@@ -9,7 +9,7 @@ import scala.util.Properties
 object MacOSXWatchServicePlugin extends AutoPlugin {
   override def trigger = allRequirements
   private def createWatchService(): WatchService =
-    if (Properties.isMac) MacOSXWatchService else Watched.createWatchService()
+    if (Properties.isMac) new MacOSXWatchService else Watched.createWatchService()
   override lazy val projectSettings =
     super.projectSettings :+ (watchService := { () => createWatchService() })
 }

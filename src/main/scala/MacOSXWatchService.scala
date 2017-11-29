@@ -21,7 +21,7 @@ import scala.concurrent.duration._
  *
  * The implementation is almost copied from sbt.io.WatchService.WatchServiceAdapter.
  */
-object MacOSXWatchService extends WatchService {
+object MacOSXWatchService {
   private class WatchKeyWrapper(path: Path, key: WatchKey) extends WatchKey {
     def cancel(): Unit = key.cancel
     def isValid(): Boolean = key.isValid
@@ -29,6 +29,8 @@ object MacOSXWatchService extends WatchService {
     def reset(): Boolean = key.reset()
     def watchable(): Watchable = path
   }
+}
+final class MacOSXWatchService extends WatchService {
   private val service = new MacOSXListeningWatchService
   private var closed: Boolean = false
   private val registered: mutable.Buffer[WatchKey] = mutable.Buffer.empty
@@ -58,7 +60,7 @@ object MacOSXWatchService extends WatchService {
     if (closed) throw new ClosedWatchServiceException
     else {
       val key = new WatchablePath(path).register(service, events: _*)
-      registered += new WatchKeyWrapper(path, key)
+      registered += new MacOSXWatchService.WatchKeyWrapper(path, key)
       key
     }
   }
