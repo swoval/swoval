@@ -4,4 +4,4 @@ This is an sbt plugin that replaces the native java PollingWatchService with the
 
 Usage
 ---
-Add `addSbtPlugin("com.swoval" %% "watchservice" % "1.0.1")` to your project/plugins.sbt.
+Add `addSbtPlugin("com.swoval" %% "watchservice" % "1.0.2")` to your project/plugins.sbt.
