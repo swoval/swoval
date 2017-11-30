@@ -11,9 +11,8 @@ lazy val root = project
     scalaVersion := "2.12.4",
     organization := "com.swoval",
     version := "1.0.4-SNAPSHOT",
-    libraryDependencies ++= Seq(directoryWatcher, sbtIO),
+    libraryDependencies ++= Seq(jna, sbtIO),
     licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html")),
-    libraryDependencies ++= Seq(directoryWatcher, sbtIO),
     bintrayRepository := "sbt-plugins",
     bintrayOrganization := Some("swoval"),
   )
