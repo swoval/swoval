@@ -4,4 +4,4 @@ This is an sbt plugin that replaces the native java PollingWatchService with the
 
 Usage
 ---
-Add `addSbtPlugin("com.swoval" %% "sbt-mac-watch-service" % "1.0.2")` to your project/plugins.sbt.
+Add `addSbtPlugin("com.swoval" %% "sbt-mac-watch-service" % "1.0.3")` to your project/plugins.sbt.
