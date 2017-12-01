@@ -76,7 +76,6 @@ private class CFRunLoopThread(val streamRef: FSEventStreamRef) extends Thread("W
   latch.await()
 
   override def run() {
-    runLoop
     addStream(streamRef)
     latch.countDown()
     CFRunLoopRun()

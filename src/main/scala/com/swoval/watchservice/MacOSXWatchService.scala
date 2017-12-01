@@ -43,24 +43,40 @@ class MacOSXWatchService(watchLatency: Duration, queueSize: Int) extends WatchSe
     throw new UnsupportedOperationException("poll isn't used as of sbt.io 1.1.0")
 
   override def pollEvents(): Map[WatchKey, Seq[WatchEvent[Path]]] = {
-    registered.flatMap { k =>
-      val events = k.pollEvents
+    registered.flatMap { case (_, k) =>
+      val events = k.pollEvents()
       if (events.isEmpty) None
       else Some(k -> events.asScala.map(_.asInstanceOf[WatchEvent[Path]]))
     }.toMap
   }
 
   override def register(path: Path, events: WatchEvent.Kind[Path]*): WatchKey = {
-    val watchKey = new MacOSXWatchKey(path, this, queueSize, latency, events: _*)
-    registered += watchKey
-    this.synchronized {
-      if (thread == null) {
-        thread = new CFRunLoopThread(watchKey.stream)
-      } else {
-        thread.addStream(watchKey.stream)
+    val pathWatchKey = registered collectFirst { case (p, k) if path startsWith p => k } match {
+      case Some(key) => key
+      case _ =>
+        registered get path match {
+          case Some(key) =>
+            key
+          case None =>
+            val key = new MacOSXWatchKey(path, this, queueSize, latency, events: _*)
+            registered += path -> key
+            this.synchronized {
+              if (thread == null) {
+                thread = new CFRunLoopThread(key.stream)
+              } else {
+                thread.addStream(key.stream)
+              }
+            }
+            key
+        }
+    }
+    registered foreach { case (p, key) =>
+      if ((p startsWith path) && (p != path)) {
+        pathWatchKey.addPath(p, key)
+        FSEventStreamStop(key.stream)
       }
     }
-    watchKey
+    pathWatchKey
   }
 
   def isOpen: Boolean = open.get
@@ -68,7 +84,7 @@ class MacOSXWatchService(watchLatency: Duration, queueSize: Int) extends WatchSe
   private val open = new AtomicBoolean(true)
   private val latency = watchLatency.toMicros / 1e6
   private var thread: CFRunLoopThread = _
-  private val registered = mutable.Buffer.empty[WatchKey]
+  private val registered = mutable.Map.empty[Path, MacOSXWatchKey]
 }
 
 private case class Event[T](kind: WatchEvent.Kind[T], count: Int, context: T) extends WatchEvent[T]
@@ -102,8 +118,25 @@ private class MacOSXWatchKey(
 
   override def toString = s"MacOSXWatchKey($watchable)"
 
+  def addPath(path: Path, key: MacOSXWatchKey) = watchKeys += path -> key
+
   def onFileEvent(folderName: String): Unit = {
-    val folderFiles = recursiveListFiles(new File(folderName).toPath)
+    val path = new File(folderName).toPath
+    val folderFiles = recursiveListFiles(path)
+    val files = allFiles get path match {
+      case Some(f) => f
+      case None =>
+        val map = mutable.Map.empty[Path, Long]
+        allFiles = allFiles + (path -> map)
+        map
+    }
+    val key = watchKeys.getOrElse(path, this)
+
+    @inline def signal(kind: WatchEvent.Kind[Path], file: Path, modified: Long) = {
+      files(file) = modified
+      key.onEvent(kind, file)
+    }
+
     folderFiles foreach { file =>
       val modified = lastModified(file)
       files get file match {
@@ -126,11 +159,14 @@ private class MacOSXWatchKey(
     FSEventStreamCreate(Ptr.NULL, callback, Ptr.NULL, pathsToWatch, sinceNow, latency, noDefer)
   }
 
-  private val files =
-    mutable.Map(recursiveListFiles(watchable).map(f => f -> lastModified(f)).toSeq: _*)
+  private var allFiles =
+    mutable.Map(recursiveListFiles(watchable).map { f =>
+      f -> lastModified(f)
+    }.toSeq: _*).groupBy { case (f, _) => f.getParent }
   private val events = new ArrayBlockingQueue[WatchEvent[_]](queueSize)
   private val overflow = new AtomicInteger()
   private val valid = new AtomicBoolean(true)
+  private val watchKeys = mutable.Map[Path, MacOSXWatchKey](watchable -> this)
 
   private lazy val callback: FSEventStreamCallback =
     (_: FSEventStreamRef, _: Ptr, numEvents: NativeLong, eventPaths: Ptr, _: Ptr, _: Ptr) =>
@@ -138,11 +174,6 @@ private class MacOSXWatchKey(
   private lazy val reportCreateEvents = kinds contains ENTRY_CREATE
   private lazy val reportModifyEvents = kinds contains ENTRY_MODIFY
   private lazy val reportDeleteEvents = kinds contains ENTRY_DELETE
-
-  @inline private def signal(kind: WatchEvent.Kind[Path], file: Path, modified: Long) = {
-    files(file) = modified
-    onEvent(kind, file)
-  }
 
   @inline private def onEvent(kind: WatchEvent.Kind[Path], context: Path) = {
     if (!events.offer(Event(kind, 1, context))) {
