@@ -27,7 +27,7 @@ import scala.util.Try
   */
 class MacOSXWatchService(watchLatency: Duration, queueSize: Int) extends WatchService {
 
-  override def close() {
+  override def close() = {
     if (open.compareAndSet(true, false)) {
       if (thread != null) {
         CarbonAPI.INSTANCE.CFRunLoopStop(thread.runLoop)
@@ -96,7 +96,7 @@ private class MacOSXWatchKey(
                               latency: Double,
                               kinds: WatchEvent.Kind[Path]*) extends WatchKey {
 
-  override def cancel() {
+  override def cancel() = {
     valid.set(false)
   }
 
