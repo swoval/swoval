@@ -46,11 +46,19 @@ trait CarbonAPI extends Library {
                           latency: Double, // seconds
                           flags: Int): FSEventStreamRef
 
+  def FSEventStreamInvalidate(streamRef: FSEventStreamRef): Boolean
+
+  def FSEventStreamRelease(streamRef: FSEventStreamRef): Boolean
+
   def FSEventStreamStart(streamRef: FSEventStreamRef): Boolean
 
   def FSEventStreamStop(streamRef: FSEventStreamRef): Unit
 
   def FSEventStreamScheduleWithRunLoop(streamRef: FSEventStreamRef,
+                                       runLoop: CFRunLoopRef,
+                                       runLoopMode: CFStringRef): Unit
+
+  def FSEventStreamUnscheduleFromRunLoop(streamRef: FSEventStreamRef,
                                        runLoop: CFRunLoopRef,
                                        runLoopMode: CFStringRef): Unit
 
@@ -62,7 +70,7 @@ trait CarbonAPI extends Library {
 }
 
 object CFRunLoopThread {
-  private val mode = CFStringRef.toCFString("kCFRunLoopDefaultMode")
+  final val mode = CFStringRef.toCFString("kCFRunLoopDefaultMode")
 }
 
 private class CFRunLoopThread(val streamRef: FSEventStreamRef) extends Thread("WatchService") {
@@ -75,14 +83,13 @@ private class CFRunLoopThread(val streamRef: FSEventStreamRef) extends Thread("W
   this.start()
   latch.await()
 
-  override def run() {
-    runLoop
+  override def run() = {
     addStream(streamRef)
     latch.countDown()
     CFRunLoopRun()
   }
 
-  def addStream(streamRef: FSEventStreamRef): Unit = {
+  def addStream(streamRef: FSEventStreamRef): Boolean = {
     FSEventStreamScheduleWithRunLoop(streamRef, runLoop, CFRunLoopThread.mode)
     FSEventStreamStart(streamRef)
   }
