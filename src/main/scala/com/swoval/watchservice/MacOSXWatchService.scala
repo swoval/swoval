@@ -29,6 +29,7 @@ class MacOSXWatchService(watchLatency: Duration, queueSize: Int) extends WatchSe
 
   override def close() = {
     if (open.compareAndSet(true, false)) {
+      registered foreach { case (_, k) => cleanupKey(k) }
       if (thread != null) {
         CarbonAPI.INSTANCE.CFRunLoopStop(thread.runLoop)
         thread.interrupt()
@@ -58,7 +59,7 @@ class MacOSXWatchService(watchLatency: Duration, queueSize: Int) extends WatchSe
           case Some(key) =>
             key
           case None =>
-            val key = new MacOSXWatchKey(path, this, queueSize, latency, events: _*)
+            val key = new MacOSXWatchKey(path, queueSize, latency, events: _*)
             registered += path -> key
             this.synchronized {
               if (thread == null) {
@@ -73,10 +74,20 @@ class MacOSXWatchService(watchLatency: Duration, queueSize: Int) extends WatchSe
     registered foreach { case (p, key) =>
       if ((p startsWith path) && (p != path)) {
         pathWatchKey.addPath(p, key)
-        FSEventStreamStop(key.stream)
+        cleanupKey(key)
       }
     }
     pathWatchKey
+  }
+
+  private def cleanupKey(key: MacOSXWatchKey) = {
+    if (key.isValid) {
+      key.cancel()
+      FSEventStreamStop(key.stream)
+      FSEventStreamUnscheduleFromRunLoop(key.stream, thread.runLoop, CFRunLoopThread.mode)
+      FSEventStreamInvalidate(key.stream)
+      FSEventStreamRelease(key.stream)
+    }
   }
 
   def isOpen: Boolean = open.get
@@ -91,7 +102,6 @@ private case class Event[T](kind: WatchEvent.Kind[T], count: Int, context: T) ex
 
 private class MacOSXWatchKey(
                               val watchable: Path,
-                              watcher: MacOSXWatchService,
                               queueSize: Int,
                               latency: Double,
                               kinds: WatchEvent.Kind[Path]*) extends WatchKey {
@@ -100,7 +110,7 @@ private class MacOSXWatchKey(
     valid.set(false)
   }
 
-  override def isValid: Boolean = watcher.isOpen && valid.get
+  override def isValid: Boolean = valid.get
 
   override def pollEvents(): JList[WatchEvent[_]] = {
     val result = new mutable.ArrayBuffer[WatchEvent[_]](events.size).asJava
