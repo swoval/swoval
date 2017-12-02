@@ -6,7 +6,7 @@ lazy val root = project
   .in(file("."))
   .settings(
     git.baseVersion := baseVersion,
-    bintrayPackage := "swoval",
+    bintrayPackage := "sbt-mac-watch-service",
     name := "sbt-mac-watch-service",
     description := "MacOSXWatchServicePlugin provides a WatchService that replaces " +
       "the default PollingWatchService on Mac OSX.",
