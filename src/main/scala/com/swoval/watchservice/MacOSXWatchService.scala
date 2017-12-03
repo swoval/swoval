@@ -25,7 +25,8 @@ import scala.util.Try
   *
   * @author Ethan Atkins
   */
-class MacOSXWatchService(watchLatency: Duration, queueSize: Int) extends WatchService {
+class MacOSXWatchService(watchLatency: Duration, queueSize: Int)(onOffer: WatchKey => Unit)
+  extends WatchService {
 
   override def close() = {
     if (open.compareAndSet(true, false)) {
@@ -59,7 +60,7 @@ class MacOSXWatchService(watchLatency: Duration, queueSize: Int) extends WatchSe
           case Some(key) =>
             key
           case None =>
-            val key = new MacOSXWatchKey(path, queueSize, latency, events: _*)
+            val key = new MacOSXWatchKey(path, queueSize, latency, onOffer, events: _*)
             registered += path -> key
             this.synchronized {
               if (thread == null) {
@@ -104,6 +105,7 @@ private class MacOSXWatchKey(
                               val watchable: Path,
                               queueSize: Int,
                               latency: Double,
+                              onOffer: WatchKey => Unit,
                               kinds: WatchEvent.Kind[Path]*) extends WatchKey {
 
   override def cancel() = {
@@ -189,6 +191,7 @@ private class MacOSXWatchKey(
     if (!events.offer(Event(kind, 1, context))) {
       overflow.incrementAndGet()
     }
+    onOffer(this)
   }
 
   @inline private def lastModified(o: Path): Long = o.toFile match {
