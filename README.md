@@ -4,7 +4,9 @@ This is an sbt plugin that replaces the native java PollingWatchService with the
 
 Usage
 ---
-Add `addSbtPlugin("com.swoval" %% "sbt-mac-watch-service" % "1.1.1")` to your project/plugins.sbt.  You can tune the plugin with the following settings (default values follow the :=):
+Add `addSbtPlugin("com.swoval" %% "sbt-mac-watch-service" % "1.1.2")` to your project/plugins.sbt.  You can tune the plugin with the following settings (default values follow the :=):
+
+To add the plugin globally to all of your sbt projects, create the file ~/.sbt/1.0/plugins/watch.sbt and add `addSbtPlugin(...)` command from above.
 
 `pollInterval := 75.milliseconds` -- This overrides the internal sbt pollInterval duration. SBT currently polls the WatchService for events at this rate. Reducing the value decreases latency but increases cpu utilization.
 
