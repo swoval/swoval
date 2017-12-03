@@ -122,9 +122,17 @@ private class MacOSXWatchKey(
 
   override def toString = s"MacOSXWatchKey($watchable)"
 
-  def onFileEvent(folderName: String): Unit = {
+  def onFileEvent(arg: (String, Int)): Unit = arg match { case (folderName, flags) =>
+    import EventStreamFlags.{ getFlags, MustScanSubDirs }
     val path = new File(folderName).toPath
-    val folderFiles = recursiveListFiles(path)
+
+    val folderFiles = if (getFlags(flags) contains MustScanSubDirs) recursiveListFiles(path) else {
+      path.toFile match {
+        case p if p.isDirectory =>
+          p.listFiles.collect { case f if !f.isDirectory => f.toPath }.toSet
+        case f => Set(f.toPath)
+      }
+    }
 
     val files = allFiles get path match {
       case Some(f) => f
@@ -157,12 +165,12 @@ private class MacOSXWatchKey(
   }
 
   private lazy val stream: FSEventStreamRef = {
+    import EventStreamCreateFlags._
     val values = Array(CFStringRef.toCFString(watchable.toFile.getAbsolutePath).getPointer)
     val pathsToWatch = CFArrayCreate(null, values, 1, null)
     val sinceNow = -1L
-    val noDefer = 0x02
     val latency = service.latency
-    FSEventStreamCreate(Ptr.NULL, callback, Ptr.NULL, pathsToWatch, sinceNow, latency, noDefer)
+    FSEventStreamCreate(Ptr.NULL, callback, Ptr.NULL, pathsToWatch, sinceNow, latency, NoDefer)
   }
 
   private var allFiles =
@@ -175,8 +183,10 @@ private class MacOSXWatchKey(
   private val valid = new AtomicBoolean(true)
 
   private lazy val callback: FSEventStreamCallback =
-    (_: FSEventStreamRef, _: Ptr, numEvents: NativeLong, eventPaths: Ptr, _: Ptr, _: Ptr) =>
-      eventPaths.getStringArray(0, numEvents.intValue()).foreach(onFileEvent)
+    (_: FSEventStreamRef, _: Ptr, numEvents: NativeLong, eventPaths: Ptr, flags: Ptr, _: Ptr) => {
+      val count = numEvents.intValue()
+      (eventPaths.getStringArray(0, count) zip flags.getIntArray(0, count)) foreach onFileEvent
+    }
   private lazy val reportCreateEvents = kinds contains ENTRY_CREATE
   private lazy val reportModifyEvents = kinds contains ENTRY_MODIFY
   private lazy val reportDeleteEvents = kinds contains ENTRY_DELETE

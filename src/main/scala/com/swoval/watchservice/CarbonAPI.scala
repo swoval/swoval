@@ -92,3 +92,115 @@ private class CFRunLoopThread extends Thread("WatchService") {
     CFRunLoopRun()
   }
 }
+
+object EventStreamCreateFlags {
+  val None = 0
+  val UseCFTypes = 1
+  val NoDefer = 1 << 1
+  val WatchRoot = 1 << 2
+  val IgnoreSelf = 1 << 3
+  val FileEvents = 1 << 4
+  val MarkSelf = 1 << 5
+  val UseExtendedData = 1 << 6
+  def flagName(flag: Int) = flag match {
+    case None => "None"
+    case UseCFTypes => "UseCFTypes"
+    case NoDefer => "NoDefer"
+    case WatchRoot => "WatchRoot"
+    case IgnoreSelf => "IgnoreSelf"
+    case FileEvents => "FileEvents"
+    case MarkSelf => "MarkSelf"
+    case UseExtendedData => "UseExtendedData"
+  }
+  def getFlags(flag: Int) = if (flag == 0) Seq(None) else allFlags.filter(f => (f & flag) != 0)
+  private val allFlags = Seq[Int](
+    None,
+    UseCFTypes,
+    NoDefer,
+    WatchRoot,
+    IgnoreSelf,
+    FileEvents,
+    MarkSelf,
+    UseExtendedData,
+  )
+}
+object EventStreamFlags {
+  val None = 0
+  val MustScanSubDirs = 1
+  val UserDropped = 1 << 1
+  val KernelDropped = 1 << 2
+  val EventIdsWrapped = 1 << 3
+  val HistoryDone = 1 << 4
+  val RootChanged = 1 << 5
+  val Mount = 1 << 6
+  val Unmount = 1 << 7
+  val ItemChangeOwner = 1 << 8
+  val ItemCreated = 1 << 9
+  val ItemFinderInfoMod = 1 << 10
+  val ItemInodeMetaMod = 1 << 11
+  val ItemIsDir = 1 << 12
+  val ItemIsFile = 1 << 13
+  val ItemIsHardlink = 1 << 14
+  val ItemIsLastHardlink = 1 << 15
+  val ItemIsSymlink = 1 << 16
+  val ItemModified = 1 << 17
+  val ItemRemoved = 1 << 18
+  val ItemRenamed = 1 << 19
+  val ItemXattrMod = 1 << 20
+  val OwnEvent = 1 << 21
+  val ItemCloned = 1 << 22
+
+  def flagName(flag: Int) = flag match {
+    case None => "None"
+    case MustScanSubDirs => "MustScanSubDirs"
+    case UserDropped => "UserDropped"
+    case KernelDropped => "KernelDropped"
+    case EventIdsWrapped => "EventIdsWrapped"
+    case HistoryDone => "HistoryDone"
+    case RootChanged => "RootChanged"
+    case Mount => "Mount"
+    case Unmount => "Unmount"
+    case ItemChangeOwner => "ItemChangeOwner"
+    case ItemCreated => "ItemCreated"
+    case ItemFinderInfoMod => "ItemFinderInfoMod"
+    case ItemInodeMetaMod => "ItemInodeMetaMod"
+    case ItemIsDir => "ItemIsDir"
+    case ItemIsFile => "ItemIsFile"
+    case ItemIsHardlink => "ItemIsHardlink"
+    case ItemIsLastHardlink => "ItemIsLastHardlink"
+    case ItemIsSymlink => "ItemIsSymlink"
+    case ItemModified => "ItemModified"
+    case ItemRemoved => "ItemRemoved"
+    case ItemRenamed => "ItemRenamed"
+    case ItemXattrMod => "ItemXattrMod"
+    case OwnEvent => "OwnEvent"
+    case ItemCloned => "ItemCloned"
+    case _ => "Unknown"
+  }
+  def getFlags(flag: Int) = if (flag == 0) Seq(None) else allFlags.filter(f => (f & flag) != 0)
+  private val allFlags = Seq[Int](
+    MustScanSubDirs,
+    UserDropped,
+    KernelDropped,
+    EventIdsWrapped,
+    HistoryDone,
+    RootChanged,
+    Mount,
+    Unmount,
+    ItemChangeOwner,
+    ItemCreated,
+    ItemFinderInfoMod,
+    ItemInodeMetaMod,
+    ItemIsDir,
+    ItemIsFile,
+    ItemIsHardlink,
+    ItemIsLastHardlink,
+    ItemIsSymlink,
+    ItemModified,
+    ItemRemoved,
+    ItemRenamed,
+    ItemXattrMod,
+    OwnEvent,
+    ItemCloned,
+  )
+}
