@@ -10,7 +10,7 @@ import com.swoval.watchservice._
 object MacOSXWatchServicePlugin extends AutoPlugin {
   override def trigger = allRequirements
   private def createWatchService(interval: Duration, queueSize: Int): WatchService = {
-    if (Properties.isMac) new MacOSXWatchService(interval, queueSize)
+    if (Properties.isMac) new MacOSXWatchService(interval, queueSize)(_ => {})
     else Watched.createWatchService()
   }
   object autoImport {
