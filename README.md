@@ -3,10 +3,9 @@ MacOSXWatchService
 This is an sbt plugin that replaces the native java PollingWatchService with the MacOSXWatchService, which uses the apple file system api to receive file events.
 
 Usage
----
-Add `addSbtPlugin("com.swoval" %% "sbt-mac-watch-service" % "1.1.2")` to your project/plugins.sbt.  You can tune the plugin with the following settings (default values follow the :=):
+--- Add `addSbtPlugin("com.swoval" %% "sbt-mac-watch-service" % "1.1.2")` to your project/plugins.sbt. To apply the plugin globally, add that command to ~/.sbt/1.0/plugins/watch.sbt (creating the file if necessary).
 
-To add the plugin globally to all of your sbt projects, create the file ~/.sbt/1.0/plugins/watch.sbt and add `addSbtPlugin(...)` command from above.
+You can tune the plugin with the following settings (default values follow the `:=`):
 
 `pollInterval := 75.milliseconds` -- This overrides the internal sbt pollInterval duration. SBT currently polls the WatchService for events at this rate. Reducing the value decreases latency but increases cpu utilization.
 
