@@ -73,24 +73,22 @@ object CFRunLoopThread {
   final val mode = CFStringRef.toCFString("kCFRunLoopDefaultMode")
 }
 
-private class CFRunLoopThread(val streamRef: FSEventStreamRef) extends Thread("WatchService") {
+private class CFRunLoopThread extends Thread("WatchService") {
 
   import CarbonAPI.INSTANCE._
 
   lazy val runLoop: CFRunLoopRef = CFRunLoopGetCurrent()
-  private[this] val latch = new java.util.concurrent.CountDownLatch(1)
+  private[this] val initLatch = new java.util.concurrent.CountDownLatch(1)
+  private[this] val signalLatch = new java.util.concurrent.CountDownLatch(1)
   this.setDaemon(true)
   this.start()
-  latch.await()
+  initLatch.await()
+  def signal() = { signalLatch.countDown() }
 
   override def run() = {
-    addStream(streamRef)
-    latch.countDown()
+    runLoop // Need to touch this variable to set the RunLoop to this thread
+    initLatch.countDown()
+    signalLatch.await()
     CFRunLoopRun()
-  }
-
-  def addStream(streamRef: FSEventStreamRef): Boolean = {
-    FSEventStreamScheduleWithRunLoop(streamRef, runLoop, CFRunLoopThread.mode)
-    FSEventStreamStart(streamRef)
   }
 }

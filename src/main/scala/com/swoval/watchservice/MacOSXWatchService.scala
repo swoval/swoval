@@ -3,7 +3,7 @@ package com.swoval.watchservice
 import java.io.File
 import java.nio.file.StandardWatchEventKinds.{ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY, OVERFLOW}
 import java.nio.file._
-import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.{ArrayBlockingQueue, LinkedBlockingDeque, TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.stream.Collectors.toSet
 import java.util.{Collections, List => JList}
@@ -25,7 +25,7 @@ import scala.util.Try
   *
   * @author Ethan Atkins
   */
-class MacOSXWatchService(watchLatency: Duration, queueSize: Int)(onOffer: WatchKey => Unit)
+class MacOSXWatchService(watchLatency: Duration, val queueSize: Int)(onOffer: WatchKey => Unit)
   extends WatchService {
 
   override def close() = {
@@ -41,75 +41,67 @@ class MacOSXWatchService(watchLatency: Duration, queueSize: Int)(onOffer: WatchK
 
   override def init(): Unit = {}
 
-  override def poll(timeout: Duration): WatchKey =
-    throw new UnsupportedOperationException("poll isn't used as of sbt.io 1.1.0")
+  override def poll(timeout: Duration): WatchKey = {
+    readyKeys.poll(timeout.toMicros, TimeUnit.MICROSECONDS)
+  }
 
   override def pollEvents(): Map[WatchKey, Seq[WatchEvent[Path]]] = {
     registered.flatMap { case (_, k) =>
       val events = k.pollEvents()
       if (events.isEmpty) None
       else Some(k -> events.asScala.map(_.asInstanceOf[WatchEvent[Path]]))
-    }.toMap
+    }.toMap[WatchKey, Seq[WatchEvent[Path]]]
   }
 
   override def register(path: Path, events: WatchEvent.Kind[Path]*): WatchKey = {
-    val pathWatchKey = registered collectFirst { case (p, k) if path startsWith p => k } match {
-      case Some(key) => key
+    registered get path match { case Some(k) => return k; case _ => }
+    val key = new MacOSXWatchKey(path, this, events: _*)
+    registered collectFirst { case (p, k) if path startsWith p => k } match {
+      case Some(_) =>
       case _ =>
-        registered get path match {
-          case Some(key) =>
-            key
-          case None =>
-            val key = new MacOSXWatchKey(path, queueSize, latency, onOffer, events: _*)
-            registered += path -> key
-            this.synchronized {
-              if (thread == null) {
-                thread = new CFRunLoopThread(key.stream)
-              } else {
-                thread.addStream(key.stream)
-              }
-            }
-            key
+        this.synchronized {
+          if (thread == null) thread = new CFRunLoopThread()
+          key.schedule()
+          thread.signal()
         }
     }
-    registered foreach { case (p, key) =>
-      if ((p startsWith path) && (p != path)) {
-        pathWatchKey.addPath(p, key)
-        cleanupKey(key)
-      }
-    }
-    pathWatchKey
+    registered foreach { case (p, k) => if ((p startsWith path) && (p != path)) cleanupKey(k) }
+    registered += path -> key
+    key
   }
 
   private def cleanupKey(key: MacOSXWatchKey) = {
     if (key.isValid) {
       key.cancel()
-      FSEventStreamStop(key.stream)
-      FSEventStreamUnscheduleFromRunLoop(key.stream, thread.runLoop, CFRunLoopThread.mode)
-      FSEventStreamInvalidate(key.stream)
-      FSEventStreamRelease(key.stream)
     }
   }
 
   def isOpen: Boolean = open.get
 
+  private[watchservice] def offer(key: MacOSXWatchKey) = {
+    if (!readyKeys.contains(key)) readyKeys.offer(key)
+    onOffer(key)
+  }
+
   private val open = new AtomicBoolean(true)
-  private val latency = watchLatency.toMicros / 1e6
-  private var thread: CFRunLoopThread = _
-  private val registered = mutable.Map.empty[Path, MacOSXWatchKey]
+  private[watchservice] val latency = watchLatency.toMicros / 1e6
+  private[watchservice] var thread: CFRunLoopThread = _
+  private[watchservice] val registered = mutable.Map.empty[Path, MacOSXWatchKey]
+  private val readyKeys = new LinkedBlockingDeque[MacOSXWatchKey]
+
 }
 
 private case class Event[T](kind: WatchEvent.Kind[T], count: Int, context: T) extends WatchEvent[T]
 
 private class MacOSXWatchKey(
                               val watchable: Path,
-                              queueSize: Int,
-                              latency: Double,
-                              onOffer: WatchKey => Unit,
+                              service: MacOSXWatchService,
                               kinds: WatchEvent.Kind[Path]*) extends WatchKey {
 
   override def cancel() = {
     valid.set(false)
+    unschedule()
+    ()
   }
 
   override def isValid: Boolean = valid.get
@@ -130,11 +122,10 @@ private class MacOSXWatchKey(
 
   override def toString = s"MacOSXWatchKey($watchable)"
 
-  def addPath(path: Path, key: MacOSXWatchKey) = watchKeys += path -> key
-
   def onFileEvent(folderName: String): Unit = {
     val path = new File(folderName).toPath
     val folderFiles = recursiveListFiles(path)
+
     val files = allFiles get path match {
       case Some(f) => f
       case None =>
@@ -142,7 +133,8 @@ private class MacOSXWatchKey(
         allFiles = allFiles + (path -> map)
         map
     }
-    val key = watchKeys.getOrElse(path, this)
+
+    val key = service.registered.getOrElse(path, return)
 
     @inline def signal(kind: WatchEvent.Kind[Path], file: Path, modified: Long) = {
       files(file) = modified
@@ -157,17 +149,19 @@ private class MacOSXWatchKey(
         case _ => // This file hasn't changed or the event isn't reported.
       }
     }
+
     files.keySet diff folderFiles foreach { file =>
       files -= file
       if (reportDeleteEvents) onEvent(ENTRY_DELETE, file)
     }
   }
 
-  val stream: FSEventStreamRef = {
+  private lazy val stream: FSEventStreamRef = {
     val values = Array(CFStringRef.toCFString(watchable.toFile.getAbsolutePath).getPointer)
     val pathsToWatch = CFArrayCreate(null, values, 1, null)
     val sinceNow = -1L
-    val noDefer = 0x00000002
+    val noDefer = 0x02
+    val latency = service.latency
     FSEventStreamCreate(Ptr.NULL, callback, Ptr.NULL, pathsToWatch, sinceNow, latency, noDefer)
   }
 
@@ -175,10 +169,10 @@ private class MacOSXWatchKey(
     mutable.Map(recursiveListFiles(watchable).map { f =>
       f -> lastModified(f)
     }.toSeq: _*).groupBy { case (f, _) => f.getParent }
-  private val events = new ArrayBlockingQueue[WatchEvent[_]](queueSize)
+  private val events = new ArrayBlockingQueue[WatchEvent[_]](service.queueSize)
+  private val scheduled = new AtomicBoolean(false)
   private val overflow = new AtomicInteger()
   private val valid = new AtomicBoolean(true)
-  private val watchKeys = mutable.Map[Path, MacOSXWatchKey](watchable -> this)
 
   private lazy val callback: FSEventStreamCallback =
     (_: FSEventStreamRef, _: Ptr, numEvents: NativeLong, eventPaths: Ptr, _: Ptr, _: Ptr) =>
@@ -191,7 +185,7 @@ private class MacOSXWatchKey(
     if (!events.offer(Event(kind, 1, context))) {
       overflow.incrementAndGet()
     }
-    onOffer(this)
+    service.offer(this)
   }
 
   @inline private def lastModified(o: Path): Long = o.toFile match {
@@ -206,5 +200,21 @@ private class MacOSXWatchKey(
           .collect(toSet[Path]).asScala.toSet
       } getOrElse Set.empty
     case p => Set(p)
+  }
+
+  @inline def schedule() = {
+    if (isValid && scheduled.compareAndSet(false, true)) {
+      FSEventStreamScheduleWithRunLoop(stream, service.thread.runLoop, CFRunLoopThread.mode)
+      FSEventStreamStart(stream)
+    }
+  }
+
+  @inline def unschedule() = {
+    if (scheduled.compareAndSet(true, false)) {
+      FSEventStreamStop(stream)
+      FSEventStreamUnscheduleFromRunLoop(stream, service.thread.runLoop, CFRunLoopThread.mode)
+      FSEventStreamInvalidate(stream)
+      FSEventStreamRelease(stream)
+    }
   }
 }

@@ -7,6 +7,7 @@ import java.nio.file.{Files, Path, WatchKey}
 import org.scalatest.{Matchers, WordSpec}
 
 import scala.annotation.tailrec
+import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 
 class MacOSXWatchServiceSpec extends WordSpec with Matchers {
@@ -70,6 +71,54 @@ class MacOSXWatchServiceSpec extends WordSpec with Matchers {
   }
 
   "MacOSXWatchService" should {
+    "poll" should {
+
+      "return create events" in {
+        withService { (service, _) =>
+          withTempDirectory { dir =>
+            service.watch(dir)
+            val f = new File(s"${dir.toFile.getAbsolutePath}/foo")
+            f.createNewFile()
+            service.poll(1.second).pollEvents().asScala match {
+              case Seq(event) => f.toPath shouldBe event.context
+            }
+          }
+        }
+      }
+      "create one event per path between polls" in {
+        withService { (service, onOffer) =>
+          withTempDirectory { dir =>
+            service.watch(dir)
+            val f = new File(s"${dir.toFile.getAbsolutePath}/foo")
+            f.createNewFile()
+            onOffer.waitForCount(1, 5.seconds)
+            f.setLastModified(System.currentTimeMillis + 5000)
+            onOffer.waitForCount(2, 5.seconds)
+            service.poll(1.second).pollEvents().asScala match {
+              case Seq(createEvent, modifyEvent) =>
+                createEvent.kind shouldBe ENTRY_CREATE
+                createEvent.context shouldBe f.toPath
+                modifyEvent.kind shouldBe ENTRY_MODIFY
+                modifyEvent.context shouldBe f.toPath
+            }
+          }
+        }
+      }
+      "return correct subdirectory" in {
+        withService { (service, onOffer) =>
+          withTempDirectory { dir =>
+            val subDir = new File(s"${dir.toFile.getAbsolutePath}/foo").toPath
+            withDirectory(subDir) {
+              service.watch(dir)
+              service.watch(subDir)
+              val f = new File(s"${subDir.toRealPath()}/bar")
+              f.createNewFile()
+              service.poll(1.second).watchable shouldBe subDir
+            }
+          }
+        }
+      }
+    }
     "handle overflows" in {
       val onOffer = new OnOffer
       withService(new MacOSXWatchService(defaultLatency, 2)(onOffer)) { service =>
