@@ -28,14 +28,12 @@ import scala.util.Try
 class MacOSXWatchService(watchLatency: Duration, val queueSize: Int)(onOffer: WatchKey => Unit)
   extends WatchService {
 
-  override def close() = {
+  override def close(): Unit = {
     if (open.compareAndSet(true, false)) {
       registered foreach { case (_, k) => cleanupKey(k) }
-      if (thread != null) {
-        CarbonAPI.INSTANCE.CFRunLoopStop(thread.runLoop)
-        thread.interrupt()
-        thread.join()
-      }
+      CarbonAPI.INSTANCE.CFRunLoopStop(thread.runLoop)
+      thread.interrupt()
+      thread.join()
     }
   }
 
@@ -54,14 +52,20 @@ class MacOSXWatchService(watchLatency: Duration, val queueSize: Int)(onOffer: Wa
   }
 
   override def register(path: Path, events: WatchEvent.Kind[Path]*): WatchKey = {
-    registered get path match { case Some(k) => return k; case _ => }
-    val key = new MacOSXWatchKey(path, this, events: _*)
+    registered get path match {
+      case Some(k) => return k;
+      case _ =>
+    }
+    val key = new MacOSXWatchKey(path, createStream(path), queueSize, events: _*)
+    allFiles ++= mutable.Map(recursiveListFiles(path).view.filterNot(allFiles.contains).map { f =>
+      f -> lastModified(f)
+    }.toSeq: _*).groupBy { case (f, _) => f.getParent }
+
     registered collectFirst { case (p, k) if path startsWith p => k } match {
       case Some(_) =>
       case _ =>
         this.synchronized {
-          if (thread == null) thread = new CFRunLoopThread()
-          key.schedule()
+          key.schedule(thread.runLoop)
           thread.signal()
         }
     }
@@ -70,133 +74,86 @@ class MacOSXWatchService(watchLatency: Duration, val queueSize: Int)(onOffer: Wa
     key
   }
 
-  private def cleanupKey(key: MacOSXWatchKey) = {
+  def onFileEvent(arg: (String, Int)): Unit = arg match {
+    case (folderName, flags) =>
+      import EventStreamFlags.{getFlags, MustScanSubDirs}
+      val path = new File(folderName).toPath
+
+      val folderFiles = if (getFlags(flags) contains MustScanSubDirs) recursiveListFiles(path) else {
+        path.toFile match {
+          case p if p.isDirectory =>
+            p.listFiles.collect { case f if !f.isDirectory => f.toPath }.toSet
+          case f => Set(f.toPath)
+        }
+      }
+
+      val files = allFiles get path match {
+        case Some(f) => f
+        case None =>
+          val map = mutable.Map.empty[Path, Long]
+          allFiles = allFiles + (path -> map)
+          map
+      }
+
+      val key = registered.getOrElse(path, return)
+
+      @inline def signal(kind: WatchEvent.Kind[Path], file: Path, modified: Long): Unit = {
+        files(file) = modified
+        createEvent(key, kind, file)
+      }
+
+      folderFiles foreach { file =>
+        val mtime = lastModified(file)
+        files get file match {
+          case Some(m) if m != mtime && key.reportModifyEvents => signal(ENTRY_MODIFY, file, mtime)
+          case None if key.reportCreateEvents => signal(ENTRY_CREATE, file, mtime)
+          case _ => // This file hasn't changed or the event isn't reported.
+        }
+      }
+
+      files.keySet diff folderFiles foreach { file =>
+        files -= file
+        if (key.reportDeleteEvents) createEvent(key, ENTRY_DELETE, file)
+      }
+  }
+
+  private def createEvent(key: MacOSXWatchKey, kind: WatchEvent.Kind[Path], file: Path): Unit = {
+    key.addEvent(Event(kind, 1, file))
+    if (!readyKeys.contains(key)) readyKeys.offer(key)
+    onOffer(key)
+  }
+
+  private def cleanupKey(key: MacOSXWatchKey): Unit = {
     if (key.isValid) {
-      key.cancel()
+      key.unschedule(thread.runLoop)
     }
   }
 
   def isOpen: Boolean = open.get
 
-  private[watchservice] def offer(key: MacOSXWatchKey) = {
-    if (!readyKeys.contains(key)) readyKeys.offer(key)
-    onOffer(key)
-  }
-
-  private val open = new AtomicBoolean(true)
-  private[watchservice] val latency = watchLatency.toMicros / 1e6
-  private[watchservice] var thread: CFRunLoopThread = _
-  private[watchservice] val registered = mutable.Map.empty[Path, MacOSXWatchKey]
-  private val readyKeys = new LinkedBlockingDeque[MacOSXWatchKey]
-
-}
-
-private case class Event[T](kind: WatchEvent.Kind[T], count: Int, context: T) extends WatchEvent[T]
-
-private class MacOSXWatchKey(
-                              val watchable: Path,
-                              service: MacOSXWatchService,
-                              kinds: WatchEvent.Kind[Path]*) extends WatchKey {
-
-  override def cancel() = {
-    valid.set(false)
-    unschedule()
-    ()
-  }
-
-  override def isValid: Boolean = valid.get
-
-  override def pollEvents(): JList[WatchEvent[_]] = {
-    val result = new mutable.ArrayBuffer[WatchEvent[_]](events.size).asJava
-    events.drainTo(result)
-    val overflowCount = overflow.getAndSet(0)
-    if (overflowCount != 0) {
-      result.add(Event(OVERFLOW, overflowCount, watchable))
-    }
-    Collections.unmodifiableList(result)
-  }
-
-  override def reset(): Boolean = {
-    true
-  }
-
-  override def toString = s"MacOSXWatchKey($watchable)"
-
-  def onFileEvent(arg: (String, Int)): Unit = arg match { case (folderName, flags) =>
-    import EventStreamFlags.{ getFlags, MustScanSubDirs }
-    val path = new File(folderName).toPath
-
-    val folderFiles = if (getFlags(flags) contains MustScanSubDirs) recursiveListFiles(path) else {
-      path.toFile match {
-        case p if p.isDirectory =>
-          p.listFiles.collect { case f if !f.isDirectory => f.toPath }.toSet
-        case f => Set(f.toPath)
-      }
-    }
-
-    val files = allFiles get path match {
-      case Some(f) => f
-      case None =>
-        val map = mutable.Map.empty[Path, Long]
-        allFiles = allFiles + (path -> map)
-        map
-    }
-
-    val key = service.registered.getOrElse(path, return)
-
-    @inline def signal(kind: WatchEvent.Kind[Path], file: Path, modified: Long) = {
-      files(file) = modified
-      key.onEvent(kind, file)
-    }
-
-    folderFiles foreach { file =>
-      val modified = lastModified(file)
-      files get file match {
-        case Some(m) if m != modified && reportModifyEvents => signal(ENTRY_MODIFY, file, modified)
-        case None if reportCreateEvents => signal(ENTRY_CREATE, file, modified)
-        case _ => // This file hasn't changed or the event isn't reported.
-      }
-    }
-
-    files.keySet diff folderFiles foreach { file =>
-      files -= file
-      if (reportDeleteEvents) onEvent(ENTRY_DELETE, file)
-    }
-  }
-
-  private lazy val stream: FSEventStreamRef = {
+  private def createStream(path: Path): FSEventStreamRef = {
     import EventStreamCreateFlags._
-    val values = Array(CFStringRef.toCFString(watchable.toFile.getAbsolutePath).getPointer)
+    val values = Array(CFStringRef.toCFString(path.toFile.getAbsolutePath).getPointer)
     val pathsToWatch = CFArrayCreate(null, values, 1, null)
     val sinceNow = -1L
-    val latency = service.latency
     FSEventStreamCreate(Ptr.NULL, callback, Ptr.NULL, pathsToWatch, sinceNow, latency, NoDefer)
   }
 
-  private var allFiles =
-    mutable.Map(recursiveListFiles(watchable).map { f =>
-      f -> lastModified(f)
-    }.toSeq: _*).groupBy { case (f, _) => f.getParent }
-  private val events = new ArrayBlockingQueue[WatchEvent[_]](service.queueSize)
-  private val scheduled = new AtomicBoolean(false)
-  private val overflow = new AtomicInteger()
-  private val valid = new AtomicBoolean(true)
+  private[this] val latency = watchLatency.toMicros / 1e6
+  private[this] val thread: CFRunLoopThread = new CFRunLoopThread
+  private[this] val registered = mutable.Map.empty[Path, MacOSXWatchKey]
 
-  private lazy val callback: FSEventStreamCallback =
+  private[this] val open = new AtomicBoolean(true)
+  private[this] val readyKeys = new LinkedBlockingDeque[MacOSXWatchKey]
+
+  private[this] lazy val callback: FSEventStreamCallback =
     (_: FSEventStreamRef, _: Ptr, numEvents: NativeLong, eventPaths: Ptr, flags: Ptr, _: Ptr) => {
       val count = numEvents.intValue()
       (eventPaths.getStringArray(0, count) zip flags.getIntArray(0, count)) foreach onFileEvent
     }
-  private lazy val reportCreateEvents = kinds contains ENTRY_CREATE
-  private lazy val reportModifyEvents = kinds contains ENTRY_MODIFY
-  private lazy val reportDeleteEvents = kinds contains ENTRY_DELETE
 
-  @inline private def onEvent(kind: WatchEvent.Kind[Path], context: Path) = {
-    if (!events.offer(Event(kind, 1, context))) {
-      overflow.incrementAndGet()
-    }
-    service.offer(this)
-  }
+  private[this] var allFiles = Map.empty[Path, mutable.Map[Path, Long]]
+
 
   @inline private def lastModified(o: Path): Long = o.toFile match {
     case f if f.exists => f.lastModified
@@ -211,20 +168,65 @@ private class MacOSXWatchKey(
       } getOrElse Set.empty
     case p => Set(p)
   }
+}
 
-  @inline def schedule() = {
+private case class Event[T](kind: WatchEvent.Kind[T], count: Int, context: T) extends WatchEvent[T]
+
+private class MacOSXWatchKey(
+                              val watchable: Path,
+                              makeStream: => FSEventStreamRef,
+                              queueSize: Int,
+                              kinds: WatchEvent.Kind[Path]*) extends WatchKey {
+
+  override def cancel(): Unit = valid.set(false)
+
+  override def isValid: Boolean = valid.get
+
+  override def pollEvents(): JList[WatchEvent[_]] = {
+    val result = new mutable.ArrayBuffer[WatchEvent[_]](events.size).asJava
+    events.drainTo(result)
+    val overflowCount = overflow.getAndSet(0)
+    if (overflowCount != 0) {
+      result.add(Event(OVERFLOW, overflowCount, watchable))
+    }
+    Collections.unmodifiableList(result)
+  }
+
+  override def reset(): Boolean = true
+
+  override def toString = s"MacOSXWatchKey($watchable)"
+
+  lazy val reportCreateEvents: Boolean = kinds contains ENTRY_CREATE
+  lazy val reportModifyEvents: Boolean = kinds contains ENTRY_MODIFY
+  lazy val reportDeleteEvents: Boolean = kinds contains ENTRY_DELETE
+
+  private lazy val stream = makeStream
+  private val events = new ArrayBlockingQueue[WatchEvent[_]](queueSize)
+  private val scheduled = new AtomicBoolean(false)
+  private val overflow = new AtomicInteger()
+  private val valid = new AtomicBoolean(true)
+
+  @inline def addEvent(event: Event[Path]): Unit = if (!events.offer(event)) {
+    overflow.incrementAndGet()
+    ()
+  }
+
+  @inline def schedule(loop: CFRunLoopRef): Unit = {
     if (isValid && scheduled.compareAndSet(false, true)) {
-      FSEventStreamScheduleWithRunLoop(stream, service.thread.runLoop, CFRunLoopThread.mode)
+      FSEventStreamScheduleWithRunLoop(stream, loop, CFRunLoopThread.mode)
       FSEventStreamStart(stream)
+      ()
     }
   }
 
-  @inline def unschedule() = {
+  @inline def unschedule(loop: CFRunLoopRef): Unit = {
+    cancel()
     if (scheduled.compareAndSet(true, false)) {
       FSEventStreamStop(stream)
-      FSEventStreamUnscheduleFromRunLoop(stream, service.thread.runLoop, CFRunLoopThread.mode)
+      FSEventStreamUnscheduleFromRunLoop(stream, loop, CFRunLoopThread.mode)
       FSEventStreamInvalidate(stream)
       FSEventStreamRelease(stream)
+      ()
     }
   }
 }
