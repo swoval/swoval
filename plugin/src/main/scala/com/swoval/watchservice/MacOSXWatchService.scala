@@ -78,10 +78,10 @@ class MacOSXWatchService(watchLatency: Duration, val queueSize: Int)(
         fileEvent match {
           case e if e.isNewFile && key.reportCreateEvents =>
             createEvent(key, ENTRY_CREATE, path)
-          case e if e.isRemoved =>
+          case e if e.isRemoved && key.reportDeleteEvents =>
             Some(ENTRY_DELETE)
             createEvent(key, ENTRY_DELETE, path)
-          case e if e.isModified || e.isTouched =>
+          case _ if key.reportModifyEvents =>
             createEvent(key, ENTRY_MODIFY, path)
           case _ =>
         }
