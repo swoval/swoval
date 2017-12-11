@@ -87,8 +87,10 @@ private class CFRunLoopThread extends Thread("WatchService") {
   override def run() = {
     runLoop // Need to touch this variable to set the RunLoop to this thread
     initLatch.countDown()
-    signalLatch.await()
-    CFRunLoopRun()
+    try {
+      signalLatch.await()
+      CFRunLoopRun()
+    } catch { case _: InterruptedException => /* service was shutdown */ }
   }
 }
 
