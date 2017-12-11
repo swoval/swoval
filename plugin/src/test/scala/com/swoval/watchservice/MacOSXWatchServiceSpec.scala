@@ -3,13 +3,14 @@ package com.swoval.watchservice
 import java.io.File
 import java.nio.file.StandardWatchEventKinds.{ ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY, OVERFLOW }
 import java.nio.file._
-import java.util.concurrent.{ CountDownLatch, TimeUnit }
+import java.util.concurrent.CountDownLatch
 
+import com.swoval.test.Util._
 import utest._
 
 import scala.annotation.tailrec
-import scala.collection.mutable
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.concurrent.duration._
 import com.swoval.test._
 
@@ -18,7 +19,7 @@ object MacOSXWatchServiceSpec extends TestSuite {
     'MacOSXWatchService - {
       'poll - {
         "return create events" - {
-          withService { (service, _, _, _) =>
+          withService { service =>
             withTempDirectory { dir =>
               service.watch(dir)
               val f = new File(s"${dir.toFile.getAbsolutePath}/foo")
@@ -30,15 +31,14 @@ object MacOSXWatchServiceSpec extends TestSuite {
           }
         }
         "create one event per path between polls" - {
-          withService { (service, _, onReg, onEvent) =>
+          withService { service =>
             withTempDirectory { dir =>
               service.watch(dir)
-              onReg.waitFor(dir, DEFAULT_TIMEOUT)
               val f = new File(s"${dir.toFile.getAbsolutePath}/foo")
               f.createNewFile()
-              onEvent.waitForCount(1, DEFAULT_TIMEOUT)
+              service.waitForEventCount(1, DEFAULT_TIMEOUT)
               f.setLastModified(System.currentTimeMillis + 5000)
-              onEvent.waitForCount(2, DEFAULT_TIMEOUT)
+              service.waitForEventCount(2, DEFAULT_TIMEOUT)
               service.poll(DEFAULT_TIMEOUT).pollEvents().asScala match {
                 case Seq(createEvent, modifyEvent) =>
                   createEvent.kind ==> ENTRY_CREATE
@@ -50,13 +50,12 @@ object MacOSXWatchServiceSpec extends TestSuite {
           }
         }
         "return correct subdirectory" - {
-          withService { (service, _, onReg, _) =>
+          withService { service =>
             withTempDirectory { dir =>
               val subDir = new File(s"${dir.toFile.getAbsolutePath}/foo").toPath
               withDirectory(subDir) {
                 service.watch(dir)
                 service.watch(subDir)
-                Seq(dir, subDir) foreach (onReg.waitFor(_, DEFAULT_TIMEOUT))
                 val f = new File(s"${subDir.toRealPath()}/bar")
                 f.createNewFile()
                 service.poll(DEFAULT_TIMEOUT).watchable ==> subDir
@@ -66,7 +65,7 @@ object MacOSXWatchServiceSpec extends TestSuite {
         }
       }
       "handle overflows" - {
-        withService(queueSize = 2) { (service, onOffer, onReg, onEvent) =>
+        withService(queueSize = 2) { service =>
           withTempDirectory { dir =>
             val dirFile = new File(dir.toFile.getAbsolutePath)
             val subDir1 = new File(s"$dirFile/subdir1")
@@ -74,17 +73,16 @@ object MacOSXWatchServiceSpec extends TestSuite {
             Seq(subDir1, subDir2) foreach { f =>
               f.mkdir()
               service.watch(f.toPath)
-              onReg.waitFor(f.toPath, DEFAULT_TIMEOUT)
             }
             val subDir1Paths = (0 to 5) map { i =>
               val f = new File(s"$subDir1/file$i")
               f.createNewFile()
-              onEvent.waitForCount(i + 1, DEFAULT_TIMEOUT)
+              service.waitForEventCount(i + 1, DEFAULT_TIMEOUT)
               f.toPath
             }
             val subDir2File = new File(s"$subDir2/file")
             subDir2File.createNewFile()
-            onOffer.waitForCount(2, DEFAULT_TIMEOUT)
+            service.waitForOfferCount(2, DEFAULT_TIMEOUT)
             val rawEvents = service.pollEvents()
             rawEvents exists { case (_, v) => v.exists(_.kind == OVERFLOW) }
             val events = rawEvents.map {
@@ -95,7 +93,7 @@ object MacOSXWatchServiceSpec extends TestSuite {
           }
         }
       }
-      "Not inadvertently exclude files - subdirectory" - {
+      "Not inadvertently exclude files in subdirectory" - {
         /*
          * Because service.register asynchronously does a file scan and tries to save work by
          * not rescanning previously scanned directories, we need to be careful about how we
@@ -109,10 +107,9 @@ object MacOSXWatchServiceSpec extends TestSuite {
           subDir.mkdir
           val file = new File(s"$subDir/baz.scala")
           file.createNewFile()
-          withService { (service, _, onReg, _) =>
+          withService { service =>
             service.watch(dir)
             service.watch(subDir.toPath)
-            onReg.waitFor(dir, DEFAULT_TIMEOUT)
             file.setLastModified(System.currentTimeMillis + 10000)
             service.poll(DEFAULT_TIMEOUT).pollEvents().asScala match {
               case Seq(Event(k, _, f)) =>
@@ -133,7 +130,7 @@ object MacOSXWatchServiceSpec extends TestSuite {
       onOffer: WatchKey => Unit = _ => {},
       onRegister: WatchKey => Unit = _ => {},
       onEvent: WatchEvent[_] => Unit = _ => {},
-  )(f: (MacOSXWatchService, OnOffer, OnReg, OnEvent) => R): R = {
+  )(f: MacOSXWatchService => R): R = {
     val offer = onOffer match {
       case o: OnOffer => o
       case f          => new OnOffer(f)
@@ -146,10 +143,10 @@ object MacOSXWatchServiceSpec extends TestSuite {
       case r: OnEvent => r
       case f          => new OnEvent(f)
     }
-    using(new MacOSXWatchService(latency, queueSize)(offer, reg, event))(f(_, offer, reg, event))
+    using(new MacOSXWatchService(latency, queueSize)(offer, reg, event))(f)
   }
 
-  def withService[R](f: (MacOSXWatchService, OnOffer, OnReg, OnEvent) => R): R = withService()(f)
+  def withService[R](f: MacOSXWatchService => R): R = withService()(f)
 
   class OnReg(f: WatchKey => Unit) extends (WatchKey => Unit) {
     private[this] val latches = mutable.Map.empty[Watchable, CountDownLatch]
@@ -205,6 +202,15 @@ object MacOSXWatchServiceSpec extends TestSuite {
   class OnEvent(f: WatchEvent[_] => Unit = _ => {}) extends EventCounter(f)
 
   implicit class RichService(val s: MacOSXWatchService) extends AnyVal {
-    def watch(dir: Path) = s.register(dir, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY)
+    def watch(dir: Path) = {
+      s.register(dir, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY)
+      s.onRegister match { case o: OnReg => o.waitFor(dir, DEFAULT_TIMEOUT) }
+    }
+    def waitForEventCount(i: Int, duration: Duration) = {
+      s.onEvent match { case e: OnEvent => e.waitForCount(i, duration) }
+    }
+    def waitForOfferCount(i: Int, duration: Duration) = {
+      s.onOffer match { case e: OnOffer => e.waitForCount(i, duration) }
+    }
   }
 }

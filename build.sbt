@@ -35,7 +35,7 @@ lazy val plugin = project
       "the default PollingWatchService on Mac OSX.",
     publishMavenStyle := false,
     sbtPlugin := true,
-    libraryDependencies ++= Seq(jna, sbtIO),
+    libraryDependencies ++= Seq(sbtIO),
   )
   .dependsOn(watcher, testing % "test->test")
 
