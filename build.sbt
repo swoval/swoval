@@ -4,6 +4,11 @@ def baseVersion: String = "1.1.4"
 
 lazy val root = project
   .in(file("."))
+  .aggregate(plugin)
+
+lazy val plugin = project
+  .in(file("plugin"))
+  .enablePlugins(GitVersioning)
   .settings(
     git.baseVersion := baseVersion,
     bintrayPackage := "sbt-mac-watch-service",
