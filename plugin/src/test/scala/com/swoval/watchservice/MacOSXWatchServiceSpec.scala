@@ -12,7 +12,6 @@ import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.duration._
-import com.swoval.test._
 
 object MacOSXWatchServiceSpec extends TestSuite {
   val tests = Tests {
