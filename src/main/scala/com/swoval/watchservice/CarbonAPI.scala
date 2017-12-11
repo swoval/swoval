@@ -1,7 +1,7 @@
 package com.swoval.watchservice
 
 import com.sun.jna.ptr.PointerByReference
-import com.sun.jna.{Pointer => Ptr, _}
+import com.sun.jna.{ Pointer => Ptr, _ }
 
 class CFArrayRef extends PointerByReference
 
@@ -27,12 +27,11 @@ trait FSEventStreamCallback extends Callback {
   def invoke(s: Ref, cbInfo: Ptr, count: NativeLong, paths: Ptr, flags: Ptr, ids: Ptr): Unit
 }
 
-
 trait CarbonAPI extends Library {
   def CFArrayCreate(allocator: Ptr, // unused
                     values: Array[Ptr],
                     numValues: Int,
-                    callBacks: Void /* unused */): CFArrayRef
+                    callBacks: Void /* unused */ ): CFArrayRef
 
   def CFStringCreateWithCharacters(allocator: Ptr, //  always pass NULL
                                    chars: Array[Char],
@@ -59,8 +58,8 @@ trait CarbonAPI extends Library {
                                        runLoopMode: CFStringRef): Unit
 
   def FSEventStreamUnscheduleFromRunLoop(streamRef: FSEventStreamRef,
-                                       runLoop: CFRunLoopRef,
-                                       runLoopMode: CFStringRef): Unit
+                                         runLoop: CFRunLoopRef,
+                                         runLoopMode: CFStringRef): Unit
 
   def CFRunLoopGetCurrent(): CFRunLoopRef
 
@@ -103,13 +102,13 @@ object EventStreamCreateFlags {
   val MarkSelf = 1 << 5
   val UseExtendedData = 1 << 6
   def flagName(flag: Int) = flag match {
-    case None => "None"
-    case UseCFTypes => "UseCFTypes"
-    case NoDefer => "NoDefer"
-    case WatchRoot => "WatchRoot"
-    case IgnoreSelf => "IgnoreSelf"
-    case FileEvents => "FileEvents"
-    case MarkSelf => "MarkSelf"
+    case None            => "None"
+    case UseCFTypes      => "UseCFTypes"
+    case NoDefer         => "NoDefer"
+    case WatchRoot       => "WatchRoot"
+    case IgnoreSelf      => "IgnoreSelf"
+    case FileEvents      => "FileEvents"
+    case MarkSelf        => "MarkSelf"
     case UseExtendedData => "UseExtendedData"
   }
   def getFlags(flag: Int) = if (flag == 0) Seq(None) else allFlags.filter(f => (f & flag) != 0)
@@ -151,31 +150,31 @@ object EventStreamFlags {
   val ItemCloned = 1 << 22
 
   def flagName(flag: Int) = flag match {
-    case None => "None"
-    case MustScanSubDirs => "MustScanSubDirs"
-    case UserDropped => "UserDropped"
-    case KernelDropped => "KernelDropped"
-    case EventIdsWrapped => "EventIdsWrapped"
-    case HistoryDone => "HistoryDone"
-    case RootChanged => "RootChanged"
-    case Mount => "Mount"
-    case Unmount => "Unmount"
-    case ItemChangeOwner => "ItemChangeOwner"
-    case ItemCreated => "ItemCreated"
-    case ItemFinderInfoMod => "ItemFinderInfoMod"
-    case ItemInodeMetaMod => "ItemInodeMetaMod"
-    case ItemIsDir => "ItemIsDir"
-    case ItemIsFile => "ItemIsFile"
-    case ItemIsHardlink => "ItemIsHardlink"
+    case None               => "None"
+    case MustScanSubDirs    => "MustScanSubDirs"
+    case UserDropped        => "UserDropped"
+    case KernelDropped      => "KernelDropped"
+    case EventIdsWrapped    => "EventIdsWrapped"
+    case HistoryDone        => "HistoryDone"
+    case RootChanged        => "RootChanged"
+    case Mount              => "Mount"
+    case Unmount            => "Unmount"
+    case ItemChangeOwner    => "ItemChangeOwner"
+    case ItemCreated        => "ItemCreated"
+    case ItemFinderInfoMod  => "ItemFinderInfoMod"
+    case ItemInodeMetaMod   => "ItemInodeMetaMod"
+    case ItemIsDir          => "ItemIsDir"
+    case ItemIsFile         => "ItemIsFile"
+    case ItemIsHardlink     => "ItemIsHardlink"
     case ItemIsLastHardlink => "ItemIsLastHardlink"
-    case ItemIsSymlink => "ItemIsSymlink"
-    case ItemModified => "ItemModified"
-    case ItemRemoved => "ItemRemoved"
-    case ItemRenamed => "ItemRenamed"
-    case ItemXattrMod => "ItemXattrMod"
-    case OwnEvent => "OwnEvent"
-    case ItemCloned => "ItemCloned"
-    case _ => "Unknown"
+    case ItemIsSymlink      => "ItemIsSymlink"
+    case ItemModified       => "ItemModified"
+    case ItemRemoved        => "ItemRemoved"
+    case ItemRenamed        => "ItemRenamed"
+    case ItemXattrMod       => "ItemXattrMod"
+    case OwnEvent           => "OwnEvent"
+    case ItemCloned         => "ItemCloned"
+    case _                  => "Unknown"
   }
   def getFlags(flag: Int) = if (flag == 0) Seq(None) else allFlags.filter(f => (f & flag) != 0)
   private val allFlags = Seq[Int](
