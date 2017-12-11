@@ -1,11 +1,11 @@
 package com.swoval.watchservice
 
 import java.io.File
-import java.nio.file.StandardWatchEventKinds.{ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY, OVERFLOW}
+import java.nio.file.StandardWatchEventKinds.{ ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY, OVERFLOW }
 import java.nio.file._
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.{ CountDownLatch, TimeUnit }
 
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.{ Matchers, WordSpec }
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -141,40 +141,42 @@ object MacOSXWatchServiceSpec {
     withDirectory(dir)(f(dir.toRealPath()))
   }
 
-  def withDirectory[R](path: Path)(f: => R): R = try {
-    path.toFile.mkdir()
-    f
-  } finally {
-    path.toFile.delete()
-    ()
-  }
+  def withDirectory[R](path: Path)(f: => R): R =
+    try {
+      path.toFile.mkdir()
+      f
+    } finally {
+      path.toFile.delete()
+      ()
+    }
 
   def withService[R](service: => MacOSXWatchService)(f: MacOSXWatchService => R): R = {
     val s = service
-    try f(s) finally s.close()
+    try f(s)
+    finally s.close()
   }
 
   def withService[R](
-                      latency: Duration = defaultLatency,
-                      queueSize: Int = defaultQueueSize,
-                      onOffer: WatchKey => Unit = _ => {},
-                      onRegister: WatchKey => Unit = _ => {},
-                      onEvent: WatchEvent[_] => Unit = _ => {},
-                    )(f: (MacOSXWatchService, OnOffer, OnReg, OnEvent) => R): R = {
+      latency: Duration = defaultLatency,
+      queueSize: Int = defaultQueueSize,
+      onOffer: WatchKey => Unit = _ => {},
+      onRegister: WatchKey => Unit = _ => {},
+      onEvent: WatchEvent[_] => Unit = _ => {},
+  )(f: (MacOSXWatchService, OnOffer, OnReg, OnEvent) => R): R = {
     val offer = onOffer match {
       case o: OnOffer => o
-      case f => new OnOffer(f)
+      case f          => new OnOffer(f)
     }
     val reg = onRegister match {
       case r: OnReg => r
-      case f => new OnReg(f)
+      case f        => new OnReg(f)
     }
     val event = onEvent match {
       case r: OnEvent => r
-      case f => new OnEvent(f)
+      case f          => new OnEvent(f)
     }
-    withService(
-      new MacOSXWatchService(latency, queueSize)(offer, reg, event))(f(_, offer, reg, event))
+    withService(new MacOSXWatchService(latency, queueSize)(offer, reg, event))(
+      f(_, offer, reg, event))
   }
 
   def withService[R](f: (MacOSXWatchService, OnOffer, OnReg, OnEvent) => R): R = withService()(f)

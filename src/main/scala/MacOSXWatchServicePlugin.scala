@@ -22,6 +22,8 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
     pollInterval := 75.milliseconds, // sbt polls the watch service for events at this rate
     watchLatency := 50.milliseconds, // os x file system api buffers events for this duration
     watchQueueSize := 256, // maximum number of buffered events per watched path
-    watchService := { () => createWatchService(watchLatency.value, watchQueueSize.value) },
+    watchService := { () =>
+      createWatchService(watchLatency.value, watchQueueSize.value)
+    },
   )
 }
