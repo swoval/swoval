@@ -5,160 +5,131 @@ import java.nio.file.StandardWatchEventKinds.{ ENTRY_CREATE, ENTRY_DELETE, ENTRY
 import java.nio.file._
 import java.util.concurrent.{ CountDownLatch, TimeUnit }
 
-import org.scalatest.{ Matchers, WordSpec }
+import utest._
 
 import scala.annotation.tailrec
+import scala.collection.mutable
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
-import MacOSXWatchServiceSpec._
+import com.swoval.test._
 
-import scala.collection.mutable
-
-class MacOSXWatchServiceSpec extends WordSpec with Matchers {
-
-  "MacOSXWatchService" should {
-    "poll" should {
-
-      "return create events" in {
-        withService { (service, _, _, _) =>
-          withTempDirectory { dir =>
-            service.watch(dir)
-            val f = new File(s"${dir.toFile.getAbsolutePath}/foo")
-            f.createNewFile()
-            service.poll(defaultTimeout).pollEvents().asScala match {
-              case Seq(event) => f.toPath shouldBe event.context
-            }
-          }
-        }
-      }
-      "create one event per path between polls" in {
-        withService { (service, _, onReg, onEvent) =>
-          withTempDirectory { dir =>
-            service.watch(dir)
-            onReg.waitFor(dir, defaultTimeout)
-            val f = new File(s"${dir.toFile.getAbsolutePath}/foo")
-            f.createNewFile()
-            onEvent.waitForCount(1, defaultTimeout)
-            f.setLastModified(System.currentTimeMillis + 5000)
-            onEvent.waitForCount(2, defaultTimeout)
-            service.poll(defaultTimeout).pollEvents().asScala match {
-              case Seq(createEvent, modifyEvent) =>
-                createEvent.kind shouldBe ENTRY_CREATE
-                createEvent.context shouldBe f.toPath
-                modifyEvent.kind shouldBe ENTRY_MODIFY
-                modifyEvent.context shouldBe f.toPath
-            }
-          }
-        }
-      }
-      "return correct subdirectory" in {
-        withService { (service, _, onReg, _) =>
-          withTempDirectory { dir =>
-            val subDir = new File(s"${dir.toFile.getAbsolutePath}/foo").toPath
-            withDirectory(subDir) {
+object MacOSXWatchServiceSpec extends TestSuite {
+  val tests = Tests {
+    'MacOSXWatchService - {
+      'poll - {
+        "return create events" - {
+          withService { (service, _, _, _) =>
+            withTempDirectory { dir =>
               service.watch(dir)
-              service.watch(subDir)
-              Seq(dir, subDir) foreach (onReg.waitFor(_, defaultTimeout))
-              val f = new File(s"${subDir.toRealPath()}/bar")
+              val f = new File(s"${dir.toFile.getAbsolutePath}/foo")
               f.createNewFile()
-              service.poll(defaultTimeout).watchable shouldBe subDir
+              service.poll(DEFAULT_TIMEOUT).pollEvents().asScala match {
+                case Seq(event) => f.toPath ==> event.context
+              }
+            }
+          }
+        }
+        "create one event per path between polls" - {
+          withService { (service, _, onReg, onEvent) =>
+            withTempDirectory { dir =>
+              service.watch(dir)
+              onReg.waitFor(dir, DEFAULT_TIMEOUT)
+              val f = new File(s"${dir.toFile.getAbsolutePath}/foo")
+              f.createNewFile()
+              onEvent.waitForCount(1, DEFAULT_TIMEOUT)
+              f.setLastModified(System.currentTimeMillis + 5000)
+              onEvent.waitForCount(2, DEFAULT_TIMEOUT)
+              service.poll(DEFAULT_TIMEOUT).pollEvents().asScala match {
+                case Seq(createEvent, modifyEvent) =>
+                  createEvent.kind ==> ENTRY_CREATE
+                  createEvent.context ==> f.toPath
+                  modifyEvent.kind ==> ENTRY_MODIFY
+                  modifyEvent.context ==> f.toPath
+              }
+            }
+          }
+        }
+        "return correct subdirectory" - {
+          withService { (service, _, onReg, _) =>
+            withTempDirectory { dir =>
+              val subDir = new File(s"${dir.toFile.getAbsolutePath}/foo").toPath
+              withDirectory(subDir) {
+                service.watch(dir)
+                service.watch(subDir)
+                Seq(dir, subDir) foreach (onReg.waitFor(_, DEFAULT_TIMEOUT))
+                val f = new File(s"${subDir.toRealPath()}/bar")
+                f.createNewFile()
+                service.poll(DEFAULT_TIMEOUT).watchable ==> subDir
+              }
+            }
+          }
+        }
+      }
+      "handle overflows" - {
+        withService(queueSize = 2) { (service, onOffer, onReg, onEvent) =>
+          withTempDirectory { dir =>
+            val dirFile = new File(dir.toFile.getAbsolutePath)
+            val subDir1 = new File(s"$dirFile/subdir1")
+            val subDir2 = new File(s"$dirFile/subdir2")
+            Seq(subDir1, subDir2) foreach { f =>
+              f.mkdir()
+              service.watch(f.toPath)
+              onReg.waitFor(f.toPath, DEFAULT_TIMEOUT)
+            }
+            val subDir1Paths = (0 to 5) map { i =>
+              val f = new File(s"$subDir1/file$i")
+              f.createNewFile()
+              onEvent.waitForCount(i + 1, DEFAULT_TIMEOUT)
+              f.toPath
+            }
+            val subDir2File = new File(s"$subDir2/file")
+            subDir2File.createNewFile()
+            onOffer.waitForCount(2, DEFAULT_TIMEOUT)
+            val rawEvents = service.pollEvents()
+            rawEvents exists { case (_, v) => v.exists(_.kind == OVERFLOW) }
+            val events = rawEvents.map {
+              case (k, v) => k.watchable -> v.filterNot(_.kind == OVERFLOW).map(_.context).toSet
+            }
+            events(subDir1.toPath) ==> (subDir1Paths take 2).toSet
+            events(subDir2.toPath) ==> Set(subDir2File.toPath)
+          }
+        }
+      }
+      "Not inadvertently exclude files - subdirectory" - {
+        /*
+         * Because service.register asynchronously does a file scan and tries to save work by
+         * not rescanning previously scanned directories, we need to be careful about how we
+         * exclude paths - the scan. There was a bug where I was excluding directories that
+         * hadn't yet been scanned because the directory was registered before the recursive
+         * file scan was executed, and the recursive file scan was excluding the registered files.
+         * This test case catches that bug.
+         */
+        withTempDirectory { dir =>
+          val subDir = new File(s"${dir.toFile.getAbsolutePath}/foo")
+          subDir.mkdir
+          val file = new File(s"$subDir/baz.scala")
+          file.createNewFile()
+          withService { (service, _, onReg, _) =>
+            service.watch(dir)
+            service.watch(subDir.toPath)
+            onReg.waitFor(dir, DEFAULT_TIMEOUT)
+            file.setLastModified(System.currentTimeMillis + 10000)
+            service.poll(DEFAULT_TIMEOUT).pollEvents().asScala match {
+              case Seq(Event(k, _, f)) =>
+                file.toPath ==> f
+                // This would be ENTRY_CREATE if the bug described above were present.
+                k ==> ENTRY_MODIFY
             }
           }
         }
       }
     }
-    "handle overflows" in {
-      withService(queueSize = 2) { (service, onOffer, onReg, onEvent) =>
-        withTempDirectory { dir =>
-          val dirFile = new File(dir.toFile.getAbsolutePath)
-          val subDir1 = new File(s"$dirFile/subdir1")
-          val subDir2 = new File(s"$dirFile/subdir2")
-          Seq(subDir1, subDir2) foreach { f =>
-            f.mkdir()
-            service.watch(f.toPath)
-            onReg.waitFor(f.toPath, defaultTimeout)
-          }
-          val subDir1Paths = (0 to 5) map { i =>
-            val f = new File(s"$subDir1/file$i")
-            f.createNewFile()
-            onEvent.waitForCount(i + 1, defaultTimeout)
-            f.toPath
-          }
-          val subDir2File = new File(s"$subDir2/file")
-          subDir2File.createNewFile()
-          onOffer.waitForCount(2, defaultTimeout)
-          val rawEvents = service.pollEvents()
-          rawEvents exists { case (_, v) => v.exists(_.kind == OVERFLOW) } shouldBe true
-          val events = rawEvents.map {
-            case (k, v) => k.watchable -> v.filterNot(_.kind == OVERFLOW).map(_.context).toSet
-          }
-          events(subDir1.toPath) shouldBe (subDir1Paths take 2).toSet
-          events(subDir2.toPath) shouldBe Set(subDir2File.toPath)
-        }
-      }
-    }
-    "Not inadvertently exclude files in subdirectory" in {
-      /*
-       * Because service.register asynchronously does a file scan and tries to save work by
-       * not rescanning previously scanned directories, we need to be careful about how we
-       * exclude paths in the scan. There was a bug where I was excluding directories that
-       * hadn't yet been scanned because the directory was registered before the recursive
-       * file scan was executed, and the recursive file scan was excluding the registered files.
-       * This test case catches that bug.
-       */
-      withTempDirectory { dir =>
-        val subDir = new File(s"${dir.toFile.getAbsolutePath}/foo")
-        subDir.mkdir
-        val file = new File(s"$subDir/baz.scala")
-        file.createNewFile()
-        withService { (service, _, onReg, _) =>
-          service.watch(dir)
-          service.watch(subDir.toPath)
-          onReg.waitFor(dir, defaultTimeout)
-          file.setLastModified(System.currentTimeMillis + 10000)
-          service.poll(defaultTimeout).pollEvents().asScala match {
-            case Seq(Event(k, _, f)) =>
-              file.toPath shouldBe f
-              // This would be ENTRY_CREATE if the bug described above were present.
-              k shouldBe ENTRY_MODIFY
-          }
-        }
-      }
-    }
-  }
 
-}
-
-object MacOSXWatchServiceSpec {
-  val defaultLatency = 5.milliseconds
-
-  val defaultQueueSize = 10
-
-  val defaultTimeout = 5.seconds
-
-  def withTempDirectory[R](f: Path => R): R = {
-    val dir = Files.createTempDirectory(this.getClass.getSimpleName)
-    withDirectory(dir)(f(dir.toRealPath()))
-  }
-
-  def withDirectory[R](path: Path)(f: => R): R =
-    try {
-      path.toFile.mkdir()
-      f
-    } finally {
-      path.toFile.delete()
-      ()
-    }
-
-  def withService[R](service: => MacOSXWatchService)(f: MacOSXWatchService => R): R = {
-    val s = service
-    try f(s)
-    finally s.close()
   }
 
   def withService[R](
-      latency: Duration = defaultLatency,
-      queueSize: Int = defaultQueueSize,
+      latency: Duration = 1.millisecond,
+      queueSize: Int = 10,
       onOffer: WatchKey => Unit = _ => {},
       onRegister: WatchKey => Unit = _ => {},
       onEvent: WatchEvent[_] => Unit = _ => {},
@@ -175,8 +146,7 @@ object MacOSXWatchServiceSpec {
       case r: OnEvent => r
       case f          => new OnEvent(f)
     }
-    withService(new MacOSXWatchService(latency, queueSize)(offer, reg, event))(
-      f(_, offer, reg, event))
+    using(new MacOSXWatchService(latency, queueSize)(offer, reg, event))(f(_, offer, reg, event))
   }
 
   def withService[R](f: (MacOSXWatchService, OnOffer, OnReg, OnEvent) => R): R = withService()(f)
@@ -237,13 +207,4 @@ object MacOSXWatchServiceSpec {
   implicit class RichService(val s: MacOSXWatchService) extends AnyVal {
     def watch(dir: Path) = s.register(dir, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY)
   }
-
-  implicit class RichDuration(val d: Duration) extends AnyVal {
-    private def toNanos = (d.toNanos - d.toMillis * 1e6).toInt
-
-    def waitOn(lock: Object) = lock.synchronized(lock.wait(d.toMillis, toNanos))
-
-    def waitOn(latch: CountDownLatch) = latch.await(d.toNanos, TimeUnit.NANOSECONDS)
-  }
-
 }

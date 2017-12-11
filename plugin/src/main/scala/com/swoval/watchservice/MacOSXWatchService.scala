@@ -28,7 +28,8 @@ class MacOSXWatchService(watchLatency: Duration, val queueSize: Int)(
     onOffer: WatchKey => Unit = _ => {},
     onRegister: WatchKey => Unit = _ => {},
     onEvent: WatchEvent[_] => Unit = _ => {},
-) extends WatchService {
+) extends AutoCloseable
+    with WatchService {
 
   private[this] val executor = Executors.newSingleThreadExecutor()
   private[this] val cleanupExecutor = Executors.newSingleThreadExecutor()
