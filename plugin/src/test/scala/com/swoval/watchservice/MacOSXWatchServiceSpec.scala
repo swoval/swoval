@@ -5,7 +5,7 @@ import java.nio.file.StandardWatchEventKinds.{ ENTRY_CREATE, ENTRY_DELETE, ENTRY
 import java.nio.file._
 import java.util.concurrent.CountDownLatch
 
-import com.swoval.test.Util._
+import com.swoval.test._
 import utest._
 
 import scala.annotation.tailrec
