@@ -69,18 +69,20 @@ object AppleDirectoryWatcherSpec extends TestSuite {
           }
         }
         'subdirectories - {
-          'onCreate - withTempDirectory { base =>
-            withTempDirectory(base) { dir =>
+          'onCreate - withTempDirectory { dir =>
+            withTempDirectory(dir) { subdir =>
               val events = new ArrayBlockingQueue[FileEvent](10)
-              val callback: Callback = e => events.add(e)
+              val callback: Callback = { e =>
+                if (new File(e.fileName).toPath != dir) events.add(e)
+              }
 
               using(new AppleDirectoryWatcher(DEFAULT_LATENCY, flags)(callback)) { w =>
-                w.waitToRegister(base)
-                val fileName = s"$dir/foo"
+                w.waitToRegister(dir)
+                val fileName = s"$subdir/foo"
                 val f = new File(fileName)
                 f.createNewFile()
                 val event = events.poll(DEFAULT_TIMEOUT)
-                new File(event.fileName) === base
+                new File(event.fileName) === subdir
               }
             }
           }
@@ -136,6 +138,7 @@ object AppleDirectoryWatcherSpec extends TestSuite {
             f.toFile.delete()
             val event = events.poll(DEFAULT_TIMEOUT)
             event.fileName ==> fileName
+
             assert(event.isRemoved)
           }
         }

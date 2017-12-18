@@ -5,8 +5,8 @@ import java.nio.file.{ NoSuchFileException, Path }
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ CountDownLatch, ExecutorService, Executors }
 
-import com.swoval.watcher.DirectoryWatcher.Callback
 import com.swoval.watcher.AppleFileSystemApi._
+import com.swoval.watcher.DirectoryWatcher._
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -14,6 +14,9 @@ import scala.concurrent.duration._
 
 object DirectoryWatcher {
   type Callback = FileEvent => Unit
+  implicit class RichExecutor(val executorService: ExecutorService) extends AnyVal {
+    def run[R](f: => R) = executorService.submit(() => f)
+  }
 }
 abstract class DirectoryWatcher extends AutoCloseable {
   def onFileEvent: Callback
@@ -25,82 +28,78 @@ class AppleDirectoryWatcher(latency: Duration, flags: Flags.Create)(
     override val onFileEvent: Callback)
     extends DirectoryWatcher {
   override def close(): Unit = if (closed.compareAndSet(false, true)) {
-    streams foreach { case (_, h) if h != 0 => AppleFileSystemApi.stopStream(handle, h) }
-    streams.clear()
-    AppleFileSystemApi.close(handle)
-    lock.synchronized(lock.notifyAll())
-    thread.interrupt()
-    thread.join()
-    Seq(executor, cleanupExecutor) foreach (_.shutdown())
+    lock.synchronized {
+      streams foreach { case (_, h) if h != 0 => AppleFileSystemApi.stopStream(handle, h) }
+      streams.clear()
+      AppleFileSystemApi.close(handle)
+      lock.notifyAll()
+    }
+    Seq(callbackExecutor, cleanupExecutor, watcherExecutor) foreach (_.shutdownNow())
   }
 
-  def register(path: Path, onRegister: Path => Unit) = register(path, flags.value, onRegister)
+  def register(path: Path, onRegister: Path => Unit): Boolean =
+    register(path, flags.value, onRegister)
   def register(path: Path, flags: Int, onRegister: Path => Unit): Boolean =
     try {
       val realPath = path.toRealPath()
-      submit(executor) {
-        if (!alreadyWatching(realPath)) {
-          val stream = createStream(realPath.toString, latency.toNanos / 1e9, flags, handle)
+      if (!alreadyWatching(realPath)) {
+        val stream = createStream(realPath.toString, latency.toNanos / 1e9, flags, handle)
+        lock.synchronized {
           if (stream != 0) streams += path -> stream
-          thread.signalLatch.countDown()
-          lock.synchronized {
-            needCleanup.set(true)
-            lock.notifyAll()
-          }
+          signalLatch.countDown()
+          needCleanup.set(true)
+          lock.notifyAll()
         }
-        onRegister(realPath)
       }
+      onRegister(realPath)
       true
     } catch { case e: NoSuchFileException => false }
 
-  def unregister(path: Path): Unit = submit(executor) {
-    streams get path match {
+  def unregister(path: Path): Unit =
+    lock.synchronized(streams get path match {
       case Some(streamHandle) if streamHandle != 0 =>
-        AppleFileSystemApi.stopStream(handle, streamHandle)
         streams -= path
-      case None => // Nothing registered, ignore event
-    }
-  }
+        Some(streamHandle)
+      case _ => None // Nothing registered, ignore event
+    }) foreach (AppleFileSystemApi.stopStream(handle, _))
 
-  private[this] val executor = Executors.newSingleThreadExecutor()
+  private[this] val callbackExecutor = Executors.newSingleThreadExecutor()
   private[this] val cleanupExecutor = Executors.newSingleThreadExecutor()
-  //private[this] val streams = mutable.Map.empty[Path, Long]
-  val streams = mutable.Map.empty[Path, Long]
-  private[this] val thread = new DirectoryWatcherThread
+  private[this] val watcherExecutor = Executors.newSingleThreadExecutor()
+  private[this] val streams = mutable.Map.empty[Path, Long]
   private[this] val lock = new Object
   private[this] val closed = new AtomicBoolean(false)
   private[this] var needCleanup = new AtomicBoolean(false)
   private[this] lazy val handle = try {
-    init(onFileEvent)
+    init(fe => callbackExecutor.run(onFileEvent(fe)))
   } catch { case _: Throwable => sys.exit(1) }
 
-  submit(cleanupExecutor)(cleanupLoop())
-  @tailrec
-  private def cleanupLoop(): Unit = {
-    def ready() = !closed.get && needCleanup.compareAndSet(true, false)
-    if (lock.synchronized { ready() || { lock.wait(); ready() } }) {
-      streams.keys filter (p => alreadyWatching(p.getParent)) foreach unregister
-    }
-    if (!closed.get) cleanupLoop()
-  }
+  private[this] val signalLatch = new CountDownLatch(1)
 
-  private[this] class DirectoryWatcherThread extends Thread("DirectoryWatcher") {
+  {
     val initLatch = new CountDownLatch(1)
-    val signalLatch = new CountDownLatch(1)
-    setDaemon(true)
-    start()
-    try initLatch.await()
-    catch { case _: InterruptedException => }
+    cleanupExecutor.run {
+      @tailrec def loop(): Unit = {
+        def ready() = !closed.get && needCleanup.compareAndSet(true, false)
+        if (lock.synchronized { ready() || { lock.wait(); ready() } }) {
+          streams.keys filter (p => alreadyWatching(p.getParent)) foreach unregister
+        }
+        if (!closed.get) loop()
+      }
+      loop()
+    }
 
-    override def run(): Unit =
+    watcherExecutor.run {
       try {
         handle
         initLatch.countDown()
-        try {
-          signalLatch.await()
-          AppleFileSystemApi.loop()
-        } catch { case _: InterruptedException => }
+        signalLatch.await()
+        AppleFileSystemApi.loop()
       } catch { case _: InterruptedException => }
+    }
+
+    try initLatch.await()
+    catch { case _: InterruptedException => }
   }
 
   private[this] var root: Path = _
