@@ -54,3 +54,6 @@ lazy val watcher = project
 
 lazy val testing = project
   .in(file("testing"))
+  .settings(
+    libraryDependencies ++= Seq(utestMain)
+  )
