@@ -4,9 +4,32 @@ This is an sbt plugin that replaces the native java PollingWatchService with the
 
 Usage
 ---
-Add `addSbtPlugin("com.swoval" %% "sbt-mac-watch-service" % "1.1.4")` to your project/plugins.sbt. To apply the plugin globally, add that command to ~/.sbt/1.0/plugins/watch.sbt (creating the file if necessary).
+Add
+```
+resolvers += Resolver.bintrayIvyRepo("swoval", "sbt-plugins")
+addSbtPlugin("com.swoval" %% "sbt-mac-watch-service" % "1.1.4")
+```
+to your project/plugins.sbt. To apply the plugin globally, add those commands to ~/.sbt/1.0/plugins/watch.sbt (creating the file if necessary).
 
-You can tune the plugin with the following settings (default values follow the `:=`):
+With luck the plugin works well with default settings, but there are a number of configuration options. By default the plugin overrides a number of sbt settings and tasks and commands:
+* sources in Compile
+* sources in Test
+* includeFilter in managedSources
+* includeFilter in unmanagedSources
+* ~ (aka sbt.BasicCommands.continuous)
+
+To prevent the plugin from overriding these sbt defaults, the following flags are available:
+* useDefaultWatchService -- don't override `~`
+* useDefaultSourceList -- don't override `sources in *`
+* useDefaultIncludeFilters -- don't override `includeFilter in *`
+
+The new implementation of `~` relies on a cache of source files. It can be configured with the `fileCache` key. To disable caching the sources (which impacts the `sources in *` tasks)
+
+`fileCache := com.swoval.watchservice.files.FileCache.NoCache`
+
+You can further tweak the file cache to control the latency of the buffered file events and whether or not to monitor files directly or just the directories (see FileCache.scala).
+
+When using the default sbt continuous execution implementation, you can tune the watch service with the following settings (default values follow the `:=`):
 
 `pollInterval := 75.milliseconds` -- This overrides the internal sbt pollInterval duration. SBT currently polls the WatchService for events at this rate. Reducing the value decreases latency but increases cpu utilization.
 
@@ -16,7 +39,7 @@ You can tune the plugin with the following settings (default values follow the `
 
 Credits
 ---
-The initial implementation was based on [directory-watcher](https://github.com/gmethvin/directory-watcher), which in turn relied on [takari-directoy-watcher](https://github.com/takari/directory-watcher).
+The initial implementation was based on [directory-watcher](https://github.com/gmethvin/directory-watcher), which in turn relied on [takari-directoy-watcher](https://github.com/takari/directory-watcher). Thanks to [@francisdb](https://github.com/francisdb) who provided lots of early feedback.
 
 License
 ---
