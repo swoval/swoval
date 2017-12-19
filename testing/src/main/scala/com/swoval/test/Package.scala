@@ -5,10 +5,16 @@ import java.util.concurrent.{ BlockingQueue, CountDownLatch, TimeUnit }
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
+import utest._
+
+import scala.language.higherKinds
 
 package object test {
   final val DEFAULT_TIMEOUT = 1.second
 
+  implicit class RichTraversbale[T, M[_]](val t: M[T]) {
+    def ===(other: M[T]) = t ==> other
+  }
   implicit class RichDuration(val d: Duration) extends AnyVal {
     private def toNanos = (d.toNanos - d.toMillis * 1e6).toInt
 
@@ -37,18 +43,18 @@ package object test {
   }
 
   def withTempFile[R](dir: Path)(f: Path => R): R = {
-    val file = Files.createTempFile(dir, "", "")
+    val file = Files.createTempFile(dir, "file", "")
     try f(file)
     finally file.toFile.delete()
   }
   def withTempFile[R](f: Path => R): R = withTempDirectory[R]((dir: Path) => withTempFile(dir)(f))
 
   def withTempDirectory[R](f: Path => R): R = {
-    val dir = Files.createTempDirectory("")
+    val dir = Files.createTempDirectory("dir")
     withDirectory(dir)(f(dir.toRealPath()))
   }
   def withTempDirectory[R](dir: Path)(f: Path => R): R = {
-    val subDir = Files.createTempDirectory(dir, "")
+    val subDir = Files.createTempDirectory(dir, "subdir")
     withDirectory(subDir)(f(subDir.toRealPath()))
   }
 

@@ -74,7 +74,6 @@ class MacOSXWatchService(watchLatency: Duration, val queueSize: Int)(
     if (fileEvent.itemIsFile) {
       val path = new File(fileEvent.fileName).toPath
       registered.synchronized(registered get path.getParent) foreach { key =>
-        //println(s"got event $fileEvent")
         fileEvent match {
           case e if e.isNewFile && key.reportCreateEvents =>
             createEvent(key, ENTRY_CREATE, path)

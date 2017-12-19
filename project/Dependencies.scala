@@ -2,6 +2,8 @@ import sbt._
 
 object Dependencies {
   val sbtIO = "org.scala-sbt" %% "io" % "1.0.1"
-  val utest = "com.lihaoyi" %% "utest" % "0.6.0" % "test"
+  private val utestVersion = "0.6.0"
+  val utestMain = "com.lihaoyi" %% "utest" % utestVersion
+  val utest = "com.lihaoyi" %% "utest" % utestVersion % "test"
   val zinc = "org.scala-sbt" %% "zinc" % "1.0.5"
 }
