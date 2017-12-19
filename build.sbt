@@ -20,7 +20,11 @@ def utestSettings = Seq(
 
 lazy val root = project
   .in(file("."))
-  .aggregate(testing, plugin, watcher)
+  .aggregate(watcher, plugin)
+  .settings(
+    publish := {},
+    bintrayUnpublish := {},
+  )
 
 lazy val plugin = project
   .in(file("plugin"))
@@ -46,6 +50,10 @@ lazy val watcher = project
     commonSettings,
     utestSettings,
     name := "directory-watcher",
+    bintrayPackage := "directory-watcher",
+    bintrayRepository := "sbt-plugins",
+    description := "Reactive directory watcher for OSX",
+    publishMavenStyle := false,
     sourceDirectory in nativeCompile := sourceDirectory.value / "main" / "native",
     target in javah := sourceDirectory.value / "main" / "native" / "include",
     watchSources ++= (sourceDirectory.value / "main" / "native" ** "*.c").get,
