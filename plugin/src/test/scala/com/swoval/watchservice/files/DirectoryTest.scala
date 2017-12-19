@@ -1,6 +1,7 @@
 package com.swoval.watchservice.files
 
 import java.io.File
+import java.nio.file.Path
 import java.nio.file.StandardWatchEventKinds.{ ENTRY_CREATE, ENTRY_DELETE }
 
 import com.swoval.test._
@@ -20,6 +21,17 @@ object DirectoryTest extends TestSuite {
       "files" - withTempFile { file =>
         val parent = file.getParent
         Directory(parent).list(recursive = true, AllPassFilter) === Seq(file.toFile)
+      }
+      "resolution" - withTempDirectory { dir =>
+        withTempDirectory(dir) { subdir =>
+          withTempFile(subdir) { f =>
+            def parentEquals(dir: Path) = (f: File) => f.toPath.toAbsolutePath.getParent == dir
+            val directory = Directory(dir)
+            directory.list(recursive = true, parentEquals(dir)) === Seq(subdir.toFile)
+            directory.list(recursive = true, parentEquals(subdir)) === Seq(f.toFile)
+            directory.list(recursive = true, AllPassFilter) === Seq(subdir.toFile, f.toFile)
+          }
+        }
       }
       "directories" - {
         "non-recursive" - withTempDirectory { dir =>

@@ -71,8 +71,9 @@ final case class Directory private (path: Path) {
 
       val cachedFiles = files.values
       val subdirs = subdirectories.values
-      (cachedFiles.view.filter(filter.accept).map(resolve).toSeq ++
-        subdirs.view.map(_.file).filter(filter.accept).map(resolve)).toIndexedSeq ++
+
+      (cachedFiles.view.map(resolve).filter(filter.accept).toSeq ++
+        subdirs.view.map(_.file).map(resolve).filter(filter.accept)).toIndexedSeq ++
         (if (recursive) subdirs.flatMap(_.list(recursive, filter)) else Seq.empty).toIndexedSeq
     }
 
