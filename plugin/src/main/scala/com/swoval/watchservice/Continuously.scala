@@ -15,7 +15,7 @@ import scala.annotation.tailrec
 
 object Continuously {
 
-  lazy val _watchState = AttributeKey[WatchState]("Internal watch state")
+  lazy val swovalWatchState = AttributeKey[WatchState]("swovalWatchState")
   sealed trait TriggerEvent
   case object Exit extends TriggerEvent
   case object Triggered extends TriggerEvent
@@ -42,16 +42,16 @@ object Continuously {
     executor.submit((() => signalExit()): Runnable)
   }
   def executeContinuously(sources: Seq[Source], s: State, next: String, repeat: String): State = {
-    val watchState = s.get(_watchState) getOrElse WatchState(sources)
+    val watchState = s.get(swovalWatchState) getOrElse WatchState(sources)
     watchState.count += 1
 
     if (watchState.count == 0) {
-      (ClearOnFailure :: next :: FailureWall :: repeat :: s).put(_watchState, watchState)
+      (ClearOnFailure :: next :: FailureWall :: repeat :: s).put(swovalWatchState, watchState)
     } else {
       println(s"${watchState.count}. Waiting for source changes... (press enter to interrupt)")
       watchState.events.take match {
         case Exit =>
-          s.remove(_watchState)
+          s.remove(swovalWatchState)
         case Triggered =>
           ClearOnFailure :: next :: FailureWall :: repeat :: s
       }
