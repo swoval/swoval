@@ -7,7 +7,7 @@ Usage
 Add
 ```
 resolvers += Resolver.bintrayIvyRepo("swoval", "sbt-plugins")
-addSbtPlugin("com.swoval" %% "sbt-mac-watch-service" % "1.1.6")
+addSbtPlugin("com.swoval" %% "sbt-mac-watch-service" % "1.1.7")
 ```
 to your project/plugins.sbt. To apply the plugin globally, add those commands to ~/.sbt/1.0/plugins/watch.sbt (creating the file if necessary).
 
