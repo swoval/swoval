@@ -1,16 +1,14 @@
 import Dependencies._
 
-def baseVersion: String = "1.1.4"
+def baseVersion: String = "1.1.7"
 
 def commonSettings = Seq(
   git.baseVersion := baseVersion,
   organization := "com.swoval",
   bintrayOrganization := Some("swoval"),
-  scalaVersion := "2.12.4",
   licenses += ("Apache-2.0", url(
-    "https://www.apache.org/licenses/LICENSE-2.0.html"
+    "https:www.apache.org/licenses/LICENSE-2.0.html"
   )),
-  libraryDependencies += zinc
 )
 
 def utestSettings = Seq(
@@ -39,13 +37,13 @@ lazy val plugin = project
       "the default PollingWatchService on Mac OSX.",
     publishMavenStyle := false,
     sbtPlugin := true,
-    libraryDependencies ++= Seq(sbtIO),
+    libraryDependencies ++= Seq(zinc, sbtIO),
   )
   .dependsOn(watcher, testing % "test->test")
 
 lazy val watcher = project
   .in(file("directory-watcher"))
-  .enablePlugins(GitVersioning, JniNative)
+  .enablePlugins(GitVersioning)
   .settings(
     commonSettings,
     utestSettings,
@@ -54,6 +52,20 @@ lazy val watcher = project
     bintrayRepository := "sbt-plugins",
     description := "Reactive directory watcher for OSX",
     publishMavenStyle := false,
+    libraryDependencies ++= Seq(zinc, apfs)
+  )
+  .dependsOn(testing % "test->test")
+
+lazy val appleFileSystem = project
+  .in(file("apple-file-system"))
+  .enablePlugins(JniNative)
+  .settings(
+    commonSettings,
+    utestSettings,
+    name := "apple-file-system",
+    bintrayPackage := "apple-file-system",
+    bintrayRepository := "sbt-plugins",
+    description := "JNI library for apple file system",
     sourceDirectory in nativeCompile := sourceDirectory.value / "main" / "native",
     target in javah := sourceDirectory.value / "main" / "native" / "include",
     watchSources ++= (sourceDirectory.value / "main" / "native" ** "*.c").get,
@@ -63,5 +75,5 @@ lazy val watcher = project
 lazy val testing = project
   .in(file("testing"))
   .settings(
-    libraryDependencies ++= Seq(utestMain)
+    libraryDependencies ++= Seq(utestMain),
   )
