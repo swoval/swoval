@@ -67,6 +67,7 @@ lazy val appleFileSystem = project
     bintrayRepository := "sbt-plugins",
     description := "JNI library for apple file system",
     sourceDirectory in nativeCompile := sourceDirectory.value / "main" / "native",
+    publishMavenStyle := false,
     target in javah := sourceDirectory.value / "main" / "native" / "include",
     watchSources ++= (sourceDirectory.value / "main" / "native" ** "*.c").get,
   )
