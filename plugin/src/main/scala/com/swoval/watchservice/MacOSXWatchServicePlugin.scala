@@ -36,7 +36,7 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
     Classpaths.concat(unmanagedSources in conf, managedSources in conf).value
   }
   private def cachedSourcesFor(conf: Configuration, sourcesInBase: Boolean) = Def.task {
-    def filter(in: FileFilter, ex: FileFilter): FileFilter = f => { in.accept(f) && !ex.accept(f) }
+    def filter(in: FileFilter, ex: FileFilter) = sbtFilter(f => in.accept(f) && !ex.accept(f))
     def list(recursive: Boolean, filter: FileFilter) =
       (f: File) => fileCache.value.list(f.toPath, recursive = recursive, filter)
 
@@ -49,7 +49,7 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
     val baseFilter = filter(unmanagedIncludeFilter, unmanagedExcludeFilter)
 
     val unmanaged = unmanagedDirs flatMap list(recursive = true, unmanagedFilter)
-    val base = baseDirs flatMap list(recursive = false, baseFilter)
+    val base = baseDirs.flatMap(d => list(recursive = false, baseFilter && nodeFilter(d))(d))
     unmanaged ++ base ++ (managedSources in conf).value
   }
 
@@ -57,6 +57,8 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
     if (useDefaultSourceList.value) defaultSourcesFor(conf)
     else cachedSourcesFor(conf, sourcesInBase.value)
   }
+  private def sbtFilter(f: FileFilter) = new SimpleFileFilter(f.accept)
+  private def nodeFilter(dir: File) = new SimpleFileFilter(f => f.toPath.getParent == dir.toPath)
   override lazy val projectSettings: Seq[Def.Setting[_]] = super.projectSettings ++ Seq(
     pollInterval := 75.milliseconds, // sbt polls the watch service for events at this rate
     watchLatency := 50.milliseconds, // os x file system api buffers events for this duration
@@ -76,9 +78,7 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
       val baseDir = baseDirectory.value
       val include =
         if (useDefaultWatchSourceList.value) (includeFilter in unmanagedSources).value
-        else
-          (includeFilter in unmanagedSources).value && new SimpleFileFilter(
-            f => f.toPath.getParent == baseDir.toPath)
+        else (includeFilter in unmanagedSources).value && nodeFilter(baseDir)
       val exclude = (excludeFilter in unmanagedSources).value
       val baseSources =
         if (sourcesInBase.value)
