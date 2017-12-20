@@ -25,6 +25,7 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
     lazy val useDefaultSourceList = settingKey[Boolean]("Use default sbt source list.")
     lazy val useDefaultWatchSourceList = settingKey[Boolean]("Use default sbt watch source list.")
     lazy val useDefaultIncludeFilters = settingKey[Boolean]("Use default sbt include filters.")
+    lazy val sourceDiff = taskKey[Unit]("Use default sbt include filters.")
   }
   import autoImport._
 
@@ -86,6 +87,19 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
       getSources(unmanagedSourceDirectories, unmanagedSources).value ++
         getSources(unmanagedResourceDirectories, unmanagedResources).value ++
         baseSources
+    },
+    sourceDiff := {
+      val ref = thisProjectRef.value.project
+      val default = (defaultSourcesFor(Compile).value ++ defaultSourcesFor(Test).value).toSet
+      val cached =
+        (cachedSourcesFor(Compile, true).value ++ cachedSourcesFor(Test, true).value).toSet
+      val (cachedExtra, defaultExtra) = (cached diff default, default diff cached)
+      def msg(version: String, paths: Set[File]) =
+        s"The $version source files in $ref had the following extra paths:\n${paths mkString "\n"}"
+      if (cachedExtra.nonEmpty) println(msg("cached", cachedExtra))
+      if (defaultExtra.nonEmpty) println(msg("default", defaultExtra))
+      if (cachedExtra.isEmpty && defaultExtra.isEmpty)
+        println(s"No difference in $ref between sbt default source files and from the cache.")
     },
     fileCache := FileCache.default,
   )
