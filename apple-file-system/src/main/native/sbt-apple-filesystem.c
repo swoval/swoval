@@ -1,11 +1,11 @@
-#include "com_swoval_watcher_AppleFileSystemApi__.h"
+#include "com_swoval_watcher_AppleFileSystemApi.h"
 #include <stdio.h>
 #include <jni.h>
 #include <CoreServices/CoreServices.h>
 
-#define CALLBACK_SIG "(Ljava/lang/Object;)Ljava/lang/Object;"
-#define EVENT_MODULE_SIG "Lcom/swoval/watcher/FileEvent$;"
-#define EVENT_APPLY_SIG "(Ljava/lang/String;IJ)Lcom/swoval/watcher/FileEvent;"
+#define CALLBACK_SIG "(Ljava/lang/Object;)V"
+#define EVENT_SIG "com/swoval/watcher/FileEvent"
+#define EVENT_INIT_SIG "(Ljava/lang/String;IJ)V"
 
 static const CFStringRef mode = CFSTR("kCFRunLoopDefaultMode");
 
@@ -14,7 +14,7 @@ struct service_handle {
     jobject callback;
     jmethodID callbackApply;
     jobject fileEvent;
-    jmethodID fileEventApply;
+    jmethodID fileEventCons;
     JNIEnv *env;
 };
 
@@ -32,19 +32,13 @@ static void callback(
 
     for (int i = 0; i < count; ++i) {
         jstring string = (*env)->NewStringUTF(env, paths[i]);
-            jobject event = (*env)->CallStaticObjectMethod(
-            env,
-            h->fileEvent,
-            h->fileEventApply,
-            string,
-            flags[i],
-            ids[i]);
+        jobject event = (*env)->NewObject(env, h->fileEvent, h->fileEventCons, string, flags[i], ids[i]);
         (*env)->CallVoidMethod(env, h->callback, h->callbackApply, event);
     }
 }
 
-JNIEXPORT void JNICALL Java_com_swoval_watcher_AppleFileSystemApi_00024_close
-(JNIEnv *env, jobject obj, jlong handle) {
+JNIEXPORT void JNICALL Java_com_swoval_watcher_AppleFileSystemApi_close
+  (JNIEnv *env, jclass clazz, jlong handle) {
     struct service_handle *h = (struct service_handle*) handle;
     CFRunLoopStop(h->runLoop);
     (*h->env)->DeleteGlobalRef(env, h->callback);
@@ -52,30 +46,30 @@ JNIEXPORT void JNICALL Java_com_swoval_watcher_AppleFileSystemApi_00024_close
     free(h);
 }
 
-JNIEXPORT jlong JNICALL Java_com_swoval_watcher_AppleFileSystemApi_00024_init
-(JNIEnv *env, jobject thread, jobject callback) {
+JNIEXPORT jlong JNICALL Java_com_swoval_watcher_AppleFileSystemApi_init
+  (JNIEnv *env, jclass thread, jobject callback) {
     struct service_handle* handle= (struct service_handle*) malloc(sizeof(struct service_handle));
     jclass callbackClass = (*env)->GetObjectClass(env, callback);
 
-    jclass eventClass = (*env)->FindClass(env, "com/swoval/watcher/FileEvent");
+    jclass eventClass = (*env)->FindClass(env, EVENT_SIG);
 
     handle->runLoop = CFRunLoopGetCurrent();
     handle->callback = (*env)->NewGlobalRef(env, callback);
-    handle->callbackApply = (*env)->GetMethodID(env, callbackClass, "apply", CALLBACK_SIG);
+    handle->callbackApply = (*env)->GetMethodID(env, callbackClass, "accept", CALLBACK_SIG);
     handle->fileEvent = (*env)->NewGlobalRef(env, eventClass);
-    handle->fileEventApply = (*env)->GetStaticMethodID(env, eventClass, "apply", EVENT_APPLY_SIG);
+    handle->fileEventCons = (*env)->GetMethodID(env, eventClass, "<init>", EVENT_INIT_SIG);
     handle->env = env;
 
     return (jlong) handle;
 }
 
-JNIEXPORT void JNICALL Java_com_swoval_watcher_AppleFileSystemApi_00024_loop
-(JNIEnv *env, jobject obj) {
+JNIEXPORT void JNICALL Java_com_swoval_watcher_AppleFileSystemApi_loop
+  (JNIEnv *env, jclass clazz) {
     CFRunLoopRun();
 }
 
-JNIEXPORT jlong JNICALL Java_com_swoval_watcher_AppleFileSystemApi_00024_createStream
-(JNIEnv *env, jobject object, jstring path, jdouble latency, jint flags, jlong handle) {
+JNIEXPORT jlong JNICALL Java_com_swoval_watcher_AppleFileSystemApi_createStream
+  (JNIEnv *env, jclass clazz, jstring path, jdouble latency, jint flags, jlong handle) {
     const char *nativePath = (*env)->GetStringUTFChars(env, path, 0);
     CFStringRef mypath = CFStringCreateWithCStringNoCopy(NULL, nativePath, kCFStringEncodingUTF8, NULL);
     CFArrayRef pathsToWatch = CFArrayCreate(NULL, (const void **)&mypath, 1, NULL);
@@ -93,8 +87,8 @@ JNIEXPORT jlong JNICALL Java_com_swoval_watcher_AppleFileSystemApi_00024_createS
     return (jlong) stream;
 }
 
-JNIEXPORT void JNICALL Java_com_swoval_watcher_AppleFileSystemApi_00024_stopStream
-(JNIEnv *env, jobject object, jlong service_handle, jlong stream_handle) {
+JNIEXPORT void JNICALL Java_com_swoval_watcher_AppleFileSystemApi_stopStream
+  (JNIEnv *env, jclass clazz, jlong service_handle, jlong stream_handle) {
     if (stream_handle == 0) return;
     FSEventStreamRef stream = (FSEventStreamRef) stream_handle;
     CFRunLoopRef runLoop = ((struct service_handle*) service_handle)->runLoop;

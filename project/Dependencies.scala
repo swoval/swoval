@@ -6,4 +6,5 @@ object Dependencies {
   val utestMain = "com.lihaoyi" %% "utest" % utestVersion
   val utest = "com.lihaoyi" %% "utest" % utestVersion % "test"
   val zinc = "org.scala-sbt" %% "zinc" % "1.0.5"
+  val apfs = "com.swoval" % "apple-file-system" % "1.1.8"
 }

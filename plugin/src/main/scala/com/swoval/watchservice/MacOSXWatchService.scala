@@ -31,7 +31,7 @@ class MacOSXWatchService(watchLatency: Duration, val queueSize: Int)(
 
   private[this] val executor = Executors.newSingleThreadExecutor()
   private[this] val watcher = {
-    val flags = Flags.Create.setFileEvents
+    val flags = new Flags.Create(Flags.Create.NoDefer).setFileEvents
     new AppleDirectoryWatcher(watchLatency, flags)(onFileEvent)
   }
 

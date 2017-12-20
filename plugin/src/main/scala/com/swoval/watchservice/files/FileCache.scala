@@ -151,14 +151,14 @@ object FileOptions {
   def apply(latency: Duration, flags: Flags.Create): FileOptions = {
     new MonitorOptions(latency, flags) with FileOptions
   }
-  lazy val default: FileOptions = FileOptions(10.milliseconds, Flags.Create.setFileEvents)
+  lazy val default: FileOptions = FileOptions(10.milliseconds, new Flags.Create(Flags.Create.NoDefer).setFileEvents())
 }
 sealed trait DirectoryOptions extends Options
 object DirectoryOptions {
   def apply(latency: Duration, flags: Flags.Create): DirectoryOptions = {
     new MonitorOptions(latency, flags) with DirectoryOptions
   }
-  lazy val default: DirectoryOptions = DirectoryOptions(1.second, Flags.Create(0))
+  lazy val default: DirectoryOptions = DirectoryOptions(1.second, new Flags.Create(0))
 }
 case object NoMonitor extends FileOptions with DirectoryOptions {
   override def toWatcher(callback: => DirectoryWatcher.Callback): Option[DirectoryWatcher] = None

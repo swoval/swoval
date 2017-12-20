@@ -26,7 +26,7 @@ object AppleDirectoryWatcherSpec extends TestSuite {
     'AppleDirectoryWatcher - {
       implicit val latch: CountDownLatch = new CountDownLatch(1)
       "directories" - {
-        val flags = Flags.Create
+        val flags = new Flags.Create(Flags.Create.NoDefer)
         'onCreate - withTempDirectory { dir =>
           val events = new ArrayBlockingQueue[FileEvent](10)
           val callback: Callback = e => events.add(e)
@@ -89,7 +89,7 @@ object AppleDirectoryWatcherSpec extends TestSuite {
         }
       }
       'files - {
-        val flags = Flags.Create.setFileEvents
+        val flags = new Flags.Create(Flags.Create.NoDefer).setFileEvents
         "handle file creation events" - {
           withTempDirectory { dir =>
             val events = new ArrayBlockingQueue[FileEvent](10)
