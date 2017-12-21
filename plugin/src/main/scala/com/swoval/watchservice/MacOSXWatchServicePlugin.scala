@@ -2,7 +2,7 @@ package com.swoval.watchservice
 
 import java.io.FileFilter
 
-import com.swoval.watchservice.files.FileCache
+import com.swoval.files.{ FileCache, Path }
 import sbt.Keys._
 import sbt.internal.io.Source
 import sbt.io.WatchService
@@ -29,16 +29,22 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
   }
   import autoImport._
 
-  private def defaultSourcesFor(conf: Configuration) = Def.task {
-    def list(p: File) = fileCache.value.list(p.toPath, recursive = false, _ => false)
+  private implicit def toSwovalPath(f: File): Path = Path(f.toString)
+  private def toFile(s: Path): File = new File(s.fullName)
+  private def defaultSourcesFor(conf: Configuration) = Def.task[Seq[File]] {
+    def list(p: File) =
+      fileCache.value
+        .list(Path(p.toPath.toString), recursive = false, _ => false)
+        .view
+        .map(toFile)
     (unmanagedSourceDirectories in conf).value foreach list
     (managedSourceDirectories in conf).value foreach list
     Classpaths.concat(unmanagedSources in conf, managedSources in conf).value
   }
-  private def cachedSourcesFor(conf: Configuration, sourcesInBase: Boolean) = Def.task {
+  private def cachedSourcesFor(conf: Configuration, sourcesInBase: Boolean) = Def.task[Seq[File]] {
     def filter(in: FileFilter, ex: FileFilter) = sbtFilter(f => in.accept(f) && !ex.accept(f))
     def list(recursive: Boolean, filter: FileFilter) =
-      (f: File) => fileCache.value.list(f.toPath, recursive = recursive, filter)
+      (f: File) => fileCache.value.list(f, recursive = recursive, filter)
 
     val unmanagedDirs = (unmanagedSourceDirectories in conf).value
     val unmanagedIncludeFilter = ((includeFilter in unmanagedSources) in conf).value
@@ -50,10 +56,10 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
 
     val unmanaged = unmanagedDirs flatMap list(recursive = true, unmanagedFilter)
     val base = baseDirs.flatMap(d => list(recursive = false, baseFilter && nodeFilter(d))(d))
-    unmanaged ++ base ++ (managedSources in conf).value
+    (unmanaged ++ base).view.map(toFile) ++ (managedSources in conf).value
   }
 
-  private def sourcesFor(conf: Configuration) = Def.taskDyn {
+  private def sourcesFor(conf: Configuration) = Def.taskDyn[Seq[File]] {
     if (useDefaultSourceList.value) defaultSourcesFor(conf)
     else cachedSourcesFor(conf, sourcesInBase.value)
   }
@@ -101,7 +107,7 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
       if (cachedExtra.isEmpty && defaultExtra.isEmpty)
         println(s"No difference in $ref between sbt default source files and from the cache.")
     },
-    fileCache := FileCache.default,
+    fileCache := FileCaches.default,
   )
   private def getSources(key: SettingKey[Seq[File]], scope: TaskKey[Seq[File]]) = Def.task {
     val dirs = (key in Compile).value ++ (key in Test).value

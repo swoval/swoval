@@ -1,18 +1,20 @@
 package com.swoval.watchservice
 
-import java.io.File
 import java.nio.file.StandardWatchEventKinds.{ ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY, OVERFLOW }
-import java.nio.file._
-import java.util.concurrent._
+import java.nio.file.{ Path => JPath, Paths => JPaths, _ }
 import java.util.concurrent.atomic.{ AtomicBoolean, AtomicInteger }
+import java.util.concurrent.{ ArrayBlockingQueue, LinkedBlockingQueue, TimeUnit }
 import java.util.{ Collections, List => JList }
 
-import com.swoval.watcher.{ AppleDirectoryWatcher, FileEvent, Flags }
+import com.swoval.files.FileWatchEvent.{ Create, Delete, Modify }
+import com.swoval.files.apple.{ Flags, FileEvent => AppleFileEvent }
+import com.swoval.files.{ AppleDirectoryWatcher, Executor, FileWatchEvent, Path }
 import sbt.io.WatchService
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.duration._
+import scala.language.implicitConversions
 
 /**
  * Provides the lion's share of the implementation details for receiving file system
@@ -24,16 +26,17 @@ import scala.concurrent.duration._
  */
 class MacOSXWatchService(watchLatency: Duration, val queueSize: Int)(
     val onOffer: WatchKey => Unit = _ => {},
-    val onRegister: WatchKey => Unit = _ => {},
     val onEvent: WatchEvent[_] => Unit = _ => {},
 ) extends WatchService
     with AutoCloseable {
 
-  private[this] val executor = Executors.newSingleThreadExecutor()
+  private[this] val executor = Executor.make
   private[this] val watcher = {
-    val flags = new Flags.Create(Flags.Create.NoDefer).setFileEvents
-    new AppleDirectoryWatcher(watchLatency, flags)(onFileEvent)
+    val flags = new Flags.Create().setNoDefer().setFileEvents()
+    new AppleDirectoryWatcher(watchLatency, flags, executor)(onFileEvent)
   }
+  private implicit def toSwovalPath(p: JPath): Path = Path(p.toRealPath().toString)
+  private implicit def toPath(p: Path): JPath = JPaths.get(p.fullName)
 
   override def close(): Unit = {
     if (open.compareAndSet(true, false)) {
@@ -47,48 +50,44 @@ class MacOSXWatchService(watchLatency: Duration, val queueSize: Int)(
     readyKeys.poll(timeout.toNanos, TimeUnit.NANOSECONDS)
   }
 
-  override def pollEvents(): Map[WatchKey, Seq[WatchEvent[Path]]] =
+  override def pollEvents(): Map[WatchKey, Seq[WatchEvent[JPath]]] =
     registered
       .synchronized(registered.flatMap {
         case (_, k) =>
           val events = k.pollEvents()
           if (events.isEmpty) None
-          else Some(k -> events.asScala.map(_.asInstanceOf[WatchEvent[Path]]))
+          else Some(k -> events.asScala.map(_.asInstanceOf[WatchEvent[JPath]]))
       })
-      .toMap[WatchKey, Seq[WatchEvent[Path]]]
+      .toMap[WatchKey, Seq[WatchEvent[JPath]]]
 
-  override def register(path: Path, events: WatchEvent.Kind[Path]*): WatchKey = {
+  override def register(path: JPath, events: WatchEvent.Kind[JPath]*): WatchKey = {
     registered.synchronized {
       registered get path match {
         case Some(k) => k;
         case _ =>
           val key = new MacOSXWatchKey(path, queueSize, events: _*)
           registered += path -> key
-          watcher.register(path, _ => onRegister(key))
+          watcher.register(Path(path.toRealPath().toString))
           key
       }
     }
   }
 
-  def onFileEvent(fileEvent: FileEvent): Unit = submit(executor) {
-    if (fileEvent.itemIsFile) {
-      val path = new File(fileEvent.fileName).toPath
-      registered.synchronized(registered get path.getParent) foreach { key =>
-        fileEvent match {
-          case e if e.isNewFile && key.reportCreateEvents =>
-            createEvent(key, ENTRY_CREATE, path)
-          case e if e.isRemoved && key.reportDeleteEvents =>
-            Some(ENTRY_DELETE)
-            createEvent(key, ENTRY_DELETE, path)
-          case _ if key.reportModifyEvents =>
-            createEvent(key, ENTRY_MODIFY, path)
-          case _ =>
-        }
+  def onFileEvent(fileEvent: FileWatchEvent): Unit = executor.run {
+    registered.synchronized(registered get (fileEvent.path.getParent: Path)) foreach { key =>
+      fileEvent.kind match {
+        case Create if key.reportCreateEvents =>
+          createEvent(key, ENTRY_CREATE, fileEvent.path)
+        case Delete if key.reportDeleteEvents =>
+          createEvent(key, ENTRY_DELETE, fileEvent.path)
+        case Modify if key.reportModifyEvents =>
+          createEvent(key, ENTRY_MODIFY, fileEvent.path)
+        case _ =>
       }
     }
   }
 
-  private def createEvent(key: MacOSXWatchKey, kind: WatchEvent.Kind[Path], file: Path): Unit = {
+  private def createEvent(key: MacOSXWatchKey, kind: WatchEvent.Kind[JPath], file: JPath): Unit = {
     val event = Event(kind, 1, file)
     key.addEvent(event)
     onEvent(event)
@@ -100,18 +99,14 @@ class MacOSXWatchService(watchLatency: Duration, val queueSize: Int)(
 
   def isOpen: Boolean = open.get
 
-  private def submit[R](service: ExecutorService)(f: => R): Unit = {
-    service.submit(() => f); ()
-  }
-
   private[this] val open = new AtomicBoolean(true)
   private[this] val readyKeys = new LinkedBlockingQueue[MacOSXWatchKey]
-  private[this] val registered = mutable.Map.empty[Path, MacOSXWatchKey]
+  private[this] val registered = mutable.Map.empty[JPath, MacOSXWatchKey]
 }
 
 private case class Event[T](kind: WatchEvent.Kind[T], count: Int, context: T) extends WatchEvent[T]
 
-private class MacOSXWatchKey(val watchable: Path, queueSize: Int, kinds: WatchEvent.Kind[Path]*)
+private class MacOSXWatchKey(val watchable: JPath, queueSize: Int, kinds: WatchEvent.Kind[JPath]*)
     extends WatchKey {
 
   override def cancel(): Unit = valid.set(false)
@@ -140,7 +135,7 @@ private class MacOSXWatchKey(val watchable: Path, queueSize: Int, kinds: WatchEv
   private val overflow = new AtomicInteger()
   private val valid = new AtomicBoolean(true)
 
-  @inline def addEvent(event: Event[Path]): Unit = if (!events.offer(event)) {
+  @inline def addEvent(event: Event[JPath]): Unit = if (!events.offer(event)) {
     overflow.incrementAndGet()
     ()
   }
