@@ -25,7 +25,7 @@ To prevent the plugin from overriding these sbt defaults, the following flags ar
 
 The new implementation of `~` relies on a cache of source files. It can be configured with the `fileCache` key. To disable caching the sources (which impacts the `sources in *` tasks)
 
-`fileCache := com.swoval.watchservice.files.FileCache.NoCache`
+`fileCache := com.swoval.files.FileCaches.NoCache`
 
 You can further tweak the file cache to control the latency of the buffered file events and whether or not to monitor files directly or just the directories (see FileCache.scala).
 

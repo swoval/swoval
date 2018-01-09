@@ -1,9 +1,9 @@
 package com.swoval.watchservice
 
+import java.nio.file.{ Paths => JPaths }
 import java.util.concurrent.{ ArrayBlockingQueue, BlockingQueue, ExecutorService, Executors }
 
-import com.swoval.watchservice.files.Callbacks
-import com.swoval.watchservice.files.Directory.Callback
+import com.swoval.files.DirectoryWatcher.Callback
 import sbt.BasicCommandStrings._
 import sbt.BasicCommands.otherCommandParser
 import sbt.CommandUtil.withAttribute
@@ -23,7 +23,10 @@ object Continuously {
                         var count: Int = -1,
                         events: BlockingQueue[TriggerEvent] = new ArrayBlockingQueue(1),
                         executor: ExecutorService = Executors.newSingleThreadExecutor()) {
-    private def shouldExit() = System.in.read match { case 10 | 13 => true; case _ => false }
+    private def shouldExit(): Boolean = System.in.read match {
+      case 10 | 13 => true
+      case _       => false
+    }
     @tailrec
     private final def signalExit(): Unit = {
       val signalled = try { shouldExit() } catch { case _: InterruptedException => true }
@@ -36,7 +39,7 @@ object Continuously {
       } else signalExit()
     }
     private[this] val callback: Callback = { e =>
-      if (sources.exists(s => s.accept(e.path))) { events.offer(Triggered) }
+      if (sources.exists(s => s.accept(JPaths.get(e.path.fullName)))) { events.offer(Triggered) }
     }
     Callbacks.add(callback)
     executor.submit((() => signalExit()): Runnable)
