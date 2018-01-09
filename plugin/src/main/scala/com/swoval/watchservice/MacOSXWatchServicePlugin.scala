@@ -37,16 +37,17 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
         .list(Path(p.toPath.toString), recursive = false, _ => false)
         .view
         .map(toFile)
+    // This has the side effect of registering these directories with the watch service.
     (unmanagedSourceDirectories in conf).value foreach list
     (managedSourceDirectories in conf).value foreach list
-    Classpaths.concat(unmanagedSources in conf, managedSources in conf).value
+    Classpaths.concat(unmanagedSources in conf, managedSources in conf).value.distinct.toIndexedSeq
   }
   private def cachedSourcesFor(conf: Configuration, sourcesInBase: Boolean) = Def.task[Seq[File]] {
     def filter(in: FileFilter, ex: FileFilter) = sbtFilter(f => in.accept(f) && !ex.accept(f))
     def list(recursive: Boolean, filter: FileFilter) =
       (f: File) => fileCache.value.list(f, recursive = recursive, filter)
 
-    val unmanagedDirs = (unmanagedSourceDirectories in conf).value
+    val unmanagedDirs = (unmanagedSourceDirectories in conf).value.distinct
     val unmanagedIncludeFilter = ((includeFilter in unmanagedSources) in conf).value
     val unmanagedExcludeFilter = ((excludeFilter in unmanagedSources) in conf).value
     val unmanagedFilter = filter(unmanagedIncludeFilter, unmanagedExcludeFilter)
@@ -56,7 +57,7 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
 
     val unmanaged = unmanagedDirs flatMap list(recursive = true, unmanagedFilter)
     val base = baseDirs.flatMap(d => list(recursive = false, baseFilter && nodeFilter(d))(d))
-    (unmanaged ++ base).view.map(toFile) ++ (managedSources in conf).value
+    ((unmanaged ++ base).view.map(toFile) ++ (managedSources in conf).value).distinct.toIndexedSeq
   }
 
   private def sourcesFor(conf: Configuration) = Def.taskDyn[Seq[File]] {
