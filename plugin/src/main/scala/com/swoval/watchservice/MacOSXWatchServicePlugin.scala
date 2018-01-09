@@ -81,7 +81,7 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
       if (useDefaultIncludeFilters.value) "*.jar" | "*.so" | "*.dll" | "*.jnilib" | "*.zip"
       else ExtensionFilter("jar", "so", "dll", "jnilib", "zip")
     },
-    watchSources := {
+    watchSources := Def.taskDyn {
       val baseDir = baseDirectory.value
       val include =
         if (useDefaultWatchSourceList.value) (includeFilter in unmanagedSources).value
@@ -91,10 +91,19 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
         if (sourcesInBase.value)
           Seq(new Source(baseDir, include, exclude, recursive = false))
         else Nil
-      getSources(unmanagedSourceDirectories, unmanagedSources).value ++
-        getSources(unmanagedResourceDirectories, unmanagedResources).value ++
-        baseSources
-    },
+      val unmanagedSourceDirs = ((unmanagedSourceDirectories in Compile).value ++
+        (unmanagedSourceDirectories in Test).value).map(_.toPath)
+      val managed = ((managedSources in Compile).value ++ (managedSources in Test).value)
+        .filter(d => unmanagedSourceDirs.exists(p => d.toPath startsWith p))
+        .toSet
+      val managedFilter: Option[sbt.io.FileFilter] =
+        if (managed.isEmpty) None else Some(new SimpleFileFilter(managed.contains))
+      Def.task[Seq[WatchSource]] {
+        getSources(unmanagedSourceDirectories, unmanagedSources, managedFilter).value ++
+          getSources(unmanagedResourceDirectories, unmanagedResources, managedFilter).value ++
+          baseSources
+      }
+    }.value,
     sourceDiff := {
       val ref = thisProjectRef.value.project
       val default = (defaultSourcesFor(Compile).value ++ defaultSourcesFor(Test).value).toSet
@@ -110,12 +119,19 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
     },
     fileCache := FileCaches.default,
   )
-  private def getSources(key: SettingKey[Seq[File]], scope: TaskKey[Seq[File]]) = Def.task {
-    val dirs = (key in Compile).value ++ (key in Test).value
-    val include = (includeFilter in scope).value
-    val exclude = (excludeFilter in scope).value
-    dirs.map(b => new Source(b, include, exclude))
-  }
+  private def getSources(key: SettingKey[Seq[File]],
+                         scope: TaskKey[Seq[File]],
+                         extraExclude: Option[FileFilter] = None) =
+    Def.task {
+      val dirs = (key in Compile).value ++ (key in Test).value
+      val ef = (excludeFilter in scope).value
+      val include = (includeFilter in scope).value
+      val exclude = extraExclude match {
+        case Some(e) => new SimpleFileFilter(p => ef.accept(p) || e.accept(p))
+        case None    => (excludeFilter in scope).value
+      }
+      dirs.map(b => new Source(b, include, exclude))
+    }
   override lazy val globalSettings = super.globalSettings ++ Seq(
     useDefaultWatchService := false,
     useDefaultSourceList := false,
