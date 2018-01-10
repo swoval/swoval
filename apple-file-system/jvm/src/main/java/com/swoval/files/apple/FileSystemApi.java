@@ -5,16 +5,21 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public class FileSystemApi implements AutoCloseable {
     private long handle;
-    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final ExecutorService executor = Executors.newSingleThreadExecutor(new ThreadFactory() {
+        SecurityManager s = System.getSecurityManager();
+        ThreadGroup group = (s != null) ? s.getThreadGroup() : Thread.currentThread().getThreadGroup();
+        @Override
+        public Thread newThread(Runnable r) {
+            return new Thread(group, r, "com.swoval.files.apple.FileSystemApi.run-loop-thread");
+        }
+    });
+
     private FileSystemApi(Consumer<FileEvent> c, Consumer<String> pc) throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         executor.submit(() -> {

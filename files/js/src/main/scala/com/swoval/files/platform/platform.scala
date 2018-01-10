@@ -3,11 +3,12 @@ package com.swoval.files
 import io.scalajs.nodejs.fs.Fs
 
 package object platform {
-  object makeExecutor extends Executor {
+  private[this] object executor extends Executor {
     override def run(runnable: Runnable): Unit = runnable.run()
     override def run[R](f: => R): Unit = f
     override def close(): Unit = {}
   }
+  def makeExecutor(name: String): Executor = executor
   object pathCompanion extends PathCompanion {
     def apply(parts: String*): Path = JsPath(parts: _*)
 

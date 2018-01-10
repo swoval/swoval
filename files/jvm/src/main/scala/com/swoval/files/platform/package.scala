@@ -3,7 +3,7 @@ package com.swoval.files
 import java.nio.file.{ Files => JFiles, Paths => JPaths }
 
 package object platform {
-  def makeExecutor: Executor = ExecutorServiceWrapper.make
+  def makeExecutor(name: String): Executor = ExecutorServiceWrapper.make(name)
   object pathCompanion extends PathCompanion {
     def apply(parts: String*): Path = JvmPath.apply(parts: _*)
     def createTempFile(dir: Path, prefix: String): Path =
