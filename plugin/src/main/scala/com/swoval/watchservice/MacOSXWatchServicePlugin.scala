@@ -142,5 +142,11 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
         .filterNot(_ == BasicCommands.continuous) :+ Continuously.continuous
       state.copy(definedCommands = commands)
     },
+    onUnload := { state =>
+      val p = sbt.Project.extract(state)
+      state.log.debug("Closing file cache: ${p.get(fileCache)}")
+      p.get(fileCache).close()
+      state
+    }
   )
 }
