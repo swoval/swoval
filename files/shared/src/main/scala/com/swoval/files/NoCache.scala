@@ -5,10 +5,14 @@ import com.swoval.files.DirectoryWatcher.Callback
 class NoCache(fileOptions: FileOptions, dirOptions: DirectoryOptions, callback: Callback)
     extends FileCache {
   private[this] val watcher = new Watcher {
-    val fileMonitor = fileOptions.toWatcher(callback)
-    val directoryMonitor = dirOptions.toWatcher(callback)
+    val executor: Executor = platform.makeExecutor("com.swoval.files.NoCache.executor-thread")
+    val fileMonitor = fileOptions.toWatcher(callback, executor)
+    val directoryMonitor = dirOptions.toWatcher(callback, executor)
 
-    override def close(): Unit = (directoryMonitor ++ fileMonitor) foreach (_.close())
+    override def close(): Unit = {
+      executor.close()
+      (directoryMonitor ++ fileMonitor) foreach (_.close())
+    }
     override def register(path: Path) = {
       (directoryMonitor ++ fileMonitor) foreach (_.register(path))
     }

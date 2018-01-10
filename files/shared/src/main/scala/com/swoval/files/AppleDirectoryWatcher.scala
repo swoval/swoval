@@ -78,6 +78,8 @@ class AppleDirectoryWatcher(latency: Duration, flags: Flags.Create, executor: Ex
 object AppleDirectoryWatcher {
   def apply(latency: Duration, flags: Flags.Create)(
       onFileEvent: Callback,
-      onStreamRemoved: String => Unit = _ => {}): AppleDirectoryWatcher =
-    new AppleDirectoryWatcher(latency, flags, platform.makeExecutor)(onFileEvent, onStreamRemoved)
+      onStreamRemoved: String => Unit = _ => {}): AppleDirectoryWatcher = {
+    val e: Executor = platform.makeExecutor("com.swoval.files.AppleDirectoryWatcher.executorThread")
+    new AppleDirectoryWatcher(latency, flags, e)(onFileEvent, onStreamRemoved)
+  }
 }

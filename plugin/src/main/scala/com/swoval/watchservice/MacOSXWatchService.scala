@@ -30,7 +30,7 @@ class MacOSXWatchService(watchLatency: Duration, val queueSize: Int)(
 ) extends WatchService
     with AutoCloseable {
 
-  private[this] val executor = Executor.make
+  private[this] val executor = Executor.make("com.swoval.files.MacOSXWatchService.executor-thread")
   private[this] val watcher = {
     val flags = new Flags.Create().setNoDefer().setFileEvents()
     new AppleDirectoryWatcher(watchLatency, flags, executor)(onFileEvent)

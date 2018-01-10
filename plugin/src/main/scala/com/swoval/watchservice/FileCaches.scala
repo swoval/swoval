@@ -4,7 +4,7 @@ import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files._
 
 object FileCaches {
-  def ex = Executor.make
+  def ex = Executor.make("com.swoval.files.FileCaches.executor-thread")
   object default extends FileCacheImpl(FileOptions.default, NoMonitor, ex)(Callbacks)
   lazy val NoCache: FileCache = new NoCache(FileOptions.default, NoMonitor, Callbacks)
   def noCache(fileOptions: FileOptions): FileCache = new NoCache(fileOptions, NoMonitor, Callbacks)

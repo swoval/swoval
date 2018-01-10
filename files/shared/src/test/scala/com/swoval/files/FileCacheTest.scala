@@ -96,7 +96,7 @@ object FileCacheTest extends TestSuite {
           }
           usingAsync(FileCache(fileOptions, dirOptions)(callback)) { c =>
             c.register(dir)
-            val executor = Executor.make
+            val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
             val files = mutable.Set.empty[Path]
             executor.run {
               (0 until filesToAdd) foreach { i =>

@@ -91,8 +91,8 @@ class FileCacheImpl(fileOptions: FileOptions, dirOptions: DirectoryOptions, exec
       }
   }
   private[this] val watcher = new Watcher {
-    val fileMonitor = fileOptions.toWatcher(fileCallback)
-    val directoryMonitor = dirOptions.toWatcher(directoryCallback)
+    val fileMonitor = fileOptions.toWatcher(fileCallback, executor)
+    val directoryMonitor = dirOptions.toWatcher(directoryCallback, executor)
 
     override def close(): Unit = (directoryMonitor ++ fileMonitor) foreach (_.close())
     override def register(path: Path) = {
@@ -106,8 +106,10 @@ class FileCacheImpl(fileOptions: FileOptions, dirOptions: DirectoryOptions, exec
 
 object FileCache {
   def apply(fileOptions: FileOptions, dirOptions: DirectoryOptions)(
-      callback: Callback): FileCacheImpl =
-    new FileCacheImpl(fileOptions, dirOptions, platform.makeExecutor)(callback)
+      callback: Callback): FileCacheImpl = {
+    val e: Executor = platform.makeExecutor("com.swoval.files.FileCacheImpl.executor-thread")
+    new FileCacheImpl(fileOptions, dirOptions, e)(callback)
+  }
 }
 
 private trait Watcher extends AutoCloseable {
@@ -115,19 +117,21 @@ private trait Watcher extends AutoCloseable {
 }
 
 sealed trait Options {
-  def toWatcher(callback: => DirectoryWatcher.Callback): Option[DirectoryWatcher]
+  def toWatcher(callback: => DirectoryWatcher.Callback, e: Executor): Option[DirectoryWatcher]
   def newWatcher(latency: Duration,
                  flags: Flags.Create,
-                 callback: DirectoryWatcher.Callback): Option[DirectoryWatcher] =
-    if (Properties.isMac)
-      Some(new AppleDirectoryWatcher(latency, flags, platform.makeExecutor)(callback))
-    else Some(new NioDirectoryWatcher(callback))
+                 callback: DirectoryWatcher.Callback,
+                 e: Executor): Option[DirectoryWatcher] =
+    if (Properties.isMac) {
+      Some(new AppleDirectoryWatcher(latency, flags, e)(callback))
+    } else Some(new NioDirectoryWatcher(callback))
 }
 sealed trait FileOptions extends Options
 object FileOptions {
   def apply(latency: Duration, flags: Flags.Create): FileOptions = {
     new MonitorOptions(latency, flags) with FileOptions {
-      def toWatcher(callback: => DirectoryWatcher.Callback) = newWatcher(latency, flags, callback)
+      def toWatcher(callback: => DirectoryWatcher.Callback, e: Executor) =
+        newWatcher(latency, flags, callback, e)
     }
   }
   lazy val default: FileOptions =
@@ -137,13 +141,15 @@ sealed trait DirectoryOptions extends Options
 object DirectoryOptions {
   def apply(latency: Duration, flags: Flags.Create): DirectoryOptions = {
     new MonitorOptions(latency, flags) with DirectoryOptions {
-      def toWatcher(callback: => DirectoryWatcher.Callback) = newWatcher(latency, flags, callback)
+      def toWatcher(callback: => DirectoryWatcher.Callback, e: Executor) =
+        newWatcher(latency, flags, callback, e)
     }
   }
   lazy val default: DirectoryOptions = DirectoryOptions(1.second, new Flags.Create().setNoDefer)
 }
 case object NoMonitor extends FileOptions with DirectoryOptions {
-  override def toWatcher(callback: => DirectoryWatcher.Callback): Option[DirectoryWatcher] = None
+  override def toWatcher(callback: => DirectoryWatcher.Callback,
+                         e: Executor): Option[DirectoryWatcher] = None
 }
 
 abstract case class MonitorOptions private[files] (latency: Duration, flags: Flags.Create)
