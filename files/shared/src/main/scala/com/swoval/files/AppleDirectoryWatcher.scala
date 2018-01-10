@@ -60,7 +60,7 @@ class AppleDirectoryWatcher(latency: Duration, flags: Flags.Create, executor: Ex
           }
         }))
       }, { s =>
-        if (!closed.get) {
+        if (!closed.get) executor.run {
           lock.synchronized(streams -= s)
           onStreamRemoved(s)
         }
