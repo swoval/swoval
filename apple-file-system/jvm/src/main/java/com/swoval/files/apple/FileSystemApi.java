@@ -1,5 +1,7 @@
 package com.swoval.files.apple;
 
+import com.swoval.concurrent.ThreadFactory;
+
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -11,14 +13,8 @@ import java.util.function.Consumer;
 
 public class FileSystemApi implements AutoCloseable {
     private long handle;
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(new ThreadFactory() {
-        SecurityManager s = System.getSecurityManager();
-        ThreadGroup group = (s != null) ? s.getThreadGroup() : Thread.currentThread().getThreadGroup();
-        @Override
-        public Thread newThread(Runnable r) {
-            return new Thread(group, r, "com.swoval.files.apple.FileSystemApi.run-loop-thread");
-        }
-    });
+    private final ExecutorService executor = Executors.newSingleThreadExecutor(
+            new ThreadFactory("com.swoval.files.apple.FileSystemApi.run-loop-thread"));
 
     private FileSystemApi(Consumer<FileEvent> c, Consumer<String> pc) throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
