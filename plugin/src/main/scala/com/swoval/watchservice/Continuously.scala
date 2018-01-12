@@ -13,6 +13,8 @@ import sbt.{ AttributeKey, Command, State, Watched }
 
 import scala.annotation.tailrec
 
+import sbt.WatchedWrapper._
+
 object Continuously {
 
   lazy val swovalWatchState = AttributeKey[WatchState]("swovalWatchState")
@@ -44,8 +46,8 @@ object Continuously {
     Callbacks.add(callback)
     executor.submit((() => signalExit()): Runnable)
   }
-  def executeContinuously(sources: Seq[Source], s: State, next: String, repeat: String): State = {
-    val watchState = s.get(swovalWatchState) getOrElse WatchState(sources)
+  def executeContinuously(watched: Watched, s: State, next: String, repeat: String): State = {
+    val watchState = s.get(swovalWatchState) getOrElse WatchState(watched.watchSources(s))
     watchState.count += 1
 
     if (watchState.count == 0) {
@@ -56,6 +58,7 @@ object Continuously {
         case Exit =>
           s.remove(swovalWatchState)
         case Triggered =>
+          watchState.printTriggeredMessage(watched)
           ClearOnFailure :: next :: FailureWall :: repeat :: s
       }
     }
@@ -69,7 +72,7 @@ object Continuously {
         withAttribute(s, Watched.Configuration, "Continuous execution not configured.") { w =>
           val repeat = ContinuousExecutePrefix + (if (arg.startsWith(" ")) arg else " " + arg)
           if (default) Watched.executeContinuously(w, s, arg, repeat)
-          else executeContinuously(w.watchSources(s), s, arg, repeat)
+          else executeContinuously(w, s, arg, repeat)
         }
     }
 }
