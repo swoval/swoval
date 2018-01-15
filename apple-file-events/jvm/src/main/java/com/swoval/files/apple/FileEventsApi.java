@@ -69,39 +69,21 @@ public class FileEventsApi implements AutoCloseable {
         try {
             String lib = System.mapLibraryName(NATIVE_LIBRARY);
             Path tmp = Files.createTempDirectory("jni-");
-            String line = null;
+            String resourcePath = "/native/x86_64-darwin/" + lib;
+            InputStream resourceStream = FileEventsApi.class.getResourceAsStream(resourcePath);
+            if (resourceStream == null) {
+                String msg = "Native library " + lib + " (" + resourcePath + ") can't be loaded.";
+                throw new UnsatisfiedLinkError(msg);
+            }
+
+            Path extractedPath = tmp.resolve(lib);
             try {
-                Process process = new ProcessBuilder("uname", "-sm").start();
-                InputStream is = process.getInputStream();
-                line = new BufferedReader(new InputStreamReader(is)).lines().findFirst().get();
-                is.close();
+                Files.copy(resourceStream, extractedPath);
             } catch (Exception e) {
-                exit("Error running `uname` command");
+                throw new UnsatisfiedLinkError("Error while extracting native library: " + e);
             }
-            String[] parts = line.split(" ");
-            if (parts.length != 2) {
-                exit("Could not determine platform: 'uname -sm' returned unexpected string: " + line);
-            } else {
-                String arch = parts[1].toLowerCase().replaceAll("\\s", "");
-                String kernel = parts[0].toLowerCase().replaceAll("\\s", "");
-                String plat = arch + "-" + kernel;
-                String resourcePath = "/native/" + plat + "/" + lib;
-                InputStream resourceStream = FileEventsApi.class.getResourceAsStream(resourcePath);
-                if (resourceStream == null) {
-                    throw new UnsatisfiedLinkError(
-                            "Native library " + lib + " (" + resourcePath + ") cannot be found on the classpath.");
-                }
 
-                Path extractedPath = tmp.resolve(lib);
-
-                try {
-                    Files.copy(resourceStream, extractedPath);
-                } catch (Exception e) {
-                    throw new UnsatisfiedLinkError("Error while extracting native library: " + e);
-                }
-
-                System.load(extractedPath.toAbsolutePath().toString());
-            }
+            System.load(extractedPath.toAbsolutePath().toString());
         } catch (Exception e) {
             exit("Couldn't load packaged library " + NATIVE_LIBRARY);
         }
