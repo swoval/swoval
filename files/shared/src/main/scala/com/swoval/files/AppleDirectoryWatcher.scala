@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.FileWatchEvent.{ Create, Delete, Modify }
-import com.swoval.files.apple.{ FileSystemApi, Flags }
+import com.swoval.files.apple.{ FileEventsApi, Flags }
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -42,8 +42,8 @@ class AppleDirectoryWatcher(latency: Duration, flags: Flags.Create, executor: Ex
   private[this] val streams = mutable.Map.empty[String, Int]
   private[this] val lock = new Object
   private[this] val closed = new AtomicBoolean(false)
-  private[this] val fileSystemApi: FileSystemApi = try {
-    FileSystemApi.apply(
+  private[this] val fileSystemApi: FileEventsApi = try {
+    FileEventsApi.apply(
       { fe =>
         executor.run(onFileEvent({
           val path = Path(fe.fileName)

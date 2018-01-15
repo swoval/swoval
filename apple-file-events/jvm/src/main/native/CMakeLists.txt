@@ -10,7 +10,7 @@ cmake_minimum_required(VERSION 2.8.0)
 # Define project and related variables
 # (required by sbt-jni) please use semantic versioning
 #
-project (sbt-apple-file-system)
+project (apple-file-events)
 set(PROJECT_VERSION_MAJOR 0)
 set(PROJECT_VERSION_MINOR 0)
 set(PROJECT_VERSION_PATCH 0)

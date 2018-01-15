@@ -44,7 +44,7 @@ object Build {
     ))
   )
   val projects: Seq[ProjectReference] =
-    (if (Properties.isMac) Seq[ProjectReference](appleFileSystem.jvm, appleFileSystem.js)
+    (if (Properties.isMac) Seq[ProjectReference](appleFileEvents.jvm, appleFileEvents.js)
      else Seq.empty) ++
       Seq[ProjectReference](
         testing.js,
@@ -62,14 +62,14 @@ object Build {
       bintrayUnpublish := {}
     )
 
-  lazy val appleFileSystem: CrossProject = crossProject(JSPlatform, JVMPlatform)
-    .in(file("apple-file-system"))
+  lazy val appleFileEvents: CrossProject = crossProject(JSPlatform, JVMPlatform)
+    .in(file("apple-file-events"))
     .configurePlatform(JVMPlatform)(_.enablePlugins(JniNative))
     .configurePlatform(JSPlatform)(_.enablePlugins(ScalaJSBundlerPlugin))
     .settings(
       commonSettings,
-      name := "apple-file-system",
-      bintrayPackage := "apple-file-system",
+      name := "apple-file-events",
+      bintrayPackage := "apple-file-events",
       bintrayRepository := "sbt-plugins",
       description := "JNI library for apple file system",
       sourceDirectory in nativeCompile := sourceDirectory.value / "main" / "native",
@@ -83,7 +83,7 @@ object Build {
       webpackBundlingMode := BundlingMode.LibraryOnly(),
       useYarn := false,
       scalaJSModuleKind := ModuleKind.CommonJSModule,
-      npmDependencies in Compile += nodeApfs,
+      npmDependencies in Compile += nodeAppleEvents,
       sourceGenerators in Compile += Def.task {
         val pkg = "com/swoval/files/apple"
         val target = (managedSourceDirectories in Compile).value.head.toPath
@@ -114,7 +114,7 @@ object Build {
     .jsSettings(
       scalaJSModuleKind := ModuleKind.CommonJSModule,
       useYarn := false,
-      libraryDependencies += "com.swoval" %%% "apple-file-system" % apfsVersion,
+      libraryDependencies += "com.swoval" %%% "apple-file-events" % appleEventsVersion,
       ioScalaJS
     )
     .settings(
@@ -128,7 +128,7 @@ object Build {
       libraryDependencies ++= Seq(
         zinc,
         scalaMacros % scalaVersion.value,
-        "com.swoval" % "apple-file-system" % apfsVersion
+        "com.swoval" % "apple-file-events" % appleEventsVersion
       ),
       utestCrossTest,
       utestFramework
@@ -151,15 +151,15 @@ object Build {
         zinc % "provided",
         sbtIO % "provided",
         "com.lihaoyi" %% "utest" % utestVersion % "test",
-        "com.swoval" % "apple-file-system" % apfsVersion % "provided"
+        "com.swoval" % "apple-file-events" % appleEventsVersion % "provided"
       ),
       utestFramework,
       resourceGenerators in Compile += Def.task {
-        // This makes a fat jar containing all of the classes in appleFileSystem and files.
-        lazy val apfscd = (classDirectory in Compile in appleFileSystem.jvm).value.toPath
+        // This makes a fat jar containing all of the classes in appleFileEvents and files.
+        lazy val apfscd = (classDirectory in Compile in appleFileEvents.jvm).value.toPath
         lazy val filescd = (classDirectory in Compile in files.jvm).value.toPath
-        lazy val libs = (nativeLibraries in Compile in appleFileSystem.jvm).value
-        (compile in Compile in appleFileSystem.jvm).value
+        lazy val libs = (nativeLibraries in Compile in appleFileEvents.jvm).value
+        (compile in Compile in appleFileEvents.jvm).value
         (compile in Compile in files.jvm).value
         lazy val resourcePath = (resourceManaged in Compile).value.toPath
         def copy(s: File, d: File) = { IO.copyFile(s, d); d }

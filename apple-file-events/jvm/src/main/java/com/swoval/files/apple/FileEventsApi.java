@@ -11,15 +11,15 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-public class FileSystemApi implements AutoCloseable {
+public class FileEventsApi implements AutoCloseable {
     private long handle;
     private final ExecutorService executor = Executors.newSingleThreadExecutor(
-            new ThreadFactory("com.swoval.files.apple.FileSystemApi.run-loop-thread"));
+            new ThreadFactory("com.swoval.files.apple.FileEventsApi.run-loop-thread"));
 
-    private FileSystemApi(Consumer<FileEvent> c, Consumer<String> pc) throws InterruptedException {
+    private FileEventsApi(Consumer<FileEvent> c, Consumer<String> pc) throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         executor.submit(() -> {
-            this.handle = FileSystemApi.init(c, pc);
+            this.handle = FileEventsApi.init(c, pc);
             latch.countDown();
             loop();
         });
@@ -58,7 +58,7 @@ public class FileSystemApi implements AutoCloseable {
         if (!closed.get()) stopStream(handle, streamHandle);
     }
 
-    private static final String NATIVE_LIBRARY = "sbt-apple-file-system0";
+    private static final String NATIVE_LIBRARY = "apple-file-events0";
 
     private static final void exit(String msg) {
         System.err.println(msg);
@@ -86,7 +86,7 @@ public class FileSystemApi implements AutoCloseable {
                 String kernel = parts[0].toLowerCase().replaceAll("\\s", "");
                 String plat = arch + "-" + kernel;
                 String resourcePath = "/native/" + plat + "/" + lib;
-                InputStream resourceStream = FileSystemApi.class.getResourceAsStream(resourcePath);
+                InputStream resourceStream = FileEventsApi.class.getResourceAsStream(resourcePath);
                 if (resourceStream == null) {
                     throw new UnsatisfiedLinkError(
                             "Native library " + lib + " (" + resourcePath + ") cannot be found on the classpath.");
@@ -115,9 +115,9 @@ public class FileSystemApi implements AutoCloseable {
         }
     }
 
-    public static FileSystemApi apply(Consumer<FileEvent> consumer, Consumer<String> pathConsumer)
+    public static FileEventsApi apply(Consumer<FileEvent> consumer, Consumer<String> pathConsumer)
             throws InterruptedException {
-        return new FileSystemApi(consumer, pathConsumer);
+        return new FileEventsApi(consumer, pathConsumer);
     }
 
     public static native void loop(long handle);

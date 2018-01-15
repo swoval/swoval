@@ -3,34 +3,34 @@ package com.swoval.files.apple
 import scala.scalajs.js
 import scala.scalajs.js.annotation.{ JSExport, JSExportAll, JSExportTopLevel, JSImport }
 
-@JSExportTopLevel("com.swoval.files.apple.FileSystemApi")
+@JSExportTopLevel("com.swoval.files.apple.FileEventsApi")
 @JSExportAll
-class FileSystemApi(handle: Double) extends AutoCloseable {
+class FileEventsApi(handle: Double) extends AutoCloseable {
   override def close(): Unit = {
-    FileSystemApiFacade.close(handle)
+    FileEventsApiFacade.close(handle)
   }
 
   def createStream(path: String, latency: Double, flags: Int) = {
-    FileSystemApiFacade.createStream(path, latency, flags, handle)
+    FileEventsApiFacade.createStream(path, latency, flags, handle)
   }
   def stopStream(streamHandle: Int) = {
-    FileSystemApiFacade.stopStream(handle, streamHandle)
+    FileEventsApiFacade.stopStream(handle, streamHandle)
   }
 }
 
-@JSExportTopLevel("com.swoval.files.apple.FileSystemApi$")
-object FileSystemApi {
+@JSExportTopLevel("com.swoval.files.apple.FileEventsApi$")
+object FileEventsApi {
   @JSExport("apply")
-  def apply(consumer: FileEvent => Unit, pathConsumer: String => Unit): FileSystemApi = {
+  def apply(consumer: FileEvent => Unit, pathConsumer: String => Unit): FileEventsApi = {
     val jsConsumer: js.Function2[String, Int, Unit] = (s, i) => consumer(new FileEvent(s, i))
     val jsPathConsumer: js.Function1[String, Unit] = s => pathConsumer(s)
-    new FileSystemApi(FileSystemApiFacade.init(jsConsumer, jsPathConsumer))
+    new FileEventsApi(FileEventsApiFacade.init(jsConsumer, jsPathConsumer))
   }
 }
 
 @js.native
 @JSImport("swoval_apfs", JSImport.Default)
-private object FileSystemApiFacade extends js.Object {
+private object FileEventsApiFacade extends js.Object {
   def close(handle: Double): Unit = js.native
 
   def init(consumer: js.Function2[String, Int, Unit],

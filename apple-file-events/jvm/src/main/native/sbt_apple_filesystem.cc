@@ -6,7 +6,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <thread>
-#include "com_swoval_files_apple_FileSystemApi.h"
+#include "com_swoval_files_apple_FileEventsApi.h"
 #include "swoval_apple_file_system.hpp"
 
 #define CALLBACK_SIG "(Ljava/lang/Object;)V"
@@ -52,13 +52,13 @@ static void jni_stop_stream(JNIHandle *h, void *data) {
     }
 }
 
-JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileSystemApi_stopLoop
+JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventsApi_stopLoop
     (JNIEnv *env, jclass clazz, jlong handle) {
         auto *h = reinterpret_cast<JNIHandle*>(handle);
         h->close();
     }
 
-JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileSystemApi_close
+JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventsApi_close
     (JNIEnv *env, jclass clazz, jlong handle) {
     auto *h = reinterpret_cast<JNIHandle*>(handle);
     assert(h->stopped);
@@ -69,14 +69,14 @@ JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileSystemApi_close
     delete h;
 }
 
-JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileSystemApi_loop
+JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventsApi_loop
   (JNIEnv *env, jclass clazz, jlong handle) {
   auto *h = reinterpret_cast<JNIHandle*>(handle);
   std::thread::id this_id = std::this_thread::get_id();
   loop(h);
 }
 
-JNIEXPORT jlong JNICALL Java_com_swoval_files_apple_FileSystemApi_init
+JNIEXPORT jlong JNICALL Java_com_swoval_files_apple_FileEventsApi_init
     (JNIEnv *env, jclass thread, jobject callback, jobject pathCallback) {
         service_handle *handle = new service_handle();
         jclass callbackClass = env->GetObjectClass(callback);
@@ -96,13 +96,13 @@ JNIEXPORT jlong JNICALL Java_com_swoval_files_apple_FileSystemApi_init
         return reinterpret_cast<jlong>(h);
     }
 
-JNIEXPORT jint JNICALL Java_com_swoval_files_apple_FileSystemApi_createStream
+JNIEXPORT jint JNICALL Java_com_swoval_files_apple_FileEventsApi_createStream
 (JNIEnv *env, jclass clazz, jstring path, jdouble latency, jint flags, jlong handle) {
     auto *h = reinterpret_cast<JNIHandle*>(handle);
     return h->startStream(env->GetStringUTFChars(path, 0), latency, flags);
 }
 
-JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileSystemApi_stopStream
+JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventsApi_stopStream
 (JNIEnv *env, jclass clazz, jlong handle, jint stream_handle) {
     auto *h = reinterpret_cast<JNIHandle*>(handle);
     if (h) h->stopStream(stream_handle, env);
