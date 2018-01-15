@@ -6,6 +6,6 @@ object DirectoryWatcher {
 
 trait DirectoryWatcher extends AutoCloseable {
   def onFileEvent: DirectoryWatcher.Callback
-  def register(path: Path): Boolean
+  def register(path: Path, recursive: Boolean = true): Boolean
   def unregister(path: Path): Unit
 }
