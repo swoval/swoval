@@ -53,13 +53,15 @@ package object test {
     val c = closeable
     val p = Promise[R]
     p.tryComplete(Try(f(c)))
-    p.future.andThen { case r => c.close(); r }
+    val res = p.future
+    res.onComplete(_ => c.close())
+    res
   }
 
   def usingAsync[C <: AutoCloseable, R](closeable: => C)(f: C => Future[R]): Future[R] = {
     val c = closeable
     val res = f(c)
-    res.andThen { case r => c.close(); r }
+    res.onComplete(_ => c.close())
     res
   }
 
