@@ -4,7 +4,8 @@
   "description": "Provides native access to FSEventStream api.",
   "main": "apfs.js",
   "dependencies": {
-      "publish": "^0.6.0"
+    "publish": "^0.6.0",
+    "md5": "^2.0.0"
   },
   "scripts": {
     "install": "node install.js"

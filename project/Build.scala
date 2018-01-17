@@ -1,7 +1,8 @@
 import java.io.File
-import java.nio.file.{ Files => JFiles, Path => JPath, Paths => JPaths }
+import java.nio.file.{ Files => JFiles, Path => JPath, StandardCopyOption }
 
 import Dependencies._
+import StandardCopyOption.REPLACE_EXISTING
 import bintray.BintrayKeys.{
   bintrayOrganization,
   bintrayPackage,
@@ -18,7 +19,7 @@ import com.typesafe.sbt.SbtGit.git
 import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport.toPlatformDepsGroupID
 import org.scalajs.core.tools.linker.backend.ModuleKind
 import org.scalajs.sbtplugin.JSPlatform
-import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.scalaJSModuleKind
+import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ scalaJSModuleKind, fastOptJS, fullOptJS }
 import sbt.Keys._
 import sbt._
 import sbtcrossproject.CrossPlugin.autoImport._
@@ -82,7 +83,6 @@ object Build {
       webpackBundlingMode := BundlingMode.LibraryOnly(),
       useYarn := false,
       scalaJSModuleKind := ModuleKind.CommonJSModule,
-      npmDependencies in Compile += nodeAppleEvents,
       sourceGenerators in Compile += Def.task {
         val pkg = "com/swoval/files/apple"
         val target = (managedSourceDirectories in Compile).value.head.toPath
@@ -103,17 +103,54 @@ object Build {
         val cmd = Seq("java", "-classpath", cp, clazz) ++ javaSources :+ target.toString
         println(cmd.!!)
         sources.map(f => target.resolve(s"$f.scala").toFile)
-      }.taskValue
+      }.taskValue,
+      cleanAllGlobals,
+      nodeNativeLibs
     )
 
+  def addLib(dir: File): File = {
+    val target = dir.toPath.resolve("node_modules/lib")
+    if (!JFiles.exists(target))
+      JFiles.createSymbolicLink(target,
+                                appleFileEvents.js.base.toPath.toAbsolutePath.resolve("npm/lib"))
+    dir
+  }
+  def nodeNativeLibs: SettingsDefinition = Seq(
+    (npmUpdate in Compile) := addLib((npmUpdate in Compile).value),
+    (npmUpdate in Test) := addLib((npmUpdate in Test).value)
+  )
+
+  def cleanGlobals(file: Attributed[File]) = {
+    val content = new String(JFiles.readAllBytes(file.data.toPath))
+      .replaceAll("([ ])*[a-zA-Z$0-9.]+\\.___global.", "$1")
+    JFiles.write(file.data.toPath, content.getBytes)
+    file
+  }
+  def cleanAllGlobals: SettingsDefinition = Seq(
+    (fastOptJS in Compile) := cleanGlobals((fastOptJS in Compile).value),
+    (fastOptJS in Test) := cleanGlobals((fastOptJS in Test).value),
+    (fullOptJS in Compile) := cleanGlobals((fullOptJS in Compile).value),
+    (fullOptJS in Test) := cleanGlobals((fullOptJS in Test).value)
+  )
   lazy val files: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("files"))
     .enablePlugins(GitVersioning)
     .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
     .jsSettings(
+      scalacOptions += "-P:scalajs:sjsDefinedByDefault",
       scalaJSModuleKind := ModuleKind.CommonJSModule,
+      webpackBundlingMode := BundlingMode.LibraryOnly(),
       useYarn := false,
       libraryDependencies += "com.swoval" %%% "apple-file-events" % appleEventsVersion,
+      cleanAllGlobals,
+      nodeNativeLibs,
+      (fullOptJS in Compile) := {
+        val res = (fullOptJS in Compile).value
+        JFiles.copy(res.data.toPath,
+                    baseDirectory.value.toPath.resolve("npm/files.js"),
+                    REPLACE_EXISTING)
+        res
+      },
       ioScalaJS
     )
     .settings(

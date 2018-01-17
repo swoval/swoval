@@ -1,0 +1,14 @@
+{
+  "name": "@swoval/files",
+  "version": "1.2.0",
+  "description": "Utilities for listing and monitoring directories.",
+  "main": "files.js",
+  "dependencies": {
+    "publish": "^0.6.0"
+  },
+  "author": {
+    "name": "Ethan Atkins",
+    "email": "ethan.atkins@gmail.com"
+  },
+  "license": "Apache-2.0"
+}

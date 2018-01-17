@@ -10,7 +10,7 @@ import scala.collection.mutable
 import scala.util.Properties
 
 object FileCacheTest extends TestSuite {
-  val tests: Tests = testOn(MacOS) {
+  val tests: Tests = Tests {
     'files - {
       val options = Options.default
       'register - {

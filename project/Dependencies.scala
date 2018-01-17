@@ -3,7 +3,6 @@ import sbt.Keys._
 import sbt._
 
 object Dependencies {
-  val nodeAppleEvents = "swoval_apfs" -> "0.1.17"
   val scalagen = "com.mysema.scalagen" %% "scalagen" % "0.4.0"
   val sbtIO = "org.scala-sbt" %% "io" % "1.0.1"
   val scalaMacros = "org.scala-lang" % "scala-reflect"

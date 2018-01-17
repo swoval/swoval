@@ -1,7 +1,8 @@
 package com.swoval.files.apple
 
 import scala.scalajs.js
-import scala.scalajs.js.annotation.{ JSExport, JSExportAll, JSExportTopLevel, JSImport }
+import scala.scalajs.js.annotation._
+import scala.util.Success
 
 @JSExportTopLevel("com.swoval.files.apple.FileEventsApi")
 @JSExportAll
@@ -28,15 +29,22 @@ object FileEventsApi {
   }
 }
 
-@js.native
-@JSImport("swoval_apfs", JSImport.Default)
-private object FileEventsApiFacade extends js.Object {
-  def close(handle: Double): Unit = js.native
+private object FileEventsApiFacade {
+  private[this] val fe: js.Dynamic =
+    try js.Dynamic.global.___global.require("lib/swoval_apple_file_system.node")
+    catch {
+      case _: Exception =>
+        js.Dynamic.global.___global.require("./lib/swoval_apple_file_system.node")
+    }
+
+  def close(handle: Double): Unit = fe.close(handle)
 
   def init(consumer: js.Function2[String, Int, Unit],
-           pathConsumer: js.Function1[String, Unit]): Double = js.native
+           pathConsumer: js.Function1[String, Unit]): Double =
+    fe.init(consumer, pathConsumer).asInstanceOf[Double]
 
-  def createStream(path: String, latency: Double, flags: Int, handle: Double): Int = js.native
+  def createStream(path: String, latency: Double, flags: Int, handle: Double): Int =
+    fe.createStream(path, latency, flags, handle).asInstanceOf[Int]
 
-  def stopStream(handle: Double, streamHandle: Int): Unit = js.native
+  def stopStream(handle: Double, streamHandle: Int): Unit = fe.stopStream(handle, streamHandle)
 }

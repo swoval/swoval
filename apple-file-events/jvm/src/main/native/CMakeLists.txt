@@ -28,7 +28,7 @@ endif()
 include_directories(.)
 include_directories(include)
 include_directories(${JNI_INCLUDE_DIRS})
-include_directories(../../../../js/src/main/resources/src)
+include_directories(../../../../js/npm/src)
 
 # Sources
 file(GLOB LIB_SRC
