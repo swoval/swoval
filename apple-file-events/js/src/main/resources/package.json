@@ -1,6 +1,6 @@
 {
   "name": "swoval_apfs",
-  "version": "0.1.15",
+  "version": "0.1.17",
   "description": "Provides native access to FSEventStream api.",
   "main": "apfs.js",
   "dependencies": {
