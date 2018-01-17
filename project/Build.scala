@@ -44,14 +44,13 @@ object Build {
     ))
   )
   val projects: Seq[ProjectReference] =
-    (if (Properties.isMac) Seq[ProjectReference](appleFileEvents.jvm, appleFileEvents.js)
+    (if (Properties.isMac) Seq[ProjectReference](appleFileEvents.jvm, appleFileEvents.js, plugin)
      else Seq.empty) ++
       Seq[ProjectReference](
         testing.js,
         testing.jvm,
         files.jvm,
-        files.js,
-        plugin
+        files.js
       )
 
   lazy val root = project
