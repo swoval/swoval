@@ -8,16 +8,14 @@ import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.util.Properties
 
-trait FileCache extends AutoCloseable {
+trait FileCache extends AutoCloseable with Callbacks {
   def list(path: Path, recursive: Boolean, filter: PathFilter): Seq[Path]
-}
-trait DirectoryCache { self: FileCache =>
   def register(path: Path): Option[Directory]
 }
-class FileCacheImpl(options: Options, executor: Executor)(callback: Callback)
-    extends FileCache
-    with DirectoryCache {
 
+class FileCacheImpl(options: Options) extends FileCache {
+  private[this] val executor: Executor =
+    platform.makeExecutor("com.swoval.files.FileCacheImpl.executor-thread")
   def list(path: Path, recursive: Boolean, filter: PathFilter): Seq[Path] =
     lock
       .synchronized {
@@ -83,10 +81,12 @@ class FileCacheImpl(options: Options, executor: Executor)(callback: Callback)
 }
 
 object FileCache {
-  def apply(fileOptions: Options)(callback: Callback): FileCacheImpl = {
-    val e: Executor = platform.makeExecutor("com.swoval.files.FileCacheImpl.executor-thread")
-    new FileCacheImpl(fileOptions, e)(callback)
+  def apply(options: Options)(callback: Callback): FileCacheImpl = {
+    val cache: FileCacheImpl = new FileCacheImpl(options)
+    cache.addCallback(callback)
+    cache
   }
+  lazy val default: FileCacheImpl = new FileCacheImpl(Options.default)
 }
 
 sealed abstract class Options {

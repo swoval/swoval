@@ -1,8 +1,6 @@
 package com.swoval.files
 
-import com.swoval.files.DirectoryWatcher.Callback
-
-class NoCache(options: Options, callback: Callback) extends FileCache {
+class NoCache(options: Options) extends FileCache {
   private[this] val executor: Executor =
     platform.makeExecutor("com.swoval.files.NoCache.executor-thread")
   private[this] val watcher = options.toWatcher(callback, executor)
@@ -18,4 +16,6 @@ class NoCache(options: Options, callback: Callback) extends FileCache {
       Seq.empty
     }
   }
+  override def register(path: Path): Option[Directory] = None
 }
+object NoCache extends NoCache(Options.default)

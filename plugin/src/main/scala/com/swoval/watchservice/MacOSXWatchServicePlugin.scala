@@ -117,7 +117,7 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
       if (cachedExtra.isEmpty && defaultExtra.isEmpty)
         println(s"No difference in $ref between sbt default source files and from the cache.")
     },
-    fileCache := FileCaches.default,
+    fileCache := FileCache.default,
   )
   private def getSources(key: SettingKey[Seq[File]],
                          scope: TaskKey[Seq[File]],
