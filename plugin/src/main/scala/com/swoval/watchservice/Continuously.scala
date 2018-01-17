@@ -8,12 +8,11 @@ import sbt.BasicCommandStrings._
 import sbt.BasicCommands.otherCommandParser
 import sbt.CommandUtil.withAttribute
 import sbt.SourceWrapper.RichSource
+import sbt.WatchedWrapper._
 import sbt.internal.io.Source
 import sbt.{ AttributeKey, Command, State, Watched }
 
 import scala.annotation.tailrec
-
-import sbt.WatchedWrapper._
 
 object Continuously {
 

@@ -1,5 +1,3 @@
-import bintray.BintrayKeys.bintrayOrganization
-import com.typesafe.sbt.SbtGit.git
 import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport.toPlatformDepsGroupID
 import sbt.Keys._
 import sbt._

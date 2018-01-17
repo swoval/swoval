@@ -1,6 +1,7 @@
 package com.swoval.files
 
 import java.util.concurrent.{ ExecutorService, Executors, TimeUnit }
+
 import com.swoval.concurrent.ThreadFactory
 
 class ExecutorServiceWrapper(val s: ExecutorService) extends Executor {

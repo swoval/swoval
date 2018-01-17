@@ -1,6 +1,6 @@
 package sbt
 
-import java.nio.file.{ Path => JPath, WatchEvent, WatchKey }
+import java.nio.file.{ WatchEvent, WatchKey, Path => JPath }
 
 import sbt.internal.io.{ Source, WatchState }
 import sbt.io.WatchService
