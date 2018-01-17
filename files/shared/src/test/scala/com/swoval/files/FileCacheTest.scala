@@ -10,38 +10,13 @@ import scala.collection.mutable
 import scala.util.Properties
 
 object FileCacheTest extends TestSuite {
-  val tests: Tests = Tests {
-    testOn(MacOS) {
-      "directories" - {
-        val (fileOptions, dirOptions) = (NoMonitor, DirectoryOptions.default)
-        'register - {
-          'existing - withTempFile { f =>
-            val parent = f.getParent
-            using(FileCache(fileOptions, dirOptions)(_ => {})) { c =>
-              c.register(parent)
-              c.list(parent, recursive = true, _ => true) === Seq(f)
-            }
-          }
-          'monitor - withTempDirectory { dir =>
-            val latch = new CountDownLatch(1)
-            usingAsync(FileCache(fileOptions, dirOptions)(_ => latch.countDown())) { c =>
-              c.register(dir)
-              withTempFile(dir) { f =>
-                latch.waitFor(2 * DEFAULT_TIMEOUT) {
-                  c.list(dir, recursive = true, _ => true) === Seq(f)
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+  val tests: Tests = testOn(MacOS) {
     'files - {
-      val (fileOptions, dirOptions) = (FileOptions.default, NoMonitor)
+      val options = Options.default
       'register - {
         'existing - withTempFile { f =>
           val parent = f.getParent
-          using(FileCache(fileOptions, dirOptions)(_ => {})) { c =>
+          using(FileCache(options)(_ => {})) { c =>
             c.register(parent)
             c.list(parent, recursive = true, _ => true) === Seq(f)
           }
@@ -50,7 +25,7 @@ object FileCacheTest extends TestSuite {
           'new - {
             'files - withTempDirectory { dir =>
               val latch = new CountDownLatch(1)
-              usingAsync(FileCache(fileOptions, dirOptions)(_ => latch.countDown())) { c =>
+              usingAsync(FileCache(options)(_ => latch.countDown())) { c =>
                 c.register(dir)
                 withTempFile(dir) { f =>
                   latch.waitFor(DEFAULT_TIMEOUT) {
@@ -61,7 +36,7 @@ object FileCacheTest extends TestSuite {
             }
             'directories - withTempDirectory { dir =>
               val latch = new CountDownLatch(1)
-              usingAsync(FileCache(fileOptions, dirOptions)(_ => latch.countDown())) { c =>
+              usingAsync(FileCache(options)(_ => latch.countDown())) { c =>
                 c.register(dir)
                 withTempDirectory(dir) { subdir =>
                   latch.waitFor(DEFAULT_TIMEOUT) {
@@ -76,7 +51,7 @@ object FileCacheTest extends TestSuite {
           val latch = new CountDownLatch(2)
           val initial = Path.createTempFile(dir, "move")
           val moved = Path(s"${initial.name}.moved")
-          usingAsync(FileCache(fileOptions, dirOptions)(_ => latch.countDown())) { c =>
+          usingAsync(FileCache(options)(_ => latch.countDown())) { c =>
             c.list(dir, recursive = false, _ => true) === Seq(initial)
             initial.renameTo(moved)
             latch.waitFor(DEFAULT_TIMEOUT) {
@@ -94,7 +69,7 @@ object FileCacheTest extends TestSuite {
                 latch.countDown()
               }
           }
-          usingAsync(FileCache(fileOptions, dirOptions)(callback)) { c =>
+          usingAsync(FileCache(options)(callback)) { c =>
             c.register(dir)
             val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
             val files = mutable.Set.empty[Path]
@@ -113,31 +88,6 @@ object FileCacheTest extends TestSuite {
               }
             } finally {
               executor.close()
-            }
-          }
-        }
-      }
-    }
-  }
-}
-object FileCacheDirectoryTest extends TestSuite {
-  val tests: Tests = testOn(MacOS) {
-    val (fileOptions, dirOptions) = (NoMonitor, DirectoryOptions.default)
-    'register - {
-      'existing - withTempFile { f =>
-        val parent = f.getParent
-        using(FileCache(fileOptions, dirOptions)(_ => {})) { c =>
-          c.register(parent)
-          c.list(parent, recursive = true, _ => true) === Seq(f)
-        }
-      }
-      'monitor - withTempDirectory { dir =>
-        val latch = new CountDownLatch(1)
-        usingAsync(FileCache(fileOptions, dirOptions)(_ => latch.countDown())) { c =>
-          c.register(dir)
-          withTempFile(dir) { f =>
-            latch.waitFor(2 * DEFAULT_TIMEOUT) {
-              c.list(dir, recursive = true, _ => true) === Seq(f)
             }
           }
         }
