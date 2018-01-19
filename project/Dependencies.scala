@@ -9,7 +9,7 @@ object Dependencies {
   val utestVersion = "0.6.0"
   val utest = "com.lihaoyi" %% "utest" % utestVersion % "test"
   val zinc = "org.scala-sbt" %% "zinc" % "1.0.5"
-  val appleEventsVersion = "1.2.0-SNAPSHOT"
+  val appleEventsVersion = "1.2.0"
   def ioScalaJS: SettingsDefinition = libraryDependencies += "io.scalajs" %%% "nodejs" % "0.4.2"
 
   def baseVersion: String = "1.2.0"
