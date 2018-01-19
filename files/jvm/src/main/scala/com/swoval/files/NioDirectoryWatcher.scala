@@ -14,14 +14,16 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 class NioDirectoryWatcher(override val onFileEvent: Callback) extends DirectoryWatcher {
-  override def register(path: Path): Boolean = {
+  override def register(path: Path, recursive: Boolean = true): Boolean = {
     def impl(p: JPath): Boolean = lock.synchronized {
       val realPath = p.toRealPath()
       try {
         watchedDirs get realPath match {
           case None =>
             watchedDirs +=
-              realPath -> realPath.register(watchService, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY)
+              realPath -> WatchedDir(
+                realPath.register(watchService, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY),
+                recursive)
             true
           case _ => false
         }
@@ -29,28 +31,30 @@ class NioDirectoryWatcher(override val onFileEvent: Callback) extends DirectoryW
         case _: NoSuchFileException => false
       }
     }
-    val res = path.exists && impl(path.path) && {
-      walk(path.path)(_.filter(p => (p != path.path) && JFiles.isDirectory(p)).forEach(impl))
+    path.exists && impl(path.path) && {
+      walk(path.path, recursive)(
+        _.filter(p => (p != path.path) && JFiles.isDirectory(p)).forEach(impl))
       true
     }
-    res
   }
   override def unregister(path: Path): Unit = lock.synchronized {
-    watchedDirs.remove(path.path) foreach { k =>
-      k.cancel(); k.reset()
+    watchedDirs.remove(path.path) foreach {
+      case WatchedDir(k, _) =>
+        k.cancel(); k.reset()
     }
   }
 
   override def close(): Unit = lock.synchronized {
-    lock.synchronized(watchedDirs.values) foreach { k =>
-      k.cancel(); k.reset()
+    lock.synchronized(watchedDirs.values) foreach {
+      case WatchedDir(k, _) =>
+        k.cancel(); k.reset()
     }
     executor.shutdownNow()
     watchService.close()
   }
 
-  private def walk[R](path: JPath)(f: java.util.stream.Stream[JPath] => R) = {
-    val stream = JFiles.walk(path)
+  private def walk[R](path: JPath, recursive: Boolean)(f: java.util.stream.Stream[JPath] => R) = {
+    val stream = if (recursive) JFiles.walk(path) else JFiles.list(path)
     try {
       f(stream)
     } catch {
@@ -60,7 +64,8 @@ class NioDirectoryWatcher(override val onFileEvent: Callback) extends DirectoryW
     }
   }
 
-  private[this] val watchedDirs = mutable.Map.empty[Watchable, WatchKey]
+  private[this] case class WatchedDir(key: WatchKey, recursive: Boolean)
+  private[this] val watchedDirs = mutable.Map.empty[JPath, WatchedDir]
   private[this] val watchService = FileSystems.getDefault.newWatchService
   private[this] val lock = new Object
   private[this] val executor = Executors.newSingleThreadExecutor
@@ -71,21 +76,24 @@ class NioDirectoryWatcher(override val onFileEvent: Callback) extends DirectoryW
       def notifyNewFile(p: JPath): Unit = onFileEvent(FileWatchEvent(JvmPath(p), Create))
       val continue = try {
         val key = watchService.take()
+        val keyPath = key.watchable().asInstanceOf[JPath]
         key.pollEvents().asScala foreach {
           e: WatchEvent[_] =>
             val path = key.watchable.asInstanceOf[JPath].resolve(e.context().asInstanceOf[JPath])
             val jvmPath = JvmPath(path)
             if (e.kind == ENTRY_CREATE && JFiles.exists(path) && JFiles.isDirectory(path)) {
-              if (register(jvmPath))
-                walk(path)(_.filter(_ != path).forEach(notifyNewFile))
+              val recursive = watchedDirs.get(keyPath).exists(_.recursive)
+              if (register(jvmPath, recursive))
+                walk(path, recursive)(_.filter(_ != path).forEach(notifyNewFile))
             }
             onFileEvent(FileWatchEvent(jvmPath, e.kind.toSwoval))
         }
-        if (!key.reset()) lock.synchronized(watchedDirs -= key.watchable())
+        if (!key.reset()) lock.synchronized(watchedDirs -= keyPath)
         true
       } catch {
         case _: InterruptedException        => false
         case _: ClosedWatchServiceException => false
+        case _: NoSuchFileException         => false
         case e: Exception =>
           println(s"Unexpected exception $e ${e.getStackTrace mkString "\n"}")
           true

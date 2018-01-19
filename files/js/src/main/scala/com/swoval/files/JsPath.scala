@@ -15,7 +15,7 @@ class JsPath(val path: String, parent: Option[JsPath] = None) extends Path {
       case p => p
     }
 
-  override lazy val isDirectory: Boolean = if (exists) Fs.statSync(fullName).isDirectory else false
+  override lazy val isDirectory: Boolean = exists && Fs.statSync(fullName).isDirectory
 
   override lazy val lastModified: Long =
     if (exists) Fs.statSync(fullName).mtime.getMilliseconds()
@@ -26,20 +26,26 @@ class JsPath(val path: String, parent: Option[JsPath] = None) extends Path {
   override lazy val parts: Seq[Path] = fullName.split(sep).map(JsPath(_))
 
   override def createFile(): Path = {
-    if (!exists) Fs.closeSync(Fs.openSync(fullName, "w"))
+    if (!exists) {
+      Fs.closeSync(Fs.openSync(fullName, "w"))
+    }
     this
   }
 
   override def delete(): Boolean = {
-    if (isDirectory) {
-      Fs.readdirSync(fullName) foreach { p =>
-        if (Fs.statSync(p).isDirectory) JsPath(p).delete() else Fs.unlinkSync(p)
+    if (exists) {
+      if (isDirectory) {
+        Fs.readdirSync(fullName) foreach { p =>
+          if (Fs.statSync(p).isDirectory) JsPath(p).delete() else Fs.unlinkSync(p)
+        }
+        Fs.rmdirSync(fullName)
+      } else {
+        Fs.unlinkSync(fullName)
       }
-      Fs.rmdirSync(fullName)
+      true
     } else {
-      Fs.unlinkSync(fullName)
+      false
     }
-    true
   }
 
   override def equals(other: Any): Boolean = other match {
@@ -64,11 +70,13 @@ class JsPath(val path: String, parent: Option[JsPath] = None) extends Path {
 
   override def list(recursive: Boolean, pathFilter: PathFilter): Seq[Path] = {
     if (exists && isDirectory) {
-      Fs.readdirSync(fullName).view.map(resolve) flatMap { p =>
-        if (p.isDirectory && recursive) p.list(recursive, pathFilter) else Seq(p)
+      Fs.readdirSync(fullName).view.map(resolve) flatMap {
+        case p if pathFilter(p) =>
+          Seq(p) ++ (if (p.isDirectory && recursive) p.list(recursive, pathFilter) else Seq.empty)
+        case p => Seq.empty
       }
     } else {
-      Seq(this)
+      Seq.empty
     }
   }
 
@@ -78,7 +86,7 @@ class JsPath(val path: String, parent: Option[JsPath] = None) extends Path {
   }
 
   override def mkdirs(): Path = parts match {
-    case Seq(_, t @ _*) if t.lengthCompare(1) > 1 =>
+    case Seq(_, t @ _*) if t.lengthCompare(1) >= 1 =>
       t.foldLeft(Path(sep)) { case (a, p) => a.resolve(p).mkdir() }
     case Seq(_, h) => h.mkdir()
   }
@@ -108,7 +116,9 @@ class JsPath(val path: String, parent: Option[JsPath] = None) extends Path {
   }
 
   override def setLastModifiedTime(millis: Long): Path = {
-    if (exists) Fs.utimesSync(fullName, Fs.statSync(fullName).atimeMs.toInt, (millis / 1000).toInt)
+    if (!exists) createFile()
+    val atime = Fs.statSync(fullName).atime.getTime.toInt
+    Fs.utimesSync(fullName, atime, (millis / 1000).toInt)
     this
   }
 

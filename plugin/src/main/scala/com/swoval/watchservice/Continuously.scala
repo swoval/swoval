@@ -4,16 +4,16 @@ import java.nio.file.{ Paths => JPaths }
 import java.util.concurrent.{ ArrayBlockingQueue, BlockingQueue, ExecutorService, Executors }
 
 import com.swoval.files.DirectoryWatcher.Callback
+import com.swoval.files.FileCache
 import sbt.BasicCommandStrings._
 import sbt.BasicCommands.otherCommandParser
 import sbt.CommandUtil.withAttribute
 import sbt.SourceWrapper.RichSource
+import sbt.WatchedWrapper._
 import sbt.internal.io.Source
 import sbt.{ AttributeKey, Command, State, Watched }
 
 import scala.annotation.tailrec
-
-import sbt.WatchedWrapper._
 
 object Continuously {
 
@@ -22,6 +22,7 @@ object Continuously {
   case object Exit extends TriggerEvent
   case object Triggered extends TriggerEvent
   case class WatchState(sources: Seq[Source],
+                        cache: FileCache,
                         var count: Int = -1,
                         events: BlockingQueue[TriggerEvent] = new ArrayBlockingQueue(1),
                         executor: ExecutorService = Executors.newSingleThreadExecutor()) {
@@ -36,18 +37,22 @@ object Continuously {
         while (!events.offer(Exit)) {
           events.poll()
         }
-        Callbacks.remove(callback)
+        cache.removeCallback(callbackHandle)
         executor.shutdownNow()
       } else signalExit()
     }
     private[this] val callback: Callback = { e =>
       if (sources.exists(s => s.accept(JPaths.get(e.path.fullName)))) { events.offer(Triggered) }
     }
-    Callbacks.add(callback)
+    private[this] val callbackHandle = cache.addCallback(callback)
     executor.submit((() => signalExit()): Runnable)
   }
-  def executeContinuously(watched: Watched, s: State, next: String, repeat: String): State = {
-    val watchState = s.get(swovalWatchState) getOrElse WatchState(watched.watchSources(s))
+  def executeContinuously(watched: Watched,
+                          s: State,
+                          cache: FileCache,
+                          next: String,
+                          repeat: String): State = {
+    val watchState = s.get(swovalWatchState) getOrElse WatchState(watched.watchSources(s), cache)
     watchState.count += 1
 
     if (watchState.count == 0) {
@@ -69,10 +74,12 @@ object Continuously {
         val extracted = sbt.Project.extract(s)
         val default: Boolean =
           extracted.get(MacOSXWatchServicePlugin.autoImport.useDefaultWatchService)
+        val cache: FileCache =
+          extracted.get(MacOSXWatchServicePlugin.autoImport.fileCache)
         withAttribute(s, Watched.Configuration, "Continuous execution not configured.") { w =>
           val repeat = ContinuousExecutePrefix + (if (arg.startsWith(" ")) arg else " " + arg)
           if (default) Watched.executeContinuously(w, s, arg, repeat)
-          else executeContinuously(w, s, arg, repeat)
+          else executeContinuously(w, s, cache, arg, repeat)
         }
     }
 }

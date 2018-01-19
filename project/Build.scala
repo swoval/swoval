@@ -1,7 +1,8 @@
 import java.io.File
-import java.nio.file.{ Files => JFiles, Path => JPath, Paths => JPaths }
+import java.nio.file.{ Files => JFiles, Path => JPath, StandardCopyOption }
 
 import Dependencies._
+import StandardCopyOption.REPLACE_EXISTING
 import bintray.BintrayKeys.{
   bintrayOrganization,
   bintrayPackage,
@@ -18,7 +19,7 @@ import com.typesafe.sbt.SbtGit.git
 import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport.toPlatformDepsGroupID
 import org.scalajs.core.tools.linker.backend.ModuleKind
 import org.scalajs.sbtplugin.JSPlatform
-import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.scalaJSModuleKind
+import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ scalaJSModuleKind, fastOptJS, fullOptJS }
 import sbt.Keys._
 import sbt._
 import sbtcrossproject.CrossPlugin.autoImport._
@@ -44,14 +45,13 @@ object Build {
     ))
   )
   val projects: Seq[ProjectReference] =
-    (if (Properties.isMac) Seq[ProjectReference](appleFileSystem.jvm, appleFileSystem.js)
+    (if (Properties.isMac) Seq[ProjectReference](appleFileEvents.jvm, appleFileEvents.js, plugin)
      else Seq.empty) ++
       Seq[ProjectReference](
         testing.js,
         testing.jvm,
         files.jvm,
-        files.js,
-        plugin
+        files.js
       )
 
   lazy val root = project
@@ -62,14 +62,14 @@ object Build {
       bintrayUnpublish := {}
     )
 
-  lazy val appleFileSystem: CrossProject = crossProject(JSPlatform, JVMPlatform)
-    .in(file("apple-file-system"))
+  lazy val appleFileEvents: CrossProject = crossProject(JSPlatform, JVMPlatform)
+    .in(file("apple-file-events"))
     .configurePlatform(JVMPlatform)(_.enablePlugins(JniNative))
     .configurePlatform(JSPlatform)(_.enablePlugins(ScalaJSBundlerPlugin))
     .settings(
       commonSettings,
-      name := "apple-file-system",
-      bintrayPackage := "apple-file-system",
+      name := "apple-file-events",
+      bintrayPackage := "apple-file-events",
       bintrayRepository := "sbt-plugins",
       description := "JNI library for apple file system",
       sourceDirectory in nativeCompile := sourceDirectory.value / "main" / "native",
@@ -83,7 +83,6 @@ object Build {
       webpackBundlingMode := BundlingMode.LibraryOnly(),
       useYarn := false,
       scalaJSModuleKind := ModuleKind.CommonJSModule,
-      npmDependencies in Compile += nodeApfs,
       sourceGenerators in Compile += Def.task {
         val pkg = "com/swoval/files/apple"
         val target = (managedSourceDirectories in Compile).value.head.toPath
@@ -104,17 +103,54 @@ object Build {
         val cmd = Seq("java", "-classpath", cp, clazz) ++ javaSources :+ target.toString
         println(cmd.!!)
         sources.map(f => target.resolve(s"$f.scala").toFile)
-      }.taskValue
+      }.taskValue,
+      cleanAllGlobals,
+      nodeNativeLibs
     )
 
+  def addLib(dir: File): File = {
+    val target = dir.toPath.resolve("node_modules/lib")
+    if (!JFiles.exists(target))
+      JFiles.createSymbolicLink(target,
+                                appleFileEvents.js.base.toPath.toAbsolutePath.resolve("npm/lib"))
+    dir
+  }
+  def nodeNativeLibs: SettingsDefinition = Seq(
+    (npmUpdate in Compile) := addLib((npmUpdate in Compile).value),
+    (npmUpdate in Test) := addLib((npmUpdate in Test).value)
+  )
+
+  def cleanGlobals(file: Attributed[File]) = {
+    val content = new String(JFiles.readAllBytes(file.data.toPath))
+      .replaceAll("([ ])*[a-zA-Z$0-9.]+\\.___global.", "$1")
+    JFiles.write(file.data.toPath, content.getBytes)
+    file
+  }
+  def cleanAllGlobals: SettingsDefinition = Seq(
+    (fastOptJS in Compile) := cleanGlobals((fastOptJS in Compile).value),
+    (fastOptJS in Test) := cleanGlobals((fastOptJS in Test).value),
+    (fullOptJS in Compile) := cleanGlobals((fullOptJS in Compile).value),
+    (fullOptJS in Test) := cleanGlobals((fullOptJS in Test).value)
+  )
   lazy val files: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("files"))
     .enablePlugins(GitVersioning)
     .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
     .jsSettings(
+      scalacOptions += "-P:scalajs:sjsDefinedByDefault",
       scalaJSModuleKind := ModuleKind.CommonJSModule,
+      webpackBundlingMode := BundlingMode.LibraryOnly(),
       useYarn := false,
-      libraryDependencies += "com.swoval" %%% "apple-file-system" % apfsVersion,
+      libraryDependencies += "com.swoval" %%% "apple-file-events" % appleEventsVersion,
+      cleanAllGlobals,
+      nodeNativeLibs,
+      (fullOptJS in Compile) := {
+        val res = (fullOptJS in Compile).value
+        JFiles.copy(res.data.toPath,
+                    baseDirectory.value.toPath.resolve("npm/files.js"),
+                    REPLACE_EXISTING)
+        res
+      },
       ioScalaJS
     )
     .settings(
@@ -128,7 +164,7 @@ object Build {
       libraryDependencies ++= Seq(
         zinc,
         scalaMacros % scalaVersion.value,
-        "com.swoval" % "apple-file-system" % apfsVersion
+        "com.swoval" % "apple-file-events" % appleEventsVersion
       ),
       utestCrossTest,
       utestFramework
@@ -151,15 +187,15 @@ object Build {
         zinc % "provided",
         sbtIO % "provided",
         "com.lihaoyi" %% "utest" % utestVersion % "test",
-        "com.swoval" % "apple-file-system" % apfsVersion % "provided"
+        "com.swoval" % "apple-file-events" % appleEventsVersion % "provided"
       ),
       utestFramework,
       resourceGenerators in Compile += Def.task {
-        // This makes a fat jar containing all of the classes in appleFileSystem and files.
-        lazy val apfscd = (classDirectory in Compile in appleFileSystem.jvm).value.toPath
+        // This makes a fat jar containing all of the classes in appleFileEvents and files.
+        lazy val apfscd = (classDirectory in Compile in appleFileEvents.jvm).value.toPath
         lazy val filescd = (classDirectory in Compile in files.jvm).value.toPath
-        lazy val libs = (nativeLibraries in Compile in appleFileSystem.jvm).value
-        (compile in Compile in appleFileSystem.jvm).value
+        lazy val libs = (nativeLibraries in Compile in appleFileEvents.jvm).value
+        (compile in Compile in appleFileEvents.jvm).value
         (compile in Compile in files.jvm).value
         lazy val resourcePath = (resourceManaged in Compile).value.toPath
         def copy(s: File, d: File) = { IO.copyFile(s, d); d }

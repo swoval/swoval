@@ -1,5 +1,5 @@
-val appleFileSystemJS = Build.appleFileSystem.js
-val appleFileSystemJVM = Build.appleFileSystem.jvm
+val appleFileEventsJS = Build.appleFileEvents.js
+val appleFileEventsJVM = Build.appleFileEvents.jvm
 val filesJS = Build.files.js
 val filesJVM = Build.files.jvm
 val plugin = Build.plugin
