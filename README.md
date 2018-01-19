@@ -6,9 +6,9 @@ Usage
 ---
 Add
 ```
-addSbtPlugin("com.swoval" %% "sbt-mac-watch-service" % "1.2.0-RC4")
+addSbtPlugin("com.swoval" %% "sbt-mac-watch-service" % "1.2.0")
 ```
-to your project/plugins.sbt. To apply the plugin globally, add those commands to ~/.sbt/1.0/plugins/watch.sbt (creating the file if necessary). If you are running into issues with 1.2.0-RC4, the last stable release before some significant internal changes was `1.1.4`.
+to your project/plugins.sbt. To apply the plugin globally, add those commands to ~/.sbt/1.0/plugins/watch.sbt (creating the file if necessary).
 
 With luck the plugin works well with default settings, but there are a number of configuration options. By default the plugin overrides a number of sbt settings and tasks and commands:
 * sources in Compile
