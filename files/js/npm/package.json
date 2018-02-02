@@ -1,5 +1,5 @@
 {
-  "name": "@swoval/files",
+  "name": "swoval_files",
   "version": "1.2.0",
   "description": "Utilities for listing and monitoring directories.",
   "main": "files.js",
