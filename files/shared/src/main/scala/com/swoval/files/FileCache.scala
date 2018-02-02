@@ -13,11 +13,13 @@ trait FileCache extends AutoCloseable with Callbacks {
   def register(path: Path): Option[Directory]
 }
 
-class FileCacheImpl(options: Options) extends FileCache {
+class FileCacheImpl(options: Options, private[this] val directories: mutable.Set[Directory])
+    extends FileCache {
+  def this(options: Options) = this(options, mutable.Set.empty)
   private[this] val executor: Executor =
     platform.makeExecutor("com.swoval.files.FileCacheImpl.executor-thread")
   def list(path: Path, recursive: Boolean, filter: PathFilter): Seq[Path] =
-    lock
+    directories
       .synchronized {
         if (path.exists) {
           directories.find(path startsWith _.path) match {
@@ -33,7 +35,7 @@ class FileCacheImpl(options: Options) extends FileCache {
     if (path.exists) {
       val dir = Directory(path, _ => {})
       watcher.foreach(_.register(path))
-      lock.synchronized {
+      directories.synchronized {
         directories foreach { dir =>
           if (dir.path startsWith path) directories.remove(dir)
         }
@@ -45,9 +47,10 @@ class FileCacheImpl(options: Options) extends FileCache {
     }
   }
 
-  override def close(): Unit = {
+  override def close(): Unit = closeImpl()
+  protected def closeImpl(clearDirectoriesOnClose: Boolean = true): Unit = {
     watcher.foreach(_.close())
-    directories.clear()
+    if (clearDirectoriesOnClose) directories.clear()
     executor.close()
   }
 
@@ -59,34 +62,41 @@ class FileCacheImpl(options: Options) extends FileCache {
           case Seq(p) if p == path =>
             callback(FileWatchEvent(path, Modify))
           case Seq() =>
-            directories.find(path startsWith _.path) match {
-              case Some(dir) if path != dir.path =>
-                lock.synchronized(dir.add(path, isFile = !path.isDirectory, callback))
-              case _ =>
+            directories.synchronized {
+              directories.find(path startsWith _.path) match {
+                case Some(dir) if path != dir.path =>
+                  dir.add(path, isFile = !path.isDirectory, callback)
+                case _ =>
+              }
             }
           case Seq(_) =>
         }
       } else {
-        directories.find(path startsWith _.path) match {
-          case Some(dir) =>
-            if (dir.remove(path)) callback(FileWatchEvent(path, Delete))
-          case _ =>
+        directories.synchronized {
+          directories.find(path startsWith _.path) match {
+            case Some(dir) =>
+              if (dir.remove(path)) callback(FileWatchEvent(path, Delete))
+            case _ =>
+          }
         }
       }
   }
   private[this] val watcher = options.toWatcher(fileCallback, executor)
-  private[this] val directories: mutable.Set[Directory] = mutable.Set.empty
-  private[this] object lock
+  for { w <- watcher; dir <- directories } w.register(dir.path)
   override def toString = s"FileCache($options)"
 }
 
 object FileCache {
-  def apply(options: Options)(callback: Callback): FileCacheImpl = {
-    val cache: FileCacheImpl = new FileCacheImpl(options)
+  def apply(options: Options, directories: mutable.Set[Directory] = mutable.Set.empty)(
+      callback: Callback): FileCacheImpl = {
+    val cache: FileCacheImpl = new FileCacheImpl(options, directories)
     cache.addCallback(callback)
     cache
   }
-  lazy val default: FileCacheImpl = new FileCacheImpl(Options.default)
+  private[this] val directories: mutable.Set[Directory] = mutable.Set.empty
+  def default: FileCacheImpl = new FileCacheImpl(Options.default, directories) {
+    override def close(): Unit = closeImpl(clearDirectoriesOnClose = false)
+  }
 }
 
 sealed abstract class Options {
