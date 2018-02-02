@@ -10,7 +10,9 @@ class ExecutorServiceWrapper(val s: ExecutorService) extends Executor {
   override def close(): Unit = {
     if (!s.isShutdown) {
       s.shutdownNow()
-      s.awaitTermination(5, TimeUnit.SECONDS)
+      try {
+        s.awaitTermination(5, TimeUnit.SECONDS)
+      } catch { case _: InterruptedException => }
     }
   }
 }
