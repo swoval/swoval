@@ -156,8 +156,8 @@ object Build {
     .settings(
       scalaVersion := "2.12.4",
       commonSettings,
-      name := "files",
-      bintrayPackage := "files",
+      name := "file-utilities",
+      bintrayPackage := "file-utilities",
       bintrayRepository := "sbt-plugins",
       description := "File system apis.",
       publishMavenStyle := false,
