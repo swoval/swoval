@@ -33,15 +33,19 @@ class FileCacheImpl(options: Options, private[this] val directories: mutable.Set
 
   override def register(path: Path): Option[Directory] = {
     if (path.exists) {
-      val dir = Directory(path, _ => {})
       watcher.foreach(_.register(path))
       directories.synchronized {
-        directories foreach { dir =>
-          if (dir.path startsWith path) directories.remove(dir)
+        if (!directories.exists(dir => path.startsWith(dir.path))) {
+          directories foreach { dir =>
+            if (dir.path startsWith path) directories.remove(dir)
+          }
+          val dir = Directory(path, _ => {})
+          directories += dir
+          Some(dir)
+        } else {
+          None
         }
-        directories += dir
       }
-      Some(dir)
     } else {
       None
     }
