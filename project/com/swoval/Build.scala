@@ -194,6 +194,7 @@ object Build {
         "com.lihaoyi" %% "utest" % utestVersion % "test",
         "com.swoval" % "apple-file-events" % appleEventsVersion % "provided"
       ),
+      watchSources ++= (watchSources in files.jvm).value,
       utestFramework,
       resourceGenerators in Compile += Def.task {
         // This makes a fat jar containing all of the classes in appleFileEvents and files.
