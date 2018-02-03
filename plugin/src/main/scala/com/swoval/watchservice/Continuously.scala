@@ -41,6 +41,13 @@ object Continuously {
         executor.shutdownNow()
       } else signalExit()
     }
+    sources.view
+      .map(_.base match {
+        case dir if dir.isDirectory => dir
+        case f                      => f.getParent
+      })
+      .distinct
+      .foreach(cache.register)
     private[this] val callback: Callback = { e =>
       if (sources.exists(s => s.accept(JPaths.get(e.path.fullName)))) { events.offer(Triggered) }
     }
