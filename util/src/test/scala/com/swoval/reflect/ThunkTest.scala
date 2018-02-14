@@ -53,9 +53,10 @@ object ThunkTest extends TestSuite {
     def withLoader[R](f: (Path, ChildFirstClassLoader) => R) = {
       val dir = Files.createTempDirectory("reflective-thunk-test")
       val thread = Thread.currentThread
-      val initLoader = thread.getContextClassLoader
+      val initLoader =
+        thread.getContextClassLoader.asInstanceOf[ChildFirstClassLoader]
       try {
-        val loader = ChildFirstClassLoader(Seq(dir))
+        val loader = initLoader.dup().copy(urls = Seq(dir.toUri.toURL))
         thread.setContextClassLoader(loader)
         f(dir, loader)
       } finally {
@@ -72,8 +73,10 @@ object ThunkTest extends TestSuite {
     }
     'reload - {
       val resourcePath = Paths.get("src/test/resources").toAbsolutePath
-      def test(digit: Long, includeBuzz: Boolean = false): Unit = withLoader {
-        (path, l) =>
+      def test(digit: Long,
+               includeBuzz: Boolean = false,
+               needIntercept: Boolean = true): Unit =
+        withLoader { (path, l) =>
           val dir = Files.createDirectories(path.resolve("com/swoval/reflect"))
           Files.copy(resourcePath.resolve(s"Bar$$.class.$digit"),
                      dir.resolve("Bar$.class"))
@@ -81,16 +84,23 @@ object ThunkTest extends TestSuite {
           if (includeBuzz) {
             Files.copy(resourcePath.resolve(s"Buzz.class"),
                        dir.resolve("Buzz.class"))
-            intercept[NoSuchMethodException](checkBuzz())
+            if (needIntercept) intercept[NoSuchMethodException](checkBuzz())
+            else checkBuzz()
           } else {
             checkBuzz
           }
+          println(digit)
           Thunk(Bar.add(1, 2L)) ==> digit
-      }
+        }
+      val loader =
+        ChildFirstClassLoader(Seq.empty,
+                              Thread.currentThread.getContextClassLoader)
+      Thread.currentThread.setContextClassLoader(loader)
       test(6)
       test(6, includeBuzz = true)
       test(7)
-      test(7, includeBuzz = true)
+      Class.forName("com.swoval.reflect.Buzz", false, loader)
+      test(7, includeBuzz = true, needIntercept = false)
     }
   }
 }
