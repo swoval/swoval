@@ -4,6 +4,7 @@ import java.net.{URL, URLClassLoader}
 import java.nio.file.Path
 
 import scala.collection.mutable
+import scala.collection.JavaConverters._
 
 case class ChildFirstClassLoader(
     urls: Seq[URL],
@@ -11,14 +12,37 @@ case class ChildFirstClassLoader(
     loaded: mutable.Map[String, Class[_]] = mutable.Map.empty)
     extends URLClassLoader(urls.toArray, parent)
     with DynamicClassLoader {
+  def this(loader: ClassLoader) =
+    this(Seq.empty, loader, mutable.Map.empty)
+//  println("WTF")
+//  println(
+//    Agent.getLoadedClasses.asScala
+//      .map { case (l, m) => s"$l -> ${m.asScala mkString "\n"}" }
+//      .mkString("\n"))
+
+//  {
+//    val now = System.nanoTime
+//    Agent.getLoadedClasses(parent).iterator.asScala.foreach { n =>
+//      loaded += n -> parent.loadClass(n)
+//    }
+//    val elapsed = System.nanoTime - now
+//    println(s"Took ${elapsed / 1e6} ms to load classes")
+//  }
+//  Seq("Dynamic", "ChildFirst")
+//    .map(n => s"com.swoval.reflect.${n}ClassLoader")
+//    .foreach(n => loaded += n -> parent.loadClass(n))
+//  println(s"WTF made loader")
   override def loadClass(name: String, resolve: Boolean): Class[_] = {
-    println(s"loading $name $loaded")
     val c: Class[_] = try {
-      loaded get name match {
-        case None => println(s"no class found for $name")
-        case _    => println(s"found class for $name")
-      }
-      loaded.getOrElse(name, findClass(name))
+      loaded.getOrElse(
+        name, {
+          if (name.startsWith("java.") || name.startsWith("sun.") || Agent
+                .hasParentLoadedClass(parent, name)) {
+            println(s"using parent for $name")
+            parent.loadClass(name)
+          } else findClass(name)
+        }
+      )
     } catch {
       case _: ClassNotFoundException =>
         parent.loadClass(name)

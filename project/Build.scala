@@ -2,15 +2,16 @@ import java.io.File
 import java.nio.file.{Files, StandardCopyOption}
 
 import com.swoval.Dependencies.{logback => SLogback, _}
+import sbt.Keys._
 import sbt._
-import Keys._
+
 import scala.collection.JavaConverters._
 import scala.tools.nsc
 
 object Build {
   lazy val baseVersion = "0.1.0-SNAPSHOT"
 
-  lazy val root = (project in file(".")).aggregate(util)
+  lazy val root = (project in file(".")).aggregate(agent, util)
 
   lazy val genTestResourceClasses =
     taskKey[Unit]("Generate test resource class files.")
@@ -31,6 +32,12 @@ object Build {
         .value
         .withCachedResolution(true),
       fork in Test := true,
+      javaOptions in Test ++= Seq(
+        "-Djava.system.class.loader=com.swoval.reflect.CachingClassLoader",
+        "-javaagent:/Users/ethanatkins/work/swoval/util/agent/target/scala-2.12/agent_2.12-0.1.0" +
+          "-SNAPSHOT.jar",
+        //"-verbose:class"
+      ),
       genTestResourceClasses := {
         val dir = Files.createTempDirectory("util-resources")
         try {
@@ -54,7 +61,8 @@ object Build {
                   settings.outputDirs.add(dir.toString, dir.toString)
                   val g = nsc.Global(settings)
                   val res =
-                    new g.Run().compile(List(dir.resolve("Bar.scala").toString))
+                    new g.Run()
+                      .compile(List(dir.resolve("Bar.scala").toString))
                   val (src, dst) =
                     (dir.resolve("com/swoval/reflect/Bar$.class"),
                      resourceDir.resolve(s"Bar$$.class.$i"))
@@ -85,5 +93,13 @@ object Build {
         slf4j,
         apfs,
       )
+    )
+    .dependsOn(agent)
+
+  lazy val agent = (project in file("util/agent"))
+    .settings(
+      packageOptions in (Compile, packageBin) +=
+        Package.ManifestAttributes(
+          "Premain-Class" -> "com.swoval.reflect.Agent")
     )
 }

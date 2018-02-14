@@ -6,12 +6,9 @@ trait DynamicClassLoader extends ClassLoader {
 object DynamicClassLoader {
   implicit def default: DynamicClassLoader = {
     val loader = Thread.currentThread.getContextClassLoader
-    val dc = loader.loadClass("com.swoval.reflect.DynamicClassLoader")
-    if (dc.isAssignableFrom(loader.getClass)) {
-      dc.cast(dc.getMethod("dup").invoke(loader))
-        .asInstanceOf[com.swoval.reflect.DynamicClassLoader]
-    } else {
-      ChildFirstClassLoader(Seq.empty, loader)
+    loader match {
+      case l: DynamicClassLoader => l.dup()
+      case l                     => ChildFirstClassLoader(Seq.empty, l)
     }
   }
 }

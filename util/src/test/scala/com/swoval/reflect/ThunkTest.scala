@@ -6,6 +6,7 @@ import java.nio.file.{Files, Path, Paths}
 import utest._
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.tools.nsc.{Global, Settings}
 
 class Buzz
@@ -21,6 +22,18 @@ object Bar {
 }
 
 object ThunkTest extends TestSuite {
+  println("OK ENTER TEST")
+  val loader = Thread
+    .currentThread()
+    .getContextClassLoader
+    .asInstanceOf[CachingClassLoader]
+  println("hello")
+  println(loader.getLoadedClasses.asScala.mkString("\n"))
+  Thread.currentThread.setContextClassLoader(
+    ChildFirstClassLoader(
+      Seq.empty,
+      loader,
+      mutable.Map(loader.getLoadedClasses.asScala.toSeq: _*)))
   val tests = Tests {
 //    'run - {
 //      'thunk - {
@@ -89,7 +102,6 @@ object ThunkTest extends TestSuite {
           } else {
             checkBuzz
           }
-          println(digit)
           Thunk(Bar.add(1, 2L)) ==> digit
         }
       val loader =
@@ -97,10 +109,10 @@ object ThunkTest extends TestSuite {
                               Thread.currentThread.getContextClassLoader)
       Thread.currentThread.setContextClassLoader(loader)
       test(6)
-      test(6, includeBuzz = true)
-      test(7)
-      Class.forName("com.swoval.reflect.Buzz", false, loader)
-      test(7, includeBuzz = true, needIntercept = false)
+//      test(6, includeBuzz = true)
+//      test(7)
+//      Class.forName("com.swoval.reflect.Buzz", false, loader)
+//      test(7, includeBuzz = true, needIntercept = false)
     }
   }
 }
