@@ -1,7 +1,7 @@
 import java.io.File
-import java.nio.file.{Files, StandardCopyOption}
+import java.nio.file.{ Files, StandardCopyOption }
 
-import com.swoval.Dependencies.{logback => SLogback, _}
+import com.swoval.Dependencies.{ logback => SLogback, _ }
 import sbt.Keys._
 import sbt._
 
@@ -11,7 +11,7 @@ import scala.tools.nsc
 object Build {
   lazy val baseVersion = "0.1.0-SNAPSHOT"
 
-  lazy val root = (project in file(".")).aggregate(agent, util)
+  lazy val root = (project in file(".")).aggregate(util)
 
   lazy val genTestResourceClasses =
     taskKey[Unit]("Generate test resource class files.")
@@ -34,10 +34,11 @@ object Build {
       fork in Test := true,
       javaOptions in Test ++= Seq(
         "-Djava.system.class.loader=com.swoval.reflect.CachingClassLoader",
-        "-javaagent:/Users/ethanatkins/work/swoval/util/agent/target/scala-2.12/agent_2.12-0.1.0" +
-          "-SNAPSHOT.jar",
+        s"-javaagent:${(packageConfiguration in (Compile, packageBin)).value.jar}"
         //"-verbose:class"
       ),
+      packageOptions in (Compile, packageBin) +=
+        Package.ManifestAttributes("Premain-Class" -> "com.swoval.reflect.Agent"),
       genTestResourceClasses := {
         val dir = Files.createTempDirectory("util-resources")
         try {
@@ -52,8 +53,7 @@ object Build {
             f =>
               Seq(6, 7) foreach {
                 i =>
-                  IO.write(dir.resolve("Bar.scala").toFile,
-                           f.replaceAll("\\$\\$impl", s"$i"))
+                  IO.write(dir.resolve("Bar.scala").toFile, f.replaceAll("\\$\\$impl", s"$i"))
                   val settings = new nsc.Settings()
                   settings.bootclasspath.value = cp
                   settings.classpath.value = cp
@@ -93,13 +93,5 @@ object Build {
         slf4j,
         apfs,
       )
-    )
-    .dependsOn(agent)
-
-  lazy val agent = (project in file("util/agent"))
-    .settings(
-      packageOptions in (Compile, packageBin) +=
-        Package.ManifestAttributes(
-          "Premain-Class" -> "com.swoval.reflect.Agent")
     )
 }

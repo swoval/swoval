@@ -1,48 +1,27 @@
 package com.swoval.reflect
 
-import java.net.{URL, URLClassLoader}
+import java.net.{ URL, URLClassLoader }
 import java.nio.file.Path
 
 import scala.collection.mutable
-import scala.collection.JavaConverters._
 
-case class ChildFirstClassLoader(
-    urls: Seq[URL],
-    parent: ClassLoader = Thread.currentThread.getContextClassLoader,
-    loaded: mutable.Map[String, Class[_]] = mutable.Map.empty)
+case class ChildFirstClassLoader(urls: Seq[URL],
+                                 parent: ClassLoader = Thread.currentThread.getContextClassLoader,
+                                 loaded: mutable.Map[String, Class[_]] = mutable.Map.empty)
     extends URLClassLoader(urls.toArray, parent)
-    with DynamicClassLoader {
+    with DynamicClassLoader
+    with HotSwapClassLoader {
   def this(loader: ClassLoader) =
     this(Seq.empty, loader, mutable.Map.empty)
-//  println("WTF")
-//  println(
-//    Agent.getLoadedClasses.asScala
-//      .map { case (l, m) => s"$l -> ${m.asScala mkString "\n"}" }
-//      .mkString("\n"))
-
-//  {
-//    val now = System.nanoTime
-//    Agent.getLoadedClasses(parent).iterator.asScala.foreach { n =>
-//      loaded += n -> parent.loadClass(n)
-//    }
-//    val elapsed = System.nanoTime - now
-//    println(s"Took ${elapsed / 1e6} ms to load classes")
-//  }
-//  Seq("Dynamic", "ChildFirst")
-//    .map(n => s"com.swoval.reflect.${n}ClassLoader")
-//    .foreach(n => loaded += n -> parent.loadClass(n))
-//  println(s"WTF made loader")
+  if (loaded.isEmpty) loadClassses()
+  override def addToCache(name: String, clazz: Class[_]): Unit =
+    loaded += name -> clazz
   override def loadClass(name: String, resolve: Boolean): Class[_] = {
     val c: Class[_] = try {
-      loaded.getOrElse(
-        name, {
-          if (name.startsWith("java.") || name.startsWith("sun.") || Agent
-                .hasParentLoadedClass(parent, name)) {
-            println(s"using parent for $name")
-            parent.loadClass(name)
-          } else findClass(name)
-        }
-      )
+      loaded.getOrElse(name, {
+        if (name.startsWith("java.") || name.startsWith("sun.")) parent.loadClass(name)
+        else findClass(name)
+      })
     } catch {
       case _: ClassNotFoundException =>
         parent.loadClass(name)
@@ -64,6 +43,5 @@ object ChildFirstClassLoader {
       case l: DynamicClassLoader    => ChildFirstClassLoader(Seq.empty, l)
     }
   def apply(paths: Seq[Path]): ChildFirstClassLoader =
-    ChildFirstClassLoader(paths.map(_.toUri.toURL),
-                          Thread.currentThread.getContextClassLoader)
+    ChildFirstClassLoader(paths.map(_.toUri.toURL), Thread.currentThread.getContextClassLoader)
 }
