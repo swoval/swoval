@@ -31,11 +31,14 @@ object Build {
         .value
         .withCachedResolution(true),
       fork in Test := true,
-      javaOptions in Test ++= Seq(
-        "-Djava.system.class.loader=com.swoval.reflect.CachingClassLoader",
-        s"-javaagent:${(packageConfiguration in (Compile, packageBin)).value.jar}"
-        //"-verbose:class"
-      ),
+      javaOptions in Test ++= {
+        println((packageConfiguration in (Compile, packageBin)).value.jar)
+        Seq(
+          "-Djava.system.class.loader=com.swoval.reflect.ChildFirstClassLoader",
+          s"-javaagent:${(packageConfiguration in (Compile, packageBin)).value.jar}"
+          //"-verbose:class"
+        )
+      },
       packageOptions in (Compile, packageBin) +=
         Package.ManifestAttributes("Premain-Class" -> "com.swoval.reflect.Agent"),
       genTestResourceClasses := {
@@ -59,12 +62,7 @@ object Build {
                   settings.usejavacp.value = true
                   settings.outputDirs.add(dir.toString, dir.toString)
                   val g = nsc.Global(settings)
-                  val res =
-                    new g.Run()
-                      .compile(List(dir.resolve("Bar.scala").toString))
-                  val (src, dst) =
-                    (dir.resolve("com/swoval/reflect/Bar$.class"),
-                     resourceDir.resolve(s"Bar$$.class.$i"))
+                  new g.Run().compile(List(dir.resolve("Bar.scala").toString))
                   Files.copy(dir.resolve("com/swoval/reflect/Bar$.class"),
                              resourceDir.resolve(s"Bar$$.class.$i"),
                              StandardCopyOption.REPLACE_EXISTING)
@@ -83,7 +81,14 @@ object Build {
             .reverse
           files foreach (Files.deleteIfExists(_))
         }
-
+      },
+      testOnly in Test := {
+        (packageBin in Compile).value
+        (testOnly in Test).evaluated
+      },
+      test in Test := {
+        (packageBin in Compile).value
+        (test in Test).value
       },
       libraryDependencies ++= Seq(
         scalaReflect,
