@@ -1,13 +1,17 @@
 package com.swoval.reflect
 
 trait DynamicClassLoader extends ClassLoader {
-  def copy(): DynamicClassLoader
+  def dup(): DynamicClassLoader
 }
 object DynamicClassLoader {
   implicit def default: DynamicClassLoader = {
-    Thread.currentThread.getContextClassLoader match {
-      case l: DynamicClassLoader => l.copy()
-      case l                     => ChildFirstClassLoader(Seq.empty, l)
+    val loader = Thread.currentThread.getContextClassLoader
+    val dc = loader.loadClass("com.swoval.reflect.DynamicClassLoader")
+    if (dc.isAssignableFrom(loader.getClass)) {
+      dc.cast(dc.getMethod("dup").invoke(loader))
+        .asInstanceOf[com.swoval.reflect.DynamicClassLoader]
+    } else {
+      ChildFirstClassLoader(Seq.empty, loader)
     }
   }
 }
