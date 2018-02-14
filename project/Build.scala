@@ -11,12 +11,12 @@ import scala.tools.nsc
 object Build {
   lazy val baseVersion = "0.1.0-SNAPSHOT"
 
-  lazy val root = (project in file(".")).aggregate(util)
+  lazy val root = (project in file(".")).aggregate(reflect, util)
 
   lazy val genTestResourceClasses =
     taskKey[Unit]("Generate test resource class files.")
 
-  lazy val util = project
+  lazy val reflect = project
     .settings(
       testFrameworks += new TestFramework("utest.runner.Framework"),
       inThisBuild(
@@ -25,7 +25,6 @@ object Build {
           scalaVersion := scalaLangVersion,
           version := "0.1.0-SNAPSHOT"
         )),
-      name := s"com.swoval.util",
       scalacOptions := Seq("-unchecked", "-deprecation", "-feature"),
       updateOptions in Global := updateOptions
         .in(Global)
@@ -87,11 +86,16 @@ object Build {
 
       },
       libraryDependencies ++= Seq(
-        SLogback,
         scalaReflect,
         utest % Test,
-        slf4j,
         apfs,
+      )
+    )
+  lazy val util = project
+    .settings(
+      libraryDependencies ++= Seq(
+        SLogback,
+        slf4j,
       )
     )
 }
