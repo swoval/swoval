@@ -72,15 +72,22 @@ object ThunkTest extends TestSuite {
     }
     'reload - {
       val resourcePath = Paths.get("src/test/resources").toAbsolutePath
-      val buzz = new Buzz
-      def test(digit: Long): Unit = withLoader { (path, l) =>
-        val dir = Files.createDirectories(path.resolve("com/swoval/reflect"))
-        Files.copy(resourcePath.resolve(s"Bar$$.class.$digit"),
-                   dir.resolve("Bar$.class"))
-        Thunk(Bar.add(1, 2L)) ==> digit
-        Thunk(Bar.buzz(buzz)) ==> digit
+      def test(digit: Long, includeBuzz: Boolean = false): Unit = withLoader {
+        (path, l) =>
+          val dir = Files.createDirectories(path.resolve("com/swoval/reflect"))
+          Files.copy(resourcePath.resolve(s"Bar$$.class.$digit"),
+                     dir.resolve("Bar$.class"))
+          if (includeBuzz)
+            Files.copy(resourcePath.resolve(s"Buzz.class"),
+                       dir.resolve("Buzz.class"))
+          Thunk(Bar.add(1, 2L)) ==> digit
+          val block = () => Thunk(Bar.buzz(new Buzz)) ==> digit
+          if (includeBuzz) {
+            intercept[NoSuchMethodException](block())
+          } else block()
       }
       test(6)
+      test(6, includeBuzz = true)
       //test(7)
     }
   }

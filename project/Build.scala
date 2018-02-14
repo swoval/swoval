@@ -61,6 +61,9 @@ object Build {
                   Files.copy(dir.resolve("com/swoval/reflect/Bar$.class"),
                              resourceDir.resolve(s"Bar$$.class.$i"),
                              StandardCopyOption.REPLACE_EXISTING)
+                  Files.copy(dir.resolve("com/swoval/reflect/Buzz.class"),
+                             resourceDir.resolve(s"Buzz.class"),
+                             StandardCopyOption.REPLACE_EXISTING)
               }
           }
         } finally {
