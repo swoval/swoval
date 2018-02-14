@@ -59,7 +59,6 @@ object ThunkMacros {
           val $methodName = $module.getDeclaredMethod(${method.toString}, ..$classes)
           $methodName.invoke($instanceName, ..${boxed(args)})
         """
-      println(tree)
       tree
     }
     def withClass(clazz: Tree, args: Args)(f: (TermName, TermName) => Tree) = {
