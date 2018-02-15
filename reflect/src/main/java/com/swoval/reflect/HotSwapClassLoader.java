@@ -5,7 +5,7 @@ public interface HotSwapClassLoader {
 
   ClassLoader getParent();
 
-  default void loadClassses() {
+  default void fillCache() {
     ClassLoader loader = getParent();
     while (loader != null) {
       for (Class<?> clazz : Agent.getInitiatedClasses(loader)) {

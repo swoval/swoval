@@ -1,15 +1,20 @@
 package com.swoval.reflect
 
-trait DynamicClassLoader extends ClassLoader {
-  def dup(): DynamicClassLoader
+import java.util.{ HashMap => JHashMap }
+
+trait DynamicClassLoader[T <: ClassLoader with DynamicClassLoader[T]]
+    extends ClassLoader
+    with CloneableClassLoader {
+  self: ClassLoader =>
+  override def dup: T
 }
 
 object DynamicClassLoader {
-  implicit def default: DynamicClassLoader = {
+  implicit def default[_]: DynamicClassLoader[_] = {
     val loader = Thread.currentThread.getContextClassLoader
     loader match {
-      case l: DynamicClassLoader => l.dup()
-      case l                     => ScalaChildFirstClassLoader(Seq.empty, l)
+      case l: DynamicClassLoader[_] => l.dup
+      case l                        => ScalaChildFirstClassLoader(Seq.empty, l, new JHashMap)
     }
   }
 }

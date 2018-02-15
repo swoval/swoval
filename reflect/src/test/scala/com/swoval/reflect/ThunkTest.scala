@@ -23,7 +23,7 @@ object Bar {
 }
 
 object ThunkTest extends TestSuite {
-  val initLoader = Thread.currentThread.getContextClassLoader
+  val initLoader = Thread.currentThread.getContextClassLoader.asInstanceOf[ChildFirstClassLoader]
   val tests = Tests {
     'run - {
       //      'thunk - {
@@ -63,7 +63,7 @@ object ThunkTest extends TestSuite {
       //println(initLoader.loaded.asScala.keySet.filter(_ startsWith "com.swoval") mkString "\n")
       println("\n")
       try {
-        val loader = initLoader.dup().copy(urls = Seq(dir.toUri.toURL))
+        val loader = initLoader.dup().copy(paths = Seq(dir))
         thread.setContextClassLoader(loader)
         f(dir, loader)
       } finally {
@@ -98,7 +98,7 @@ object ThunkTest extends TestSuite {
         }
 
       val loader =
-        ScalaChildFirstClassLoader(Seq.empty, Thread.currentThread.getContextClassLoader)
+        ScalaChildFirstClassLoader(Seq.empty, initLoader, new java.util.HashMap)
       Thread.currentThread.setContextClassLoader(loader)
       //test(6)
       test(6, includeBuzz = true)

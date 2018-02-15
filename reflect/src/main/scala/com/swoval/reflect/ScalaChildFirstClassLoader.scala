@@ -1,32 +1,40 @@
 package com.swoval.reflect
 
-import java.net.URL
 import java.nio.file.Path
 import java.util.{ HashMap => JHashMap, Map => JMap }
 
-case class ScalaChildFirstClassLoader(urls: Seq[URL],
-                                      parent: ClassLoader =
-                                        Thread.currentThread.getContextClassLoader,
-                                      loaded: JMap[String, Class[_]] = new JHashMap)
-    extends ChildFirstClassLoader(urls.toArray, parent, loaded)
-    with DynamicClassLoader {
+case class ScalaChildFirstClassLoader(paths: Seq[Path],
+                                      parent: ClassLoader,
+                                      loaded: JMap[String, Class[_]])
+    extends ChildFirstClassLoader(paths.map(_.toUri.toURL).toArray, parent, loaded)
+    with DynamicClassLoader[ScalaChildFirstClassLoader] {
+  import scala.collection.JavaConverters._
+  println(loaded.asScala.keys.toSeq.sorted mkString "\n")
 
-  override def toString = s"ScalaChildFirstLoader($urls, $parent)"
+  override def toString = s"ScalaChildFirstLoader($paths, $parent)"
 
   override def dup(): ScalaChildFirstClassLoader =
-    ScalaChildFirstClassLoader(urls, parent, new JHashMap(loaded))
+    ScalaChildFirstClassLoader(paths, parent, new JHashMap(loaded))
 }
 
 object ScalaChildFirstClassLoader {
   implicit def default: ScalaChildFirstClassLoader =
     Thread.currentThread.getContextClassLoader match {
       case l: ScalaChildFirstClassLoader => l
-      case l: DynamicClassLoader         => ScalaChildFirstClassLoader(Seq.empty, l)
+      case l: ChildFirstClassLoader =>
+        ScalaChildFirstClassLoader(Seq.empty, l.dup(), new JHashMap(l.getLoadedClasses))
+      case l: DynamicClassLoader[_] =>
+        ScalaChildFirstClassLoader(Seq.empty, l.dup(), new JHashMap)
     }
 
-  def apply(parent: ClassLoader): ScalaChildFirstClassLoader =
-    ScalaChildFirstClassLoader(Seq.empty, parent)
+  def apply(parent: ClassLoader): ScalaChildFirstClassLoader = {
+    val map: JMap[String, Class[_]] = parent match {
+      case l: ChildFirstClassLoader => new JHashMap(l.getLoadedClasses)
+      case _                        => new JHashMap
+    }
+    ScalaChildFirstClassLoader(Seq.empty, parent, map)
+  }
 
   def apply(paths: Seq[Path]): ScalaChildFirstClassLoader =
-    ScalaChildFirstClassLoader(paths.map(_.toUri.toURL), Thread.currentThread.getContextClassLoader)
+    ScalaChildFirstClassLoader(paths, Thread.currentThread.getContextClassLoader, new JHashMap)
 }

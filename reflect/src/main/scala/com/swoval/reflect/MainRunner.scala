@@ -1,8 +1,7 @@
 package com.swoval.reflect
 
 import java.io.File
-import java.net.URL
-import java.nio.file.Paths
+import java.nio.file.{ Path, Paths }
 
 object MainRunner {
   def main(args: Array[String]) {
@@ -10,8 +9,8 @@ object MainRunner {
       args.iterator.dropWhile(_ != name).drop(1).toSeq.headOption
 
     val urls = (argFor("--swoval-reload-classpath").toSeq
-      .flatMap(stringToURLs) ++ Option(System.getProperty("swoval.reload.class.path")).toSeq
-      .flatMap(stringToURLs)).distinct
+      .flatMap(stringToPaths) ++ Option(System.getProperty("swoval.reload.class.path")).toSeq
+      .flatMap(stringToPaths)).distinct
     val childFirstLoader = ScalaChildFirstClassLoader(urls)
     Thread.currentThread.setContextClassLoader(childFirstLoader)
     val serverClass = childFirstLoader.loadClass("com.swoval.Server$")
@@ -20,8 +19,8 @@ object MainRunner {
     main.invoke(server, args)
   }
 
-  private def stringToURLs(s: String): Seq[URL] =
+  private def stringToPaths(s: String): Seq[Path] =
     s.split(File.pathSeparator).map(stringToURL)
 
-  def stringToURL(s: String) = Paths.get(s).toUri.toURL
+  def stringToURL(s: String) = Paths.get(s)
 }

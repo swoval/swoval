@@ -2,11 +2,14 @@ package com.swoval.reflect;
 
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClassLoader {
+public class ChildFirstClassLoader extends URLClassLoader
+    implements HotSwapClassLoader, CloneableClassLoader {
   private final Map<String, Class<?>> loaded;
+
   private final URL[] urls;
 
   public ChildFirstClassLoader(
@@ -14,6 +17,7 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
     super(urls, parent);
     this.loaded = loaded;
     this.urls = urls;
+    if (loaded.isEmpty()) fillCache();
   }
 
   public ChildFirstClassLoader(final URL[] urls, final ClassLoader parent) {
@@ -43,6 +47,7 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
     if (resolve) {
       resolveClass(clazz);
     }
+    System.out.println("Adding " + name);
     loaded.put(name, clazz);
     return clazz;
   }
@@ -53,7 +58,16 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
   }
 
   @Override
+  public ChildFirstClassLoader dup() {
+    return new ChildFirstClassLoader(urls, getParent(), new HashMap<>(loaded));
+  }
+
+  @Override
   public void addToCache(String name, Class<?> clazz) {
     loaded.put(name, clazz);
+  }
+
+  public Map<String, Class<?>> getLoadedClasses() {
+    return Collections.unmodifiableMap(loaded);
   }
 }
