@@ -54,16 +54,16 @@ object ThunkTest extends TestSuite {
       }
     }
 
-    def withLoader[R](f: (Path, ScalaChildFirstClassLoader) => R) = {
+    def withLoader[R](f: (Path, ChildFirstClassLoader) => R) = {
       val dir = Files.createTempDirectory("reflective-thunk-test")
       val thread = Thread.currentThread
       val initLoader =
-        thread.getContextClassLoader.asInstanceOf[ScalaChildFirstClassLoader]
+        thread.getContextClassLoader.asInstanceOf[ChildFirstClassLoader]
       println("\n")
       //println(initLoader.loaded.asScala.keySet.filter(_ startsWith "com.swoval") mkString "\n")
       println("\n")
       try {
-        val loader = initLoader.dup().copy(paths = Seq(dir))
+        val loader = initLoader.copy(Array(dir.toUri.toURL))
         thread.setContextClassLoader(loader)
         f(dir, loader)
       } finally {
@@ -98,7 +98,7 @@ object ThunkTest extends TestSuite {
         }
 
       val loader =
-        ScalaChildFirstClassLoader(Seq.empty, initLoader, new java.util.HashMap)
+        new ChildFirstClassLoader(Array.empty, initLoader, new java.util.HashMap)
       Thread.currentThread.setContextClassLoader(loader)
       //test(6)
       test(6, includeBuzz = true)
@@ -109,6 +109,6 @@ object ThunkTest extends TestSuite {
   }
 
   override def utestBeforeEach(path: Seq[String]): Unit = {
-    Thread.currentThread.setContextClassLoader(ScalaChildFirstClassLoader(initLoader))
+    Thread.currentThread.setContextClassLoader(new ChildFirstClassLoader(initLoader))
   }
 }

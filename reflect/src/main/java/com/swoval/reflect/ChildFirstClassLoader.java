@@ -6,8 +6,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ChildFirstClassLoader extends URLClassLoader
-    implements HotSwapClassLoader, CloneableClassLoader {
+public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClassLoader {
   private final Map<String, Class<?>> loaded;
 
   private final URL[] urls;
@@ -18,6 +17,10 @@ public class ChildFirstClassLoader extends URLClassLoader
     this.loaded = loaded;
     this.urls = urls;
     if (loaded.isEmpty()) fillCache();
+  }
+
+  public ChildFirstClassLoader(final URL[] urls) {
+    this(urls, Thread.currentThread().getContextClassLoader(), new HashMap<>());
   }
 
   public ChildFirstClassLoader(final URL[] urls, final ClassLoader parent) {
@@ -57,7 +60,10 @@ public class ChildFirstClassLoader extends URLClassLoader
     return loadClass(name, false);
   }
 
-  @Override
+  public ChildFirstClassLoader copy(URL[] urls) {
+    return new ChildFirstClassLoader(urls, getParent(), new HashMap<>(loaded));
+  }
+
   public ChildFirstClassLoader dup() {
     return new ChildFirstClassLoader(urls, getParent(), new HashMap<>(loaded));
   }
