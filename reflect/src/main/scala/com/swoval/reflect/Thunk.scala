@@ -17,7 +17,7 @@ object ThunkMacros {
   }
   def impl[T: c.WeakTypeTag](c: blackbox.Context)(thunk: c.Expr[T]): c.Expr[T] = {
     import c.universe._
-    def loader = c.inferImplicitValue(weakTypeOf[DynamicClassLoader[_]])
+    def loader = c.inferImplicitValue(weakTypeOf[DynamicClassLoader])
     def fresh(name: String) = TermName(c.freshName(name))
     type Args = Seq[Seq[Tree]]
     def argClasses(args: Args) = args.flatten.map {

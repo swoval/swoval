@@ -7,7 +7,7 @@ case class ScalaChildFirstClassLoader(paths: Seq[Path],
                                       parent: ClassLoader,
                                       loaded: JMap[String, Class[_]])
     extends ChildFirstClassLoader(paths.map(_.toUri.toURL).toArray, parent, loaded)
-    with DynamicClassLoader[ScalaChildFirstClassLoader] {
+    with DynamicClassLoader {
   import scala.collection.JavaConverters._
   println(loaded.asScala.keys.toSeq.sorted mkString "\n")
 
@@ -23,7 +23,7 @@ object ScalaChildFirstClassLoader {
       case l: ScalaChildFirstClassLoader => l
       case l: ChildFirstClassLoader =>
         ScalaChildFirstClassLoader(Seq.empty, l.dup(), new JHashMap(l.getLoadedClasses))
-      case l: DynamicClassLoader[_] =>
+      case l: DynamicClassLoader =>
         ScalaChildFirstClassLoader(Seq.empty, l.dup(), new JHashMap)
     }
 
