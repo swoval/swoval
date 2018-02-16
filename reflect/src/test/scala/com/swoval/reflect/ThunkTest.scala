@@ -10,15 +10,12 @@ class Buzz
 
 object Foo {
   def buzz(x: Buzz): Int = 3
-
   def bar(x: Int): Int = x + 1
-
   def add(x: Int, y: Long): Long = x + y
 }
 
 object Bar {
   def add(x: Int, y: Long): Long = x + y
-
   def buzz(x: Buzz): Int = 3
 }
 
@@ -31,6 +28,7 @@ object ThunkTest extends TestSuite {
   private val pkg = "com.swoval.reflect"
   private val initLoader = getChildFirstClassLoader
   initLoader.fillCache()
+  private val resourcePath = Paths.get("src/test/resources").toAbsolutePath
   val tests = Tests {
     'run - {
       'thunk - {
@@ -61,29 +59,29 @@ object ThunkTest extends TestSuite {
     }
 
     'reload - {
-      val resourcePath = Paths.get("src/test/resources").toAbsolutePath
-
-      def test(digit: Long, includeBuzz: Boolean = false, needIntercept: Boolean = true): Unit =
+      def test(digit: Long): Unit =
         withLoader { (path, l) =>
           val dir = Files.createDirectories(path.resolve("com/swoval/reflect"))
           Files.copy(resourcePath.resolve(s"Bar$$.class.$digit"), dir.resolve("Bar$.class"))
-          val checkBuzz = () => Thunk(Bar.buzz(new Buzz)) ==> digit
-          if (includeBuzz) {
-            Files.copy(resourcePath.resolve(s"Buzz.class"), dir.resolve("Buzz.class"))
-            if (needIntercept) intercept[NoSuchMethodException](checkBuzz())
-            else checkBuzz()
-          } else {
-            checkBuzz
-          }
           Thunk(Bar.add(1, 2L)) ==> digit
         }
 
       test(6)
-      test(6, includeBuzz = true)
       test(7)
-      val loader = getChildFirstClassLoader
-      Class.forName("com.swoval.reflect.Buzz", false, loader)
-      test(7, includeBuzz = true, needIntercept = false)
+    }
+    'find - {
+      'existing - {
+        withLoader((path, l) => Thunk(Bar.buzz(new Buzz)) ==> 3)
+      }
+      'replaced - {
+        //Class.forName("com.swoval.reflect.Buzz", false, l)
+        withLoader { (path, l) =>
+          val dir = Files.createDirectories(path.resolve("com/swoval/reflect"))
+          Files.copy(resourcePath.resolve(s"Buzz.class"), dir.resolve("Buzz.class"))
+          val checkBuzz = () => Thunk(Bar.buzz(new Buzz)) ==> 3
+          intercept[NoSuchMethodError](checkBuzz())
+        }
+      }
     }
   }
 
