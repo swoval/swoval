@@ -17,7 +17,19 @@ object ThunkMacros {
   }
   def impl[T: c.WeakTypeTag](c: blackbox.Context)(thunk: c.Expr[T]): c.Expr[T] = {
     import c.universe._
-    def loader = c.inferImplicitValue(weakTypeOf[DynamicClassLoader])
+    def loader = {
+      c.inferImplicitValue(weakTypeOf[DynamicClassLoader], silent = true) match {
+        case q"" =>
+          q"""
+          Thread.currentThread.getContextClassLoader match {
+            case l: DynamicClassLoader    => l.dup()
+            case l: ChildFirstClassLoader => DynamicClassLoader(l.dup())
+            case l                        => DynamicClassLoader(new ChildFirstClassLoader(Array.empty, l))
+          }
+          """
+        case l => l
+      }
+    }
     def fresh(name: String) = TermName(c.freshName(name))
     type Args = Seq[Seq[Tree]]
     def argClasses(args: Args) = args.flatten.map {

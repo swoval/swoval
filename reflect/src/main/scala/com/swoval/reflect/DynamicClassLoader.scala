@@ -9,9 +9,8 @@ object DynamicClassLoader {
     val loader = Thread.currentThread.getContextClassLoader
     loader match {
       case l: DynamicClassLoader    => l.dup()
-      case l: ChildFirstClassLoader => new DynamicClassLoader(l)
-      case l =>
-        new DynamicClassLoader(new ChildFirstClassLoader(Array.empty, l))
+      case l: ChildFirstClassLoader => DynamicClassLoader(l.dup())
+      case l                        => DynamicClassLoader(new ChildFirstClassLoader(Array.empty, l))
     }
   }
 }

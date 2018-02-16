@@ -2,6 +2,7 @@ package com.swoval.reflect
 
 import java.nio.file.{ Files, Path, Paths }
 
+import com.swoval.reflect.ChildFirstClassLoader.Predicates
 import utest._
 
 import scala.collection.JavaConverters._
@@ -26,7 +27,9 @@ object ThunkTest extends TestSuite {
   override def utestBeforeEach(path: Seq[String]): Unit = {
     Thread.currentThread.setContextClassLoader(initLoader.dup())
   }
-  val initLoader = Thread.currentThread.getContextClassLoader.asInstanceOf[ChildFirstClassLoader]
+  val initLoader = Thread.currentThread.getContextClassLoader
+    .asInstanceOf[ChildFirstClassLoader]
+    .copy(p => new Predicates(p.getForceParent, _ == "com.swoval.reflect.Buzz"))
   initLoader.fillCache()
   val tests = Tests {
 //    'run - {
@@ -106,8 +109,8 @@ object ThunkTest extends TestSuite {
 //      test(6, includeBuzz = true)
       //test(7)
       //Class.forName("com.swoval.reflect.Buzz", false, loader)
-      //Class.forName("com.swoval.reflect.Buzz", false, initLoader)
-      //println(initLoader.getLoadedClasses.asScala.keySet.toSeq.sorted mkString "\n")
+      Class.forName("com.swoval.reflect.Buzz", false, initLoader)
+      println(initLoader.getLoadedClasses.asScala.keySet.toSeq.sorted mkString "\n")
       test(7, includeBuzz = true, needIntercept = false)
     }
   }

@@ -7,40 +7,80 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClassLoader {
+  public static class Predicates {
+    private final Predicate<String> forceParent;
+    private final Predicate<String> forceChild;
+
+    public Predicates(Predicate<String> forceParent, Predicate<String> forceChild) {
+      this.forceParent = forceParent;
+      this.forceChild = forceChild;
+    }
+
+    public Predicate<String> getForceParent() {
+      return forceParent;
+    }
+
+    public Predicate<String> getForceChild() {
+      return forceChild;
+    }
+  }
+
   private final Map<String, Class<?>> loaded;
+  private final Predicates predicates;
+  private static final Predicates DEFAULT_PREDICATES =
+      new Predicates(
+          name ->
+              name.startsWith("java.")
+                  || name.startsWith("sun.")
+                  || name.startsWith("com.swoval.reflect"),
+          name -> false);
 
   private final URL[] urls;
 
   public ChildFirstClassLoader(
-      final URL[] urls, final ClassLoader parent, final Map<String, Class<?>> loaded) {
+      final URL[] urls,
+      final Predicates predicates,
+      final ClassLoader parent,
+      final Map<String, Class<?>> loaded) {
     super(urls, parent);
     this.loaded = loaded;
     this.urls = urls;
+    this.predicates = predicates;
     if (loaded.isEmpty()) fillCache();
   }
 
   public ChildFirstClassLoader(final URL[] urls) {
-    this(urls, Thread.currentThread().getContextClassLoader(), new HashMap<>());
+    this(urls, DEFAULT_PREDICATES, Thread.currentThread().getContextClassLoader(), new HashMap<>());
   }
 
   public ChildFirstClassLoader(final URL[] urls, final ClassLoader parent) {
-    this(urls, parent, new HashMap<>());
+    this(urls, DEFAULT_PREDICATES, parent, new HashMap<>());
   }
 
   public ChildFirstClassLoader(final ClassLoader parent) {
-    this(new URL[0], parent, new HashMap<>());
+    this(new URL[0], DEFAULT_PREDICATES, parent, new HashMap<>());
   }
 
   @Override
   public Class<?> loadClass(final String name, final boolean resolve)
       throws ClassNotFoundException {
     Class<?> clazz = loaded.get(name);
+    if (name.equals("com.swoval.reflect.Buzz")) {
+      for (Map.Entry<String, Class<?>> entry : loaded.entrySet()) {
+        //        if (entry.getValue().getName().contains("swoval")) {
+        //          System.out.println("" + this + " WTF " + entry);
+        //        }
+      }
+      System.out.println("Loading buzz " + clazz);
+    }
     if (clazz != null) {
       return clazz;
     }
-    if (name.startsWith("java.") || name.startsWith("sun.") || name.equals("com.swoval.reflect.Agent")) {
+    if (!predicates.forceParent.test(name) || predicates.forceChild.test(name)) {
       clazz = getParent().loadClass(name);
     } else {
       try {
@@ -62,19 +102,23 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
   }
 
   public ChildFirstClassLoader copy(URL[] urls) {
-    return new ChildFirstClassLoader(urls, getParent(), new HashMap<>(loaded));
+    return new ChildFirstClassLoader(urls, predicates, getParent(), new HashMap<>(loaded));
+  }
+
+  public ChildFirstClassLoader copy(Function<Predicates, Predicates> func) {
+    return new ChildFirstClassLoader(
+        urls, func.apply(predicates), getParent(), new HashMap<>(loaded));
   }
 
   public ChildFirstClassLoader dup() {
-    return new ChildFirstClassLoader(urls, getParent(), new HashMap<>(loaded));
+    return new ChildFirstClassLoader(urls, predicates, getParent(), new HashMap<>(loaded));
   }
 
   @Override
   public String toString() {
     StringBuilder urlString = new StringBuilder();
     urlString.append('[');
-    for (URL u : urls)
-      urlString.append(u.toString()).append(',');
+    for (URL u : urls) urlString.append(u.toString()).append(',');
     urlString.append(']');
     return "ChildFirstClassLoader(" + urlString + ", " + getParent() + ")";
   }
@@ -96,5 +140,4 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
   public Map<String, Class<?>> getLoadedClasses() {
     return Collections.unmodifiableMap(loaded);
   }
-
 }
