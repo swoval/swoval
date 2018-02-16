@@ -11,8 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
-public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClassLoader {
-
+public class ChildFirstClassLoader extends URLClassLoader {
   private final Map<String, Class<?>> loaded;
   private final Predicates predicates;
   private final URL[] urls;
@@ -43,32 +42,21 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
   }
 
   @Override
-  public Class<?> findClass(final String name) throws ClassNotFoundException {
-    System.out.println("Calling findClass for " + name);
-    return super.findClass(name);
-  }
-
-  @Override
   public Class<?> loadClass(final String name, final boolean resolve)
       throws ClassNotFoundException {
     synchronized (getClassLoadingLock(name)) {
       Class<?> clazz = loaded.get(name);
-      System.out.println("Loading " + name);
       if (clazz != null) {
-        System.out.println("Returning " + name + " from cache");
         return clazz;
       }
       if (name.startsWith("java.") || name.startsWith("sun.")
           || (predicates.getForceParent().test(name) && !predicates.getForceChild().test(name))) {
-        System.out.println("Force loading " + name + " from parent");
         clazz = getParent().loadClass(name);
       } else {
         try {
           clazz = findClass(name);
-          System.out.println("Got class " + name + " from child");
         } catch (final ClassNotFoundException e) {
           clazz = getParent().loadClass(name);
-          System.out.println("Got class " + name + " from parent");
         }
       }
       if (resolve) {
@@ -84,6 +72,15 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
     return loadClass(name, false);
   }
 
+  public void fillCache() {
+    ClassLoader loader = getParent();
+    while (loader != null) {
+      for (Class<?> clazz : Agent.getInitiatedClasses(loader)) {
+        loaded.put(clazz.getName(), clazz);
+      }
+      loader = loader.getParent();
+    }
+  }
   public ChildFirstClassLoader copy(URL[] urls) {
     return new ChildFirstClassLoader(urls, predicates, getParent(), new HashMap<>(loaded));
   }
@@ -113,11 +110,6 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
     } catch (MalformedURLException e) {
       throw new InternalError(e);
     }
-  }
-
-  @Override
-  public void addToCache(String name, Class<?> clazz) {
-    loaded.put(name, clazz);
   }
 
   public Map<String, Class<?>> getLoadedClasses() {

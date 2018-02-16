@@ -68,10 +68,8 @@ object ThunkMacros {
       val methodName = fresh("methodName")
       val tree = q"""
         val $loaderName = $loader
-        ..${parsedArgs.map { a =>
-        q"val ${a.name} = ${a.tree}"
-      }}
         val $module = $loaderName.loadClass($moduleName)
+        ..${parsedArgs.map(a => q"val ${a.name} = ${a.tree}")}
         val $instanceName = $module.getDeclaredField("MODULE$$").get(null)
         val $methodName = $module.getDeclaredMethod(${method.toString}, ..$classes)
         $methodName.invoke($instanceName, ..${parsedArgs.map(_.boxed)})
@@ -113,7 +111,6 @@ object ThunkMacros {
       case q"new ${clazz: Tree }(...${args: Args }).${method: TermName }(...${methodArgs: Args })" =>
         classApply(clazz, args, method, methodArgs)
     })
-    println(tree)
     c.Expr[T](tree)
   }
 }
