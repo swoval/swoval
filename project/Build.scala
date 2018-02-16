@@ -1,5 +1,5 @@
 import java.io.File
-import java.nio.file.{ Files, Path, StandardCopyOption }
+import java.nio.file.{ Files, StandardCopyOption }
 import java.util.jar.JarFile
 
 import com.swoval.Dependencies.{ logback => SLogback, _ }
@@ -52,11 +52,9 @@ object Build {
       javacOptions ++= Seq("-source", "1.8", "-target", "1.8") ++
         java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty),
       javaOptions in Test ++= {
-        println((packageConfiguration in (Compile, packageBin)).value.jar)
         Seq(
           "-Djava.system.class.loader=com.swoval.reflect.ChildFirstClassLoader",
           s"-javaagent:${(packageConfiguration in (Compile, packageBin)).value.jar}"
-          //"-verbose:class"
         )
       },
       packageOptions in (Compile, packageBin) +=
@@ -116,14 +114,14 @@ object Build {
       libraryDependencies ++= Seq(
         scalaReflect,
         utest % Test,
-        apfs,
+        apfs
       )
     )
   lazy val util = project
     .settings(
       libraryDependencies ++= Seq(
         SLogback,
-        slf4j,
+        slf4j
       )
     )
 }
