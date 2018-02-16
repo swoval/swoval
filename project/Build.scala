@@ -31,6 +31,7 @@ object Build {
         .value
         .withCachedResolution(true),
       fork in Test := true,
+      javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
       javaOptions in Test ++= {
         println((packageConfiguration in (Compile, packageBin)).value.jar)
         Seq(

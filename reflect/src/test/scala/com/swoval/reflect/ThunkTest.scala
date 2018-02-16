@@ -23,45 +23,45 @@ object Bar {
 }
 
 object ThunkTest extends TestSuite {
+  override def utestBeforeEach(path: Seq[String]): Unit = {
+    Thread.currentThread.setContextClassLoader(initLoader.dup())
+  }
   val initLoader = Thread.currentThread.getContextClassLoader.asInstanceOf[ChildFirstClassLoader]
+  initLoader.fillCache()
   val tests = Tests {
-    'run - {
-      //      'thunk - {
-      //        'reflectively - {
-      //          'classArguments - {
-      //            Thunk(Foo.buzz(new Buzz)) ==> 3
-      //          }
-      //          'primitiveArguments - {
-      //            Thunk(Foo.bar(1)) ==> 2
-      //          }
-      //          'variableArguments - {
-      //            val x = 3
-      //            val y = 4L
-      //            Thunk(Foo.add(x, y)) ==> x + y
-      //          }
-      //        }
-      //      }
-      'strict - {
-        'strict - {
-          //Thunk(Foo.add(1, 2), true) ==> 3
-          //println(Thread.currentThread.getContextClassLoader)
-          Thunk(Foo.buzz(new Buzz), true) ==> 3
-        }
-        //        'reflective - {
-        //          Thunk(Foo.buzz(new Buzz), false) ==> 3
-        //          Thunk(Foo.add(1, 2), false) ==> 3
-        //        }
-      }
-    }
+//    'run - {
+//      'thunk - {
+//        'reflectively - {
+//          'classArguments - {
+//            Thunk(Foo.buzz(new Buzz)) ==> 3
+//          }
+//          'primitiveArguments - {
+//            Thunk(Foo.bar(1)) ==> 2
+//          }
+//          'variableArguments - {
+//            val x = 3
+//            val y = 4L
+//            Thunk(Foo.add(x, y)) ==> x + y
+//          }
+//        }
+//      }
+//      'strict - {
+//        'strict - {
+//          Thunk(Foo.add(1, 2), true) ==> 3
+//          Thunk(Foo.buzz(new Buzz), true) ==> 3
+//        }
+//        'reflective - {
+//          Thunk(Foo.buzz(new Buzz), false) ==> 3
+//          Thunk(Foo.add(1, 2), false) ==> 3
+//        }
+//      }
+//    }
 
     def withLoader[R](f: (Path, ChildFirstClassLoader) => R) = {
       val dir = Files.createTempDirectory("reflective-thunk-test")
       val thread = Thread.currentThread
       val initLoader =
         thread.getContextClassLoader.asInstanceOf[ChildFirstClassLoader]
-      println("\n")
-      //println(initLoader.loaded.asScala.keySet.filter(_ startsWith "com.swoval") mkString "\n")
-      println("\n")
       try {
         val loader = initLoader.copy(Array(dir.toUri.toURL))
         thread.setContextClassLoader(loader)
@@ -97,18 +97,19 @@ object ThunkTest extends TestSuite {
           Thunk(Bar.add(1, 2L)) ==> digit
         }
 
-      val loader =
-        new ChildFirstClassLoader(Array.empty, initLoader, new java.util.HashMap)
-      Thread.currentThread.setContextClassLoader(loader)
+//      println(initLoader.getLoadedClasses.asScala.keySet.toSeq.sorted mkString "\n")
+//      val loader = new ChildFirstClassLoader(Array.empty, initLoader)
+//      println("ok")
+//      println(loader.getLoadedClasses.asScala.keySet.toSeq.sorted mkString "\n")
+//      Thread.currentThread.setContextClassLoader(loader)
       //test(6)
-      test(6, includeBuzz = true)
-      //      test(7)
-      //      Class.forName("com.swoval.reflect.Buzz", false, loader)
-      //      test(7, includeBuzz = true, needIntercept = false)
+//      test(6, includeBuzz = true)
+      //test(7)
+      //Class.forName("com.swoval.reflect.Buzz", false, loader)
+      //Class.forName("com.swoval.reflect.Buzz", false, initLoader)
+      //println(initLoader.getLoadedClasses.asScala.keySet.toSeq.sorted mkString "\n")
+      test(7, includeBuzz = true, needIntercept = false)
     }
   }
 
-  override def utestBeforeEach(path: Seq[String]): Unit = {
-    Thread.currentThread.setContextClassLoader(new ChildFirstClassLoader(initLoader))
-  }
 }

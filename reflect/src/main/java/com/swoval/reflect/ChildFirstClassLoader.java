@@ -1,7 +1,9 @@
 package com.swoval.reflect;
 
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -38,7 +40,7 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
     if (clazz != null) {
       return clazz;
     }
-    if (name.startsWith("java.") || name.startsWith("sun.")) {
+    if (name.startsWith("java.") || name.startsWith("sun.") || name.equals("com.swoval.reflect.Agent")) {
       clazz = getParent().loadClass(name);
     } else {
       try {
@@ -50,7 +52,6 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
     if (resolve) {
       resolveClass(clazz);
     }
-    System.out.println("Adding " + name);
     loaded.put(name, clazz);
     return clazz;
   }
@@ -69,6 +70,25 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
   }
 
   @Override
+  public String toString() {
+    StringBuilder urlString = new StringBuilder();
+    urlString.append('[');
+    for (URL u : urls)
+      urlString.append(u.toString()).append(',');
+    urlString.append(']');
+    return "ChildFirstClassLoader(" + urlString + ", " + getParent() + ")";
+  }
+
+  // This is necessary to use this class as a system classloader in java 9.
+  public void appendToClassPathForInstrumentation(String name) {
+    try {
+      super.addURL(Paths.get(name).toUri().toURL());
+    } catch (MalformedURLException e) {
+      throw new InternalError(e);
+    }
+  }
+
+  @Override
   public void addToCache(String name, Class<?> clazz) {
     loaded.put(name, clazz);
   }
@@ -76,4 +96,5 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
   public Map<String, Class<?>> getLoadedClasses() {
     return Collections.unmodifiableMap(loaded);
   }
+
 }
