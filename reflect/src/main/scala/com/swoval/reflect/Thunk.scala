@@ -18,13 +18,12 @@ object ThunkMacros {
   def impl[T: c.WeakTypeTag](c: blackbox.Context)(thunk: c.Expr[T]): c.Expr[T] = {
     import c.universe._
     def loader = {
-      c.inferImplicitValue(weakTypeOf[DynamicClassLoader], silent = true) match {
+      c.inferImplicitValue(weakTypeOf[ChildFirstClassLoader], silent = true) match {
         case q"" =>
           q"""
           Thread.currentThread.getContextClassLoader match {
-            case l: DynamicClassLoader    => l.dup()
-            case l: ChildFirstClassLoader => DynamicClassLoader(l.dup())
-            case l                        => DynamicClassLoader(new ChildFirstClassLoader(Array.empty, l))
+            case l: ChildFirstClassLoader => l.dup()
+            case l                        => new ChildFirstClassLoader(Array.empty, l)
           }
           """
         case l => l

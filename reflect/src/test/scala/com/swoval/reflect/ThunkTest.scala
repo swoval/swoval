@@ -2,7 +2,6 @@ package com.swoval.reflect
 
 import java.nio.file.{ Files, Path, Paths }
 
-import com.swoval.reflect.ChildFirstClassLoader.Predicates
 import utest._
 
 import scala.collection.JavaConverters._

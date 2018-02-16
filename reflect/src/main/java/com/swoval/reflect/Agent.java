@@ -17,16 +17,16 @@ public class Agent {
     }
     public static void premain(String args, Instrumentation inst) {
         instrumentation = inst;
-        inst.addTransformer(new ClassFileTransformer() {
-            @Override
-            public byte[] transform(ClassLoader loader, String className,
-                Class<?> classBeingRedefined,
-                ProtectionDomain protectionDomain, byte[] classfileBuffer)
-                throws IllegalClassFormatException {
-                if (className != null && className.startsWith("com/swoval"))
-                    System.out.println("Loaded " + className + " " + loader);
-                return classfileBuffer;
-            }
-        });
+//        inst.addTransformer(new ClassFileTransformer() {
+//            @Override
+//            public byte[] transform(ClassLoader loader, String className,
+//                Class<?> classBeingRedefined,
+//                ProtectionDomain protectionDomain, byte[] classfileBuffer)
+//                throws IllegalClassFormatException {
+//                if (className != null && className.startsWith("com/swoval"))
+//                    System.out.println("Loaded " + className + " " + loader);
+//                return classfileBuffer;
+//            }
+//        });
     }
 }

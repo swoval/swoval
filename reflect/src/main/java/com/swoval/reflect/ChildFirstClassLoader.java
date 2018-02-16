@@ -1,5 +1,7 @@
 package com.swoval.reflect;
 
+import static com.swoval.reflect.Predicates.defaultPredicates;
+
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -8,37 +10,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.function.Predicate;
 
 public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClassLoader {
-  public static class Predicates {
-    private final Predicate<String> forceParent;
-    private final Predicate<String> forceChild;
-
-    public Predicates(Predicate<String> forceParent, Predicate<String> forceChild) {
-      this.forceParent = forceParent;
-      this.forceChild = forceChild;
-    }
-
-    public Predicate<String> getForceParent() {
-      return forceParent;
-    }
-
-    public Predicate<String> getForceChild() {
-      return forceChild;
-    }
-  }
 
   private final Map<String, Class<?>> loaded;
   private final Predicates predicates;
-  private static final Predicates DEFAULT_PREDICATES =
-      new Predicates(
-          name ->
-              name.startsWith("java.")
-                  || name.startsWith("sun.")
-                  || name.startsWith("com.swoval.reflect"),
-          name -> false);
-
   private final URL[] urls;
 
   public ChildFirstClassLoader(
@@ -54,46 +30,40 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
   }
 
   public ChildFirstClassLoader(final URL[] urls) {
-    this(urls, DEFAULT_PREDICATES, Thread.currentThread().getContextClassLoader(), new HashMap<>());
+    this(urls, defaultPredicates(), Thread.currentThread().getContextClassLoader(), new HashMap<>());
   }
 
   public ChildFirstClassLoader(final URL[] urls, final ClassLoader parent) {
-    this(urls, DEFAULT_PREDICATES, parent, new HashMap<>());
+    this(urls, defaultPredicates(), parent, new HashMap<>());
   }
 
   public ChildFirstClassLoader(final ClassLoader parent) {
-    this(new URL[0], DEFAULT_PREDICATES, parent, new HashMap<>());
+    this(new URL[0], defaultPredicates(), parent, new HashMap<>());
   }
 
   @Override
   public Class<?> loadClass(final String name, final boolean resolve)
       throws ClassNotFoundException {
-    Class<?> clazz = loaded.get(name);
-    if (name.equals("com.swoval.reflect.Buzz")) {
-      for (Map.Entry<String, Class<?>> entry : loaded.entrySet()) {
-        //        if (entry.getValue().getName().contains("swoval")) {
-        //          System.out.println("" + this + " WTF " + entry);
-        //        }
+    synchronized (getClassLoadingLock(name)) {
+      Class<?> clazz = loaded.get(name);
+      if (clazz != null) {
+        return clazz;
       }
-      System.out.println("Loading buzz " + clazz);
-    }
-    if (clazz != null) {
+      if (!predicates.getForceParent().test(name) || predicates.getForceChild().test(name)) {
+        clazz = getParent().loadClass(name);
+      } else {
+        try {
+          clazz = findClass(name);
+        } catch (final ClassNotFoundException e) {
+          clazz = getParent().loadClass(name);
+        }
+      }
+      if (resolve) {
+        resolveClass(clazz);
+      }
+      loaded.put(name, clazz);
       return clazz;
     }
-    if (!predicates.forceParent.test(name) || predicates.forceChild.test(name)) {
-      clazz = getParent().loadClass(name);
-    } else {
-      try {
-        clazz = findClass(name);
-      } catch (final ClassNotFoundException e) {
-        clazz = getParent().loadClass(name);
-      }
-    }
-    if (resolve) {
-      resolveClass(clazz);
-    }
-    loaded.put(name, clazz);
-    return clazz;
   }
 
   @Override
