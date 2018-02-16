@@ -3,6 +3,7 @@ package com.swoval.reflect
 import java.io.File
 import java.nio.file.{ Files, Path, Paths }
 
+import com.swoval.app.MainRunner
 import utest._
 
 import scala.collection.JavaConverters._

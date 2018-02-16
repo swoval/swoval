@@ -13,12 +13,19 @@ import scala.util.Properties
 object Build {
   lazy val baseVersion = "0.1.0-SNAPSHOT"
 
-  lazy val root = (project in file(".")).aggregate(reflect, util)
+  lazy val root = (project in file(".")).aggregate(app, reflect, util)
 
   lazy val genTestResourceClasses =
     taskKey[Unit]("Generate test resource class files.")
 
   lazy val java8rt = settingKey[Option[String]]("Location of rt.jar for java 8")
+
+  lazy val app = project
+    .settings(
+      testFrameworks += new TestFramework("utest.runner.Framework"),
+      libraryDependencies += utest
+    )
+    .dependsOn(reflect)
 
   lazy val reflect = project
     .settings(
@@ -113,7 +120,7 @@ object Build {
       },
       libraryDependencies ++= Seq(
         scalaReflect,
-        utest % Test,
+        utest,
         apfs
       )
     )
