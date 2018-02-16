@@ -43,21 +43,32 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
   }
 
   @Override
+  public Class<?> findClass(final String name) throws ClassNotFoundException {
+    System.out.println("Calling findClass for " + name);
+    return super.findClass(name);
+  }
+
+  @Override
   public Class<?> loadClass(final String name, final boolean resolve)
       throws ClassNotFoundException {
     synchronized (getClassLoadingLock(name)) {
       Class<?> clazz = loaded.get(name);
+      System.out.println("Loading " + name);
       if (clazz != null) {
+        System.out.println("Returning " + name + " from cache");
         return clazz;
       }
       if (name.startsWith("java.") || name.startsWith("sun.")
           || (predicates.getForceParent().test(name) && !predicates.getForceChild().test(name))) {
+        System.out.println("Force loading " + name + " from parent");
         clazz = getParent().loadClass(name);
       } else {
         try {
           clazz = findClass(name);
+          System.out.println("Got class " + name + " from child");
         } catch (final ClassNotFoundException e) {
           clazz = getParent().loadClass(name);
+          System.out.println("Got class " + name + " from parent");
         }
       }
       if (resolve) {

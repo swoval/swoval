@@ -68,28 +68,31 @@ object Build {
           val cp = (fullClasspath in Compile).value
             .map(_.data)
             .mkString(File.pathSeparator)
-          println(cp)
-          (resources in Test).value collectFirst {
-            case f if f.getName == "Bar.scala.template" => IO.read(f)
+          val settings = new nsc.Settings()
+          settings.bootclasspath.value = cp
+          settings.classpath.value = cp
+          settings.usejavacp.value = true
+          settings.outputDirs.add(dir.toString, dir.toString)
+          val g = nsc.Global(settings)
+          (resources in Test).value collect {
+            case f if f.getName == "Bar.scala.template"  => ("Bar", IO.read(f))
+            case f if f.getName == "Buzz.scala.template" => ("Buzz", IO.read(f))
           } foreach {
-            f =>
-              Seq(6, 7) foreach {
-                i =>
-                  IO.write(dir.resolve("Bar.scala").toFile, f.replaceAll("\\$\\$impl", s"$i"))
-                  val settings = new nsc.Settings()
-                  settings.bootclasspath.value = cp
-                  settings.classpath.value = cp
-                  settings.usejavacp.value = true
-                  settings.outputDirs.add(dir.toString, dir.toString)
-                  val g = nsc.Global(settings)
-                  new g.Run().compile(List(dir.resolve("Bar.scala").toString))
-                  Files.copy(dir.resolve("com/swoval/reflect/Bar$.class"),
-                             resourceDir.resolve(s"Bar$$.class.$i"),
-                             StandardCopyOption.REPLACE_EXISTING)
-                  Files.copy(dir.resolve("com/swoval/reflect/Buzz.class"),
-                             resourceDir.resolve(s"Buzz.class"),
-                             StandardCopyOption.REPLACE_EXISTING)
+            case ("Bar", f) =>
+              Seq(6, 7) foreach { i =>
+                IO.write(dir.resolve("Bar.scala").toFile, f.replaceAll("\\$\\$impl", s"$i"))
+                new g.Run().compile(List(dir.resolve("Bar.scala").toString))
+                Files.copy(dir.resolve("com/swoval/reflect/Bar$.class"),
+                           resourceDir.resolve(s"Bar$$.class.$i"),
+                           StandardCopyOption.REPLACE_EXISTING)
               }
+            case ("Buzz", f) =>
+              IO.write(dir.resolve("Buzz.scala").toFile, f)
+              new g.Run().compile(List(dir.resolve("Buzz.scala").toString))
+              Files.copy(dir.resolve("com/swoval/reflect/Buzz.class"),
+                         resourceDir.resolve(s"Buzz.class"),
+                         StandardCopyOption.REPLACE_EXISTING)
+            case (_, _) =>
           }
         } finally {
           val files = Files

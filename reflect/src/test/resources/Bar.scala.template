@@ -4,4 +4,3 @@ object Bar {
     def add(x: Int, y: Long): Long = $$impl
     def buzz(x: Buzz): Int = $$impl
 }
-class Buzz
