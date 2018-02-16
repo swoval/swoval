@@ -14,14 +14,18 @@ object MainRunner {
       .flatMap(stringToURLs)).distinct
     val childFirstLoader = new ChildFirstClassLoader(urls.toArray)
     Thread.currentThread.setContextClassLoader(childFirstLoader)
-    val serverClass = childFirstLoader.loadClass("com.swoval.Server$")
-    val server = serverClass.getDeclaredField("MODULE$").get(null)
-    val main = serverClass.getDeclaredMethod("main", classOf[Array[String]])
-    main.invoke(server, args)
+    argFor("--main") match {
+      case Some(m) =>
+        val programArgs = args.drop(args.lastIndexOf(m))
+        val serverClass = childFirstLoader.loadClass("com.swoval.Server$")
+        val server = serverClass.getDeclaredField("MODULE$").get(null)
+        val main = serverClass.getDeclaredMethod("main", classOf[Array[String]])
+        main.invoke(server, programArgs)
+      case _ =>
+        println("Usage: must specify a fully qualified main class with '--main'")
+    }
   }
 
-  private def stringToURLs(s: String): Seq[URL] =
-    s.split(File.pathSeparator).map(stringToURL)
-
-  def stringToURL(s: String) = Paths.get(s).toUri.toURL
+  private def stringToURLs(s: String): Seq[URL] = s.split(File.pathSeparator).map(stringToURL)
+  private def stringToURL(s: String) = Paths.get(s).toUri.toURL
 }
