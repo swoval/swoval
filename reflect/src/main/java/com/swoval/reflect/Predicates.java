@@ -5,18 +5,14 @@ import java.util.function.Predicate;
 public class Predicates {
   private final Predicate<String> forceParent;
   private final Predicate<String> forceChild;
-  private static final Predicate<String> defaultParent = new Predicate<String>() {
-    @Override
-    public boolean test(String name) {
-      return name.startsWith("java.") || name.startsWith("sun.") || name.startsWith("com.swoval.reflect.");
-    }
-  };
-  private static final Predicate<String> defaultChild = new Predicate<String>() {
-    @Override
-    public boolean test(String name) {
-      return false;
-    }
-  };
+  private static final Predicate<String> defaultParent =
+      name ->
+          name.equals("com.swoval.reflect.ChildFirstClassLoader")
+              || name.equals("com.swoval.reflect.Agent")
+              || name.equals("com.swoval.reflect.HotSwapClassLoader")
+              || name.equals("com.swoval.reflect.Predicates");
+  private static final Predicate<String> defaultChild = name -> false;
+
   public static Predicates defaultPredicates() {
     return new Predicates(defaultParent, defaultChild);
   }

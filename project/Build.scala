@@ -1,5 +1,6 @@
 import java.io.File
-import java.nio.file.{ Files, StandardCopyOption }
+import java.nio.file.{ Files, Path, StandardCopyOption }
+import java.util.jar.JarFile
 
 import com.swoval.Dependencies.{ logback => SLogback, _ }
 import sbt.Keys._
@@ -7,6 +8,7 @@ import sbt._
 
 import scala.collection.JavaConverters._
 import scala.tools.nsc
+import scala.util.Properties
 
 object Build {
   lazy val baseVersion = "0.1.0-SNAPSHOT"
@@ -16,9 +18,25 @@ object Build {
   lazy val genTestResourceClasses =
     taskKey[Unit]("Generate test resource class files.")
 
+  lazy val java8rt = settingKey[Option[String]]("Location of rt.jar for java 8")
+
   lazy val reflect = project
     .settings(
       testFrameworks += new TestFramework("utest.runner.Framework"),
+      java8rt := {
+        if (Properties.isMac) {
+          import scala.sys.process._
+          Seq("mdfind", "-name", "rt.jar").!!.split("\n").find { n =>
+            !n.endsWith("alt-rt.jar") && {
+              val version =
+                new JarFile(n).getManifest.getMainAttributes.getValue("Specification-Version")
+              version.split("\\.").last == "8"
+            }
+          }
+        } else {
+          None
+        }
+      },
       inThisBuild(
         List(
           organization := "com.swoval",
@@ -31,7 +49,8 @@ object Build {
         .value
         .withCachedResolution(true),
       fork in Test := true,
-      javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
+      javacOptions ++= Seq("-source", "1.8", "-target", "1.8") ++
+        java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty),
       javaOptions in Test ++= {
         println((packageConfiguration in (Compile, packageBin)).value.jar)
         Seq(

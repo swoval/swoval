@@ -30,7 +30,8 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
   }
 
   public ChildFirstClassLoader(final URL[] urls) {
-    this(urls, defaultPredicates(), Thread.currentThread().getContextClassLoader(), new HashMap<>());
+    this(
+        urls, defaultPredicates(), Thread.currentThread().getContextClassLoader(), new HashMap<>());
   }
 
   public ChildFirstClassLoader(final URL[] urls, final ClassLoader parent) {
@@ -49,7 +50,8 @@ public class ChildFirstClassLoader extends URLClassLoader implements HotSwapClas
       if (clazz != null) {
         return clazz;
       }
-      if (!predicates.getForceParent().test(name) || predicates.getForceChild().test(name)) {
+      if (name.startsWith("java.") || name.startsWith("sun.")
+          || (predicates.getForceParent().test(name) && !predicates.getForceChild().test(name))) {
         clazz = getParent().loadClass(name);
       } else {
         try {
