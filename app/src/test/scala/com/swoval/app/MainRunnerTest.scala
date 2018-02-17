@@ -5,6 +5,11 @@ import utest._
 import scala.concurrent.duration._
 
 object StaticMain {
+  def shutdown(): Unit = {}
+  def waitForShutdown(duration: Duration): Boolean = {
+    println(s"waiting for $duration")
+    true
+  }
   def run(args: Array[String]): Int = {
     args.head.toInt
   }
@@ -27,6 +32,8 @@ class SlowTask extends Shutdownable {
 }
 
 object MainRunnerTest extends TestSuite {
+  val s = implicitly[DelegateShutdownable[StaticMain.type]]
+  println(s.shutdownable(StaticMain).waitForShutdown(Duration.Inf))
   val tests = Tests {
     'run - {
       MainRunner.run[Int](Array("--main", "com.swoval.app.StaticMain", "3")) ==> 3
