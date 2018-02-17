@@ -12,36 +12,33 @@ import scala.concurrent.duration._
 import scala.util.Try
 
 object MainRunner {
-  sealed trait Instance extends Any {
-    def instance: Object
+  sealed trait Instance[+T >: Null <: Object] {
+    def value: T
+    def shutdownable: Shutdownable = value match {
+      case s: Shutdownable => s
+      case _ =>
+        () =>
+          {}
+    }
   }
-  case object NullInstance extends Instance {
-    def instance: Object = null
+  case object NullInstance extends Instance[Null] {
+    def value: Null = null
   }
-  case class InstanceWrapper[+T <: Object](instance: T) extends AnyVal with Instance
-  case class Setup(newInstance: () => Instance,
-                   method: Method,
-                   args: Array[String],
-                   loader: ChildFirstClassLoader) {
-    class Handle[T](instance: Instance) {
+  case class InstanceWrapper[+T >: Null <: Object](value: T) extends Instance[T]
+  case class Setup[T >: Null <: Object](newInstance: () => Instance[T],
+                                        method: Method,
+                                        args: Array[String],
+                                        loader: ChildFirstClassLoader) {
+    class Handle[R](instance: Instance[T]) {
+      def getInstance: T = instance.value
       private[this] val res = new ArrayBlockingQueue[T](1)
-      def instance[T](implicit m: Manifest[T]): T = instance match {
-        case InstanceWrapper(i: T) => i
-        case _ =>
-          val msg = s"${instance.instance} is not an instance of ${m.runtimeClass.getName}"
-          throw new ClassCastException(msg)
-      }
       def shutdown(): Unit = {
-        val clazz = method.getDeclaringClass
-        Try(method.getDeclaringClass.getDeclaredMethod("shutdown"))
-          .recoverWith {
-            case _: NoSuchMethodException =>
-              Try(clazz.getDeclaredMethod("close"))
-          }
-          .foreach(_.invoke(instance))
+        val shutdownable = instance.shutdownable
+        shutdownable.shutdown()
+        shutdownable.waitForShutdown()
       }
       private[this] val thread = new Thread(s"MainRunner Thread ${method.getName}") {
-        override def run() = res.add(method.invoke(instance, args).asInstanceOf[T])
+        override def run(): Unit = res.add(method.invoke(instance.value, args).asInstanceOf[T])
       }
       thread.start()
       def result(): T = res.take()
@@ -51,10 +48,10 @@ object MainRunner {
         thread.join(5.seconds.toMillis)
       }
     }
-    def run[T](): Handle[T] = new Handle[T](newInstance())
+    def run[R](): Handle[R] = new Handle[R](newInstance())
   }
   object Setup {
-    def apply[T <: Object](args: Array[String]): Setup = {
+    def apply[T >: Null <: Object](args: Array[String]): Setup[T] = {
       def argFor(name: String): Option[String] =
         args.iterator.dropWhile(_ != name).drop(1).toSeq.headOption
 
@@ -80,20 +77,24 @@ object MainRunner {
           if (Modifier.isStatic(mainMethod.getModifiers)) {
             val newInstance = m match {
               case c if c.endsWith("$") =>
-                Try(programClass.getDeclaredField("MODULE$").get(null))
+                Try(programClass.getDeclaredField("MODULE$").get(null).asInstanceOf[T])
                   .map(f => () => InstanceWrapper(f))
                   .getOrElse(() => NullInstance)
               case _ =>
-                Try(childFirstLoader.loadClass(s"$m$$").getDeclaredField("MODULE$").get(null))
-                  .map(f => () => InstanceWrapper(f))
+                Try(
+                  childFirstLoader
+                    .loadClass(s"$m$$")
+                    .getDeclaredField("MODULE$")
+                    .get(null)
+                    .asInstanceOf[T])
+                  .map(f => () => InstanceWrapper[T](f))
                   .getOrElse(() => NullInstance)
             }
             Setup(newInstance, mainMethod, programArgs, childFirstLoader)
           } else {
             try {
               val constructor = programClass.getConstructor()
-              val newInstance = () =>
-                InstanceWrapper(constructor.newInstance().asInstanceOf[Object])
+              val newInstance = () => InstanceWrapper(constructor.newInstance().asInstanceOf[T])
               Setup(newInstance, mainMethod, programArgs, childFirstLoader)
             } catch {
               case _: NoSuchMethodException =>
@@ -108,8 +109,8 @@ object MainRunner {
       }
     }
   }
-  def setup(args: Array[String]): Setup = Setup(args)
-  def run[T](args: Array[String]) = setup(args).run[T].result()
+  def setup[T >: Null <: Object](args: Array[String]): Setup[T] = Setup[T](args)
+  def run[T](args: Array[String]) = setup[Object](args).run[T]().result()
   def main(args: Array[String]): Unit = run[Object](args)
 
   private def stringToURLs(s: String): Seq[URL] = s.split(File.pathSeparator).map(stringToURL)
