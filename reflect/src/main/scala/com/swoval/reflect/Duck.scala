@@ -40,11 +40,22 @@ object Duck {
         }
         val tName = TermName(c.freshName(t.typeSymbol.fullName.split("\\.").last.toLowerCase))
         val className = TermName(c.freshName("class"))
-        val classTree = q"val $className = $tName.getClass"
         val methodsName = TermName(c.freshName("methods"))
         val methods =
-          q"val $methodsName = $className.getDeclaredMethods.groupBy(_.getName)"
-        val decls: Seq[c.Tree] = Seq(classTree, methods) ++ dType.decls
+          q"""
+             val $methodsName = {
+               val classes = new scala.collection.mutable.ArrayBuffer[Class[_]]()
+               var $className: Class[_] = $tName.getClass
+               do {
+                 classes += $className
+                 $className = $className.getSuperclass
+               } while ($className != null)
+               classes.foldRight(Map.empty[String, Array[java.lang.reflect.Method]]) {
+                 case (c, map) => map ++ c.getDeclaredMethods.groupBy(_.getName)
+               }
+             }
+           """
+        val decls: Seq[c.Tree] = Seq(methods) ++ dType.decls
           .filter(m => m.isMethod && !m.isConstructor)
           .flatMap { d =>
             val methodName = d.name.toString
@@ -54,10 +65,11 @@ object Duck {
             val paramNames = paramTypes.map(p =>
               TermName(c.freshName(p.typeSymbol.fullName.split("\\.").last.toLowerCase)))
             val params = paramNames zip paramTypes map { case (n, t) => q"val $n: $t" }
+            val boxed = (paramNames zip paramTypes).map { case (n, t) => Box(c)(n, t) }
             val realParamNames = sig.paramLists.map(_.map(t => termName(t)))
             val realParams = realParamNames.zip(sig.paramLists).map {
               case (names, types) =>
-                names.zip(types) map { case (n, t) => q"val $n: $t" }
+                names.zip(types) map { case (n, t) => q"val $n: ${t.typeSignature}" }
             }
             val rType = sig.finalResultType
             val alias = q"""
@@ -71,7 +83,7 @@ object Duck {
                       if (paramTypes.zip(duckParamTypes).forall {
                         case (t, d) => d.isAssignableFrom(t)
                       } && m.getReturnType.isAssignableFrom(classOf[$rType])) {
-                        Some((..$params) => m.invoke($tName, ..$paramNames).asInstanceOf[$rType])
+                        Some((..$params) => m.invoke($tName, ..$boxed).asInstanceOf[$rType])
                       } else {
                         None
                       }
@@ -131,8 +143,6 @@ object Duck {
 
         duck(q"override def duck($tName: $tType): $dType = new $dType { ..$decls }")
     }
-    println(tree)
-    println(scala.util.Try(c.typecheck(tree)))
     c.Expr[Duck[T, D]](tree)
   }
 }
