@@ -4,19 +4,23 @@ import scala.reflect.macros.blackbox
 import scala.reflect.macros.whitebox
 import scala.language.experimental.macros
 import scala.languageFeature.reflectiveCalls
+import scala.reflect.macros.runtime.AbortMacroException
 
 trait Duck[T, D] extends Any {
   def duck(t: T): D
 }
 trait WeakDuck[T, D] extends Duck[T, D]
 object WeakDuck {
-  implicit def default[T, D]: WeakDuck[T, D] = macro DuckMacros.objectImpl[T, D, WeakDuck[_, _]]
+  implicit def default[T, D]: WeakDuck[T, D] = macro DuckMacros.weakImpl[T, D]
+}
+trait LowPriorityDuck {
+  implicit def defaultWeak[T, D](implicit ev: scala.languageFeature.reflectiveCalls,
+                                 weakDuck: WeakDuck[T, D]): Duck[T, D] = weakDuck
 }
 
-object Duck {
+object Duck extends LowPriorityDuck {
   implicit def default[T, D]: Duck[T, D] = macro DuckMacros.impl[T, D, Duck[_, _]]
 }
-trait LowPriorityDuck {}
 object DuckMacros {
   def termName(c: blackbox.Context)(tpe: c.universe.Symbol) =
     c.universe.TermName(c.freshName(tpe.fullName.split("\\.").last.toLowerCase))
@@ -31,6 +35,16 @@ object DuckMacros {
           ${dType.typeSymbol.fullName} + "]"
       }
     """
+  }
+  def weakImpl[O: c.WeakTypeTag, D: c.WeakTypeTag](c: blackbox.Context): c.Expr[WeakDuck[O, D]] = {
+    val expr = try {
+      impl[O, D, WeakDuck[O, D]](c)
+    } catch {
+      case _: AbortMacroException =>
+        objectImpl[O, D, WeakDuck[O, D]](c)
+    }
+    println(expr)
+    expr
   }
   def objectImpl[O: c.WeakTypeTag, D: c.WeakTypeTag, DT <: Duck[_, _]: c.WeakTypeTag](
       c: blackbox.Context): c.Expr[DT] = {

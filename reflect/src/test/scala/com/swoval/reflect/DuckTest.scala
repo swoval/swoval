@@ -11,19 +11,19 @@ object DuckTest extends TestSuite {
   }
   val tests = Tests {
     'singleMethod - {
-      'abstract - {
-        'specified - {
-          trait Foo {
-            def foo(): Int
-          }
-          object Bar {
-            def foo(): Int = 3
-          }
-          implicitly[Duck[Bar.type, Foo]].duck(Bar).foo() ==> 3
-          println(implicitly[WeakDuck[Bar.type, Foo]])
-          WeakDuck.default[Bar.type, Foo].duck(Bar).foo() ==> 3
-        }
-      }
+//      'abstract - {
+//        'specified - {
+//          trait Foo {
+//            def foo(): Int
+//          }
+//          object Bar {
+//            def foo(): Int = 3
+//          }
+//          implicitly[Duck[Bar.type, Foo]].duck(Bar).foo() ==> 3
+//          println(implicitly[WeakDuck[Bar.type, Foo]])
+//          WeakDuck.default[Bar.type, Foo].duck(Bar).foo() ==> 3
+//        }
+//      }
 //      'default - {
 //        trait Foo {
 //          def foo(): Int = 3
@@ -43,14 +43,14 @@ object DuckTest extends TestSuite {
     'reflective - {
       'abstract - {
         'specified - {
-//          trait Foo {
-//            def foo(i: Int, y: Long): Long
-//          }
-//          abstract class Blah {
-//            def foo(i: Int, y: Long): Long = i + y
-//          }
-//          object Bar extends Blah
-//          implicitly[Duck[Object, Foo]].duck(Bar).foo(1, 3) ==> 4
+          trait Foo {
+            def foo(i: Int, y: Long): Long
+          }
+          abstract class Blah {
+            def foo(i: Int, y: Long): Long = i + y
+          }
+          object Bar extends Blah
+          implicitly[Duck[Object, Foo]].duck(Bar).foo(1, 3) ==> 4
 //          val foo: Foo = implicitly[Duck[Object, Foo]].duck(Bar)
 //          val n = 100000
 //          benchmark(n, "bar")(Bar.foo(1, 3))
