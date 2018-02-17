@@ -3,7 +3,6 @@ package com.swoval.reflect
 import java.io.File
 import java.nio.file.{ Files, Path, Paths }
 
-import com.swoval.app.MainRunner
 import utest._
 
 import scala.collection.JavaConverters._
@@ -19,6 +18,10 @@ object Foo {
 object Bar {
   def add(x: Int, y: Long): Long = x + y
   def buzz(x: Buzz): Int = 3
+}
+
+trait Blah {
+  def add(x: Int, y: Long): Long
 }
 
 object ThunkTest extends TestSuite {

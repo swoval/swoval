@@ -1,12 +1,13 @@
 package com.swoval.app
 
+import com.swoval.reflect.Duck
 import utest._
 
 import scala.concurrent.duration._
 
 object StaticMain {
   def shutdown(): Unit = {}
-  def waitForShutdown(duration: Duration): Boolean = {
+  def waitForShutdown(duration: Object): Boolean = {
     println(s"waiting for $duration")
     true
   }
@@ -32,7 +33,7 @@ class SlowTask extends Shutdownable {
 }
 
 object MainRunnerTest extends TestSuite {
-  val s = implicitly[DelegateShutdownable[StaticMain.type]]
+  val s = implicitly[Duck[StaticMain.type]]
   println(s.shutdownable(StaticMain).waitForShutdown(Duration.Inf))
   val tests = Tests {
     'run - {
