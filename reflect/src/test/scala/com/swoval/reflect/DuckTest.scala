@@ -50,6 +50,7 @@ object DuckTest extends TestSuite {
             def foo(i: Int, y: Long): Long = i + y
           }
           object Bar extends Blah
+          import Duck.features.AllowWeakConversions
           implicitly[Duck[Object, Foo]].duck(Bar).foo(1, 3) ==> 4
 //          val foo: Foo = implicitly[Duck[Object, Foo]].duck(Bar)
 //          val n = 100000

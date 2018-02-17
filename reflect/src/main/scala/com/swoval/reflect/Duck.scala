@@ -13,13 +13,12 @@ trait WeakDuck[T, D] extends Duck[T, D]
 object WeakDuck {
   implicit def default[T, D]: WeakDuck[T, D] = macro DuckMacros.weakImpl[T, D]
 }
-trait LowPriorityDuck {
-  implicit def defaultWeak[T, D](implicit ev: scala.languageFeature.reflectiveCalls,
-                                 weakDuck: WeakDuck[T, D]): Duck[T, D] = weakDuck
-}
-
-object Duck extends LowPriorityDuck {
+object Duck {
   implicit def default[T, D]: Duck[T, D] = macro DuckMacros.impl[T, D, Duck[_, _]]
+  trait AllowWeakConversions
+  object features {
+    implicit final case object AllowWeakConversions extends AllowWeakConversions
+  }
 }
 object DuckMacros {
   def termName(c: blackbox.Context)(tpe: c.universe.Symbol) =
@@ -138,7 +137,18 @@ object DuckMacros {
       case t if t <:< dType =>
         duck(c)(tType, dType, duckName, q"override def duck(t: $tType): $dType = t")
       case t if weakTypeOf[Object] <:< t && t <:< weakTypeOf[Any] =>
-        c.abort(c.enclosingPosition, s"Can't generate duck type for generic type $tType")
+        c.inferImplicitValue(weakTypeOf[Duck.AllowWeakConversions]) match {
+          case q"" =>
+            c.abort(
+              c.enclosingPosition,
+              s"Tried to create Duck instance from generic type $tType." +
+                " Import com.swoval.reflect.Duck.features.AllowWeakConversions to create a Duck" +
+                " instance using java reflection."
+            )
+          case t =>
+            println(t)
+            objectImpl[T, D, Duck[T, D]](c).tree
+        }
       case t =>
         val methods = tType.decls.filter(d => d.isMethod && !d.isConstructor)
         val tName = TermName(c.freshName(t.typeSymbol.fullName.split("\\.").last.toLowerCase))
@@ -180,7 +190,7 @@ object DuckMacros {
                 duckName,
                 q"override def duck($tName: $tType): $dType = new $dType { ..$decls }")
     }
-    println(tree)
+    //println(tree)
     c.Expr[DT](tree)
   }
 }
