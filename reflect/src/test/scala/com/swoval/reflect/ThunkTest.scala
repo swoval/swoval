@@ -34,6 +34,16 @@ object ThunkTest extends TestSuite {
   private val initLoader = getChildFirstClassLoader
   initLoader.fillCache()
   private val resourcePath = Paths.get("src/test/resources").toAbsolutePath
+  object Types {
+    def x(b: Boolean): Int = 1
+    def x(b: Byte): Int = 2
+    def x(c: Char): Int = 3
+    def x(d: Double): Int = 4
+    def x(f: Float): Int = 5
+    def x(i: Int): Int = 6
+    def x(l: Long): Int = 7
+    def x(s: Short): Int = 8
+  }
   val tests = Tests {
     'run - {
       'thunk - {
@@ -61,6 +71,16 @@ object ThunkTest extends TestSuite {
           Thunk(Foo.add(1, 2), false) ==> 3
         }
       }
+    }
+    'boxing - {
+      Thunk(Types.x(true)) ==> 1
+//      Thunk(Types.x(1.toByte)) ==> 2
+//      Thunk(Types.x('1')) ==> 3
+//      Thunk(Types.x(1.0)) ==> 4
+//      Thunk(Types.x(1.0f)) ==> 5
+//      Thunk(Types.x(1)) ==> 6
+//      Thunk(Types.x(1L)) ==> 7
+//      Thunk(Types.x(1.toShort)) ==> 8
     }
 
     'reload - {

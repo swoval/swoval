@@ -1,5 +1,6 @@
 package com.swoval.reflect
 
+import scala.annotation.tailrec
 import scala.reflect.macros.blackbox
 
 class MacroHelpers[C <: blackbox.Context](protected val c: C) {
@@ -21,7 +22,16 @@ class MacroHelpers[C <: blackbox.Context](protected val c: C) {
 
   def typeToTerm(tpe: Type): TermName = typeToTerm(tpe.typeSymbol)
   def typeToTerm(symbol: Symbol): TermName = TermName(symbol.fullName.split("\\.").last.toLowerCase)
-  def qualified(tpe: Type): Tree = qualified(tpe.typeSymbol.fullName, isType = true)
+  def qualified(tpe: Type): Tree = {
+    @tailrec
+    def impl(t: Symbol, name: Option[String] = None): Tree = {
+      if (t.owner.isPackage)
+        qualified(s"${t.fullName}${name.map(n => s".$n").getOrElse("")}", isType = true)
+      else
+        impl(t.owner.asType, None)
+    }
+    impl(tpe.typeSymbol)
+  }
   def qualified(term: String, isType: Boolean): Tree = {
     val (parts, name) = term.split("\\.") match { case l => (l.dropRight(1), l.last) }
     val prefix = parts match {
