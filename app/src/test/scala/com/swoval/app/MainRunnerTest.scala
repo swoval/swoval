@@ -33,8 +33,8 @@ class SlowTask extends Shutdownable {
 }
 
 object MainRunnerTest extends TestSuite {
-  val s = implicitly[Duck[StaticMain.type]]
-  println(s.shutdownable(StaticMain).waitForShutdown(Duration.Inf))
+  //val s = implicitly[Duck[Object, StaticMain.type]]
+  //println(s.shutdownable(StaticMain).waitForShutdown(Duration.Inf))
   val tests = Tests {
     'run - {
       MainRunner.run[Int](Array("--main", "com.swoval.app.StaticMain", "3")) ==> 3

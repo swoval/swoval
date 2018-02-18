@@ -1,7 +1,6 @@
 package com.swoval.reflect
 
 import scala.reflect.macros.blackbox
-import scala.reflect.macros.whitebox
 import scala.language.experimental.macros
 import scala.languageFeature.reflectiveCalls
 import scala.reflect.macros.runtime.AbortMacroException
@@ -54,15 +53,13 @@ object DuckMacros {
     val methodsName = TermName(c.freshName("methods"))
     val methods = q"""
       val $methodsName = {
-        val classes = new scala.collection.mutable.ArrayBuffer[Class[_]]()
+        val classes = new _root_.scala.collection.mutable.ArrayBuffer[Class[_]]()
         var $className: Class[_] = $tName.getClass
         do {
           classes += $className
           $className = $className.getSuperclass
         } while ($className != null)
-        classes.foldRight(Map.empty[String, Array[_root_.java.lang.reflect.Method]]) {
-          case (c, map) => map ++ c.getDeclaredMethods.groupBy(_.getName)
-        }
+        classes.flatMap(_.getDeclaredMethods.toSeq).groupBy(_.getName)
       }
     """
     val decls: Seq[c.Tree] = Seq(methods) ++ dType.decls
@@ -86,8 +83,8 @@ object DuckMacros {
               lazy val $methodAlias: (..$paramTypes) => $rType = {
                 ($methodsName.get($methodName) match {
                   case Some(methods) =>
-                    val duckParamTypes: Array[Class[_]] =
-                      Array(..${paramTypes.map(t => q"classOf[${qualified(t)}]")})
+                    val duckParamTypes: _root_.scala.Seq[Class[_]] =
+                      _root_.scala.Seq(..${paramTypes.map(t => q"classOf[${qualified(t)}]")})
                     methods.flatMap { case m =>
                       val paramTypes = m.getParameterTypes
                       if (paramTypes.zip(duckParamTypes).forall {
@@ -100,7 +97,7 @@ object DuckMacros {
                     }
                     case None => ???
                 }) match {
-                  case Array(m) => m
+                  case _root_.scala.Seq(m) => m
                   case _ => throw new IllegalArgumentException("whatever")
                 }
               }
@@ -141,11 +138,10 @@ object DuckMacros {
                 " Import com.swoval.reflect.Duck.features.AllowWeakConversions to create a Duck" +
                 " instance using java reflection."
             )
-          case t =>
-            println(t)
+          case _ =>
             objectImpl[T, D, Duck[T, D]](c).tree
         }
-      case t =>
+      case _ =>
         val methods = tType.decls.filter(d => d.isMethod && !d.isConstructor)
         val tName = typeToTerm(tType)
         val decls = dType.decls.filter(m => m.isMethod && !m.isConstructor).flatMap { d =>

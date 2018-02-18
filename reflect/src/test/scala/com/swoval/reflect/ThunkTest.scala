@@ -39,7 +39,9 @@ object ThunkTest extends TestSuite {
   private val pkg = "com.swoval.reflect"
   private val initLoader = getChildFirstClassLoader
   initLoader.fillCache()
-  private val resourcePath = Paths.get("src/test/resources").toAbsolutePath
+  private val forked = !Files.exists(Paths.get("reflect").toAbsolutePath)
+  private val resourcePath =
+    Paths.get(s"${if (forked) "" else "reflect/"}src/test/resources").toAbsolutePath
   object Types {
     def x(b: Boolean): Int = 1
     def x(b: Byte): Int = 2
@@ -122,13 +124,17 @@ object ThunkTest extends TestSuite {
            * its parent URLClassLoader findClass, which will load an incompatible duplicate version
            * of the class.
            */
-          withURLLoader { (path, l) =>
-            val dir = Files.createDirectories(path.resolve("com/swoval/reflect"))
-            Files.copy(resourcePath.resolve(s"Buzz.class"), dir.resolve("Buzz.class"))
-            intercept[NoSuchMethodException] {
-              // There seems to be a bug in intercept that requires full qualification of Buzz
-              Thunk(Bar.buzz(new com.swoval.reflect.Buzz))
+          if (forked) {
+            withURLLoader { (path, l) =>
+              val dir = Files.createDirectories(path.resolve("com/swoval/reflect"))
+              Files.copy(resourcePath.resolve(s"Buzz.class"), dir.resolve("Buzz.class"))
+              intercept[NoSuchMethodException] {
+                // There seems to be a bug in intercept that requires full qualification of Buzz
+                Thunk(Bar.buzz(new com.swoval.reflect.Buzz))
+              }
             }
+          } else {
+            println("Not running notBlocked test on embedded jvm.")
           }
         }
         'blocked - {

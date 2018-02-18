@@ -58,12 +58,14 @@ object Build {
       fork in Test := true,
       javacOptions ++= Seq("-source", "1.8", "-target", "1.8") ++
         java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty),
-      javaOptions in Test ++= {
-        Seq(
-          "-Djava.system.class.loader=com.swoval.reflect.ChildFirstClassLoader",
-          s"-javaagent:${(packageConfiguration in (Compile, packageBin)).value.jar}"
-        )
-      },
+      javaOptions in Test ++= Def.taskDyn {
+        val forked = (fork in Test).value
+        lazy val agent = (packageConfiguration in (Compile, packageBin)).value.jar
+        Def.task {
+          val loader = "-Djava.system.class.loader=com.swoval.reflect.ChildFirstClassLoader"
+          if (forked) Seq(loader, s"-javaagent:$agent") else Seq.empty
+        }
+      }.value,
       packageOptions in (Compile, packageBin) +=
         Package.ManifestAttributes("Premain-Class" -> "com.swoval.reflect.Agent"),
       genTestResourceClasses := {
