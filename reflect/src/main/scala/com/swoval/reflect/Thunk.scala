@@ -17,6 +17,8 @@ object ThunkMacros {
   }
   def impl[T: c.WeakTypeTag](c: blackbox.Context)(thunk: c.Expr[T]): c.Expr[T] = {
     import c.universe._
+    val helpers = new MacroHelpers[c.type](c)
+    import helpers._
     def loader = {
       c.inferImplicitValue(weakTypeOf[ChildFirstClassLoader], silent = true) match {
         case q"" =>
@@ -34,18 +36,19 @@ object ThunkMacros {
     case class Arg(tree: c.Tree, name: TermName, clazz: c.Tree, boxed: c.Tree)
     object Arg {
       def apply(arg: c.Tree): Arg = {
-        def box(name: c.TermName, tpe: c.Type): c.Tree = Box(c)(name, tpe)
         val tpe = arg.tpe
         val name = fresh(tpe.typeSymbol.name.encodedName.toString.toLowerCase)
-        tpe match {
-          case t if t <:< weakTypeOf[Boolean] => Arg(arg, name, q"classOf[Boolean]", box(name, t))
-          case t if t <:< weakTypeOf[Byte]    => Arg(arg, name, q"classOf[Byte]", box(name, t))
-          case t if t <:< weakTypeOf[Char]    => Arg(arg, name, q"classOf[Char]", box(name, t))
-          case t if t <:< weakTypeOf[Double]  => Arg(arg, name, q"classOf[Double]", box(name, t))
-          case t if t <:< weakTypeOf[Float]   => Arg(arg, name, q"classOf[Float]", box(name, t))
-          case t if t <:< weakTypeOf[Int]     => Arg(arg, name, q"classOf[Int]", box(name, t))
-          case t if t <:< weakTypeOf[Long]    => Arg(arg, name, q"classOf[Long]", box(name, t))
-          case t if t <:< weakTypeOf[Short]   => Arg(arg, name, q"classOf[Short]", box(name, t))
+        lazy val classOfType = q"classOf[${qualified(tpe, isType = true)}]"
+
+        tpe.erasure match {
+          case t if t <:< weakTypeOf[Boolean] => Arg(arg, name, classOfType, box(name, t))
+          case t if t <:< weakTypeOf[Byte]    => Arg(arg, name, classOfType, box(name, t))
+          case t if t <:< weakTypeOf[Char]    => Arg(arg, name, classOfType, box(name, t))
+          case t if t <:< weakTypeOf[Double]  => Arg(arg, name, classOfType, box(name, t))
+          case t if t <:< weakTypeOf[Float]   => Arg(arg, name, classOfType, box(name, t))
+          case t if t <:< weakTypeOf[Int]     => Arg(arg, name, classOfType, box(name, t))
+          case t if t <:< weakTypeOf[Long]    => Arg(arg, name, classOfType, box(name, t))
+          case t if t <:< weakTypeOf[Short]   => Arg(arg, name, classOfType, box(name, t))
           case _                              => Arg(arg, name, q"$name.getClass", q"$name")
         }
       }
@@ -103,6 +106,7 @@ object ThunkMacros {
       case q"new ${clazz: Tree }(...${args: Args }).${method: TermName }(...${methodArgs: Args })" =>
         classApply(clazz, args, method, methodArgs)
     })
+    println(tree)
     c.Expr[T](tree)
   }
 }
