@@ -34,27 +34,19 @@ object ThunkMacros {
     case class Arg(tree: c.Tree, name: TermName, clazz: c.Tree, boxed: c.Tree)
     object Arg {
       def apply(arg: c.Tree): Arg = {
+        def box(name: c.TermName, tpe: c.Type): c.Tree = Box(c)(name, tpe)
         val tpe = arg.tpe
         val name = fresh(tpe.typeSymbol.name.encodedName.toString.toLowerCase)
         tpe match {
-          case t if t <:< weakTypeOf[Boolean] =>
-            Arg(arg, name, q"classOf[Boolean]", q"_root_.java.lang.Boolean.valueOf($name)")
-          case t if t <:< weakTypeOf[Byte] =>
-            Arg(arg, name, q"classOf[Byte]", q"_root_.java.lang.Byte.valueOf($name)")
-          case t if t <:< weakTypeOf[Char] =>
-            Arg(arg, name, q"classOf[Char]", q"_root_.java.lang.Char.valueOf($name)")
-          case t if t <:< weakTypeOf[Double] =>
-            Arg(arg, name, q"classOf[Double]", q"_root_.java.lang.Double.valueOf($name)")
-          case t if t <:< weakTypeOf[Float] =>
-            Arg(arg, name, q"classOf[Float]", q"_root_.java.lang.Float.valueOf($name)")
-          case t if t <:< weakTypeOf[Int] =>
-            Arg(arg, name, q"classOf[Int]", q"_root_.java.lang.Integer.valueOf($name)")
-          case t if t <:< weakTypeOf[Long] =>
-            Arg(arg, name, q"classOf[Long]", q"_root_.java.lang.Long.valueOf($name)")
-          case t if t <:< weakTypeOf[Short] =>
-            Arg(arg, name, q"classOf[Short]", q"_root_.java.lang.Short.valueOf($name)")
-          case _ =>
-            Arg(arg, name, q"$name.getClass", q"$name")
+          case t if t <:< weakTypeOf[Boolean] => Arg(arg, name, q"classOf[Boolean]", box(name, t))
+          case t if t <:< weakTypeOf[Byte]    => Arg(arg, name, q"classOf[Byte]", box(name, t))
+          case t if t <:< weakTypeOf[Char]    => Arg(arg, name, q"classOf[Char]", box(name, t))
+          case t if t <:< weakTypeOf[Double]  => Arg(arg, name, q"classOf[Double]", box(name, t))
+          case t if t <:< weakTypeOf[Float]   => Arg(arg, name, q"classOf[Float]", box(name, t))
+          case t if t <:< weakTypeOf[Int]     => Arg(arg, name, q"classOf[Int]", box(name, t))
+          case t if t <:< weakTypeOf[Long]    => Arg(arg, name, q"classOf[Long]", box(name, t))
+          case t if t <:< weakTypeOf[Short]   => Arg(arg, name, q"classOf[Short]", box(name, t))
+          case _                              => Arg(arg, name, q"$name.getClass", q"$name")
         }
       }
     }
