@@ -21,8 +21,6 @@ object Duck {
   }
 }
 object DuckMacros {
-  def termName(c: blackbox.Context)(tpe: c.universe.Symbol) =
-    c.universe.TermName(c.freshName(tpe.fullName.split("\\.").last.toLowerCase))
   def duck(
       c: blackbox.Context)(tType: c.Type, dType: c.Type, name: c.Tree, body: c.Tree*): c.Tree = {
     import c.universe._
@@ -47,9 +45,11 @@ object DuckMacros {
   }
   def objectImpl[O: c.WeakTypeTag, D: c.WeakTypeTag, DT <: Duck[_, _]: c.WeakTypeTag](
       c: blackbox.Context): c.Expr[DT] = {
+    val helpers = new MacroHelpers[c.type](c)
+    import helpers._
     import c.universe._
     val (tType, dType) = (weakTypeOf[O], weakTypeOf[D])
-    val tName = termName(c)(tType.typeSymbol)
+    val tName = typeToTerm(tType)
     val className = TermName(c.freshName("class"))
     val methodsName = TermName(c.freshName("methods"))
     val methods = q"""
@@ -60,7 +60,7 @@ object DuckMacros {
           classes += $className
           $className = $className.getSuperclass
         } while ($className != null)
-        classes.foldRight(Map.empty[String, Array[java.lang.reflect.Method]]) {
+        classes.foldRight(Map.empty[String, Array[_root_.java.lang.reflect.Method]]) {
           case (c, map) => map ++ c.getDeclaredMethods.groupBy(_.getName)
         }
       }
@@ -75,19 +75,19 @@ object DuckMacros {
         val paramNames = paramTypes.map(p =>
           TermName(c.freshName(p.typeSymbol.fullName.split("\\.").last.toLowerCase)))
         val params = paramNames zip paramTypes map { case (n, t) => q"val $n: $t" }
-        val boxed = (paramNames zip paramTypes).map { case (n, t) => Box(c)(n, t) }
-        val realParamNames = sig.paramLists.map(_.map(t => termName(c)(t)))
+        val boxed = (paramNames zip paramTypes).map { case (n, t) => box(n, t) }
+        val realParamNames = sig.paramLists.map(_.map(typeToTerm))
         val realParams = realParamNames.zip(sig.paramLists).map {
           case (names, types) =>
             names.zip(types) map { case (n, t) => q"val $n: ${t.typeSignature}" }
         }
-        val rType = sig.finalResultType
+        val rType = qualified(sig.finalResultType)
         val alias = q"""
               lazy val $methodAlias: (..$paramTypes) => $rType = {
                 ($methodsName.get($methodName) match {
                   case Some(methods) =>
                     val duckParamTypes: Array[Class[_]] =
-                      Array(..${paramTypes.map(t => q"classOf[$t]")})
+                      Array(..${paramTypes.map(t => q"classOf[${qualified(t)}]")})
                     methods.flatMap { case m =>
                       val paramTypes = m.getParameterTypes
                       if (paramTypes.zip(duckParamTypes).forall {
@@ -114,24 +114,20 @@ object DuckMacros {
         )
       }
       .toSeq
-    val tree =
-      duck(c)(
-        tType,
-        dType,
-        tq"_root_.com.swoval.reflect.${weakTypeOf[DT].typeSymbol.name.toTypeName}",
-        q"override def duck($tName: $tType): $dType = new $dType { ..$decls }"
-      )
+    val body = q"override def duck($tName: $tType): $dType = new $dType { ..$decls }"
+    val tree = duck(c)(tType, dType, qualified(weakTypeOf[DT]), body)
     c.Expr[DT](tree)
   }
   def impl[T: c.WeakTypeTag, D: c.WeakTypeTag, DT <: Duck[_, _]: c.WeakTypeTag](
       c: blackbox.Context): c.Expr[DT] = {
     import c.universe._
+    val helpers = new MacroHelpers[c.type](c)
+    import helpers._
     val (tType, dType) = (weakTypeOf[T], weakTypeOf[D])
     if (!dType.typeSymbol.isClass || !dType.typeSymbol.asClass.isTrait) {
       c.abort(c.enclosingPosition, s"Tried to duck type to non-trait type $dType")
     }
-    val duckName =
-      tq"_root_.com.swoval.reflect.${TypeName(weakTypeOf[DT].typeSymbol.name.toString)}"
+    val duckName = qualified(weakTypeOf[DT])
 
     val tree = tType match {
       case t if t <:< dType =>
@@ -151,7 +147,7 @@ object DuckMacros {
         }
       case t =>
         val methods = tType.decls.filter(d => d.isMethod && !d.isConstructor)
-        val tName = TermName(c.freshName(t.typeSymbol.fullName.split("\\.").last.toLowerCase))
+        val tName = typeToTerm(tType)
         val decls = dType.decls.filter(m => m.isMethod && !m.isConstructor).flatMap { d =>
           (methods
             .filter(_.name == d.name) match {
@@ -170,8 +166,7 @@ object DuckMacros {
             }
             .map { m =>
               val args = m.typeSignature.paramLists.map(_.map { a =>
-                val name =
-                  TermName(c.freshName(a.fullName.split("\\.").last.toLowerCase))
+                val name = typeToTerm(a.typeSignature)
                 name -> q"val $name: ${a.typeSignature}"
               })
               q"""
@@ -185,10 +180,8 @@ object DuckMacros {
           case d              => d
         }
 
-        duck(c)(tType,
-                dType,
-                duckName,
-                q"override def duck($tName: $tType): $dType = new $dType { ..$decls }")
+        val body = q"override def duck($tName: $tType): $dType = new $dType { ..$decls }"
+        duck(c)(tType, dType, duckName, body)
     }
     //println(tree)
     c.Expr[DT](tree)

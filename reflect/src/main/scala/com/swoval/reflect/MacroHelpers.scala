@@ -19,12 +19,14 @@ class MacroHelpers[C <: blackbox.Context](protected val c: C) {
     }
   }
 
-  def qualified(tpe: Type, isType: Boolean): Tree = {
-    val (parts, name) = tpe.typeSymbol.fullName.split("\\.") match {
-      case l => (l.dropRight(1), l.last)
-    }
+  def typeToTerm(tpe: Type): TermName = typeToTerm(tpe.typeSymbol)
+  def typeToTerm(symbol: Symbol): TermName = TermName(symbol.fullName.split("\\.").last.toLowerCase)
+  def qualified(tpe: Type): Tree = qualified(tpe.typeSymbol.fullName, isType = true)
+  def qualified(term: String, isType: Boolean): Tree = {
+    val (parts, name) = term.split("\\.") match { case l => (l.dropRight(1), l.last) }
     val prefix = parts match {
-      case Array(t) => q"_root_.${TermName(t)}"
+      case Array()  => q"_root_"
+      case Array(p) => q"_root_.${TermName(p)}"
       case Array(h, rest @ _*) =>
         rest.foldLeft(q"_root_.${TermName(h)}") { case (a, t) => q"$a.${TermName(t)}" }
     }

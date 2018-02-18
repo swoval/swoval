@@ -38,7 +38,7 @@ object ThunkMacros {
       def apply(arg: c.Tree): Arg = {
         val tpe = arg.tpe
         val name = fresh(tpe.typeSymbol.name.encodedName.toString.toLowerCase)
-        lazy val classOfType = q"classOf[${qualified(tpe, isType = true)}]"
+        lazy val classOfType = q"classOf[${qualified(tpe)}]"
 
         tpe.erasure match {
           case t if t <:< weakTypeOf[Boolean] => Arg(arg, name, classOfType, box(name, t))
@@ -106,7 +106,6 @@ object ThunkMacros {
       case q"new ${clazz: Tree }(...${args: Args }).${method: TermName }(...${methodArgs: Args })" =>
         classApply(clazz, args, method, methodArgs)
     })
-    println(tree)
     c.Expr[T](tree)
   }
 }
