@@ -14,9 +14,14 @@ object WeakDuck {
 }
 object Duck {
   implicit def default[T, D]: Duck[T, D] = macro DuckMacros.impl[T, D, Duck[_, _]]
-  trait AllowWeakConversions
+  sealed trait AllowReflection
   object features {
-    implicit final case object AllowWeakConversions extends AllowWeakConversions
+    implicit final case object AllowWeakReflection extends AllowReflection
+    implicit final case object AllowReflection extends AllowReflection
+  }
+  implicit class Duckable[T](val t: T) extends AnyVal {
+    def cast[D](implicit duck: Duck[T, D]): D = duck.duck(t)
+    def weakCast[D](implicit duck: WeakDuck[T, D]): D = duck.duck(t)
   }
 }
 object DuckMacros {
@@ -39,7 +44,6 @@ object DuckMacros {
       case _: AbortMacroException =>
         objectImpl[O, D, WeakDuck[O, D]](c)
     }
-    println(expr)
     expr
   }
   def objectImpl[O: c.WeakTypeTag, D: c.WeakTypeTag, DT <: Duck[_, _]: c.WeakTypeTag](
@@ -79,35 +83,52 @@ object DuckMacros {
             names.zip(types) map { case (n, t) => q"val $n: ${t.typeSignature}" }
         }
         val rType = qualified(sig.finalResultType)
+        val notFound = {
+          val weak = weakTypeOf[Duck.AllowReflection]
+          c.inferImplicitValue(weak, silent = true) match {
+            case q"" => q"None"
+            case t
+                if t.tpe =:= weakTypeOf[Duck.features.AllowWeakReflection.type]
+                  && sig.finalResultType <:< weakTypeOf[Unit] && d.isAbstract =>
+              q"Some((..$params) => {})"
+            case _ => q"None"
+          }
+        }
+        val cases = Seq(
+          cq"${pq"_root_.scala.Seq(m)"} => m",
+          if (!d.isAbstract)
+            cq"${pq"_"} => (..$params) => super.${TermName(methodName)}(..$paramNames)"
+          else {
+            val msg = q"""$tName.toString + " does not have a " + ${d.toString}"""
+            cq"${pq"_"} => throw new IllegalArgumentException($msg)"
+          }
+        )
         val alias = q"""
-              lazy val $methodAlias: (..$paramTypes) => $rType = {
-                ($methodsName.get($methodName) match {
-                  case Some(methods) =>
-                    val duckParamTypes: _root_.scala.Seq[Class[_]] =
-                      _root_.scala.Seq(..${paramTypes.map(t => q"classOf[${qualified(t)}]")})
-                    methods.flatMap { case m =>
-                      val paramTypes = m.getParameterTypes
-                      if (paramTypes.zip(duckParamTypes).forall {
-                        case (t, d) => d.isAssignableFrom(t)
-                      } && m.getReturnType.isAssignableFrom(classOf[$rType])) {
-                        Some((..$params) => m.invoke($tName, ..$boxed).asInstanceOf[$rType])
-                      } else {
-                        None
-                      }
+          lazy val $methodAlias: (..$paramTypes) => $rType = {
+            ($methodsName.get($methodName) match {
+                case Some(methods) =>
+                  val duckParamTypes: _root_.scala.Seq[Class[_]] =
+                    _root_.scala.Seq(..${paramTypes.map(t => q"classOf[${qualified(t)}]")})
+                  methods.flatMap { case m =>
+                    val paramTypes = m.getParameterTypes
+                    if (paramTypes.zip(duckParamTypes).forall {
+                      case (t, d) => d.isAssignableFrom(t)
+                    } && m.getReturnType.isAssignableFrom(classOf[$rType])) {
+                      Some((..$params) => m.invoke($tName, ..$boxed).asInstanceOf[$rType])
+                    } else {
+                      $notFound
                     }
-                    case None => ???
-                }) match {
-                  case _root_.scala.Seq(m) => m
-                  case _ => throw new IllegalArgumentException("whatever")
-                }
-              }
-            """
+                  }
+                  case None => $notFound.toSeq
+              }) match { case ..$cases }
+          }
+          """
         Seq(
           alias,
           q"""
-                def ${TermName(methodName)}(...$realParams): ${sig.finalResultType} =
-                  $methodAlias(..${realParamNames.flatten})
-              """
+            override def ${TermName(methodName)}(...$realParams): ${sig.finalResultType} =
+              $methodAlias(..${realParamNames.flatten})
+          """
         )
       }
       .toSeq
@@ -130,12 +151,12 @@ object DuckMacros {
       case t if t <:< dType =>
         duck(c)(tType, dType, duckName, q"override def duck(t: $tType): $dType = t")
       case t if weakTypeOf[Object] <:< t && t <:< weakTypeOf[Any] =>
-        c.inferImplicitValue(weakTypeOf[Duck.AllowWeakConversions]) match {
+        c.inferImplicitValue(weakTypeOf[Duck.AllowReflection]) match {
           case q"" =>
             c.abort(
               c.enclosingPosition,
               s"Tried to create Duck instance from generic type $tType." +
-                " Import com.swoval.reflect.Duck.features.AllowWeakConversions to create a Duck" +
+                " Import com.swoval.reflect.Duck.features.AllowReflection to create a Duck" +
                 " instance using java reflection."
             )
           case _ =>
@@ -144,33 +165,41 @@ object DuckMacros {
       case _ =>
         val methods = tType.decls.filter(d => d.isMethod && !d.isConstructor)
         val tName = typeToTerm(tType)
-        val decls = dType.decls.filter(m => m.isMethod && !m.isConstructor).flatMap { d =>
-          (methods
-            .filter(_.name == d.name) match {
-            case m if m.isEmpty && d.isAbstract =>
-              c.abort(c.enclosingPosition, s"$tType does not specify abstract $d in $dType")
+        val decls = dType.decls.filter(m => m.isMethod && !m.isConstructor).flatMap { decl =>
+          val method = (methods
+            .filter(_.name == decl.name) match {
+            case m if m.isEmpty && decl.isAbstract =>
+              c.abort(c.enclosingPosition, s"$tType does not specify abstract $decl in $dType")
             case m => m
-          }).flatMap { m =>
-              val dTypeSig = d.typeSignature
-              val mTypeSig = m.typeSignature
-              val argsMatch = dTypeSig.paramLists zip mTypeSig.paramLists forall {
-                case (dp, mp) =>
-                  dp zip mp forall { case (dt, mt) => mt.typeSignature <:< dt.typeSignature }
-              }
-              if (argsMatch && dTypeSig.finalResultType <:< mTypeSig.finalResultType) Some(m)
+          }).flatMap { methodSymbol =>
+              val declTypeSig = decl.typeSignature
+              val methodTypeSig = methodSymbol.typeSignature
+              val (declParams, methodParams) = (declTypeSig.paramLists, methodTypeSig.paramLists)
+              val argsMatch = (declParams.lengthCompare(methodParams.length) == 0) &&
+                declParams.zip(methodParams).forall {
+                  case (dp, mp) if dp.lengthCompare(mp.length) == 0 =>
+                    dp zip mp forall { case (dt, mt) => mt.typeSignature <:< dt.typeSignature }
+                }
+              if (argsMatch && declTypeSig.finalResultType <:< methodTypeSig.finalResultType)
+                Some(methodSymbol)
               else None
             }
-            .map { m =>
-              val args = m.typeSignature.paramLists.map(_.map { a =>
+            .map { method =>
+              val args = method.typeSignature.paramLists.map(_.map { a =>
                 val name = typeToTerm(a.typeSignature)
                 name -> q"val $name: ${a.typeSignature}"
               })
               q"""
-               override def ${m.name.encodedName.toTermName}(...${args
-                .map(_.map(_._2))}): ${m.typeSignature.finalResultType} =
-                $tName.$m(...${args.map(_.map(_._1))})
-            """
+                override def ${method.name.encodedName.toTermName}(...${args
+                .map(_.map(_._2))}): ${method.typeSignature.finalResultType} =
+                   $tName.$method(...${args.map(_.map(_._1))})
+              """
             }
+          if (method.isEmpty && decl.isAbstract) {
+            c.abort(c.enclosingPosition,
+                    s"No implementation for abstract method $decl in $dType is provided by $tType")
+          }
+          method
         } match {
           case d if d.isEmpty => Seq(q"")
           case d              => d
@@ -179,7 +208,6 @@ object DuckMacros {
         val body = q"override def duck($tName: $tType): $dType = new $dType { ..$decls }"
         duck(c)(tType, dType, duckName, body)
     }
-    //println(tree)
     c.Expr[DT](tree)
   }
 }
