@@ -25,8 +25,14 @@ trait Blah {
 }
 
 object ThunkTest extends TestSuite {
-  private def getChildFirstClassLoader: ChildFirstClassLoader =
-    Thread.currentThread.getContextClassLoader.asInstanceOf[ChildFirstClassLoader]
+  private def getChildFirstClassLoader: ChildFirstClassLoader = {
+    try {
+      Thread.currentThread.getContextClassLoader.asInstanceOf[ChildFirstClassLoader]
+    } catch {
+      case e: ClassCastException =>
+        new ChildFirstClassLoader(Thread.currentThread.getContextClassLoader)
+    }
+  }
   override def utestBeforeEach(path: Seq[String]): Unit = {
     Thread.currentThread.setContextClassLoader(initLoader.dup())
   }
@@ -74,13 +80,13 @@ object ThunkTest extends TestSuite {
     }
     'boxing - {
       Thunk(Types.x(true)) ==> 1
-//      Thunk(Types.x(1.toByte)) ==> 2
-//      Thunk(Types.x('1')) ==> 3
-//      Thunk(Types.x(1.0)) ==> 4
-//      Thunk(Types.x(1.0f)) ==> 5
-//      Thunk(Types.x(1)) ==> 6
-//      Thunk(Types.x(1L)) ==> 7
-//      Thunk(Types.x(1.toShort)) ==> 8
+      Thunk(Types.x(1.toByte)) ==> 2
+      Thunk(Types.x('1')) ==> 3
+      Thunk(Types.x(1.0)) ==> 4
+      Thunk(Types.x(1.0f)) ==> 5
+      Thunk(Types.x(1)) ==> 6
+      Thunk(Types.x(1L)) ==> 7
+      Thunk(Types.x(1.toShort)) ==> 8
     }
 
     'reload - {

@@ -22,16 +22,21 @@ class MacroHelpers[C <: blackbox.Context](protected val c: C) {
 
   def typeToTerm(tpe: Type): TermName = typeToTerm(tpe.typeSymbol)
   def typeToTerm(symbol: Symbol): TermName = TermName(symbol.fullName.split("\\.").last.toLowerCase)
-  def qualified(tpe: Type): Tree = {
+  def javaName(tpe: Type): String = {
     @tailrec
-    def impl(t: Symbol, name: Option[String] = None): Tree = {
+    def impl(t: Symbol, names: Seq[String] = Seq.empty): String = {
       if (t.owner.isPackage)
-        qualified(s"${t.fullName}${name.map(n => s".$n").getOrElse("")}", isType = true)
+        s"${t.owner.fullName}${(t.name.toString +: names).mkString(".", "$", "")}"
+      else if (t.owner.isType)
+        impl(t.owner.asType, t.name.toString +: names)
       else
-        impl(t.owner.asType, None)
+        c.abort(
+          c.enclosingPosition,
+          s"Can't determine java class name from ${qualified(tpe).toString.replace("_root_.", "")}")
     }
     impl(tpe.typeSymbol)
   }
+  def qualified(tpe: Type): Tree = qualified(tpe.typeSymbol.fullName, isType = true)
   def qualified(term: String, isType: Boolean): Tree = {
     val (parts, name) = term.split("\\.") match { case l => (l.dropRight(1), l.last) }
     val prefix = parts match {

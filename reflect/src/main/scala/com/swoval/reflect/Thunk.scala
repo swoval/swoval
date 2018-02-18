@@ -54,14 +54,7 @@ object ThunkMacros {
       }
     }
     def moduleApply(obj: Tree, method: TermName, args: Args) = {
-      if (obj.toString.contains("Types")) {
-        val s = obj.tpe.typeSymbol
-        obj.tpe.typeSymbol.owner
-        println(obj.tpe.erasure.dealias.asSeenFrom(obj.tpe, obj.tpe.typeSymbol.owner).typeSymbol)
-        println(s.alternatives)
-        println(s.fullName)
-      }
-      val moduleName = s"${obj.tpe.termSymbol.asModule.fullName}$$"
+      val moduleName = s"${javaName(obj.tpe)}$$"
       val loaderName = fresh("loader")
       val parsedArgs = args.flatten.map(Arg(_))
       val classes = parsedArgs.map(_.clazz)
@@ -113,7 +106,6 @@ object ThunkMacros {
       case q"new ${clazz: Tree }(...${args: Args }).${method: TermName }(...${methodArgs: Args })" =>
         classApply(clazz, args, method, methodArgs)
     })
-    if (s"$tree".contains("Types")) println(tree)
     c.Expr[T](tree)
   }
 }
