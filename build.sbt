@@ -5,6 +5,7 @@ val appleFileEventsJVM = Build.appleFileEvents.jvm
 val filesJS = Build.files.js
 val filesJVM = Build.files.jvm
 val plugin = Build.plugin
+val reflect = Build.reflect
 val root = Build.root
 val scalagen = Build.scalagen
 val testingJS = Build.testing.js

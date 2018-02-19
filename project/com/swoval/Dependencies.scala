@@ -11,7 +11,7 @@ object Dependencies {
   val scalagen = "com.mysema.scalagen" %% "scalagen" % "0.4.0"
   val scalaMacros = "org.scala-lang" % "scala-reflect"
   val slf4j = "org.slf4j" % "slf4j-api" % "1.7.25"
-  val utestVersion = "0.6.0"
+  val utestVersion = "0.6.3"
   val utest = "com.lihaoyi" %% "utest" % utestVersion % "test"
 
   def baseVersion: String = "1.2.2"

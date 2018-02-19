@@ -1,9 +1,11 @@
 package com.swoval
 
 import java.io.File
-import java.nio.file.{ Files => JFiles, Path => JPath, StandardCopyOption }
+import java.nio.file.{ Files, StandardCopyOption, Path => JPath }
 
 import StandardCopyOption.REPLACE_EXISTING
+import java.util.jar.JarFile
+
 import bintray.BintrayKeys.{
   bintrayOrganization,
   bintrayPackage,
@@ -21,7 +23,7 @@ import com.typesafe.sbt.SbtGit.git
 import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport.toPlatformDepsGroupID
 import org.scalajs.core.tools.linker.backend.ModuleKind
 import org.scalajs.sbtplugin.JSPlatform
-import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ scalaJSModuleKind, fastOptJS, fullOptJS }
+import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ fastOptJS, fullOptJS, scalaJSModuleKind }
 import sbt.Keys._
 import sbt._
 import sbtcrossproject.CrossPlugin.autoImport._
@@ -29,6 +31,7 @@ import sbtcrossproject.CrossProject
 
 import scala.collection.JavaConverters._
 import scala.sys.process._
+import scala.tools.nsc
 import scala.util.Properties
 import scalajsbundler.BundlingMode
 import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin
@@ -52,6 +55,7 @@ object Build {
       Seq[ProjectReference](
         files.js,
         files.jvm,
+        reflect,
         testing.js,
         testing.jvm,
         util
@@ -113,9 +117,9 @@ object Build {
 
   def addLib(dir: File): File = {
     val target = dir.toPath.resolve("node_modules/lib")
-    if (!JFiles.exists(target))
-      JFiles.createSymbolicLink(target,
-                                appleFileEvents.js.base.toPath.toAbsolutePath.resolve("npm/lib"))
+    if (!Files.exists(target))
+      Files.createSymbolicLink(target,
+                               appleFileEvents.js.base.toPath.toAbsolutePath.resolve("npm/lib"))
     dir
   }
   def nodeNativeLibs: SettingsDefinition = Seq(
@@ -124,9 +128,9 @@ object Build {
   )
 
   def cleanGlobals(file: Attributed[File]) = {
-    val content = new String(JFiles.readAllBytes(file.data.toPath))
+    val content = new String(Files.readAllBytes(file.data.toPath))
       .replaceAll("([ ])*[a-zA-Z$0-9.]+\\.___global.", "$1")
-    JFiles.write(file.data.toPath, content.getBytes)
+    Files.write(file.data.toPath, content.getBytes)
     file
   }
   def cleanAllGlobals: SettingsDefinition = Seq(
@@ -149,9 +153,9 @@ object Build {
       nodeNativeLibs,
       (fullOptJS in Compile) := {
         val res = (fullOptJS in Compile).value
-        JFiles.copy(res.data.toPath,
-                    baseDirectory.value.toPath.resolve("npm/files.js"),
-                    REPLACE_EXISTING)
+        Files.copy(res.data.toPath,
+                   baseDirectory.value.toPath.resolve("npm/files.js"),
+                   REPLACE_EXISTING)
         res
       },
       ioScalaJS
@@ -200,7 +204,7 @@ object Build {
         (compile in Compile in files.jvm).value
         lazy val resourcePath = (resourceManaged in Compile).value.toPath
         def copy(s: File, d: File) = { IO.copyFile(s, d); d }
-        def projectFiles(p: JPath) = JFiles.walk(p).iterator.asScala.toSeq.collect {
+        def projectFiles(p: JPath) = Files.walk(p).iterator.asScala.toSeq.collect {
           case f if f.toString endsWith ".class" =>
             copy(f.toFile, resourcePath.resolve(p.relativize(f)).toFile)
         }
@@ -212,6 +216,100 @@ object Build {
       }.taskValue
     )
     .dependsOn(files.jvm % "provided->compile;test->test", testing.jvm % "test->test")
+
+  lazy val reflect = project
+    .settings(
+      commonSettings,
+      testFrameworks += new TestFramework("utest.runner.Framework"),
+      BuildKeys.java8rt := {
+        if (Properties.isMac) {
+          import scala.sys.process._
+          Seq("mdfind", "-name", "rt.jar").!!.split("\n").find { n =>
+            !n.endsWith("alt-rt.jar") && {
+              val version =
+                new JarFile(n).getManifest.getMainAttributes.getValue("Specification-Version")
+              version.split("\\.").last == "8"
+            }
+          }
+        } else {
+          None
+        }
+      },
+      scalacOptions := Seq("-unchecked", "-deprecation", "-feature"),
+      updateOptions in Global := updateOptions
+        .in(Global)
+        .value
+        .withCachedResolution(true),
+      fork in Test := true,
+      javacOptions ++= Seq("-source", "1.8", "-target", "1.8") ++
+        BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty),
+      javaOptions in Test ++= Def.taskDyn {
+        val forked = (fork in Test).value
+        lazy val agent = (packageConfiguration in (Compile, packageBin)).value.jar
+        Def.task {
+          val loader = "-Djava.system.class.loader=com.swoval.reflect.ChildFirstClassLoader"
+          if (forked) Seq(loader, s"-javaagent:$agent") else Seq.empty
+        }
+      }.value,
+      packageOptions in (Compile, packageBin) +=
+        Package.ManifestAttributes("Premain-Class" -> "com.swoval.reflect.Agent"),
+      BuildKeys.genTestResourceClasses := {
+        val dir = Files.createTempDirectory("util-resources")
+        try {
+          val resourceDir = (resourceDirectory in Test).value.toPath
+          val cp = (fullClasspath in Compile).value
+            .map(_.data)
+            .mkString(File.pathSeparator)
+          val settings = new nsc.Settings()
+          settings.bootclasspath.value = cp
+          settings.classpath.value = cp
+          settings.usejavacp.value = true
+          settings.outputDirs.add(dir.toString, dir.toString)
+          val g = nsc.Global(settings)
+          (resources in Test).value collect {
+            case f if f.getName == "Bar.scala.template"  => ("Bar", IO.read(f))
+            case f if f.getName == "Buzz.scala.template" => ("Buzz", IO.read(f))
+          } foreach {
+            case ("Bar", f) =>
+              Seq(6, 7) foreach { i =>
+                IO.write(dir.resolve("Bar.scala").toFile, f.replaceAll("\\$\\$impl", s"$i"))
+                new g.Run().compile(List(dir.resolve("Bar.scala").toString))
+                Files.copy(dir.resolve("com/swoval/reflect/Bar$.class"),
+                           resourceDir.resolve(s"Bar$$.class.$i"),
+                           StandardCopyOption.REPLACE_EXISTING)
+              }
+            case ("Buzz", f) =>
+              IO.write(dir.resolve("Buzz.scala").toFile, f)
+              new g.Run().compile(List(dir.resolve("Buzz.scala").toString))
+              Files.copy(dir.resolve("com/swoval/reflect/Buzz.class"),
+                         resourceDir.resolve(s"Buzz.class"),
+                         StandardCopyOption.REPLACE_EXISTING)
+            case (_, _) =>
+          }
+        } finally {
+          val files = Files
+            .walk(dir)
+            .iterator
+            .asScala
+            .toIndexedSeq
+            .sortBy(_.toString)
+            .reverse
+          files foreach (Files.deleteIfExists(_))
+        }
+      },
+      testOnly in Test := {
+        (packageBin in Compile).value
+        (testOnly in Test).evaluated
+      },
+      test in Test := {
+        (packageBin in Compile).value
+        (test in Test).value
+      },
+      libraryDependencies ++= Seq(
+        scalaMacros % scalaVersion.value,
+        utest
+      )
+    )
 
   lazy val scalagen: Project = project
     .in(file("scalagen"))
