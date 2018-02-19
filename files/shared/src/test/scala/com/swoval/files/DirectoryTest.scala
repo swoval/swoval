@@ -1,6 +1,6 @@
 package com.swoval.files
 
-import java.io.File
+import java.io.{ File, FileFilter }
 
 import com.swoval.files.FileWatchEvent.{ Create, Delete }
 import com.swoval.files.test.{
@@ -10,7 +10,6 @@ import com.swoval.files.test.{
   withTempFileSync
 }
 import com.swoval.test._
-import sbt.io._
 import utest._
 
 object DirectoryTest extends TestSuite {
