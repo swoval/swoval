@@ -9,3 +9,4 @@ val root = Build.root
 val scalagen = Build.scalagen
 val testingJS = Build.testing.js
 val testingJVM = Build.testing.jvm
+val util = Build.util

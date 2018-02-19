@@ -3,7 +3,6 @@ package com.swoval
 import java.io.File
 import java.nio.file.{ Files => JFiles, Path => JPath, StandardCopyOption }
 
-import Dependencies._
 import StandardCopyOption.REPLACE_EXISTING
 import bintray.BintrayKeys.{
   bintrayOrganization,
@@ -16,6 +15,7 @@ import ch.jodersky.sbt.jni.plugins.JniJavah.autoImport.javah
 import ch.jodersky.sbt.jni.plugins.JniNative
 import ch.jodersky.sbt.jni.plugins.JniNative.autoImport._
 import ch.jodersky.sbt.jni.plugins.JniPackage.autoImport._
+import com.swoval.Dependencies.{ logback => SLogback, _ }
 import com.typesafe.sbt.GitVersioning
 import com.typesafe.sbt.SbtGit.git
 import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport.toPlatformDepsGroupID
@@ -50,10 +50,11 @@ object Build {
     (if (Properties.isMac) Seq[ProjectReference](appleFileEvents.jvm, appleFileEvents.js, plugin)
      else Seq.empty) ++
       Seq[ProjectReference](
+        files.js,
+        files.jvm,
         testing.js,
         testing.jvm,
-        files.jvm,
-        files.js
+        util
       )
 
   lazy val root = project
@@ -228,9 +229,16 @@ object Build {
       ioScalaJS
     )
     .settings(
-      scalaVersion := "2.12.4",
       libraryDependencies += scalaMacros % scalaVersion.value,
       utestCrossMain,
       utestFramework
+    )
+
+  lazy val util = project
+    .settings(
+      libraryDependencies ++= Seq(
+        SLogback,
+        slf4j
+      )
     )
 }
