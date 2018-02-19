@@ -1,3 +1,5 @@
+import com.swoval.Build
+
 val appleFileEventsJS = Build.appleFileEvents.js
 val appleFileEventsJVM = Build.appleFileEvents.jvm
 val filesJS = Build.files.js

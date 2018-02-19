@@ -1,3 +1,5 @@
+package com.swoval
+
 import java.io.File
 import java.nio.file.{ Files => JFiles, Path => JPath, StandardCopyOption }
 
@@ -162,7 +164,6 @@ object Build {
       description := "File system apis.",
       publishMavenStyle := false,
       libraryDependencies ++= Seq(
-        zinc,
         scalaMacros % scalaVersion.value,
         "com.swoval" % "apple-file-events" % appleEventsVersion
       ),
@@ -184,7 +185,6 @@ object Build {
       publishMavenStyle := false,
       sbtPlugin := true,
       libraryDependencies ++= Seq(
-        zinc % "provided",
         sbtIO % "provided",
         "com.lihaoyi" %% "utest" % utestVersion % "test",
         "com.swoval" % "apple-file-events" % appleEventsVersion % "provided"
