@@ -19,4 +19,5 @@ object Dependencies {
   def utestCrossMain = libraryDependencies += "com.lihaoyi" %%% "utest" % utestVersion
   def utestCrossTest = libraryDependencies += "com.lihaoyi" %%% "utest" % utestVersion % "test"
   def utestFramework = testFrameworks += new TestFramework("utest.runner.Framework")
+  lazy val zinc = "org.scala-sbt" %% "zinc" % "1.0.5" % "provided"
 }
