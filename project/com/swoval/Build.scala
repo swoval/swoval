@@ -1,9 +1,8 @@
 package com.swoval
 
 import java.io.File
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{ Files, StandardCopyOption, Path => JPath }
-
-import StandardCopyOption.REPLACE_EXISTING
 import java.util.jar.JarFile
 
 import bintray.BintrayKeys.{
@@ -16,11 +15,9 @@ import bintray.BintrayPlugin
 import ch.jodersky.sbt.jni.plugins.JniJavah.autoImport.javah
 import ch.jodersky.sbt.jni.plugins.JniNative
 import ch.jodersky.sbt.jni.plugins.JniNative.autoImport._
-import ch.jodersky.sbt.jni.plugins.JniPackage.autoImport._
 import com.swoval.Dependencies.{ logback => SLogback, _ }
 import com.typesafe.sbt.GitVersioning
 import com.typesafe.sbt.SbtGit.git
-import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport.toPlatformDepsGroupID
 import org.scalajs.core.tools.linker.backend.ModuleKind
 import org.scalajs.sbtplugin.JSPlatform
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ fastOptJS, fullOptJS, scalaJSModuleKind }
