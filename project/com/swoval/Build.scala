@@ -60,7 +60,21 @@ object Build {
         Opts.resolver.sonatypeSnapshots
       else
         Opts.resolver.sonatypeStaging
-    )
+    ),
+    BuildKeys.java8rt in ThisBuild := {
+      if (Properties.isMac) {
+        import scala.sys.process._
+        Seq("mdfind", "-name", "rt.jar").!!.split("\n").find { n =>
+          !n.endsWith("alt-rt.jar") && {
+            val version =
+              new JarFile(n).getManifest.getMainAttributes.getValue("Specification-Version")
+            version.split("\\.").last == "8"
+          }
+        }
+      } else {
+        None
+      }
+    }
   )
   val projects: Seq[ProjectReference] =
     (if (Properties.isMac) Seq[ProjectReference](appleFileEvents.jvm, appleFileEvents.js, plugin)
@@ -97,6 +111,7 @@ object Build {
       watchSources ++= sourceDirectory.value.globRecursive("*.hpp" | "*.cc").get,
       javacOptions ++= Seq("-source", "1.8", "-target", "1.8") ++
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty),
+      javacOptions in (Compile, doc) := Seq.empty,
       utestCrossTest,
       utestFramework
     )
@@ -210,20 +225,6 @@ object Build {
     .settings(
       commonSettings,
       testFrameworks += new TestFramework("utest.runner.Framework"),
-      BuildKeys.java8rt := {
-        if (Properties.isMac) {
-          import scala.sys.process._
-          Seq("mdfind", "-name", "rt.jar").!!.split("\n").find { n =>
-            !n.endsWith("alt-rt.jar") && {
-              val version =
-                new JarFile(n).getManifest.getMainAttributes.getValue("Specification-Version")
-              version.split("\\.").last == "8"
-            }
-          }
-        } else {
-          None
-        }
-      },
       scalacOptions := Seq("-unchecked", "-deprecation", "-feature"),
       updateOptions in Global := updateOptions
         .in(Global)
