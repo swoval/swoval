@@ -95,6 +95,8 @@ object Build {
       sourceDirectory in nativeCompile := sourceDirectory.value / "main" / "native",
       target in javah := sourceDirectory.value / "main" / "native" / "include",
       watchSources ++= sourceDirectory.value.globRecursive("*.hpp" | "*.cc").get,
+      javacOptions ++= Seq("-source", "1.8", "-target", "1.8") ++
+        BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty),
       utestCrossTest,
       utestFramework
     )
