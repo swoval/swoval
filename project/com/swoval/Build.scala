@@ -6,12 +6,13 @@ import java.nio.file.{ Files, StandardCopyOption, Path => JPath }
 import java.util.jar.JarFile
 
 import bintray.BintrayKeys.{
+  bintray => bintrayScope,
   bintrayOrganization,
   bintrayPackage,
   bintrayRepository,
   bintrayUnpublish
 }
-import bintray.BintrayPlugin
+import bintray.{ Bintray, BintrayPlugin }
 import ch.jodersky.sbt.jni.plugins.JniJavah.autoImport.javah
 import ch.jodersky.sbt.jni.plugins.JniNative
 import ch.jodersky.sbt.jni.plugins.JniNative.autoImport._
@@ -42,6 +43,7 @@ object Build {
     git.baseVersion := baseVersion,
     organization := "com.swoval",
     bintrayOrganization := Some("swoval"),
+    bintrayRepository := "sbt-plugins",
     homepage := Some(url("https://github.com/swoval/swoval")),
     scmInfo := Some(
       ScmInfo(url("https://github.com/swoval/swoval"), "git@github.com:swoval/swoval.git")),
@@ -58,6 +60,7 @@ object Build {
       else
         Opts.resolver.sonatypeStaging
     ),
+    publishMavenStyle in bintrayScope := false,
     BuildKeys.java8rt in ThisBuild := {
       if (Properties.isMac) {
         import scala.sys.process._
@@ -89,8 +92,8 @@ object Build {
     .in(file("."))
     .aggregate(projects: _*)
     .settings(
+      bintrayUnpublish := {},
       publish := {},
-      bintrayUnpublish := {}
     )
 
   lazy val appleFileEvents: CrossProject = crossProject(JSPlatform, JVMPlatform)
@@ -101,7 +104,6 @@ object Build {
       commonSettings,
       name := "apple-file-events",
       bintrayPackage := "apple-file-events",
-      bintrayRepository := "sbt-plugins",
       description := "JNI library for apple file system",
       sourceDirectory in nativeCompile := sourceDirectory.value / "main" / "native",
       target in javah := sourceDirectory.value / "main" / "native" / "include",
@@ -190,7 +192,6 @@ object Build {
       commonSettings,
       name := "file-utilities",
       bintrayPackage := "file-utilities",
-      bintrayRepository := "sbt-plugins",
       description := "File system apis.",
       libraryDependencies += scalaMacros % scalaVersion.value,
       utestCrossTest,
@@ -205,7 +206,6 @@ object Build {
       commonSettings,
       name := "sbt-mac-watch-service",
       bintrayPackage := "sbt-mac-watch-service",
-      bintrayRepository := "sbt-plugins",
       description := "MacOSXWatchServicePlugin provides a WatchService that replaces " +
         "the default PollingWatchService on Mac OSX.",
       sbtPlugin := true,
@@ -288,9 +288,10 @@ object Build {
         (packageBin in Compile).value
         (testOnly in Test).evaluated
       },
-      test in Test := {
+      // Qualify test with Keys to remove intellij warning
+      Keys.test in Test := {
         (packageBin in Compile).value
-        (test in Test).value
+        (Keys.test in Test).value
       },
       libraryDependencies ++= Seq(
         scalaMacros % scalaVersion.value,
@@ -315,6 +316,8 @@ object Build {
       ioScalaJS
     )
     .settings(
+      commonSettings,
+      bintrayPackage := "testing",
       libraryDependencies += scalaMacros % scalaVersion.value,
       utestCrossMain,
       utestFramework
@@ -322,6 +325,8 @@ object Build {
 
   lazy val util = project
     .settings(
+      commonSettings,
+      bintrayPackage := "util",
       libraryDependencies ++= Seq(
         SLogback,
         slf4j
