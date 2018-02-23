@@ -45,9 +45,22 @@ object Build {
     git.baseVersion := baseVersion,
     organization := "com.swoval",
     bintrayOrganization := Some("swoval"),
-    licenses += ("Apache-2.0", url(
-      "https:www.apache.org/licenses/LICENSE-2.0.html"
-    ))
+    homepage := Some(url("https://github.com/swoval/swoval")),
+    scmInfo := Some(
+      ScmInfo(url("https://github.com/swoval/swoval"), "git@github.com:swoval/swoval.git")),
+    developers := List(
+      Developer("username",
+                "Ethan Atkins",
+                "ethan.atkins@gmail.com",
+                url("https://github.com/eatkins"))),
+    licenses += ("MIT", url("http://www.apache.org/licenses/LICENSE-2.0")),
+    publishMavenStyle := true,
+    publishTo := Some(
+      if (isSnapshot.value)
+        Opts.resolver.sonatypeSnapshots
+      else
+        Opts.resolver.sonatypeStaging
+    )
   )
   val projects: Seq[ProjectReference] =
     (if (Properties.isMac) Seq[ProjectReference](appleFileEvents.jvm, appleFileEvents.js, plugin)
@@ -80,7 +93,6 @@ object Build {
       bintrayRepository := "sbt-plugins",
       description := "JNI library for apple file system",
       sourceDirectory in nativeCompile := sourceDirectory.value / "main" / "native",
-      publishMavenStyle := false,
       target in javah := sourceDirectory.value / "main" / "native" / "include",
       watchSources ++= sourceDirectory.value.globRecursive("*.hpp" | "*.cc").get,
       utestCrossTest,
@@ -148,7 +160,6 @@ object Build {
       scalaJSModuleKind := ModuleKind.CommonJSModule,
       webpackBundlingMode := BundlingMode.LibraryOnly(),
       useYarn := false,
-      libraryDependencies += "com.swoval" %%% "apple-file-events" % appleEventsVersion,
       cleanAllGlobals,
       nodeNativeLibs,
       (fullOptJS in Compile) := {
@@ -163,19 +174,15 @@ object Build {
     .settings(
       scalaVersion := "2.12.4",
       commonSettings,
-      name := "files",
-      bintrayPackage := "files",
+      name := "file-utilities",
+      bintrayPackage := "file-utilities",
       bintrayRepository := "sbt-plugins",
       description := "File system apis.",
-      publishMavenStyle := false,
-      libraryDependencies ++= Seq(
-        scalaMacros % scalaVersion.value,
-        "com.swoval" % "apple-file-events" % appleEventsVersion
-      ),
+      libraryDependencies += scalaMacros % scalaVersion.value,
       utestCrossTest,
       utestFramework
     )
-    .dependsOn(testing % "test->test")
+    .dependsOn(appleFileEvents, testing % "test->test")
 
   lazy val plugin: Project = project
     .in(file("plugin"))
@@ -187,35 +194,15 @@ object Build {
       bintrayRepository := "sbt-plugins",
       description := "MacOSXWatchServicePlugin provides a WatchService that replaces " +
         "the default PollingWatchService on Mac OSX.",
-      publishMavenStyle := false,
       sbtPlugin := true,
       libraryDependencies ++= Seq(
         sbtIO % "provided",
-        "com.lihaoyi" %% "utest" % utestVersion % "test",
-        "com.swoval" % "apple-file-events" % appleEventsVersion % "provided"
+        "com.lihaoyi" %% "utest" % utestVersion % "test"
       ),
-      utestFramework,
-      resourceGenerators in Compile += Def.task {
-        // This makes a fat jar containing all of the classes in appleFileEvents and files.
-        lazy val apfscd = (classDirectory in Compile in appleFileEvents.jvm).value.toPath
-        lazy val filescd = (classDirectory in Compile in files.jvm).value.toPath
-        lazy val libs = (nativeLibraries in Compile in appleFileEvents.jvm).value
-        (compile in Compile in appleFileEvents.jvm).value
-        (compile in Compile in files.jvm).value
-        lazy val resourcePath = (resourceManaged in Compile).value.toPath
-        def copy(s: File, d: File) = { IO.copyFile(s, d); d }
-        def projectFiles(p: JPath) = Files.walk(p).iterator.asScala.toSeq.collect {
-          case f if f.toString endsWith ".class" =>
-            copy(f.toFile, resourcePath.resolve(p.relativize(f)).toFile)
-        }
-        libs.map {
-          case (l, p) if p startsWith File.separator =>
-            copy(l, resourcePath.resolve(p.substring(1)).toFile)
-          case (l, p) => copy(l, resourcePath.resolve(p).toFile)
-        } ++ projectFiles(apfscd) ++ projectFiles(filescd)
-      }.taskValue
+      watchSources ++= (watchSources in files.jvm).value,
+      utestFramework
     )
-    .dependsOn(files.jvm % "provided->compile;test->test", testing.jvm % "test->test")
+    .dependsOn(files.jvm % "compile->compile;test->test", testing.jvm % "test->test")
 
   lazy val reflect = project
     .settings(

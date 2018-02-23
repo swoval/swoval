@@ -138,9 +138,8 @@ object MacOSXWatchServicePlugin extends AutoPlugin {
     useDefaultIncludeFilters := false,
     useDefaultWatchSourceList := false,
     onLoad := { state =>
-      val commands = state.definedCommands
-        .filterNot(_ == BasicCommands.continuous) :+ Continuously.continuous
-      state.copy(definedCommands = commands)
+      val filtered = state.definedCommands.filterNot(SimpleCommandMatcher.nameMatches("~"))
+      state.copy(definedCommands = filtered :+ Continuously.continuous)
     },
     onUnload := { state =>
       val p = sbt.Project.extract(state)
