@@ -80,9 +80,9 @@ object Continuously {
       (s, arg) =>
         val extracted = sbt.Project.extract(s)
         val default: Boolean =
-          extracted.get(MacOSXWatchServicePlugin.autoImport.useDefaultWatchService)
+          extracted.get(CloseWatchPlugin.autoImport.useDefaultWatchService)
         val cache: FileCache =
-          extracted.get(MacOSXWatchServicePlugin.autoImport.fileCache)
+          extracted.get(CloseWatchPlugin.autoImport.fileCache)
         withAttribute(s, Watched.Configuration, "Continuous execution not configured.") { w =>
           val repeat = ContinuousExecutePrefix + (if (arg.startsWith(" ")) arg else " " + arg)
           if (default) Watched.executeContinuously(w, s, arg, repeat)

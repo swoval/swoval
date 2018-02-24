@@ -11,7 +11,7 @@ import sbt.{ FileFilter => _, _ }
 import scala.concurrent.duration._
 import scala.util.Properties
 
-object MacOSXWatchServicePlugin extends AutoPlugin {
+object CloseWatchPlugin extends AutoPlugin {
   override def trigger = allRequirements
   private def createWatchService(interval: Duration, queueSize: Int): WatchService = {
     if (Properties.isMac) new MacOSXWatchService(interval, queueSize)(_ => {})

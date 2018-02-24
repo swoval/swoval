@@ -2,11 +2,11 @@ swoval
 ===
 A collection of small libraries to facilitate scala development.
 
-MacOSXWatchService
+CloseWatch
 =
 
 An sbt plugin to improve watch performance on all platforms (but especially OSX).
-See documentation [MacOSXWatchService](plugin/README.md)
+See documentation [CloseWatch](plugin/README.md)
 
 License
 ---

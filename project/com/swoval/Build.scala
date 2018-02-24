@@ -204,10 +204,10 @@ object Build {
     .enablePlugins(GitVersioning, BintrayPlugin)
     .settings(
       commonSettings,
-      name := "sbt-mac-watch-service",
-      bintrayPackage := "sbt-mac-watch-service",
-      description := "MacOSXWatchServicePlugin provides a WatchService that replaces " +
-        "the default PollingWatchService on Mac OSX.",
+      name := "sbt-close-watch",
+      bintrayPackage := "sbt-close-watch",
+      description := "CloseWatch reduces the latency between file system events and sbt task " +
+        "and command processing, especially on OSX.",
       sbtPlugin := true,
       libraryDependencies ++= Seq(
         sbtIO % "provided",
