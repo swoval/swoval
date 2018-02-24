@@ -52,7 +52,7 @@ object Build {
                 "Ethan Atkins",
                 "ethan.atkins@gmail.com",
                 url("https://github.com/eatkins"))),
-    licenses += ("MIT", url("http://www.apache.org/licenses/LICENSE-2.0")),
+    licenses += ("MIT", url("https://opensource.org/licenses/MIT")),
     publishMavenStyle := true,
     publishTo := Some(
       if (isSnapshot.value)
