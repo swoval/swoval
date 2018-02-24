@@ -54,6 +54,7 @@ object Build {
                 url("https://github.com/eatkins"))),
     licenses += ("MIT", url("https://opensource.org/licenses/MIT")),
     publishMavenStyle := true,
+    publishMavenStyle in publishLocal := false,
     publishTo := Some(
       if (isSnapshot.value)
         Opts.resolver.sonatypeSnapshots
@@ -213,6 +214,7 @@ object Build {
         sbtIO % "provided",
         "com.lihaoyi" %% "utest" % utestVersion % "test"
       ),
+      publishMavenStyle in publishLocal := false,
       watchSources ++= (watchSources in files.jvm).value,
       utestFramework
     )
