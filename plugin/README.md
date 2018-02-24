@@ -1,12 +1,12 @@
-MacOSXWatchService
+Close Watch
 ===
-This is an sbt plugin that replaces the native java PollingWatchService with the MacOSXWatchService, which uses the apple file system api to receive file events.
+This is an sbt plugin that aims to lower the latency between file system events and sbt tasks. It replaces the default watch service with a more highly optimized service that works well on all platforms
 
 Usage
 ---
 Add
 ```
-addSbtPlugin("com.swoval" %% "sbt-mac-watch-service" % "1.2.0")
+addSbtPlugin("com.swoval" %% "sbt-close-watch" % "1.2.4")
 ```
 to your project/plugins.sbt. To apply the plugin globally, add those commands to ~/.sbt/1.0/plugins/watch.sbt (creating the file if necessary).
 
