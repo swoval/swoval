@@ -14,7 +14,6 @@ object Dependencies {
   val utest = "com.lihaoyi" %% "utest" % utestVersion % "test"
   val zinc = "org.scala-sbt" %% "zinc" % "1.0.5" % "provided"
 
-  def baseVersion: String = "1.2.2"
   def ioScalaJS: SettingsDefinition = libraryDependencies += "io.scalajs" %%% "nodejs" % "0.4.2"
   def utestCrossMain = libraryDependencies += "com.lihaoyi" %%% "utest" % utestVersion
   def utestCrossTest = libraryDependencies += "com.lihaoyi" %%% "utest" % utestVersion % "test"
