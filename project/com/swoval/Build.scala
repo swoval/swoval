@@ -37,6 +37,7 @@ import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin.autoImport._
 import scalajscrossproject.ScalaJSCrossPlugin.autoImport.JSCrossProjectOps
 
 object Build {
+  def baseVersion: String = "1.2.4"
   def commonSettings: SettingsDefinition = Seq(
     scalaVersion := "2.12.4",
     resolvers += Resolver.sonatypeRepo("releases"),
