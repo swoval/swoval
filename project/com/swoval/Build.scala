@@ -5,20 +5,15 @@ import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{ Files, StandardCopyOption, Path => JPath }
 import java.util.jar.JarFile
 
-import bintray.BintrayKeys.{
-  bintray => bintrayScope,
-  bintrayOrganization,
-  bintrayPackage,
-  bintrayRepository,
-  bintrayUnpublish
-}
-import bintray.{ Bintray, BintrayPlugin }
+import bintray.BintrayKeys._
+import _root_.bintray.BintrayPlugin
 import ch.jodersky.sbt.jni.plugins.JniJavah.autoImport.javah
 import ch.jodersky.sbt.jni.plugins.JniNative
 import ch.jodersky.sbt.jni.plugins.JniNative.autoImport._
 import com.swoval.Dependencies.{ logback => SLogback, _ }
 import com.typesafe.sbt.GitVersioning
 import com.typesafe.sbt.SbtGit.git
+import com.typesafe.sbt.pgp.PgpKeys.publishSigned
 import org.scalajs.core.tools.linker.backend.ModuleKind
 import org.scalajs.sbtplugin.JSPlatform
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ fastOptJS, fullOptJS, scalaJSModuleKind }
@@ -26,15 +21,15 @@ import sbt.Keys._
 import sbt._
 import sbtcrossproject.CrossPlugin.autoImport._
 import sbtcrossproject.CrossProject
+import scalajsbundler.BundlingMode
+import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin
+import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin.autoImport._
+import scalajscrossproject.ScalaJSCrossPlugin.autoImport.JSCrossProjectOps
 
 import scala.collection.JavaConverters._
 import scala.sys.process._
 import scala.tools.nsc
 import scala.util.Properties
-import scalajsbundler.BundlingMode
-import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin
-import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin.autoImport._
-import scalajscrossproject.ScalaJSCrossPlugin.autoImport.JSCrossProjectOps
 
 object Build {
   def baseVersion: String = "1.2.4"
@@ -43,8 +38,8 @@ object Build {
     resolvers += Resolver.sonatypeRepo("releases"),
     git.baseVersion := baseVersion,
     organization := "com.swoval",
-    bintrayOrganization := Some("swoval"),
-    bintrayRepository := "sbt-plugins",
+    bintrayOrganization := Some("eatkins"),
+    bintrayRepository := "swoval",
     homepage := Some(url("https://github.com/swoval/swoval")),
     scmInfo := Some(
       ScmInfo(url("https://github.com/swoval/swoval"), "git@github.com:swoval/swoval.git")),
@@ -54,15 +49,7 @@ object Build {
                 "ethan.atkins@gmail.com",
                 url("https://github.com/eatkins"))),
     licenses += ("MIT", url("https://opensource.org/licenses/MIT")),
-    publishMavenStyle := true,
     publishMavenStyle in publishLocal := false,
-    publishTo := Some(
-      if (isSnapshot.value)
-        Opts.resolver.sonatypeSnapshots
-      else
-        Opts.resolver.sonatypeStaging
-    ),
-    publishMavenStyle in bintrayScope := false,
     BuildKeys.java8rt in ThisBuild := {
       if (Properties.isMac) {
         import scala.sys.process._
@@ -78,6 +65,8 @@ object Build {
       }
     }
   )
+  lazy val release = taskKey[Unit]("Release a project snapshot.")
+  lazy val releaseSnapshot = taskKey[Unit]("Release the project")
   val projects: Seq[ProjectReference] =
     (if (Properties.isMac) Seq[ProjectReference](appleFileEvents.jvm, appleFileEvents.js, plugin)
      else Seq.empty) ++
@@ -95,7 +84,7 @@ object Build {
     .aggregate(projects: _*)
     .settings(
       bintrayUnpublish := {},
-      publish := {},
+      publish := {}
     )
 
   lazy val appleFileEvents: CrossProject = crossProject(JSPlatform, JVMPlatform)
