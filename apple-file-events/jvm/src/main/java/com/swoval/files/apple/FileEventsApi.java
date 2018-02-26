@@ -13,106 +13,111 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public class FileEventsApi implements AutoCloseable {
-    private long handle;
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(
-            new ThreadFactory("com.swoval.files.apple.FileEventsApi.run-loop-thread"));
 
-    private FileEventsApi(Consumer<FileEvent> c, Consumer<String> pc) throws InterruptedException {
-        CountDownLatch latch = new CountDownLatch(1);
-        executor.submit(() -> {
-            this.handle = FileEventsApi.init(c, pc);
-            latch.countDown();
-            loop();
-        });
-        latch.await();
+  private long handle;
+  private final ExecutorService executor = Executors.newSingleThreadExecutor(
+      new ThreadFactory("com.swoval.files.apple.FileEventsApi.run-loop-thread"));
+
+  private FileEventsApi(Consumer<FileEvent> c, Consumer<String> pc) throws InterruptedException {
+    CountDownLatch latch = new CountDownLatch(1);
+    executor.submit(() -> {
+      this.handle = FileEventsApi.init(c, pc);
+      latch.countDown();
+      loop();
+    });
+    latch.await();
+  }
+
+  private AtomicBoolean closed = new AtomicBoolean(false);
+
+  @Override
+  public void close() {
+    if (closed.compareAndSet(false, true)) {
+      stopLoop();
+      executor.shutdownNow();
+      try {
+        executor.awaitTermination(5, TimeUnit.SECONDS);
+        close(handle);
+      } catch (InterruptedException e) {
+      }
     }
+  }
 
-    private AtomicBoolean closed = new AtomicBoolean(false);
+  public void loop() {
+    loop(handle);
+  }
 
-    @Override
-    public void close() {
-        if (closed.compareAndSet(false,true)) {
-            stopLoop();
-            executor.shutdownNow();
-            try {
-                executor.awaitTermination(5, TimeUnit.SECONDS);
-                close(handle);
-            } catch (InterruptedException e) {
-            }
-        }
+  public int createStream(String path, double latency, int flags) {
+    if (closed.get()) {
+      throw new IllegalStateException();
     }
+    return createStream(path, latency, flags, handle);
+  }
 
-    public void loop() {
-        loop(handle);
+  public void stopLoop() {
+    stopLoop(handle);
+  }
+
+  public void stopStream(int streamHandle) {
+    if (!closed.get()) {
+      stopStream(handle, streamHandle);
     }
+  }
 
-    public int createStream(String path, double latency, int flags) {
-        if (closed.get()) throw new IllegalStateException();
-        return createStream(path, latency, flags, handle);
+  private static final String NATIVE_LIBRARY = "apple-file-events0";
+
+  private static final void exit(String msg) {
+    System.err.println(msg);
+    System.exit(1);
+  }
+
+  private static void loadPackaged() {
+    try {
+      String lib = System.mapLibraryName(NATIVE_LIBRARY);
+      Path tmp = Files.createTempDirectory("jni-");
+      String resourcePath = "/native/x86_64-darwin/" + lib;
+      InputStream resourceStream = FileEventsApi.class.getResourceAsStream(resourcePath);
+      if (resourceStream == null) {
+        String msg = "Native library " + lib + " (" + resourcePath + ") can't be loaded.";
+        throw new UnsatisfiedLinkError(msg);
+      }
+
+      Path extractedPath = tmp.resolve(lib);
+      try {
+        Files.copy(resourceStream, extractedPath);
+      } catch (Exception e) {
+        throw new UnsatisfiedLinkError("Error while extracting native library: " + e);
+      }
+
+      System.load(extractedPath.toAbsolutePath().toString());
+    } catch (Exception e) {
+      exit("Couldn't load packaged library " + NATIVE_LIBRARY);
     }
+  }
 
-    public void stopLoop() {
-        stopLoop(handle);
+  static {
+    try {
+      System.loadLibrary(NATIVE_LIBRARY);
+    } catch (UnsatisfiedLinkError e) {
+      loadPackaged();
     }
+  }
 
-    public void stopStream(int streamHandle) {
-        if (!closed.get()) stopStream(handle, streamHandle);
-    }
+  public static FileEventsApi apply(Consumer<FileEvent> consumer, Consumer<String> pathConsumer)
+      throws InterruptedException {
+    return new FileEventsApi(consumer, pathConsumer);
+  }
 
-    private static final String NATIVE_LIBRARY = "apple-file-events0";
+  public static native void loop(long handle);
 
-    private static final void exit(String msg) {
-        System.err.println(msg);
-        System.exit(1);
-    }
+  public static native void close(long handle);
 
-    private static void loadPackaged() {
-        try {
-            String lib = System.mapLibraryName(NATIVE_LIBRARY);
-            Path tmp = Files.createTempDirectory("jni-");
-            String resourcePath = "/native/x86_64-darwin/" + lib;
-            InputStream resourceStream = FileEventsApi.class.getResourceAsStream(resourcePath);
-            if (resourceStream == null) {
-                String msg = "Native library " + lib + " (" + resourcePath + ") can't be loaded.";
-                throw new UnsatisfiedLinkError(msg);
-            }
+  public static native long init(Consumer<FileEvent> consumer, Consumer<String> pathConsumer);
 
-            Path extractedPath = tmp.resolve(lib);
-            try {
-                Files.copy(resourceStream, extractedPath);
-            } catch (Exception e) {
-                throw new UnsatisfiedLinkError("Error while extracting native library: " + e);
-            }
+  public static native int createStream(String path, double latency, int flags, long handle);
 
-            System.load(extractedPath.toAbsolutePath().toString());
-        } catch (Exception e) {
-            exit("Couldn't load packaged library " + NATIVE_LIBRARY);
-        }
-    }
+  public static native void stopLoop(long handle);
 
-    static {
-        try {
-            System.loadLibrary(NATIVE_LIBRARY);
-        } catch (UnsatisfiedLinkError e) {
-            loadPackaged();
-        }
-    }
-
-    public static FileEventsApi apply(Consumer<FileEvent> consumer, Consumer<String> pathConsumer)
-            throws InterruptedException {
-        return new FileEventsApi(consumer, pathConsumer);
-    }
-
-    public static native void loop(long handle);
-
-    public static native void close(long handle);
-
-    public static native long init(Consumer<FileEvent> consumer, Consumer<String> pathConsumer);
-
-    public static native int createStream(String path, double latency, int flags, long handle);
-
-    public static native void stopLoop(long handle);
-
-    public static native void stopStream(long handle, int streamHandle);
+  public static native void stopStream(long handle, int streamHandle);
 
 }
