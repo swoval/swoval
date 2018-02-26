@@ -85,6 +85,10 @@ class handle {
 
     int startStream(const char *path, double latency, int flags) {
         std::unique_lock<std::mutex> lock(mutex);
+        if (stopped) {
+          fprintf(stderr, "Tried to add stream for %s on closed runloop.", path);
+          return -1;
+        }
         if (!started) {
             cond.wait(lock, [this] { return this->started; });
         }
@@ -107,12 +111,14 @@ class handle {
                 latency,
                 flags);
         FSEventStreamScheduleWithRunLoop(stream, runLoop, mode);
-        FSEventStreamStart(stream);
+        if (!FSEventStreamStart(stream)) {
+          fprintf(stderr, "Error starting stream for path %s\n", path);
+          return -1;
+        }
 
         std::unique_lock<std::mutex> id_lock(id_mutex);
         int32_t id = current_id++;
         lock.lock();
-        std::allocator<std::string> alloc;
         stream_handles[id] =
             std::make_pair(std::unique_ptr<std::string>(new std::string(path)), stream);
         lock.unlock();

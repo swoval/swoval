@@ -22,9 +22,11 @@ class AppleDirectoryWatcher(latency: Duration, flags: Flags.Create, executor: Ex
 
   def register(path: Path, recursive: Boolean): Boolean = register(path, flags.value)
   def register(path: Path, flags: Int): Boolean = {
-    if (!alreadyWatching(path)) {
-      val stream = fileSystemApi.createStream(path.fullName, latency.toNanos / 1e9, flags)
-      lock.synchronized(streams += path.fullName -> stream)
+    if (path.isDirectory && !alreadyWatching(path)) {
+      fileSystemApi.createStream(path.fullName, latency.toNanos / 1e9, flags) match {
+        case -1 => System.err.println(s"Error watching $path.")
+        case id => lock.synchronized(streams += path.fullName -> id)
+      }
     }
     true
   }

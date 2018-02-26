@@ -49,7 +49,8 @@ public class FileEventsApi implements AutoCloseable {
 
   public int createStream(String path, double latency, int flags) {
     if (closed.get()) {
-      throw new IllegalStateException();
+      String err = "Tried to create watch stream for path " + path + " on closed watch service";
+      throw new IllegalStateException(err);
     }
     return createStream(path, latency, flags, handle);
   }
