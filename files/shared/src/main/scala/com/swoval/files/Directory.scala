@@ -137,10 +137,14 @@ case class Directory private (path: Path) {
       f -> Directory.of(path.resolve(Path(f)), callback))
     val createdFiles = newFiles diff oldFiles
     files ++= createdFiles.map(f => f -> Path(f))
-    deletedFiles foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Delete)))
-    deletedDirs foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Delete)))
-    createdDirs foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Create)))
-    createdFiles foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Create)))
+    callback match {
+      case Directory.EmptyCallback =>
+      case _ =>
+        deletedFiles foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Delete)))
+        deletedDirs foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Delete)))
+        createdDirs foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Create)))
+        createdFiles foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Create)))
+    }
     this
   }
   private def resolve(other: Path) = path.resolve(other)
