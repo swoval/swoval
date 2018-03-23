@@ -10,10 +10,6 @@ class JvmPath(val path: JPath, parent: Option[JvmPath] = None) extends Path {
 
   override lazy val isDirectory: Boolean = JFiles.isDirectory(fullJPath)
 
-  override lazy val lastModified: Long =
-    if (exists) JFiles.getLastModifiedTime(fullJPath).toMillis
-    else 0
-
   override lazy val name: String = path.toString
 
   override lazy val parts: Seq[Path] =
@@ -38,6 +34,10 @@ class JvmPath(val path: JPath, parent: Option[JvmPath] = None) extends Path {
   override def getRoot: Path = JvmPath(path.getRoot)
 
   override def hashCode: Int = fullJPath.hashCode
+
+  override def lastModified: Long =
+    if (exists) JFiles.getLastModifiedTime(fullJPath).toMillis
+    else 0
 
   override def list(recursive: Boolean, pathFilter: PathFilter): Seq[Path] = {
     val stream = if (recursive) JFiles.walk(path).filter(_ != path) else JFiles.list(path)
