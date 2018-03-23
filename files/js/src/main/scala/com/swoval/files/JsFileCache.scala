@@ -4,7 +4,7 @@ import scala.scalajs.js
 import scala.scalajs.js.JSConverters._
 import scala.scalajs.js.annotation.JSExportTopLevel
 
-@JSExportTopLevel("com.swoval.files.FileCache")
+@JSExportTopLevel("FileCache")
 class JsFileCache(callback: js.UndefOr[js.Function2[String, String, Unit]]) extends js.Object {
   private[this] val inner = new FileCacheImpl(Options.default)
   callback.toOption.foreach(addCallback)
@@ -21,4 +21,5 @@ class JsFileCache(callback: js.UndefOr[js.Function2[String, String, Unit]]) exte
   def addCallback(callback: js.Function2[String, String, Unit]): Int =
     inner.addCallback(fe => callback.apply(fe.path.fullName, fe.kind.toString))
   def removeCallback(handle: Int): Unit = inner.removeCallback(handle)
+  def close(): Unit = inner.close()
 }
