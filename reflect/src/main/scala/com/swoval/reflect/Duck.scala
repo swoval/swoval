@@ -3,7 +3,6 @@ package com.swoval.reflect
 import scala.reflect.macros.blackbox
 import scala.language.experimental.macros
 import scala.languageFeature.reflectiveCalls
-import scala.reflect.macros.runtime.AbortMacroException
 
 /**
  * Converts an instance of type T into an instance of a trait of type D
@@ -98,7 +97,7 @@ private[reflect] object DuckMacros {
     val expr = try {
       impl[O, D, WeakDuck[O, D]](c)
     } catch {
-      case _: AbortMacroException =>
+      case _: Throwable =>
         objectImpl[O, D, WeakDuck[O, D]](c)
     }
     expr

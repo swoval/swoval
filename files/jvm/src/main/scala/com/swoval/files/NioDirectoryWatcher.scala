@@ -3,11 +3,13 @@ package com.swoval.files
 import java.nio.file.StandardWatchEventKinds.{ ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY }
 import java.nio.file.{ Files => JFiles, Path => JPath, Paths => JPaths, _ }
 import java.util.concurrent.Executors
+import java.util.function.{ Consumer, Predicate }
 
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.FileWatchEvent.{ Create, Delete, Modify }
 import com.swoval.files.JvmPath._
 import com.swoval.files.NioDirectoryWatcher._
+import com.swoval.files.compat._
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -31,9 +33,10 @@ class NioDirectoryWatcher(override val onFileEvent: Callback) extends DirectoryW
         case _: NoSuchFileException => false
       }
     }
+    val predicate: Predicate[JPath] = (p: JPath) => (p != path.path) && JFiles.isDirectory(p)
+    val consumer: Consumer[JPath] = (p: JPath) => impl(p)
     path.exists && impl(path.path) && {
-      walk(path.path, recursive)(
-        _.filter(p => (p != path.path) && JFiles.isDirectory(p)).forEach(impl))
+      walk(path.path, recursive)(_.filter(predicate).forEach(consumer))
       true
     }
   }
@@ -73,7 +76,8 @@ class NioDirectoryWatcher(override val onFileEvent: Callback) extends DirectoryW
   executor.submit((() => {
     @tailrec
     def loop(): Unit = {
-      def notifyNewFile(p: JPath): Unit = onFileEvent(FileWatchEvent(JvmPath(p), Create))
+      val notifyNewFile: Consumer[JPath] =
+        (p: JPath) => onFileEvent(FileWatchEvent(JvmPath(p), Create))
       val continue = try {
         val key = watchService.take()
         val keyPath = key.watchable().asInstanceOf[JPath]
@@ -84,7 +88,7 @@ class NioDirectoryWatcher(override val onFileEvent: Callback) extends DirectoryW
             if (e.kind == ENTRY_CREATE && JFiles.exists(path) && JFiles.isDirectory(path)) {
               val recursive = watchedDirs.get(keyPath).exists(_.recursive)
               if (register(jvmPath, recursive))
-                walk(path, recursive)(_.filter(_ != path).forEach(notifyNewFile))
+                walk(path, recursive)(_.filter((_: JPath) != path).forEach(notifyNewFile))
             }
             onFileEvent(FileWatchEvent(jvmPath, e.kind.toSwoval))
         }

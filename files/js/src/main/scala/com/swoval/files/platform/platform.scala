@@ -3,6 +3,7 @@ package com.swoval.files
 import io.scalajs.nodejs.fs.Fs
 
 package object platform {
+  type Consumer[T] = Function[T, Unit]
   private[this] object executor extends Executor {
     override def run(runnable: Runnable): Unit = runnable.run()
     override def run[R](f: => R): Unit = f

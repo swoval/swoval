@@ -2,6 +2,7 @@ package com.swoval.files
 
 import java.nio.file.attribute.FileTime
 import java.nio.file.{ Files => JFiles, Path => JPath, Paths => JPaths }
+import java.util.function.Predicate
 
 import scala.collection.JavaConverters._
 
@@ -40,7 +41,14 @@ class JvmPath(val path: JPath, parent: Option[JvmPath] = None) extends Path {
     else 0
 
   override def list(recursive: Boolean, pathFilter: PathFilter): Seq[Path] = {
-    val stream = if (recursive) JFiles.walk(path).filter(_ != path) else JFiles.list(path)
+    val stream =
+      if (recursive)
+        JFiles
+          .walk(path)
+          .filter(new Predicate[JPath] {
+            override def test(t: JPath): Boolean = t != path
+          })
+      else JFiles.list(path)
     try {
       stream.iterator.asScala
         .map(p => JvmPath(p))

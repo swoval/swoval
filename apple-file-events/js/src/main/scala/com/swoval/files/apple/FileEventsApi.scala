@@ -23,8 +23,9 @@ class FileEventsApi(handle: Double) extends AutoCloseable {
 object FileEventsApi {
   @JSExport("apply")
   def apply(consumer: FileEvent => Unit, pathConsumer: String => Unit): FileEventsApi = {
-    val jsConsumer: js.Function2[String, Int, Unit] = (s, i) => consumer(new FileEvent(s, i))
-    val jsPathConsumer: js.Function1[String, Unit] = s => pathConsumer(s)
+    val jsConsumer: js.Function2[String, Int, Unit] = (s: String, i: Int) =>
+      consumer(new FileEvent(s, i))
+    val jsPathConsumer: js.Function1[String, Unit] = (s: String) => pathConsumer(s)
     new FileEventsApi(FileEventsApiFacade.init(jsConsumer, jsPathConsumer))
   }
 }

@@ -39,7 +39,7 @@ class FileCacheImpl(options: Options, private[this] val directories: mutable.Set
           directories foreach { dir =>
             if (dir.path startsWith path) directories.remove(dir)
           }
-          val dir = Directory(path, _ => {})
+          val dir = Directory.of(path)
           directories += dir
           Some(dir)
         } else {

@@ -10,7 +10,7 @@ trait Path {
   def getRoot: Path
   def fullName: String
   def lastModified: Long
-  def list(recursive: Boolean, filter: PathFilter = _ => true): Seq[Path]
+  def list(recursive: Boolean, filter: PathFilter = (_: Path) => true): Seq[Path]
   def mkdir(): Path
   def mkdirs(): Path
   def name: String

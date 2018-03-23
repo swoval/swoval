@@ -6,7 +6,10 @@ import com.swoval.concurrent.ThreadFactory
 
 class ExecutorServiceWrapper(val s: ExecutorService) extends Executor {
   override def run(runnable: Runnable): Unit = s.submit(runnable)
-  override def run[R](f: => R): Unit = s.submit((() => f): Runnable)
+  override def run[R](f: => R): Unit =
+    s.submit(new Runnable {
+      override def run(): Unit = f
+    })
   override def close(): Unit = {
     if (!s.isShutdown) {
       s.shutdownNow()

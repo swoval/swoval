@@ -121,7 +121,7 @@ object MacOSXWatchServiceTest extends TestSuite {
       latency: Duration = 1.millisecond,
       queueSize: Int = 10,
       onOffer: WatchKey => Unit = _ => {},
-      onEvent: WatchEvent[_] => Unit = _ => {},
+      onEvent: WatchEvent[_] => Unit = _ => {}
   )(f: MacOSXWatchService => R): Future[R] = {
     val offer = onOffer match {
       case o: OnOffer => o
