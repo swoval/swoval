@@ -26,7 +26,7 @@ import scala.language.implicitConversions
  */
 class MacOSXWatchService(watchLatency: Duration, val queueSize: Int)(
     val onOffer: WatchKey => Unit = _ => {},
-    val onEvent: WatchEvent[_] => Unit = _ => {},
+    val onEvent: WatchEvent[_] => Unit = _ => {}
 ) extends WatchService
     with AutoCloseable {
 

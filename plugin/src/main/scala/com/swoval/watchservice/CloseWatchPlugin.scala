@@ -2,39 +2,44 @@ package com.swoval.watchservice
 
 import java.io.FileFilter
 
-import com.swoval.files.{ FileCache, Path }
+import com.swoval.files.{ FileCache, Path, PathFilter }
 import sbt.Keys._
-import sbt.internal.io.Source
-import sbt.io.WatchService
-import sbt.{ FileFilter => _, _ }
+import sbt._
+import sbt.complete.{ DefaultParsers, Parser }
 
+import scala.collection.mutable
 import scala.concurrent.duration._
-import scala.util.Properties
 
 object CloseWatchPlugin extends AutoPlugin {
   override def trigger = allRequirements
-  private def createWatchService(interval: Duration, queueSize: Int): WatchService = {
-    if (Properties.isMac) new MacOSXWatchService(interval, queueSize)(_ => {})
-    else Watched.createWatchService()
-  }
   object autoImport {
-    lazy val watchLatency = settingKey[Duration]("Set watch latency for continuous builds.")
-    lazy val watchQueueSize = settingKey[Int]("Set watch event queue size for each watched file.")
-    lazy val fileCache = settingKey[FileCache]("Set the file cache to use.")
-    lazy val useDefaultWatchService = settingKey[Boolean]("Use the built in sbt watch service.")
-    lazy val useDefaultSourceList = settingKey[Boolean]("Use default sbt source list.")
-    lazy val useDefaultWatchSourceList = settingKey[Boolean]("Use default sbt watch source list.")
-    lazy val useDefaultIncludeFilters = settingKey[Boolean]("Use default sbt include filters.")
-    lazy val sourceDiff = taskKey[Unit]("Use default sbt include filters.")
+    lazy val closeWatchAntiEntropy = settingKey[Duration](
+      "Set watch anti-entropy period for source files. For a given file that has triggered a" +
+        "build, any updates occuring before the last event time plus this duration will be ignored.")
+    lazy val closeWatchFileCache = settingKey[FileCache]("Set the file cache to use.")
+    lazy val closeWatchLegacyWatchLatency =
+      settingKey[Duration]("Set the watch latency of the sbt watch service")
+    lazy val closeWatchLegacyQueueSize =
+      settingKey[Int](
+        "Set the maximum number of watch events to enqueue when using the legacy watch service.")
+    lazy val closeWatchSourceDiff = taskKey[Unit]("Use default sbt include filters.")
+    lazy val closeWatchTransitiveSources =
+      inputKey[Seq[SourcePath]](
+        "Find all of the watch sources for a particular tasks by looking in the aggregates and " +
+          "dependencies of the task. This task differs from watchTransitiveSources because it " +
+          "scoped to the first argument the task that is parsed from the input")
+    lazy val closeWatchUseDefaultWatchService =
+      settingKey[Boolean]("Use the built in sbt watch service.")
   }
   import autoImport._
 
+  import scala.language.implicitConversions
   private implicit def toSwovalPath(f: File): Path = Path(f.toString)
   private def toFile(s: Path): File = new File(s.fullName)
   private def defaultSourcesFor(conf: Configuration) = Def.task[Seq[File]] {
     def list(p: File) =
-      fileCache.value
-        .list(Path(p.toPath.toString), recursive = false, _ => false)
+      closeWatchFileCache.value
+        .list(Path(p.toPath.toString), recursive = false, (_: Path) => false)
         .view
         .map(toFile)
     // This has the side effect of registering these directories with the watch service.
@@ -43,9 +48,12 @@ object CloseWatchPlugin extends AutoPlugin {
     Classpaths.concat(unmanagedSources in conf, managedSources in conf).value.distinct.toIndexedSeq
   }
   private def cachedSourcesFor(conf: Configuration, sourcesInBase: Boolean) = Def.task[Seq[File]] {
-    def filter(in: FileFilter, ex: FileFilter) = sbtFilter(f => in.accept(f) && !ex.accept(f))
+    def filter(in: FileFilter, ex: FileFilter) = new Compat.FileFilter {
+      override def accept(f: File) = in.accept(f) && !ex.accept(f)
+      override def toString = s"${Filter.show(in)} && !${Filter.show(ex)}"
+    }
     def list(recursive: Boolean, filter: FileFilter) =
-      (f: File) => fileCache.value.list(f, recursive = recursive, filter)
+      (f: File) => closeWatchFileCache.value.list(f, recursive = recursive, filter)
 
     val unmanagedDirs = (unmanagedSourceDirectories in conf).value.distinct
     val unmanagedIncludeFilter = ((includeFilter in unmanagedSources) in conf).value
@@ -60,91 +68,201 @@ object CloseWatchPlugin extends AutoPlugin {
     ((unmanaged ++ base).view.map(toFile) ++ (managedSources in conf).value).distinct.toIndexedSeq
   }
 
+  private def nodeFilter(dir: File) = new SimpleFileFilter(f => f.toPath.getParent == dir.toPath)
   private def sourcesFor(conf: Configuration) = Def.taskDyn[Seq[File]] {
-    if (useDefaultSourceList.value) defaultSourcesFor(conf)
+    if (closeWatchUseDefaultWatchService.value) defaultSourcesFor(conf)
     else cachedSourcesFor(conf, sourcesInBase.value)
   }
-  private def sbtFilter(f: FileFilter) = new SimpleFileFilter(f.accept)
-  private def nodeFilter(dir: File) = new SimpleFileFilter(f => f.toPath.getParent == dir.toPath)
-  override lazy val projectSettings: Seq[Def.Setting[_]] = super.projectSettings ++ Seq(
-    pollInterval := 75.milliseconds, // sbt polls the watch service for events at this rate
-    watchLatency := 50.milliseconds, // os x file system api buffers events for this duration
-    watchQueueSize := 256, // maximum number of buffered events per watched path
+  private def watchSourcesTask(config: ConfigKey) = Def.taskDyn {
+    val baseDir = baseDirectory.value
+    val include = (includeFilter in unmanagedSources).value
+    val exclude = (excludeFilter in unmanagedSources).value
+
+    val baseSources: Seq[Compat.WatchSource] =
+      if (sourcesInBase.value && config != ConfigKey(Test.name)) {
+        val pathFilter = new PathFilter {
+          override def apply(p: Path): Boolean = {
+            val f = file(p.fullName)
+            file(p.getParent.fullName) == baseDir && include.accept(f) && !exclude.accept(f)
+          }
+          override def toString: String =
+            s"""SourceFilter(
+               |  base = "$baseDir",
+               |  filter =  (_: File).getParent == "$baseDir" && ${Filter
+                 .show(include)} && !${Filter.show(exclude)}
+               |)""".stripMargin
+        }
+        Seq(Compat.makeScopedSource(baseDir, pathFilter, (baseDirectory in config).scopedKey))
+      } else Nil
+    val unmanagedSourceDirs = ((unmanagedSourceDirectories in Compile).value ++
+      (unmanagedSourceDirectories in Test).value).map(_.toPath)
+    val managed = ((managedSources in Compile).value ++ (managedSources in Test).value)
+      .filter(d => unmanagedSourceDirs.exists(p => d.toPath startsWith p))
+      .toSet
+    val managedFilter: Option[Compat.FileFilter] =
+      if (managed.isEmpty) None else Some(new SimpleFileFilter(managed.contains))
+    Def.task[Seq[Compat.WatchSource]] {
+      getSources(config, unmanagedSourceDirectories, unmanagedSources, managedFilter).value ++
+        getSources(config, unmanagedResourceDirectories, unmanagedResources, managedFilter).value ++
+        baseSources
+    }
+  }
+  def watchSourcesSetting(config: ConfigKey) = {
+    watchSources in config := watchSourcesTask(config).value
+  }
+  def getIncludeFilter(config: ConfigKey): Def.Setting[_] =
+    includeFilter in (unmanagedSources in config) := {
+      if (closeWatchUseDefaultWatchService.value)
+        ("*.java" | "*.scala") && new SimpleFileFilter(_.isFile)
+      else
+        ExtensionFilter("scala", "java") && new sbt.FileFilter {
+          override def accept(pathname: File): Boolean = !pathname.isDirectory
+          override def toString = "NotDirectoryFilter"
+        }
+    }
+  lazy val projectSettingsImpl: Seq[Def.Setting[_]] = Seq(
+    closeWatchLegacyWatchLatency := 50.milliseconds, // os x file system api buffers events for this duration
+    closeWatchLegacyQueueSize := 256, // maximum number of buffered events per watched path
     sources in Compile := sourcesFor(Compile).value,
     sources in Test := sourcesFor(Test).value,
-    watchService := (() => createWatchService(watchLatency.value, watchQueueSize.value)),
-    includeFilter in unmanagedSources := {
-      if (useDefaultIncludeFilters.value) ("*.java" | "*.scala") && new SimpleFileFilter(_.isFile)
-      else ExtensionFilter("scala", "java") && new SimpleFileFilter(!_.isDirectory)
-    },
+    unmanagedSources := Seq.empty,
+    getIncludeFilter(Compile),
+    getIncludeFilter(Test),
     includeFilter in unmanagedJars := {
-      if (useDefaultIncludeFilters.value) "*.jar" | "*.so" | "*.dll" | "*.jnilib" | "*.zip"
+      if (closeWatchUseDefaultWatchService.value)
+        "*.jar" | "*.so" | "*.dll" | "*.jnilib" | "*.zip"
       else ExtensionFilter("jar", "so", "dll", "jnilib", "zip")
     },
-    watchSources := Def.taskDyn {
-      val baseDir = baseDirectory.value
-      val include =
-        if (useDefaultWatchSourceList.value) (includeFilter in unmanagedSources).value
-        else (includeFilter in unmanagedSources).value && nodeFilter(baseDir)
-      val exclude = (excludeFilter in unmanagedSources).value
-      val baseSources =
-        if (sourcesInBase.value)
-          Seq(new Source(baseDir, include, exclude, recursive = false))
-        else Nil
-      val unmanagedSourceDirs = ((unmanagedSourceDirectories in Compile).value ++
-        (unmanagedSourceDirectories in Test).value).map(_.toPath)
-      val managed = ((managedSources in Compile).value ++ (managedSources in Test).value)
-        .filter(d => unmanagedSourceDirs.exists(p => d.toPath startsWith p))
-        .toSet
-      val managedFilter: Option[sbt.io.FileFilter] =
-        if (managed.isEmpty) None else Some(new SimpleFileFilter(managed.contains))
-      Def.task[Seq[WatchSource]] {
-        getSources(unmanagedSourceDirectories, unmanagedSources, managedFilter).value ++
-          getSources(unmanagedResourceDirectories, unmanagedResources, managedFilter).value ++
-          baseSources
-      }
-    }.value,
-    sourceDiff := {
+    watchSources in Compile ++= watchSourcesTask(Compile).value.distinct,
+    watchSources in Test ++= watchSourcesTask(Test).value.distinct,
+    closeWatchSourceDiff := Def.taskDyn {
       val ref = thisProjectRef.value.project
       val default = (defaultSourcesFor(Compile).value ++ defaultSourcesFor(Test).value).toSet
-      val cached =
-        (cachedSourcesFor(Compile, true).value ++ cachedSourcesFor(Test, true).value).toSet
-      val (cachedExtra, defaultExtra) = (cached diff default, default diff cached)
-      def msg(version: String, paths: Set[File]) =
-        s"The $version source files in $ref had the following extra paths:\n${paths mkString "\n"}"
-      if (cachedExtra.nonEmpty) println(msg("cached", cachedExtra))
-      if (defaultExtra.nonEmpty) println(msg("default", defaultExtra))
-      if (cachedExtra.isEmpty && defaultExtra.isEmpty)
-        println(s"No difference in $ref between sbt default source files and from the cache.")
-    },
-    fileCache in ThisBuild := FileCache.default
+      val base = sourcesInBase.value
+      Def.task {
+        val cached =
+          (cachedSourcesFor(Compile, base).value ++ cachedSourcesFor(Test, base).value).toSet
+        val (cachedExtra, defaultExtra) = (cached diff default, default diff cached)
+        def msg(version: String, paths: Set[File]) =
+          s"The $version source files in $ref had the following extra paths:\n${paths mkString "\n"}"
+
+        if (cachedExtra.nonEmpty) println(msg("cached", cachedExtra))
+        if (defaultExtra.nonEmpty) println(msg("default", defaultExtra))
+        if (cachedExtra.isEmpty && defaultExtra.isEmpty)
+          println(s"No difference in $ref between sbt default source files and from the cache.")
+      }
+    }.value
+  ) ++ Compat.extraProjectSettings
+  override lazy val projectSettings: Seq[Def.Setting[_]] = super.projectSettings ++
+    Compat.settings(projectSettingsImpl) ++ Seq(
+    closeWatchFileCache := FileCache.default,
+    closeWatchTransitiveSources := Def
+      .inputTaskDyn {
+        import complete.DefaultParsers._
+        getTransitiveWatchSources(spaceDelimited("<arg>").parsed)
+      }
+      .evaluated
+      .sortBy(_.base),
+    watchSources in publish := (watchSources in Compile).value,
+    watchSources in publishLocal := (watchSources in Compile).value,
+    watchSources in publishM2 := (watchSources in Compile).value
   )
-  private def getSources(key: SettingKey[Seq[File]],
-                         scope: TaskKey[Seq[File]],
+  private def getSources(config: ConfigKey,
+                         key: SettingKey[Seq[File]],
+                         task: TaskKey[Seq[File]],
                          extraExclude: Option[FileFilter] = None) =
     Def.task {
-      val dirs = (key in Compile).value ++ (key in Test).value
-      val ef = (excludeFilter in scope).value
-      val include = (includeFilter in scope).value
+      val dirs = (key in config).value.filter(_.exists)
+      val ef = (excludeFilter in task).value
+      val include = (includeFilter in task).value
       val exclude = extraExclude match {
         case Some(e) => new SimpleFileFilter(p => ef.accept(p) || e.accept(p))
-        case None    => (excludeFilter in scope).value
+        case None    => ef
       }
-      dirs.map(b => new Source(b, include, exclude))
+      def filter(dir: File) = {
+        val pathFilter = new PathFilter {
+          override def apply(p: Path): Boolean = {
+            val f = file(p.fullName)
+            include.accept(f) && !exclude.accept(f)
+          }
+          override def toString: String = s"${Filter.show(include)} && !${Filter.show(ef)}"
+        }
+        new SourceFilter(Path(dir.toString), pathFilter, key.scopedKey)
+      }
+      dirs.map(d => Compat.makeSource(d, filter(d)))
     }
-  override lazy val globalSettings = super.globalSettings ++ Seq(
-    useDefaultWatchService := false,
-    useDefaultSourceList := false,
-    useDefaultIncludeFilters := false,
-    useDefaultWatchSourceList := false,
+  private def paths(tasks: Seq[ScopedKey[_]]): Def.Initialize[Task[Seq[SourcePath]]] = Def.task {
+    val visited = mutable.HashSet.empty[String]
+    tasks
+      .map { task =>
+        Def.ScopedKey(task.scope.task match {
+          case Zero => task.scope in task.key
+          case _    => task.scope
+        }, task.key)
+      }
+      .distinct
+      .flatMap(s => Sources(s, state.value, streams.value.log, visited).distinct.sortBy(_.base))
+      .distinct
+      .sortBy(_.base)
+  }
+  private def commands(taskDef: String) = Def.taskDyn {
+    val s = state.value
+    val parser = Command.combine(s.definedCommands)(s)
+    DefaultParsers.parse(taskDef, parser) match {
+      case Right(_) => paths(Seq((compile in Project.extract(s).currentRef).scopedKey))
+      case _        => throw NoSuchTaskException(taskDef)
+    }
+  }
+  private def getTransitiveWatchSources(taskDef: Seq[String]) = Def.taskDyn {
+    val parsed = Parser.result(Compat.internal.Act.aggregatedKeyParser(state.value),
+                               taskDef.headOption.getOrElse("compile"))
+    parsed.fold(_ => commands(taskDef.mkString(" ").trim), paths)
+  }
+  override lazy val globalSettings: Seq[Def.Setting[_]] = super.globalSettings ++ Seq(
+    closeWatchUseDefaultWatchService := false,
+    closeWatchTransitiveSources := Def
+      .inputTaskDyn {
+        import complete.DefaultParsers._
+        getTransitiveWatchSources(spaceDelimited("<arg>").parsed)
+      }
+      .evaluated
+      .sortBy(_.base),
+    /*
+     * This duration was chosen based on the behavior of saving files with neovim v0.2.2. I found
+     * that multiple updates of the file would occur usually in a period no longer than 20
+     * milliseconds. This value of the parameter mostly eliminates spurious builds due to these
+     * multiple updates.
+     */
+    closeWatchAntiEntropy := 35.milliseconds,
     onLoad := { state =>
-      val filtered = state.definedCommands.filterNot(SimpleCommandMatcher.nameMatches("~"))
-      state.copy(definedCommands = filtered :+ Continuously.continuous)
+      val extracted = Project.extract(state)
+      val session = extracted.session
+      val useDefault = extracted.structure.data.data.exists(_._2.entries.exists(e =>
+        e.key.label == "closeWatchUseDefaultWatchService" && e.value == true))
+
+      if (useDefault) state
+      else {
+        val filtered = state.definedCommands.filterNot(SimpleCommandMatcher.nameMatches("~"))
+        val newSettings = session.original.filterNot { s =>
+          s.key.key.label == "watchSources" && !s.definitive && (s.pos match {
+            case f: FilePosition => f.path.contains("Defaults.scala")
+            case _               => false
+          })
+        }
+        val newState = if (newSettings.lengthCompare(session.original.length) != 0) {
+          val newStructure = Compat.reapply(newSettings, extracted.structure, extracted.showKey)
+          state
+            .put(stateBuildStructure, newStructure)
+            .put(sessionSettings, session.copy(original = newSettings))
+        } else state
+        newState.copy(definedCommands = filtered :+ Continuously.continuous)
+      }
     },
     onUnload := { state =>
       val p = sbt.Project.extract(state)
-      state.log.debug("Closing file cache: ${p.get(fileCache)}")
-      p.get(fileCache).close()
+      val cache = p.getOpt(closeWatchFileCache)
+      state.log.debug(s"Closing file cache: $cache")
+      cache.foreach(_.close())
       state
     }
   )
