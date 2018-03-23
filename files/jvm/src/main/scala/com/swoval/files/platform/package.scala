@@ -5,6 +5,8 @@ import java.nio.file.{ Files => JFiles, Paths => JPaths }
 package object platform {
   type Consumer[T] = java.util.function.Consumer[T]
   def makeExecutor(name: String): Executor = ExecutorServiceWrapper.make(name)
+  def makeScheduledExecutor(name: String): ScheduledExecutor =
+    ExecutorServiceWrapper.makeScheduled(name)
   object pathCompanion extends PathCompanion {
     def apply(parts: String*): Path = JvmPath.apply(parts: _*)
     def createTempFile(dir: Path, prefix: String): Path =
