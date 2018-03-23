@@ -43,9 +43,10 @@ package object test {
       })
     def add(t: T): Unit = lock.synchronized {
       promises.dequeueFirst(_ => true) match {
-        case Some(timer) =>
-          timer.tryComplete(Success(t))
-        case _ => queue.enqueue(t)
+        case Some(promise) =>
+          promise.tryComplete(Success(t))
+        case _ =>
+          queue.enqueue(t)
       }
     }
   }
