@@ -14,11 +14,11 @@ object AppleDirectoryWatcherTest extends TestSuite {
   val dirFlags = new Flags.Create().setNoDefer()
   val fileFlags = new Flags.Create().setNoDefer().setFileEvents()
   val tests = testOn(MacOS) {
+    val events = new ArrayBlockingQueue[FileWatchEvent](10)
     "directories" - {
       'onCreate - {
         withTempDirectory { dir =>
           assert(dir.exists)
-          val events = new ArrayBlockingQueue[FileWatchEvent](10)
           val callback: Callback = e => events.add(e)
 
           usingAsync(AppleDirectoryWatcher(DEFAULT_LATENCY, dirFlags)(callback)) { w =>
@@ -29,7 +29,6 @@ object AppleDirectoryWatcherTest extends TestSuite {
         }
       }
       'onModify - withTempDirectory { dir =>
-        val events = new ArrayBlockingQueue[FileWatchEvent](10)
         val callback: Callback = e => events.add(e)
 
         usingAsync(AppleDirectoryWatcher(DEFAULT_LATENCY, dirFlags)(callback)) { w =>
@@ -42,7 +41,6 @@ object AppleDirectoryWatcherTest extends TestSuite {
         }
       }
       'onDelete - withTempDirectory { dir =>
-        val events = new ArrayBlockingQueue[FileWatchEvent](10)
         val callback: Callback = e => events.add(e)
 
         usingAsync(AppleDirectoryWatcher(DEFAULT_LATENCY, dirFlags)(callback)) { w =>
@@ -55,7 +53,6 @@ object AppleDirectoryWatcherTest extends TestSuite {
       'subdirectories - {
         'onCreate - withTempDirectory { dir =>
           withTempDirectory(dir) { subdir =>
-            val events = new ArrayBlockingQueue[FileWatchEvent](10)
             val callback: Callback = e => if (e.path != dir) events.add(e)
 
             usingAsync(AppleDirectoryWatcher(DEFAULT_LATENCY, dirFlags)(callback)) { w =>
@@ -69,7 +66,6 @@ object AppleDirectoryWatcherTest extends TestSuite {
     }
     'files - {
       "handle file creation events" - withTempDirectory { dir =>
-        val events = new ArrayBlockingQueue[FileWatchEvent](10)
         val callback: Callback = e => { if (!e.path.isDirectory) events.add(e) }
 
         usingAsync(AppleDirectoryWatcher(DEFAULT_LATENCY, fileFlags)(callback)) { w =>
@@ -79,7 +75,6 @@ object AppleDirectoryWatcherTest extends TestSuite {
         }
       }
       "handle file touch events" - withTempFile { f =>
-        val events = new ArrayBlockingQueue[FileWatchEvent](10)
         val callback: Callback = e => if (!e.path.isDirectory && e.kind != Create) events.add(e)
         usingAsync(AppleDirectoryWatcher(DEFAULT_LATENCY, fileFlags)(callback)) { w =>
           w.register(f.getParent)
@@ -88,7 +83,6 @@ object AppleDirectoryWatcherTest extends TestSuite {
         }
       }
       "handle file modify events" - withTempFile { f =>
-        val events = new ArrayBlockingQueue[FileWatchEvent](10)
         val callback: Callback = e => if (!e.path.isDirectory && e.kind != Create) events.add(e)
         usingAsync(AppleDirectoryWatcher(DEFAULT_LATENCY, fileFlags)(callback)) { w =>
           w.register(f.getParent)
@@ -97,7 +91,6 @@ object AppleDirectoryWatcherTest extends TestSuite {
         }
       }
       "handle file deletion events" - withTempFile { f =>
-        val events = new ArrayBlockingQueue[FileWatchEvent](10)
         val callback: Callback = e => { if (!e.path.exists && e.kind != Create) events.add(e) }
         usingAsync(AppleDirectoryWatcher(DEFAULT_LATENCY, fileFlags)(callback)) { w =>
           w.register(f.getParent)
