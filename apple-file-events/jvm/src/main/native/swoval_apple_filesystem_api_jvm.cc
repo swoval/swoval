@@ -29,26 +29,24 @@ struct service_handle {
 
 typedef handle<service_handle> JNIHandle;
 
-static void jni_callback(JNIHandle *h) {
+static void jni_callback(std::unique_ptr<Events> events, JNIHandle *h, Lock lock) {
     JNIEnv *env = h->data->env;
     if (!h->stopped) {
-      for (int i = 0; i < h->events.size(); ++i) {
-          jstring string = env->NewStringUTF(h->events[i].first.c_str());
-          jobject event = env->NewObject(h->data->fileEvent, h->data->fileEventCons, string, h->events[i].second);
+      for (auto e : *events) {
+          jstring string = env->NewStringUTF(e.first.c_str());
+          jobject event = env->NewObject(h->data->fileEvent, h->data->fileEventCons, string, e.second);
           env->CallVoidMethod(h->data->callback, h->data->callbackApply, event);
-      };
-      h->events.clear();
+      }
     }
 }
 
-static void jni_stop_stream(JNIHandle *h, void *data) {
-    JNIEnv *env = data ? (JNIEnv *) data : h->data->env;
+static void jni_stop_stream(std::unique_ptr<Strings> strings, JNIHandle *h, Lock lock) {
+    JNIEnv *env = h->data->env;
     if (!h->stopped) {
-      for (int i = 0; i < h->stopped_streams.size(); ++i) {
-          jstring string = env->NewStringUTF(h->stopped_streams[i]->c_str());
+      for (auto stream : *strings) {
+          jstring string = env->NewStringUTF(stream.c_str());
           env->CallVoidMethod(h->data->pathCallback, h->data->pathCallbackApply, string);
       }
-      h->stopped_streams.clear();
     }
 }
 
@@ -65,14 +63,15 @@ JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventsApi_close
     env->DeleteGlobalRef(h->data->callback);
     env->DeleteGlobalRef(h->data->pathCallback);
     env->DeleteGlobalRef((jobject) h->data->fileEvent);
+    Lock lock(h->mutex);
     delete h->data;
+    lock.unlock();
     delete h;
 }
 
 JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventsApi_loop
   (JNIEnv *env, jclass clazz, jlong handle) {
   auto *h = reinterpret_cast<JNIHandle*>(handle);
-  std::thread::id this_id = std::this_thread::get_id();
   loop(h);
 }
 
@@ -91,7 +90,7 @@ JNIEXPORT jlong JNICALL Java_com_swoval_files_apple_FileEventsApi_init
         handle->fileEvent = (jclass) env->NewGlobalRef(eventClass);
         handle->fileEventCons = env->GetMethodID(eventClass, "<init>", EVENT_INIT_SIG);
         handle->env = env;
-        auto *h = new JNIHandle(handle, nullptr, jni_callback, jni_stop_stream);
+        auto *h = new JNIHandle(handle, jni_callback, jni_stop_stream);
 
         return reinterpret_cast<jlong>(h);
     }
@@ -105,6 +104,6 @@ JNIEXPORT jint JNICALL Java_com_swoval_files_apple_FileEventsApi_createStream
 JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventsApi_stopStream
 (JNIEnv *env, jclass clazz, jlong handle, jint stream_handle) {
     auto *h = reinterpret_cast<JNIHandle*>(handle);
-    if (h) h->stopStream(stream_handle, env);
+    if (h) h->stopStream(stream_handle);
 }
 }

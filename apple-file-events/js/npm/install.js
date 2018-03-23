@@ -6,7 +6,7 @@ if (!(platform === "darwin")) {
 }
 const fs = require("fs")
 const md5 = require("md5")
-const md5sum = md5(["src/swoval_apple_file_system.hpp", "src/swoval_apple_file_system_api.cc"]
+const md5sum = md5(["src/swoval_apple_file_system.hpp", "src/swoval_apple_file_system_api_node.cc"]
   .reduce((a, f) => a + fs.readFileSync(f), ""))
 const existingMD5Sum = fs.existsSync("md5sum") ? fs.readFileSync("md5sum", {"encoding": "utf8"}) : ""
 
