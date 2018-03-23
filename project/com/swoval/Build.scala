@@ -1,8 +1,9 @@
 package com.swoval
 
-import java.io.File
+import java.io.{ ByteArrayInputStream, File, InputStream, SequenceInputStream }
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{ Files, StandardCopyOption, Path => JPath }
+import java.util.concurrent.TimeUnit
 import java.util.jar.JarFile
 
 import bintray.BintrayKeys._
@@ -14,6 +15,7 @@ import com.swoval.Dependencies.{ logback => SLogback, _ }
 import com.typesafe.sbt.GitVersioning
 import com.typesafe.sbt.SbtGit.git
 import com.typesafe.sbt.pgp.PgpKeys.publishSigned
+import org.apache.commons.codec.digest.DigestUtils
 import org.scalajs.core.tools.linker.backend.ModuleKind
 import org.scalajs.sbtplugin.JSPlatform
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ fastOptJS, fullOptJS, scalaJSModuleKind }
@@ -87,6 +89,7 @@ object Build {
       publish := {}
     )
 
+  private var swovalNodeMD5Sum = ""
   lazy val appleFileEvents: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("apple-file-events"))
     .configurePlatform(JVMPlatform)(_.enablePlugins(JniNative))
@@ -109,7 +112,34 @@ object Build {
       webpackBundlingMode := BundlingMode.LibraryOnly(),
       useYarn := false,
       scalaJSModuleKind := ModuleKind.CommonJSModule,
-      sourceGenerators in Compile += Def.task {
+      (compile in Compile) := {
+        val npm = baseDirectory.value.toPath.resolve("npm")
+        def is(path: JPath) =
+          if (Files.exists(path)) Files.newInputStream(path)
+          else new ByteArrayInputStream(Array.empty[Byte])
+        def append(l: InputStream, r: InputStream*): InputStream = r match {
+          case Seq(h)            => new SequenceInputStream(l, h)
+          case Seq(h, rest @ _*) => append(new SequenceInputStream(l, h), rest: _*)
+        }
+        def digest: String = {
+          val inputStream = append(
+            is(npm.resolve("src/swoval_apple_file_system.hpp")),
+            is(npm.resolve("src/swoval_apple_file_system_api_node.cc")),
+            is(npm.resolve("lib/swoval_apple_file_system.node"))
+          )
+          try DigestUtils.md5Hex(inputStream)
+          finally inputStream.close()
+        }
+        if (digest != swovalNodeMD5Sum) {
+          val proc =
+            new java.lang.ProcessBuilder("node", "install.js").directory(npm.toFile).start()
+          proc.waitFor(5, TimeUnit.SECONDS)
+          println(Source.fromInputStream(proc.getInputStream).mkString(""))
+        }
+        swovalNodeMD5Sum = digest
+        (compile in Compile).value
+      },
+      generateJSSources := Def.task {
         val pkg = "com/swoval/files/apple"
         val target = (managedSourceDirectories in Compile).value.head.toPath
         val base = baseDirectory.value.toPath
@@ -170,11 +200,20 @@ object Build {
       cleanAllGlobals,
       nodeNativeLibs,
       (fullOptJS in Compile) := {
-        val res = (fullOptJS in Compile).value
-        Files.copy(res.data.toPath,
-                   baseDirectory.value.toPath.resolve("npm/files.js"),
-                   REPLACE_EXISTING)
-        res
+        val files = Seq(
+          "CMakeLists.txt",
+          "install.js",
+          "src/swoval_apple_file_system.hpp",
+          "src/swoval_apple_file_system_api_node.cc"
+        )
+        val npm = baseDirectory.value.toPath.resolve("npm")
+        Files.createDirectories(npm.resolve("src"))
+        val apfs = appleFileEvents.js.base.toPath.resolve("npm")
+        files.foreach(f => Files.copy(apfs.resolve(f), npm.resolve(f), REPLACE_EXISTING))
+
+        val filesJS = (fullOptJS in Compile).value
+        Files.copy(filesJS.data.toPath, npm.resolve("files.js"), REPLACE_EXISTING)
+        filesJS
       },
       ioScalaJS
     )
