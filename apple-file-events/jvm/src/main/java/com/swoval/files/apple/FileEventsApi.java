@@ -97,11 +97,7 @@ public class FileEventsApi implements AutoCloseable {
   }
 
   static {
-    try {
-      System.loadLibrary(NATIVE_LIBRARY);
-    } catch (UnsatisfiedLinkError e) {
-      loadPackaged();
-    }
+    loadPackaged();
   }
 
   public static FileEventsApi apply(Consumer<FileEvent> consumer, Consumer<String> pathConsumer)

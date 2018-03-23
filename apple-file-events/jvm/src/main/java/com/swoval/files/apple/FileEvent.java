@@ -3,6 +3,7 @@ package com.swoval.files.apple;
 import static com.swoval.files.apple.Flags.Event.*;
 
 public class FileEvent implements com.swoval.files.apple.Event {
+
     public final String fileName;
     private final int flags;
 
@@ -14,15 +15,23 @@ public class FileEvent implements com.swoval.files.apple.Event {
     private boolean hasFlags(int f) {
         return (flags & f) != 0;
     }
+
     public boolean isModified() {
-        return hasFlags(ItemInodeMetaMod|ItemModified);
+        return hasFlags(ItemInodeMetaMod | ItemModified);
     }
+
     public boolean isNewFile() {
-        return !isModified() && !isRemoved() && !isTouched() && hasFlags(ItemCreated);
+        return isCreated() && !isModified() && !isRemoved() && !isTouched();
     }
+
+    public boolean isCreated() {
+        return hasFlags(ItemCreated);
+    }
+
     public boolean isRemoved() {
         return hasFlags(ItemRemoved);
     }
+
     public boolean isTouched() {
         return hasFlags(ItemInodeMetaMod);
     }
