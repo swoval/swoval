@@ -1,6 +1,9 @@
 package com.swoval.files.apple;
 
-import static com.swoval.files.apple.Flags.Event.*;
+import static com.swoval.files.apple.Flags.Event.ItemCreated;
+import static com.swoval.files.apple.Flags.Event.ItemInodeMetaMod;
+import static com.swoval.files.apple.Flags.Event.ItemModified;
+import static com.swoval.files.apple.Flags.Event.ItemRemoved;
 
 public class FileEvent implements com.swoval.files.apple.Event {
 

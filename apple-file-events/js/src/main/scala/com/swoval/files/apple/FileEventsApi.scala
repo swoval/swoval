@@ -2,7 +2,6 @@ package com.swoval.files.apple
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation._
-import scala.util.Success
 
 @JSExportTopLevel("com.swoval.files.apple.FileEventsApi")
 @JSExportAll

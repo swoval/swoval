@@ -6,10 +6,8 @@ import java.nio.file.{ Files, StandardCopyOption, Path => JPath }
 import java.util.concurrent.TimeUnit
 import java.util.jar.JarFile
 
-import sbt.Keys._
-import sbt._
-import bintray.BintrayKeys._
 import _root_.bintray.BintrayPlugin
+import bintray.BintrayKeys._
 import ch.jodersky.sbt.jni.plugins.JniJavah.autoImport.javah
 import ch.jodersky.sbt.jni.plugins.JniNative
 import ch.jodersky.sbt.jni.plugins.JniNative.autoImport._
@@ -22,6 +20,8 @@ import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport.toPlatfor
 import org.scalajs.core.tools.linker.backend.ModuleKind
 import org.scalajs.sbtplugin.JSPlatform
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ fastOptJS, fullOptJS, scalaJSModuleKind }
+import sbt.Keys._
+import sbt._
 import sbtcrossproject.CrossPlugin.autoImport._
 import sbtcrossproject.CrossProject
 import sbtdoge.CrossPerProjectPlugin

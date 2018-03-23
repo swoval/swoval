@@ -1,8 +1,8 @@
 package com.swoval
 
+import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport.toPlatformDepsGroupID
 import sbt.Keys._
 import sbt._
-import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport.toPlatformDepsGroupID
 
 object Dependencies {
   val logback = "ch.qos.logback" % "logback-classic" % "1.2.3"

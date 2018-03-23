@@ -1,4 +1,4 @@
-import Defaults.sbtPluginExtra
+import sbt.Defaults.sbtPluginExtra
 
 addSbtPlugin("org.foundweekends" % "sbt-bintray" % "0.5.3")
 

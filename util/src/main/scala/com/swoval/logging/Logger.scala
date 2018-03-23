@@ -3,9 +3,9 @@ package com.swoval.util
 import java.util.concurrent.ConcurrentHashMap
 
 import ch.qos.logback.classic.Level
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
-import org.slf4j.LoggerFactory
 
 trait Logger[T] extends SettableLevel {
   def debug(msg: => Any): Unit

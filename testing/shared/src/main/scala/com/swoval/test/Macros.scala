@@ -1,8 +1,9 @@
 package com.swoval.test
 
-import scala.util.Properties
 import com.swoval.test.compat._
 import utest.Tests
+
+import scala.util.Properties
 
 object Macros {
   def testOnWithDesc(c: blackbox.Context)(desc: c.Expr[String], platforms: c.Expr[Platform]*)(

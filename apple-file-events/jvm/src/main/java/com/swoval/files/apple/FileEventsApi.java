@@ -1,7 +1,6 @@
 package com.swoval.files.apple;
 
 import com.swoval.concurrent.ThreadFactory;
-
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
