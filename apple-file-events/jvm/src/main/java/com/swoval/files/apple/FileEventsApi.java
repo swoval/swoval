@@ -1,28 +1,37 @@
 package com.swoval.files.apple;
 
 import com.swoval.concurrent.ThreadFactory;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.OutputStream;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 
 public class FileEventsApi implements AutoCloseable {
+
+  public interface Consumer<T> {
+    void accept(T t);
+  }
 
   private long handle;
   private final ExecutorService executor = Executors.newSingleThreadExecutor(
       new ThreadFactory("com.swoval.files.apple.FileEventsApi.run-loop-thread"));
 
-  private FileEventsApi(Consumer<FileEvent> c, Consumer<String> pc) throws InterruptedException {
-    CountDownLatch latch = new CountDownLatch(1);
-    executor.submit(() -> {
-      this.handle = FileEventsApi.init(c, pc);
-      latch.countDown();
-      loop();
+  private FileEventsApi(final Consumer<FileEvent> c, final Consumer<String> pc)
+      throws InterruptedException {
+    final CountDownLatch latch = new CountDownLatch(1);
+    executor.submit(new Runnable() {
+      @Override
+      public void run() {
+        FileEventsApi.this.handle = FileEventsApi.init(c, pc);
+        latch.countDown();
+        loop();
+      }
     });
     latch.await();
   }
@@ -74,7 +83,13 @@ public class FileEventsApi implements AutoCloseable {
   private static void loadPackaged() {
     try {
       String lib = System.mapLibraryName(NATIVE_LIBRARY);
-      Path tmp = Files.createTempDirectory("jni-");
+      File temp = File.createTempFile("jni-", "");
+      if (!temp.delete()) {
+        throw new IOException("Couldn't remove temp file");
+      }
+      if (!temp.mkdir()) {
+        throw new IOException("Couldn't remove temp file");
+      }
       String resourcePath = "/native/x86_64-darwin/" + lib;
       InputStream resourceStream = FileEventsApi.class.getResourceAsStream(resourcePath);
       if (resourceStream == null) {
@@ -82,14 +97,22 @@ public class FileEventsApi implements AutoCloseable {
         throw new UnsatisfiedLinkError(msg);
       }
 
-      Path extractedPath = tmp.resolve(lib);
+      File extractedPath = new File(temp.getAbsolutePath() + "/" + lib);
+      OutputStream out = new FileOutputStream(extractedPath);
       try {
-        Files.copy(resourceStream, extractedPath);
+        byte[] buf = new byte[1024];
+        int len = 0;
+        while ((len = resourceStream.read(buf)) >= 0) {
+          out.write(buf, 0, len);
+        }
       } catch (Exception e) {
         throw new UnsatisfiedLinkError("Error while extracting native library: " + e);
+      } finally {
+        resourceStream.close();
+        out.close();
       }
 
-      System.load(extractedPath.toAbsolutePath().toString());
+      System.load(extractedPath.getAbsolutePath());
     } catch (Exception e) {
       exit("Couldn't load packaged library " + NATIVE_LIBRARY);
     }

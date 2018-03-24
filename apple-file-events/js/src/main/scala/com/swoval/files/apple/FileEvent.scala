@@ -1,12 +1,17 @@
 package com.swoval.files.apple
 
-import com.swoval.files.apple.Flags.Event._
+import com.swoval.files.apple.Flags.Event.ItemCreated
+
+import com.swoval.files.apple.Flags.Event.ItemInodeMetaMod
+
+import com.swoval.files.apple.Flags.Event.ItemModified
+
+import com.swoval.files.apple.Flags.Event.ItemRemoved
 
 //remove if not needed
 import scala.collection.JavaConversions._
 
-class FileEvent(val fileName: String, var flags: Int)
-    extends com.swoval.files.apple.Event {
+class FileEvent(val fileName: String, var flags: Int) extends Event {
 
   private def hasFlags(f: Int): Boolean = (flags & f) != 0
 

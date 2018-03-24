@@ -3,7 +3,7 @@ package com.swoval.files.apple
 //remove if not needed
 import scala.collection.JavaConversions._
 
-trait Event {
+abstract class Event {
 
 //https://developer.apple.com/documentation/coreservices/1455361-fseventstreameventflags
   def flags(): Int

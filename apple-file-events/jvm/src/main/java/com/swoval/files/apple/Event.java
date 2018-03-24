@@ -1,102 +1,102 @@
 package com.swoval.files.apple;
 
-public interface Event {
+abstract class Event {
     //https://developer.apple.com/documentation/coreservices/1455361-fseventstreameventflags
-    int flags();
+    abstract int flags();
 
-    default boolean isNone() {
+    public boolean isNone() {
         return flags() == 0;
     }
 
-    default boolean mustScanSubDirs() {
+    public boolean mustScanSubDirs() {
         return (flags() & Flags.Event.MustScanSubDirs) != 0;
     }
 
-    default boolean userDropped() {
+    public boolean userDropped() {
         return (flags() & Flags.Event.UserDropped) != 0;
     }
 
-    default boolean kernelDropped() {
+    public boolean kernelDropped() {
         return (flags() & Flags.Event.KernelDropped) != 0;
     }
 
-    default boolean eventIdsWrapped() {
+    public boolean eventIdsWrapped() {
         return (flags() & Flags.Event.EventIdsWrapped) != 0;
     }
 
-    default boolean historyDone() {
+    public boolean historyDone() {
         return (flags() & Flags.Event.HistoryDone) != 0;
     }
 
-    default boolean rootChanged() {
+    public boolean rootChanged() {
         return (flags() & Flags.Event.RootChanged) != 0;
     }
 
-    default boolean mount() {
+    public boolean mount() {
         return (flags() & Flags.Event.Mount) != 0;
     }
 
-    default boolean unmount() {
+    public boolean unmount() {
         return (flags() & Flags.Event.Unmount) != 0;
     }
 
-    default boolean itemChangeOwner() {
+    public boolean itemChangeOwner() {
         return (flags() & Flags.Event.ItemChangeOwner) != 0;
     }
 
-    default boolean itemCreated() {
+    public boolean itemCreated() {
         return (flags() & Flags.Event.ItemCreated) != 0;
     }
 
-    default boolean itemFinderInfoMod() {
+    public boolean itemFinderInfoMod() {
         return (flags() & Flags.Event.ItemFinderInfoMod) != 0;
     }
 
-    default boolean itemInodeMetaMod() {
+    public boolean itemInodeMetaMod() {
         return (flags() & Flags.Event.ItemInodeMetaMod) != 0;
     }
 
-    default boolean itemIsDir() {
+    public boolean itemIsDir() {
         return (flags() & Flags.Event.ItemIsDir) != 0;
     }
 
-    default boolean itemIsFile() {
+    public boolean itemIsFile() {
         return (flags() & Flags.Event.ItemIsFile) != 0;
     }
 
-    default boolean itemIsHardlink() {
+    public boolean itemIsHardlink() {
         return (flags() & Flags.Event.ItemIsHardlink) != 0;
     }
 
-    default boolean itemIsLastHardlink() {
+    public boolean itemIsLastHardlink() {
         return (flags() & Flags.Event.ItemIsLastHardlink) != 0;
     }
 
-    default boolean itemIsSymlink() {
+    public boolean itemIsSymlink() {
         return (flags() & Flags.Event.ItemIsSymlink) != 0;
     }
 
-    default boolean itemModified() {
+    public boolean itemModified() {
         return (flags() & Flags.Event.ItemModified) != 0;
     }
 
-    default boolean itemRemoved() {
+    public boolean itemRemoved() {
         return (flags() & Flags.Event.ItemRemoved) != 0;
     }
 
-    default boolean itemRenamed() {
+    public boolean itemRenamed() {
         return (flags() & Flags.Event.ItemRenamed) != 0;
     }
 
-    default boolean itemXattrMod() {
+    public boolean itemXattrMod() {
         return (flags() & Flags.Event.ItemXattrMod) != 0;
     }
 
-    default boolean ownEvent() {
+    public boolean ownEvent() {
         return (flags() & Flags.Event.OwnEvent) != 0;
     }
 
-    default boolean itemCloned() {
+    public boolean itemCloned() {
         return (flags() & Flags.Event.ItemCloned) != 0;
     }
 }

@@ -176,7 +176,7 @@ object Build {
           .filterNot(_.toString contains "target")
           .toSeq
       },
-      javacOptions ++= Seq("-source", "1.8", "-target", "1.8") ++
+      javacOptions ++= Seq("-source", "1.7", "-target", "1.7") ++
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty),
       javacOptions in (Compile, doc) := Seq.empty,
       utestCrossTest,

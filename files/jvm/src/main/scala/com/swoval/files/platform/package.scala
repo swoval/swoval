@@ -3,7 +3,6 @@ package com.swoval.files
 import java.nio.file.{ Files => JFiles, Paths => JPaths }
 
 package object platform {
-  type Consumer[T] = java.util.function.Consumer[T]
   def makeExecutor(name: String): Executor = ExecutorServiceWrapper.make(name)
   def makeScheduledExecutor(name: String): ScheduledExecutor =
     ExecutorServiceWrapper.makeScheduled(name)

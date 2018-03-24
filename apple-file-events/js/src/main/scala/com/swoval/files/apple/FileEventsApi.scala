@@ -20,11 +20,14 @@ class FileEventsApi(handle: Double) extends AutoCloseable {
 
 @JSExportTopLevel("com.swoval.files.apple.FileEventsApi$")
 object FileEventsApi {
+  trait Consumer[T] {
+    def accept(t: T): Unit
+  }
   @JSExport("apply")
-  def apply(consumer: FileEvent => Unit, pathConsumer: String => Unit): FileEventsApi = {
+  def apply(consumer: Consumer[FileEvent], pathConsumer: Consumer[String]): FileEventsApi = {
     val jsConsumer: js.Function2[String, Int, Unit] = (s: String, i: Int) =>
-      consumer(new FileEvent(s, i))
-    val jsPathConsumer: js.Function1[String, Unit] = (s: String) => pathConsumer(s)
+      consumer.accept(new FileEvent(s, i))
+    val jsPathConsumer: js.Function1[String, Unit] = (s: String) => pathConsumer.accept(s)
     new FileEventsApi(FileEventsApiFacade.init(jsConsumer, jsPathConsumer))
   }
 }

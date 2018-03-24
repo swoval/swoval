@@ -5,7 +5,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.FileWatchEvent.{ Create, Delete, Modify }
 import com.swoval.files.apple.{ FileEvent, FileEventsApi, Flags }
-import com.swoval.files.platform.Consumer
 import com.swoval.files.compat._
 
 import scala.annotation.tailrec
@@ -46,29 +45,33 @@ class AppleDirectoryWatcher(latency: Duration, flags: Flags.Create, executor: Ex
   private[this] val streams = mutable.Map.empty[String, Int]
   private[this] val lock = new Object
   private[this] val closed = new AtomicBoolean(false)
-  private[this] val onFileEventImpl: Consumer[FileEvent] = (fe: FileEvent) => {
-    executor.run(onFileEvent({
-      val path = Path(fe.fileName)
-      if (fe.itemIsFile) {
-        fe match {
-          case e if e.isNewFile && path.exists =>
-            FileWatchEvent(path, Create)
-          case e if e.isRemoved || !path.exists =>
-            FileWatchEvent(path, Delete)
-          case _ =>
-            FileWatchEvent(path, Modify)
+  private[this] val onFileEventImpl = new FileEventsApi.Consumer[FileEvent] {
+    override def accept(fe: FileEvent): Unit = {
+      executor.run(onFileEvent({
+        val path = Path(fe.fileName)
+        if (fe.itemIsFile) {
+          fe match {
+            case e if e.isNewFile && path.exists =>
+              FileWatchEvent(path, Create)
+            case e if e.isRemoved || !path.exists =>
+              FileWatchEvent(path, Delete)
+            case _ =>
+              FileWatchEvent(path, Modify)
+          }
+        } else if (path.exists) {
+          FileWatchEvent(path, Modify)
+        } else {
+          FileWatchEvent(path, Delete)
         }
-      } else if (path.exists) {
-        FileWatchEvent(path, Modify)
-      } else {
-        FileWatchEvent(path, Delete)
-      }
-    }))
+      }))
+    }
   }
-  private[this] val onStreamEvent: Consumer[String] = (s: String) => {
-    if (!closed.get) executor.run {
-      lock.synchronized(streams -= s)
-      onStreamRemoved(s)
+  private[this] val onStreamEvent = new FileEventsApi.Consumer[String] {
+    override def accept(s: String): Unit = {
+      if (!closed.get) executor.run {
+        lock.synchronized(streams -= s)
+        onStreamRemoved(s)
+      }
     }
   }
   private[this] val fileSystemApi: FileEventsApi = try {
