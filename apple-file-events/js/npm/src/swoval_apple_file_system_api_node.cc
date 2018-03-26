@@ -5,29 +5,26 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-
 #define MAX_PATH_SIZE 1024
-#define NAPI(work) \
-    do {\
-        napi_status status; \
-        status = work; \
+#define NAPI(work)                 \
+    do {                           \
+        napi_status status;        \
+        status = work;             \
         assert(status == napi_ok); \
     } while (0);
 
-#define NAPI_ARGS(count, func) \
-    size_t argc = count; \
-    napi_value argv[count]; \
+#define NAPI_ARGS(count, func)                                        \
+    size_t argc = count;                                              \
+    napi_value argv[count];                                           \
     NAPI(napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr)); \
-    if (argc != count) { \
-        return nullptr; \
+    if (argc != count) {                                              \
+        return nullptr;                                               \
     }
 
-static void deleteHandle(uv_handle_t* handle) {
-    delete handle;
-}
+static void deleteHandle(uv_handle_t *handle) { delete handle; }
 
 class handle_data {
-    public:
+  public:
     napi_ref callback_ref;
     napi_ref stop_stream_callback_ref;
     napi_env env;
@@ -37,9 +34,7 @@ class handle_data {
     Events events;
     Strings streams;
     uv_async_t *async_work;
-    ~handle_data() {
-        uv_close((uv_handle_t*) async_work, deleteHandle);
-    }
+    ~handle_data() { uv_close((uv_handle_t *)async_work, deleteHandle); }
 };
 
 typedef handle<handle_data> NodeHandle;
@@ -47,9 +42,9 @@ typedef handle<handle_data> NodeHandle;
 static void close_impl(NodeHandle *h) {
     if (h && h->stopped) {
         uint32_t ref_count;
-        napi_env env = h->data->env;
+        napi_env env    = h->data->env;
         napi_ref cb_ref = h->data->callback_ref;
-        napi_ref s_ref = h->data->stop_stream_callback_ref;
+        napi_ref s_ref  = h->data->stop_stream_callback_ref;
 
         h->close();
         Lock lock(h->mutex);
@@ -67,14 +62,14 @@ static void close_impl(NodeHandle *h) {
     }
 }
 
-static NodeHandle* get_handle_ptr(napi_env env, napi_value obj) {
+static NodeHandle *get_handle_ptr(napi_env env, napi_value obj) {
     double res[0];
     NAPI(napi_get_value_double(env, obj, res));
-    return *reinterpret_cast<NodeHandle**>(res);
+    return *reinterpret_cast<NodeHandle **>(res);
 }
 
 static void process_callback(uv_async_t *async) {
-    auto *h = reinterpret_cast<NodeHandle*>(async->data);
+    auto *h = reinterpret_cast<NodeHandle *>(async->data);
     if (h->stopped) {
         if (h->closed) {
             delete h->data;
@@ -126,7 +121,7 @@ static void enqueue_stop_stream(std::unique_ptr<Strings> strings, NodeHandle *h,
 
 napi_value close(napi_env env, napi_callback_info info) {
     NAPI_ARGS(1, "close");
-    auto *h = get_handle_ptr(env, argv[0]);
+    auto *h    = get_handle_ptr(env, argv[0]);
     h->stopped = true;
     napi_value zero;
     NAPI(napi_create_int32(env, 0, &zero));
@@ -150,7 +145,7 @@ napi_value stop_stream(napi_env env, napi_callback_info info) {
 napi_value start_stream(napi_env env, napi_callback_info info) {
     NAPI_ARGS(4, "startStream");
     double latency = 0.001;
-    int flags = 0x2;
+    int flags      = 0x2;
     int32_t handle = 0;
     char native_path[MAX_PATH_SIZE];
     size_t path_len;
@@ -160,7 +155,7 @@ napi_value start_stream(napi_env env, napi_callback_info info) {
     NAPI(napi_get_value_double(env, argv[1], &latency));
     NAPI(napi_get_value_int32(env, argv[2], &flags));
     auto *h = get_handle_ptr(env, argv[3]);
-    int id = h ? h->startStream(const_cast<const char*>(native_path), latency, flags) : -1;
+    int id  = h ? h->startStream(const_cast<const char *>(native_path), latency, flags) : -1;
     napi_value jid;
     NAPI(napi_create_int32(env, id, &jid));
     return jid;
@@ -170,30 +165,30 @@ napi_value initialize(napi_env env, napi_callback_info info) {
     NAPI_ARGS(2, "init");
 
     auto *data = new handle_data();
-    data->env = env;
+    data->env  = env;
     NAPI(napi_create_reference(env, argv[0], 1, &data->callback_ref));
     NAPI(napi_create_reference(env, argv[1], 1, &data->stop_stream_callback_ref));
     auto *h = new NodeHandle(data, enqueue_callback, enqueue_stop_stream);
 
-    h->data->async_work = new uv_async_t;
+    h->data->async_work       = new uv_async_t;
     h->data->async_work->data = h;
-    uv_loop_t* uv_loop;
+    uv_loop_t *uv_loop;
     NAPI(napi_get_uv_event_loop(env, &uv_loop));
     int res = 0;
-    res = uv_async_init(uv_loop, h->data->async_work, process_callback);
-    uv_thread_create(&h->data->thread, reinterpret_cast<void(*)(void*)>(loop<handle_data>), h);
+    res     = uv_async_init(uv_loop, h->data->async_work, process_callback);
+    uv_thread_create(&h->data->thread, reinterpret_cast<void (*)(void *)>(loop<handle_data>), h);
 
-    double *id = reinterpret_cast<double*>(&h);
+    double *id = reinterpret_cast<double *>(&h);
     napi_value jid;
     napi_create_double(env, *id, &jid);
     return jid;
 }
 
-#define MODULE_ADD_FUNC(func, name) \
-    do { \
-        napi_value fn; \
+#define MODULE_ADD_FUNC(func, name)                                   \
+    do {                                                              \
+        napi_value fn;                                                \
         NAPI(napi_create_function(env, nullptr, 0, func, NULL, &fn)); \
-        NAPI(napi_set_named_property(env, exports, name, fn)); \
+        NAPI(napi_set_named_property(env, exports, name, fn));        \
     } while (0)
 
 napi_value Init(napi_env env, napi_value exports) {

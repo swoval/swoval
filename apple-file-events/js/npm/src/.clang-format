@@ -1,0 +1,23 @@
+IndentWidth: 4
+ColumnLimit: 100
+---
+Language: Cpp
+Standard: Cpp11
+DerivePointerAlignment: false
+AlignConsecutiveAssignments: true
+AlignOperands: true
+AlignTrailingComments: true
+AllowAllParametersOfDeclarationOnNextLine: false
+AlignEscapedNewlinesLeft: true
+
+FixNamespaceComments: true
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+SpaceBeforeAssignmentOperators: true
+SpacesBeforeTrailingComments: 3
+SpacesInAngles: false
+SpacesInCStyleCastParentheses: false
+SpacesInContainerLiterals: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+SortIncludes: false

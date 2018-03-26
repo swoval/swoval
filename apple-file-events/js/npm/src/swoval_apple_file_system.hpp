@@ -6,49 +6,43 @@
 #include <vector>
 
 static std::mutex id_mutex;
-static int32_t current_id = 0;
+static int32_t current_id     = 0;
 static const CFStringRef mode = CFSTR("kCFRunLoopDefaultMode");
 
-template<class T>
-class handle;
+template <class T> class handle;
 
-template<class T>
-static void loop(handle<T> *h);
+template <class T> static void loop(handle<T> *h);
 
-template <typename T>
-static void cleanupFunc(handle<T> *h);
+template <typename T> static void cleanupFunc(handle<T> *h);
 
-typedef std::vector< std::pair<std::string, int32_t> > Events;
+typedef std::vector<std::pair<std::string, int32_t>> Events;
 typedef std::vector<std::string> Strings;
 typedef std::unique_lock<std::mutex> Lock;
 
-template <typename T>
-class handle {
-    public:
+template <typename T> class handle {
+  public:
     T *data;
     CFRunLoopRef runLoop;
     CFRunLoopSourceRef sourceRef;
     CFRunLoopSourceContext *context = nullptr;
     std::mutex mutex;
     std::condition_variable cond;
-    std::map<int32_t, std::pair< std::string, FSEventStreamRef> > stream_handles;
-    bool started = false;
-    bool stopped = false;
-    bool closed = false;
-    void (*callback)(std::unique_ptr<Events>, handle<T> *, Lock) = nullptr;
+    std::map<int32_t, std::pair<std::string, FSEventStreamRef>> stream_handles;
+    bool started                                                              = false;
+    bool stopped                                                              = false;
+    bool closed                                                               = false;
+    void (*callback)(std::unique_ptr<Events>, handle<T> *, Lock)              = nullptr;
     void (*stop_stream_callback)(std::unique_ptr<Strings>, handle<T> *, Lock) = nullptr;
 
-    handle(
-        T *t,
-        void (*cb)(std::unique_ptr<Events>, handle<T> *, Lock),
-        void (*ss)(std::unique_ptr<Strings>, handle<T> *, Lock)
-    ): data(t), callback(cb), stop_stream_callback(ss) {}
+    handle(T *t, void (*cb)(std::unique_ptr<Events>, handle<T> *, Lock),
+           void (*ss)(std::unique_ptr<Strings>, handle<T> *, Lock))
+        : data(t), callback(cb), stop_stream_callback(ss) {}
 
     void close() {
         Lock lock(mutex);
         if (!closed) {
             stopped = true;
-            closed = true;
+            closed  = true;
             CFRunLoopSourceInvalidate(sourceRef);
             CFRunLoopRemoveSource(runLoop, sourceRef, mode);
             if (context) {
@@ -67,8 +61,8 @@ class handle {
     int startStream(const char *path, double latency, int flags) {
         Lock lock(mutex);
         if (stopped) {
-          fprintf(stderr, "Tried to add stream for %s on closed runloop.\n", path);
-          return -1;
+            fprintf(stderr, "Tried to add stream for %s on closed runloop.\n", path);
+            return -1;
         }
         if (!started) {
             cond.wait(lock, [this] { return this->started; });
@@ -80,24 +74,20 @@ class handle {
             }
         }
 
-        CFStringRef mypath = CFStringCreateWithCStringNoCopy(nullptr, path, kCFStringEncodingUTF8, nullptr);
-        CFArrayRef pathsToWatch = CFArrayCreate(nullptr, (const void **)&mypath, 1, nullptr);
+        CFStringRef mypath =
+            CFStringCreateWithCStringNoCopy(nullptr, path, kCFStringEncodingUTF8, nullptr);
+        CFArrayRef pathsToWatch      = CFArrayCreate(nullptr, (const void **)&mypath, 1, nullptr);
         FSEventStreamContext context = {0, this, nullptr, nullptr, nullptr};
-        FSEventStreamRef stream = FSEventStreamCreate(
-                nullptr,
-                defaultCallback,
-                &context,
-                pathsToWatch,
-                kFSEventStreamEventIdSinceNow,
-                latency,
-                flags);
+        FSEventStreamRef stream =
+            FSEventStreamCreate(nullptr, defaultCallback, &context, pathsToWatch,
+                                kFSEventStreamEventIdSinceNow, latency, flags);
         FSEventStreamScheduleWithRunLoop(stream, runLoop, mode);
         if (!FSEventStreamStart(stream)) {
             return -1;
         }
 
         Lock id_lock(id_mutex);
-        int32_t id = current_id++;
+        int32_t id         = current_id++;
         stream_handles[id] = std::make_pair(std::string(path), stream);
         lock.unlock();
         id_lock.unlock();
@@ -111,9 +101,10 @@ class handle {
         stopStream(stream_key, std::move(lock));
     }
     void stopStream(int32_t stream_key, Lock lock) {
-        if (stopped) return;
+        if (stopped)
+            return;
         auto strings = std::unique_ptr<Strings>(new Strings);
-        auto pair = stream_handles.find(stream_key);
+        auto pair    = stream_handles.find(stream_key);
         if (pair != stream_handles.end()) {
             stop_stream(pair->second.second, runLoop);
             strings->push_back(pair->second.first);
@@ -124,42 +115,36 @@ class handle {
         }
     }
 
-    static void defaultCallback(
-            ConstFSEventStreamRef stream,
-            void *info,
-            size_t count,
-            void *eventPaths,
-            const FSEventStreamEventFlags flags[],
-            const FSEventStreamEventId ids[])
-    {
-        handle<T> *h = reinterpret_cast<handle<T>*>(info);
+    static void defaultCallback(ConstFSEventStreamRef stream, void *info, size_t count,
+                                void *eventPaths, const FSEventStreamEventFlags flags[],
+                                const FSEventStreamEventId ids[]) {
+        handle<T> *h = reinterpret_cast<handle<T> *>(info);
         Lock lock(h->mutex);
-        if (h->stopped) return;
+        if (h->stopped)
+            return;
         const char **paths = reinterpret_cast<const char **>(eventPaths);
-        auto events = std::unique_ptr<Events>(new Events);
+        auto events        = std::unique_ptr<Events>(new Events);
         for (size_t i = 0; i < count; ++i) {
             events->push_back(std::make_pair(std::string(paths[i]), flags[i]));
         }
         h->callback(std::move(events), h, std::move(lock));
     }
 
-    private:
+  private:
     void stop_stream(FSEventStreamRef stream, CFRunLoopRef runLoop) {
         FSEventStreamStop(stream);
         FSEventStreamUnscheduleFromRunLoop(stream, runLoop, mode);
         FSEventStreamInvalidate(stream);
         FSEventStreamRelease(stream);
     }
-
 };
 
-template <typename T>
-void loop(handle<T> *h) {
-    h->runLoop = CFRunLoopGetCurrent();
-    h->context = new CFRunLoopSourceContext();
-    h->context->info = h;
-    h->context->perform = (void(*)(void*))cleanupFunc<T>;
-    h->sourceRef = CFRunLoopSourceCreate(nullptr, 0, h->context);
+template <typename T> void loop(handle<T> *h) {
+    h->runLoop          = CFRunLoopGetCurrent();
+    h->context          = new CFRunLoopSourceContext();
+    h->context->info    = h;
+    h->context->perform = (void (*)(void *))cleanupFunc<T>;
+    h->sourceRef        = CFRunLoopSourceCreate(nullptr, 0, h->context);
     CFRunLoopAddSource(h->runLoop, h->sourceRef, mode);
     Lock lock(h->mutex);
     h->started = true;
@@ -168,8 +153,7 @@ void loop(handle<T> *h) {
     CFRunLoopRun();
 }
 
-template <typename T>
-static void cleanupFunc(handle<T> *h) {
+template <typename T> static void cleanupFunc(handle<T> *h) {
     std::vector<std::pair<int32_t, std::string>> streams;
     std::vector<int32_t> redundant_ids;
     Lock lock(h->mutex);
