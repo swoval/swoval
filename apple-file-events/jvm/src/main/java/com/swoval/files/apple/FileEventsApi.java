@@ -6,6 +6,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.Files;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -97,7 +98,7 @@ public class FileEventsApi implements AutoCloseable {
         throw new UnsatisfiedLinkError(msg);
       }
 
-      File extractedPath = new File(temp.getAbsolutePath() + "/" + lib);
+      final File extractedPath = new File(temp.getAbsolutePath() + "/" + lib);
       OutputStream out = new FileOutputStream(extractedPath);
       try {
         byte[] buf = new byte[1024];
@@ -111,6 +112,16 @@ public class FileEventsApi implements AutoCloseable {
         resourceStream.close();
         out.close();
       }
+
+      Runtime.getRuntime().addShutdownHook(new Thread() {
+        public void run() {
+          try {
+            Files.delete(extractedPath.toPath());
+          } catch (IOException e) {
+            System.err.println("Error deleting temporary files: " + e);
+          }
+        }
+      });
 
       System.load(extractedPath.getAbsolutePath());
     } catch (Exception e) {
