@@ -12,11 +12,12 @@ import scala.concurrent.duration._
 
 object CloseWatchPlugin extends AutoPlugin {
   override def trigger = allRequirements
+  private[watchservice] var _internalFileCache: FileCache = _
   object autoImport {
     lazy val closeWatchAntiEntropy = settingKey[Duration](
       "Set watch anti-entropy period for source files. For a given file that has triggered a" +
         "build, any updates occuring before the last event time plus this duration will be ignored.")
-    lazy val closeWatchFileCache = settingKey[FileCache]("Set the file cache to use.")
+    lazy val closeWatchFileCache = taskKey[FileCache]("Set the file cache to use.")
     lazy val closeWatchLegacyWatchLatency =
       settingKey[Duration]("Set the watch latency of the sbt watch service")
     lazy val closeWatchLegacyQueueSize =
@@ -53,7 +54,7 @@ object CloseWatchPlugin extends AutoPlugin {
       override def toString = s"${Filter.show(in)} && !${Filter.show(ex)}"
     }
     def list(recursive: Boolean, filter: FileFilter) =
-      (f: File) => closeWatchFileCache.value.list(f, recursive = recursive, filter)
+      (f: File) => _internalFileCache.list(f, recursive = recursive, filter)
 
     val unmanagedDirs = (unmanagedSourceDirectories in conf).value.distinct
     val unmanagedIncludeFilter = ((includeFilter in unmanagedSources) in conf).value
@@ -155,7 +156,6 @@ object CloseWatchPlugin extends AutoPlugin {
   ) ++ Compat.extraProjectSettings
   override lazy val projectSettings: Seq[Def.Setting[_]] = super.projectSettings ++
     Compat.settings(projectSettingsImpl) ++ Seq(
-    closeWatchFileCache := FileCache.default,
     closeWatchTransitiveSources := Def
       .inputTaskDyn {
         import complete.DefaultParsers._
@@ -219,6 +219,7 @@ object CloseWatchPlugin extends AutoPlugin {
     parsed.fold(_ => commands(taskDef.mkString(" ").trim), paths)
   }
   override lazy val globalSettings: Seq[Def.Setting[_]] = super.globalSettings ++ Seq(
+    closeWatchFileCache := FileCache.default,
     closeWatchUseDefaultWatchService := false,
     closeWatchTransitiveSources := Def
       .inputTaskDyn {
@@ -236,6 +237,7 @@ object CloseWatchPlugin extends AutoPlugin {
     closeWatchAntiEntropy := 35.milliseconds,
     onLoad := { state =>
       val extracted = Project.extract(state)
+      _internalFileCache = extracted.runTask(closeWatchFileCache, state)._2
       val session = extracted.session
       val useDefault = extracted.structure.data.data.exists(_._2.entries.exists(e =>
         e.key.label == "closeWatchUseDefaultWatchService" && e.value == true))
@@ -259,10 +261,8 @@ object CloseWatchPlugin extends AutoPlugin {
       }
     },
     onUnload := { state =>
-      val p = sbt.Project.extract(state)
-      val cache = p.getOpt(closeWatchFileCache)
-      state.log.debug(s"Closing file cache: $cache")
-      cache.foreach(_.close())
+      state.log.debug(s"Closing internal file cache")
+      _internalFileCache.close()
       state
     }
   )

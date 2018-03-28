@@ -120,23 +120,6 @@ object FileCacheTest extends TestSuite {
           }.andThen { case _ => executor.close() }
         }
       }
-      'reuseDirectories - withTempDirectory { dir =>
-        val directory = Directory.of(dir)
-        val directories = mutable.Set(directory)
-        val latch = new CountDownLatch(1)
-        usingAsync(new FileCacheImpl(options, directories) {
-          override def close() = closeImpl(clearDirectoriesOnClose = false)
-        }) { c =>
-          c.addCallback((_: FileWatchEvent) => latch.countDown())
-          withTempFile(dir) { f =>
-            latch.waitFor(DEFAULT_TIMEOUT) {
-              c.list(dir, recursive = true, (_: Path) => true) === Seq(f)
-              c.close()
-              directories.toSet === Set(directory)
-            }
-          }
-        }
-      }
     }
   }
 }

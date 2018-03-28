@@ -106,21 +106,16 @@ class FileCacheImpl(options: Options) extends FileCache {
     }
   }
   private[this] val watcher = options.toWatcher(fileCallback, executor)
-  for { w <- watcher; dir <- directories } w.register(dir.path)
   override def toString = s"FileCache($options)"
 }
 
 object FileCache {
-  def apply(options: Options, directories: mutable.Set[Directory] = mutable.Set.empty)(
-      callback: Callback): FileCacheImpl = {
-    val cache: FileCacheImpl = new FileCacheImpl(options, directories)
+  def apply(options: Options)(callback: Callback): FileCacheImpl = {
+    val cache: FileCacheImpl = new FileCacheImpl(options)
     cache.addCallback(callback)
     cache
   }
-  private[this] val directories: mutable.Set[Directory] = mutable.Set.empty
-  def default: FileCacheImpl = new FileCacheImpl(Options.default, directories) {
-    override def close(): Unit = closeImpl(clearDirectoriesOnClose = false)
-  }
+  def default: FileCacheImpl = new FileCacheImpl(Options.default)
 }
 
 sealed abstract class Options {

@@ -7,13 +7,13 @@ import com.swoval.files.DirectoryWatcher.Callback
 import scala.collection.mutable
 
 trait Callbacks extends AutoCloseable {
-  def addCallback(callback: Callback) = {
+  def addCallback(callback: Callback): Int = {
     val key = counter.getAndIncrement()
     lock.synchronized(callbacks += key -> callback)
     key
   }
 
-  def removeCallback(handle: Int) = {
+  def removeCallback(handle: Int): Unit = {
     lock.synchronized(callbacks -= handle)
   }
 

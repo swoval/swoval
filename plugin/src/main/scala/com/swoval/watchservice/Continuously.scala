@@ -146,7 +146,7 @@ object Continuously {
         extracted.runInputTask(closeWatchTransitiveSources, s" $t", s)._2).distinct
       val log = Project.structure(s).streams(s)(Keys.streams in Global).log
       val antiEntropy = extracted.get(closeWatchAntiEntropy)
-      val cache = extracted.get(closeWatchFileCache)
+      val cache = CloseWatchPlugin._internalFileCache
       val onTrigger: State => Unit = printTriggeredMessage(_, w)
       log.debug(s"Found watch sources:\n${sources.sortBy(_.base).mkString("\n")}")
       State(arg, sources, cache, log, antiEntropy, onTrigger).waitForEvents(s)
