@@ -1,24 +1,22 @@
 package com.swoval
 
-import java.io.File
+import java.io.{ ByteArrayInputStream, File, InputStream, SequenceInputStream }
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{ Files, StandardCopyOption, Path => JPath }
+import java.util.concurrent.TimeUnit
 import java.util.jar.JarFile
 
-import bintray.BintrayKeys.{
-  bintray => bintrayScope,
-  bintrayOrganization,
-  bintrayPackage,
-  bintrayRepository,
-  bintrayUnpublish
-}
-import bintray.{ Bintray, BintrayPlugin }
+import _root_.bintray.BintrayPlugin
+import bintray.BintrayKeys._
 import ch.jodersky.sbt.jni.plugins.JniJavah.autoImport.javah
 import ch.jodersky.sbt.jni.plugins.JniNative
 import ch.jodersky.sbt.jni.plugins.JniNative.autoImport._
 import com.swoval.Dependencies.{ logback => SLogback, _ }
 import com.typesafe.sbt.GitVersioning
 import com.typesafe.sbt.SbtGit.git
+import com.typesafe.sbt.pgp.PgpKeys.publishSigned
+import org.apache.commons.codec.digest.DigestUtils
+import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport.toPlatformDepsGroupID
 import org.scalajs.core.tools.linker.backend.ModuleKind
 import org.scalajs.sbtplugin.JSPlatform
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ fastOptJS, fullOptJS, scalaJSModuleKind }
@@ -26,103 +24,203 @@ import sbt.Keys._
 import sbt._
 import sbtcrossproject.CrossPlugin.autoImport._
 import sbtcrossproject.CrossProject
-
-import scala.collection.JavaConverters._
-import scala.sys.process._
-import scala.tools.nsc
-import scala.util.Properties
+import sbtdoge.CrossPerProjectPlugin
 import scalajsbundler.BundlingMode
 import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin
 import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin.autoImport._
 import scalajscrossproject.ScalaJSCrossPlugin.autoImport.JSCrossProjectOps
 
-object Build {
-  def baseVersion: String = "1.2.4"
-  def commonSettings: SettingsDefinition = Seq(
-    scalaVersion := "2.12.4",
-    resolvers += Resolver.sonatypeRepo("releases"),
-    git.baseVersion := baseVersion,
-    organization := "com.swoval",
-    bintrayOrganization := Some("swoval"),
-    bintrayRepository := "sbt-plugins",
-    homepage := Some(url("https://github.com/swoval/swoval")),
-    scmInfo := Some(
-      ScmInfo(url("https://github.com/swoval/swoval"), "git@github.com:swoval/swoval.git")),
-    developers := List(
-      Developer("username",
-                "Ethan Atkins",
-                "ethan.atkins@gmail.com",
-                url("https://github.com/eatkins"))),
-    licenses += ("MIT", url("https://opensource.org/licenses/MIT")),
-    publishMavenStyle := true,
-    publishMavenStyle in publishLocal := false,
-    publishTo := Some(
-      if (isSnapshot.value)
-        Opts.resolver.sonatypeSnapshots
-      else
-        Opts.resolver.sonatypeStaging
-    ),
-    publishMavenStyle in bintrayScope := false,
-    BuildKeys.java8rt in ThisBuild := {
-      if (Properties.isMac) {
-        import scala.sys.process._
-        Seq("mdfind", "-name", "rt.jar").!!.split("\n").find { n =>
-          !n.endsWith("alt-rt.jar") && {
-            val version =
-              new JarFile(n).getManifest.getMainAttributes.getValue("Specification-Version")
-            version.split("\\.").last == "8"
-          }
-        }
-      } else {
-        None
-      }
-    }
-  )
-  val projects: Seq[ProjectReference] =
-    (if (Properties.isMac) Seq[ProjectReference](appleFileEvents.jvm, appleFileEvents.js, plugin)
-     else Seq.empty) ++
-      Seq[ProjectReference](
-        files.js,
-        files.jvm,
-        reflect,
-        testing.js,
-        testing.jvm,
-        util
-      )
+import scala.collection.JavaConverters._
+import scala.io.Source
+import scala.tools.nsc
+import scala.tools.nsc.reporters.StoreReporter
+import scala.util.Properties
 
+object Build {
+  val scalaCrossVersions @ Seq(scala210, scala211, scala212) = Seq("2.10.7", "2.11.12", "2.12.4")
+  def baseVersion: String = "1.2.4"
+  def settings(args: Def.Setting[_]*): SettingsDefinition =
+    Def.SettingsDefinition.wrapSettingsDefinition(args)
+  def commonSettings: SettingsDefinition =
+    settings(
+      resolvers += Resolver.sonatypeRepo("releases"),
+      resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
+      resolvers += "Sonatype OSS Releases" at "https://oss.sonatype.org/content/repositories/releases",
+      git.baseVersion := baseVersion,
+      organization := "com.swoval",
+      bintrayOrganization := Some("eatkins"),
+      bintrayRepository := "swoval",
+      homepage := Some(url("https://github.com/swoval/swoval")),
+      scmInfo := Some(
+        ScmInfo(url("https://github.com/swoval/swoval"), "git@github.com:swoval/swoval.git")),
+      developers := List(
+        Developer("username",
+                  "Ethan Atkins",
+                  "ethan.atkins@gmail.com",
+                  url("https://github.com/eatkins"))),
+      licenses += ("MIT", url("https://opensource.org/licenses/MIT")),
+      publishMavenStyle in publishLocal := false,
+      bintrayRelease := Def.taskDyn {
+        if (Seq("Snapshot", "Release").exists(t => sys.props.get(s"Sonatype$t").isDefined))
+          Def.task({})
+        else
+          Def.task(bintrayRelease.value)
+      }.value,
+      publishTo := {
+        val p = publishTo.value
+        if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true"))
+          Some(Opts.resolver.sonatypeSnapshots): Option[Resolver]
+        else if (sys.props.get("SonatypeRelease").fold(false)(_ == "true"))
+          Some(Opts.resolver.sonatypeReleases): Option[Resolver]
+        else p
+      },
+      version := {
+        val v = version.value
+        if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true")) {
+          if (v.endsWith("-SNAPSHOT")) v else s"$v-SNAPSHOT"
+        } else {
+          v
+        }
+      },
+      BuildKeys.java8rt in ThisBuild := {
+        if (Properties.isMac) {
+          import scala.sys.process._
+          Seq("mdfind", "-name", "rt.jar").!!.split("\n").find { n =>
+            !n.endsWith("alt-rt.jar") && {
+              val version =
+                new JarFile(n).getManifest.getMainAttributes.getValue("Specification-Version")
+              version.split("\\.").last == "8"
+            }
+          }
+        } else {
+          None
+        }
+      },
+      release := {},
+      releaseSigned := {},
+      releaseLocal := {}
+    ) ++ (if (Properties.isMac) Nil else settings(publish := {}, publishSigned := {}))
+  lazy val release = taskKey[Unit]("Release a project snapshot.")
+  lazy val releaseLocal = taskKey[Unit]("Release local project")
+  lazy val releaseSigned = taskKey[Unit]("Release signed project")
+  lazy val generateJSSources = taskKey[Unit]("Generate scala sources from java")
+  def projects: Seq[ProjectReference] = Seq[ProjectReference](
+    appleFileEvents.jvm,
+    appleFileEvents.js,
+    files.js,
+    files.jvm,
+    plugin,
+    reflect,
+    testing.js,
+    testing.jvm,
+    util
+  )
+
+  def releaseTask(key: TaskKey[Unit]) = Def.taskDyn {
+    (key in files.jvm).value
+    (key in testing.jvm).value
+    (key in util).value
+    (scalaVersion in crossVersion).value match {
+      case `scala210` => Def.task((key in plugin).value)
+      case v =>
+        Def.taskDyn {
+          (key in reflect).value
+          (key in files.js).value
+          (key in testing.js).value
+          if (v == scala212)
+            Def.task { (key in plugin).value; (key in appleFileEvents.jvm).value } else Def.task(())
+        }
+    }
+  }
   lazy val root = project
     .in(file("."))
+    .enablePlugins(CrossPerProjectPlugin)
     .aggregate(projects: _*)
     .settings(
+      crossScalaVersions := scalaCrossVersions,
       bintrayUnpublish := {},
+      publishSigned := {},
       publish := {},
+      publishLocal := {},
+      releaseLocal := releaseTask(publishLocal).value,
+      releaseSigned := releaseTask(publishSigned).value,
+      release := releaseTask(publish).value
     )
 
+  private var swovalNodeMD5Sum = ""
+  val nativeCompileSettings =
+    if (Properties.isMac)
+      settings(
+        sourceDirectory in nativeCompile := sourceDirectory.value / "main" / "native",
+        target in javah := sourceDirectory.value / "main" / "native" / "include"
+      )
+    else settings()
   lazy val appleFileEvents: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("apple-file-events"))
-    .configurePlatform(JVMPlatform)(_.enablePlugins(JniNative))
+    .configurePlatform(JVMPlatform)(p => if (Properties.isMac) p.enablePlugins(JniNative) else p)
     .configurePlatform(JSPlatform)(_.enablePlugins(ScalaJSBundlerPlugin))
     .settings(
       commonSettings,
       name := "apple-file-events",
       bintrayPackage := "apple-file-events",
       description := "JNI library for apple file system",
-      sourceDirectory in nativeCompile := sourceDirectory.value / "main" / "native",
-      target in javah := sourceDirectory.value / "main" / "native" / "include",
-      watchSources ++= sourceDirectory.value.globRecursive("*.hpp" | "*.cc").get,
-      javacOptions ++= Seq("-source", "1.8", "-target", "1.8") ++
+      watchSources in Compile ++= {
+        Files
+          .walk(baseDirectory.value.toPath.getParent)
+          .iterator
+          .asScala
+          .filter(Files.isRegularFile(_))
+          .collect {
+            case p if p.toString.endsWith(".hpp") || p.toString.endsWith(".cc") => p.toFile
+          }
+          .filterNot(_.toString contains "target")
+          .toSeq
+      },
+      javacOptions ++= Seq("-source", "1.7", "-target", "1.7") ++
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty),
       javacOptions in (Compile, doc) := Seq.empty,
       utestCrossTest,
       utestFramework
     )
+    .jvmSettings(
+      nativeCompileSettings,
+      crossPaths := false,
+      autoScalaLibrary := false
+    )
     .jsSettings(
+      crossScalaVersions := scalaCrossVersions,
       webpackBundlingMode := BundlingMode.LibraryOnly(),
       useYarn := false,
       scalaJSModuleKind := ModuleKind.CommonJSModule,
-      sourceGenerators in Compile += Def.task {
+      (compile in Compile) := {
+        val npm = baseDirectory.value.toPath.resolve("npm")
+        def is(path: JPath) =
+          if (Files.exists(path)) Files.newInputStream(path)
+          else new ByteArrayInputStream(Array.empty[Byte])
+        def append(l: InputStream, r: InputStream*): InputStream = r match {
+          case Seq(h)            => new SequenceInputStream(l, h)
+          case Seq(h, rest @ _*) => append(new SequenceInputStream(l, h), rest: _*)
+        }
+        def digest: String = {
+          val inputStream = append(
+            is(npm.resolve("src/swoval_apple_file_system.hpp")),
+            is(npm.resolve("src/swoval_apple_file_system_api_node.cc")),
+            is(npm.resolve("lib/swoval_apple_file_system.node"))
+          )
+          try DigestUtils.md5Hex(inputStream)
+          finally inputStream.close()
+        }
+        if (digest != swovalNodeMD5Sum) {
+          val proc =
+            new java.lang.ProcessBuilder("node", "install.js").directory(npm.toFile).start()
+          proc.waitFor(5, TimeUnit.SECONDS)
+          println(Source.fromInputStream(proc.getInputStream).mkString(""))
+        }
+        swovalNodeMD5Sum = digest
+        (compile in Compile).value
+      },
+      generateJSSources := Def.task {
         val pkg = "com/swoval/files/apple"
-        val target = (managedSourceDirectories in Compile).value.head.toPath
         val base = baseDirectory.value.toPath
         val javaSourceDir: JPath =
           base.relativize((javaSource in Compile).value.toPath.resolve(pkg))
@@ -137,22 +235,24 @@ object Build {
             .value
             .map(_.data)
             .mkString(File.pathSeparator)
+        val target = (scalaSource in Compile).value.toPath.resolve(pkg)
+
         val cmd = Seq("java", "-classpath", cp, clazz) ++ javaSources :+ target.toString
+        import scala.sys.process._
         println(cmd.!!)
-        sources.map(f => target.resolve(s"$f.scala").toFile)
-      }.taskValue,
+      }.value,
       cleanAllGlobals,
       nodeNativeLibs
     )
 
   def addLib(dir: File): File = {
     val target = dir.toPath.resolve("node_modules/lib")
-    if (!Files.exists(target))
+    if (!Files.isSymbolicLink(target))
       Files.createSymbolicLink(target,
                                appleFileEvents.js.base.toPath.toAbsolutePath.resolve("npm/lib"))
     dir
   }
-  def nodeNativeLibs: SettingsDefinition = Seq(
+  def nodeNativeLibs: SettingsDefinition = settings(
     (npmUpdate in Compile) := addLib((npmUpdate in Compile).value),
     (npmUpdate in Test) := addLib((npmUpdate in Test).value)
   )
@@ -163,7 +263,7 @@ object Build {
     Files.write(file.data.toPath, content.getBytes)
     file
   }
-  def cleanAllGlobals: SettingsDefinition = Seq(
+  def cleanAllGlobals: SettingsDefinition = settings(
     (fastOptJS in Compile) := cleanGlobals((fastOptJS in Compile).value),
     (fastOptJS in Test) := cleanGlobals((fastOptJS in Test).value),
     (fullOptJS in Compile) := cleanGlobals((fullOptJS in Compile).value),
@@ -173,24 +273,7 @@ object Build {
     .in(file("files"))
     .enablePlugins(GitVersioning)
     .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
-    .jsSettings(
-      scalacOptions += "-P:scalajs:sjsDefinedByDefault",
-      scalaJSModuleKind := ModuleKind.CommonJSModule,
-      webpackBundlingMode := BundlingMode.LibraryOnly(),
-      useYarn := false,
-      cleanAllGlobals,
-      nodeNativeLibs,
-      (fullOptJS in Compile) := {
-        val res = (fullOptJS in Compile).value
-        Files.copy(res.data.toPath,
-                   baseDirectory.value.toPath.resolve("npm/files.js"),
-                   REPLACE_EXISTING)
-        res
-      },
-      ioScalaJS
-    )
     .settings(
-      scalaVersion := "2.12.4",
       commonSettings,
       name := "file-utilities",
       bintrayPackage := "file-utilities",
@@ -199,6 +282,35 @@ object Build {
       utestCrossTest,
       utestFramework
     )
+    .jsSettings(
+      crossScalaVersions := scalaCrossVersions.drop(1),
+      scalacOptions += "-P:scalajs:sjsDefinedByDefault",
+      scalaJSModuleKind := ModuleKind.CommonJSModule,
+      webpackBundlingMode := BundlingMode.LibraryOnly(),
+      useYarn := false,
+      cleanAllGlobals,
+      nodeNativeLibs,
+      (fullOptJS in Compile) := {
+        val files = Seq(
+          "CMakeLists.txt",
+          "install.js",
+          "src/swoval_apple_file_system.hpp",
+          "src/swoval_apple_file_system_api_node.cc"
+        )
+        val npm = baseDirectory.value.toPath.resolve("npm")
+        Files.createDirectories(npm.resolve("src"))
+        val apfs = appleFileEvents.js.base.toPath.resolve("npm")
+        files.foreach(f => Files.copy(apfs.resolve(f), npm.resolve(f), REPLACE_EXISTING))
+
+        val filesJS = (fullOptJS in Compile).value
+        Files.copy(filesJS.data.toPath, npm.resolve("files.js"), REPLACE_EXISTING)
+        filesJS
+      },
+      ioScalaJS
+    )
+    .jvmSettings(
+      crossScalaVersions := scalaCrossVersions
+    )
     .dependsOn(appleFileEvents, testing % "test->test")
 
   lazy val plugin: Project = project
@@ -206,15 +318,19 @@ object Build {
     .enablePlugins(GitVersioning, BintrayPlugin)
     .settings(
       commonSettings,
+      sbtVersion in pluginCrossBuild := {
+        if ((scalaVersion in crossVersion).value == scala210) "0.13.17" else "1.1.1"
+      },
+      crossSbtVersions := Seq("1.1.1", "0.13.17"),
+      crossScalaVersions := Seq(scala210, scala212),
       name := "sbt-close-watch",
       bintrayPackage := "sbt-close-watch",
       description := "CloseWatch reduces the latency between file system events and sbt task " +
         "and command processing, especially on OSX.",
       sbtPlugin := true,
       libraryDependencies ++= Seq(
-        sbtIO % "provided",
         "com.lihaoyi" %% "utest" % utestVersion % "test"
-      ),
+      ) ++ (if ((scalaVersion in crossVersion).value == scala210) None else Some(sbtIO)),
       publishMavenStyle in publishLocal := false,
       watchSources ++= (watchSources in files.jvm).value,
       utestFramework
@@ -224,6 +340,7 @@ object Build {
   lazy val reflect = project
     .settings(
       commonSettings,
+      crossScalaVersions := scalaCrossVersions.drop(1),
       testFrameworks += new TestFramework("utest.runner.Framework"),
       scalacOptions := Seq("-unchecked", "-deprecation", "-feature"),
       updateOptions in Global := updateOptions
@@ -255,7 +372,7 @@ object Build {
           settings.classpath.value = cp
           settings.usejavacp.value = true
           settings.outputDirs.add(dir.toString, dir.toString)
-          val g = nsc.Global(settings)
+          val g = nsc.Global(settings, new StoreReporter)
           (resources in Test).value collect {
             case f if f.getName == "Bar.scala.template"  => ("Bar", IO.read(f))
             case f if f.getName == "Buzz.scala.template" => ("Buzz", IO.read(f))
@@ -298,8 +415,7 @@ object Build {
       },
       libraryDependencies ++= Seq(
         scalaMacros % scalaVersion.value,
-        utest,
-        zinc // AbortMacroException is not found without this dependency
+        utest
       )
     )
 
@@ -308,7 +424,8 @@ object Build {
     .settings(
       publish := {},
       resolvers += Resolver.bintrayRepo("nightscape", "maven"),
-      scalaVersion := "2.11.12",
+      scalaVersion := scala211,
+      crossScalaVersions := Seq(scala211),
       libraryDependencies += Dependencies.scalagen
     )
 
@@ -316,6 +433,7 @@ object Build {
     .in(file("testing"))
     .jsSettings(
       scalaJSModuleKind := ModuleKind.CommonJSModule,
+      crossScalaVersions := scalaCrossVersions.drop(1),
       ioScalaJS
     )
     .settings(
@@ -325,10 +443,12 @@ object Build {
       utestCrossMain,
       utestFramework
     )
+    .jvmSettings(crossScalaVersions := scalaCrossVersions)
 
   lazy val util = project
     .settings(
       commonSettings,
+      crossScalaVersions := scalaCrossVersions,
       bintrayPackage := "util",
       libraryDependencies ++= Seq(
         SLogback,

@@ -8,7 +8,7 @@ import utest._
 import scala.util.Properties
 
 object NioDirectoryWatcherTest extends TestSuite {
-  val tests = if (System.getProperty("java.vm.name") == "Scala.js" || !Properties.isMac) Tests {
+  val tests = if (!Properties.isMac) Tests {
     implicit val latch: com.swoval.files.test.CountDownLatch = new CountDownLatch(1)
     val events = new ArrayBlockingQueue[FileWatchEvent](10)
     val callback: Callback = e => events.add(e)

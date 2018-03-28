@@ -23,7 +23,9 @@ package object test {
       val oDiff = oSet diff tSet
       Seq(tDiff -> "extra", oDiff -> "missing") foreach {
         case (s, c) if s.nonEmpty =>
-          println(s"The actual result had $c fields $s compared to the expected result.")
+          println(
+            s"The actual result had $c fields $s compared to the expected result.\n" +
+              s"Found: $t\nExpected: $other ")
           s ==> Set.empty
         case _ =>
       }
@@ -53,32 +55,40 @@ package object test {
     val c = closeable
     val p = Promise[R]
     p.tryComplete(Try(f(c)))
-    val res = p.future
-    res.onComplete(_ => c.close())
-    res
+    p.future.andThen {
+      case r =>
+        c.close()
+        r
+    }
   }
 
   def usingAsync[C <: AutoCloseable, R](closeable: => C)(f: C => Future[R]): Future[R] = {
     val c = closeable
-    val res = f(c)
-    res.onComplete(_ => c.close())
-    res
+    f(c).andThen {
+      case r =>
+        c.close()
+        r
+    }
   }
 
   object Files {
     def withTempFile[R](dir: String)(f: String => Future[R]): Future[R] = {
       val file: String = platform.createTempFile(dir, "file")
-      val res = f(file)
-      res.onComplete(_ => platform.delete(file))
-      res
+      f(file).andThen {
+        case r =>
+          platform.delete(file)
+          r
+      }
     }
 
     def withTempFile[R](f: String => Future[R]): Future[R] =
       withTempDirectory { dir =>
         val file: String = platform.createTempFile(dir, "file")
-        val res = f(file)
-        res.onComplete(_ => platform.delete(file))
-        res
+        f(file).andThen {
+          case r =>
+            platform.delete(file)
+            r
+        }
       }
 
     def withTempDirectory[R](f: String => Future[R]): Future[R] = {
@@ -93,9 +103,11 @@ package object test {
 
     def withDirectory[R](path: String)(f: => Future[R]): Future[R] = {
       platform.mkdir(path)
-      val res = f
-      res.onComplete(_ => platform.delete(path))
-      res
+      f.andThen {
+        case r =>
+          platform.delete(path)
+          r
+      }
     }
   }
   def testOn(desc: String, platforms: Platform*)(tests: Any): Tests = macro Macros.testOnWithDesc

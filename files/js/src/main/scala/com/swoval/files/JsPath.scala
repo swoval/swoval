@@ -17,10 +17,6 @@ class JsPath(val path: String, parent: Option[JsPath] = None) extends Path {
 
   override lazy val isDirectory: Boolean = exists && Fs.statSync(fullName).isDirectory
 
-  override lazy val lastModified: Long =
-    if (exists) Fs.statSync(fullName).mtime.getMilliseconds()
-    else 0
-
   override lazy val name: String = path.toString
 
   override lazy val parts: Seq[Path] = fullName.split(sep).map(JsPath(_))
@@ -67,6 +63,10 @@ class JsPath(val path: String, parent: Option[JsPath] = None) extends Path {
   override def getRoot: Path = JsPath("/")
 
   override def hashCode: Int = fullName.hashCode
+
+  override def lastModified: Long =
+    if (exists) Fs.statSync(fullName).mtime.getTime().toLong
+    else 0
 
   override def list(recursive: Boolean, pathFilter: PathFilter): Seq[Path] = {
     if (exists && isDirectory) {

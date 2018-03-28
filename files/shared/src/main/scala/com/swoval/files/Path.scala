@@ -10,7 +10,7 @@ trait Path {
   def getRoot: Path
   def fullName: String
   def lastModified: Long
-  def list(recursive: Boolean, filter: PathFilter = _ => true): Seq[Path]
+  def list(recursive: Boolean, filter: PathFilter = (_: Path) => true): Seq[Path]
   def mkdir(): Path
   def mkdirs(): Path
   def name: String
@@ -32,6 +32,9 @@ trait PathCompanion {
 }
 object Path extends PathCompanion {
   private[this] val companion: PathCompanion = platform.pathCompanion
+  implicit object ordering extends Ordering[Path] {
+    override def compare(l: Path, r: Path): Int = l.fullName.compare(r.fullName)
+  }
   def apply(name: String*): Path = companion(name: _*)
   def createTempFile(dir: Path, prefix: String): Path = companion.createTempFile(dir, prefix)
   def createTempDirectory(dir: Path, prefix: String): Path =

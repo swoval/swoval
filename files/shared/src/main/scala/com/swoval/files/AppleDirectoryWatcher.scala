@@ -4,7 +4,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.FileWatchEvent.{ Create, Delete, Modify }
-import com.swoval.files.apple.{ FileEventsApi, Flags }
+import com.swoval.files.apple.{ FileEvent, FileEventsApi, Flags }
+import com.swoval.files.compat._
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -22,9 +23,11 @@ class AppleDirectoryWatcher(latency: Duration, flags: Flags.Create, executor: Ex
 
   def register(path: Path, recursive: Boolean): Boolean = register(path, flags.value)
   def register(path: Path, flags: Int): Boolean = {
-    if (!alreadyWatching(path)) {
-      val stream = fileSystemApi.createStream(path.fullName, latency.toNanos / 1e9, flags)
-      lock.synchronized(streams += path.fullName -> stream)
+    if (path.isDirectory && !alreadyWatching(path)) {
+      fileSystemApi.createStream(path.fullName, latency.toNanos / 1e9, flags) match {
+        case -1 => System.err.println(s"Error watching $path.")
+        case id => lock.synchronized(streams += path.fullName -> id)
+      }
     }
     true
   }
@@ -42,34 +45,41 @@ class AppleDirectoryWatcher(latency: Duration, flags: Flags.Create, executor: Ex
   private[this] val streams = mutable.Map.empty[String, Int]
   private[this] val lock = new Object
   private[this] val closed = new AtomicBoolean(false)
-  private[this] val fileSystemApi: FileEventsApi = try {
-    FileEventsApi.apply(
-      { fe =>
-        executor.run(onFileEvent({
-          val path = Path(fe.fileName)
-          if (fe.itemIsFile) {
-            fe match {
-              case e if e.isNewFile => FileWatchEvent(path, Create)
-              case e if e.isRemoved => FileWatchEvent(path, Delete)
-              case _                => FileWatchEvent(path, Modify)
-            }
-          } else if (path.exists) {
-            FileWatchEvent(path, Modify)
-          } else {
-            FileWatchEvent(path, Delete)
+  private[this] val onFileEventImpl = new FileEventsApi.Consumer[FileEvent] {
+    override def accept(fe: FileEvent): Unit = {
+      executor.run(onFileEvent({
+        val path = Path(fe.fileName)
+        if (fe.itemIsFile) {
+          fe match {
+            case e if e.isNewFile && path.exists =>
+              FileWatchEvent(path, Create)
+            case e if e.isRemoved || !path.exists =>
+              FileWatchEvent(path, Delete)
+            case _ =>
+              FileWatchEvent(path, Modify)
           }
-        }))
-      }, { s =>
-        if (!closed.get) executor.run {
-          lock.synchronized(streams -= s)
-          onStreamRemoved(s)
+        } else if (path.exists) {
+          FileWatchEvent(path, Modify)
+        } else {
+          FileWatchEvent(path, Delete)
         }
+      }))
+    }
+  }
+  private[this] val onStreamEvent = new FileEventsApi.Consumer[String] {
+    override def accept(s: String): Unit = {
+      if (!closed.get) executor.run {
+        lock.synchronized(streams -= s)
+        onStreamRemoved(s)
       }
-    )
+    }
+  }
+  private[this] val fileSystemApi: FileEventsApi = try {
+    FileEventsApi.apply(onFileEventImpl, onStreamEvent)
   } catch { case _: Throwable => sys.exit(1) }
 
   @tailrec @inline
-  private[this] def alreadyWatching(path: Path): Boolean = {
+  private[this] final def alreadyWatching(path: Path): Boolean = {
     if (path == path.getRoot) false
     else (streams contains path.fullName) || alreadyWatching(path.getParent)
   }

@@ -13,24 +13,25 @@ class NioDirectoryWatcher(override val onFileEvent: Callback) extends DirectoryW
     def impl(p: Path): Boolean = watchedDirs get p.fullName match {
       case None if p.isDirectory =>
         val options = new FSWatcherOptions(recursive = false)
-        val callback: js.Function2[nodejs.EventType, String, Unit] = (tpe, name) => {
-          val watchPath = p.resolve(Path(name))
-          val exists = watchPath.exists
-          val kind: FileWatchEvent.Kind = tpe match {
-            case "rename" if !exists => Delete
-            case _                   => Modify
-          }
-          onFileEvent(FileWatchEvent(watchPath, kind))
-          if (recursive && tpe == "rename" && exists && watchPath.isDirectory) {
-            watchPath.list(recursive, _ => true) foreach { newPath =>
-              if (newPath.isDirectory) {
-                impl(newPath)
-              } else {
-                onFileEvent(FileWatchEvent(newPath, Create))
+        val callback: js.Function2[nodejs.EventType, String, Unit] =
+          (tpe: nodejs.EventType, name: String) => {
+            val watchPath = p.resolve(Path(name))
+            val exists = watchPath.exists
+            val kind: FileWatchEvent.Kind = tpe match {
+              case "rename" if !exists => Delete
+              case _                   => Modify
+            }
+            onFileEvent(FileWatchEvent(watchPath, kind))
+            if (recursive && tpe == "rename" && exists && watchPath.isDirectory) {
+              watchPath.list(recursive, _ => true) foreach { newPath =>
+                if (newPath.isDirectory) {
+                  impl(newPath)
+                } else {
+                  onFileEvent(FileWatchEvent(newPath, Create))
+                }
               }
             }
           }
-        }
         watchedDirs += p.fullName -> WatchedDir(Fs.watch(p.fullName, options, callback), recursive)
         true
       case _ =>

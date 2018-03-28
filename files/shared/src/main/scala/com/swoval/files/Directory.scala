@@ -6,7 +6,7 @@ import com.swoval.files.FileWatchEvent.{ Create, Delete }
 import scala.annotation.tailrec
 import scala.collection.mutable
 
-final case class Directory private (path: Path) {
+case class Directory private (path: Path) {
   def close(): Unit = {
     subdirectories.values foreach (_.close())
     subdirectories.clear()
@@ -22,7 +22,7 @@ final case class Directory private (path: Path) {
             } else {
               directory.subdirectories get p.name match {
                 case None =>
-                  val dir = Directory(directory.resolve(p), callback)
+                  val dir = Directory.of(directory.resolve(p), callback)
                   directory.subdirectories += p.name -> dir
                   true
                 case _ =>
@@ -36,9 +36,9 @@ final case class Directory private (path: Path) {
           lock.synchronized(directory.subdirectories get p.name) match {
             case None =>
               lock.synchronized {
-                val dir = Directory(directory.resolve(p), callback)
-                directory.subdirectories += p.name -> dir
                 callback(FileWatchEvent(directory.resolve(p), Create))
+                val dir = Directory.of(directory.resolve(p), callback)
+                directory.subdirectories += p.name -> dir
                 val child = dir.path.resolve(Path(rest.map(_.name): _*))
                 dir.find(child).isDefined
               }
@@ -133,13 +133,18 @@ final case class Directory private (path: Path) {
     val deletedFiles = oldFiles diff newFiles
     files --= deletedFiles
     val createdDirs = newDirs diff oldDirs
-    subdirectories ++= createdDirs.view map (f => f -> Directory(path.resolve(Path(f)), callback))
+    subdirectories ++= createdDirs.view map (f =>
+      f -> Directory.of(path.resolve(Path(f)), callback))
     val createdFiles = newFiles diff oldFiles
     files ++= createdFiles.map(f => f -> Path(f))
-    deletedFiles foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Delete)))
-    deletedDirs foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Delete)))
-    createdDirs foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Create)))
-    createdFiles foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Create)))
+    callback match {
+      case Directory.EmptyCallback =>
+      case _ =>
+        deletedFiles foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Delete)))
+        deletedDirs foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Delete)))
+        createdDirs foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Create)))
+        createdFiles foreach (f => callback(FileWatchEvent(path.resolve(Path(f)), Create)))
+    }
     this
   }
   private def resolve(other: Path) = path.resolve(other)
@@ -150,7 +155,9 @@ final case class Directory private (path: Path) {
 }
 
 object Directory {
-  def apply(path: Path): Directory = apply(path, _ => {})
-  def apply(path: Path, callback: Callback = _ => {}): Directory =
+  case object EmptyCallback extends Callback {
+    override def apply(e: FileWatchEvent): Unit = {}
+  }
+  def of(path: Path, callback: Callback = EmptyCallback): Directory =
     new Directory(path).traverse(callback)
 }

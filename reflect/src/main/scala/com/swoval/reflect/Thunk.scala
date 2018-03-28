@@ -1,7 +1,7 @@
 package com.swoval.reflect
 
-import scala.reflect.macros.blackbox
 import scala.language.experimental.macros
+import scala.reflect.macros.blackbox
 
 /**
  * Evaluates expressions possibly using reflection rather than direct evaluation. The motivation

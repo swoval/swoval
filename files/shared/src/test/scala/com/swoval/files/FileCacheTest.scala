@@ -1,12 +1,15 @@
 package com.swoval.files
 
 import com.swoval.files.DirectoryWatcher.Callback
-import com.swoval.files.FileWatchEvent.Create
+import com.swoval.files.FileWatchEvent.{ Create, Delete, Modify }
+import com.swoval.files.apple.Flags
 import com.swoval.files.test._
 import com.swoval.test._
 import utest._
+import utest.framework.ExecutionContext.RunNow
 
 import scala.collection.mutable
+import scala.concurrent.duration._
 import scala.util.Properties
 
 object FileCacheTest extends TestSuite {
@@ -16,9 +19,9 @@ object FileCacheTest extends TestSuite {
       'register - {
         'existing - withTempFile { f =>
           val parent = f.getParent
-          using(FileCache(options)(_ => {})) { c =>
+          using(FileCache(options)((_: FileWatchEvent) => {})) { c =>
             c.register(parent)
-            c.list(parent, recursive = true, _ => true) === Seq(f)
+            c.list(parent, recursive = true, (_: Path) => true) === Seq(f)
           }
         }
         'monitor - {
@@ -29,7 +32,7 @@ object FileCacheTest extends TestSuite {
                 c.register(dir)
                 withTempFile(dir) { f =>
                   latch.waitFor(DEFAULT_TIMEOUT) {
-                    c.list(dir, recursive = true, _ => true) === Seq(f)
+                    c.list(dir, recursive = true, (_: Path) => true) === Seq(f)
                   }
                 }
               }
@@ -40,7 +43,7 @@ object FileCacheTest extends TestSuite {
                 c.register(dir)
                 withTempDirectory(dir) { subdir =>
                   latch.waitFor(DEFAULT_TIMEOUT) {
-                    c.list(dir, recursive = true, _ => true) === Seq(subdir)
+                    c.list(dir, recursive = true, (_: Path) => true) === Seq(subdir)
                   }
                 }
               }
@@ -51,27 +54,56 @@ object FileCacheTest extends TestSuite {
           val latch = new CountDownLatch(2)
           val initial = Path.createTempFile(dir, "move")
           val moved = Path(s"${initial.name}.moved")
-          usingAsync(FileCache(options)(_ => latch.countDown())) { c =>
-            c.list(dir, recursive = false, _ => true) === Seq(initial)
+          usingAsync(FileCache(options)((_: FileWatchEvent) => latch.countDown())) { c =>
+            c.list(dir, recursive = false, (_: Path) => true) === Seq(initial)
             initial.renameTo(moved)
             latch.waitFor(DEFAULT_TIMEOUT) {
-              c.list(dir, recursive = false, _ => true) === Seq(moved)
+              c.list(dir, recursive = false, (_: Path) => true) === Seq(moved)
+            }
+          }
+        }
+        "anti-entropy" - withTempFile { f =>
+          val parent = f.getParent
+          val events = new ArrayBlockingQueue[FileWatchEvent](2)
+          val executor: ScheduledExecutor = platform.makeScheduledExecutor("FileCacheTest")
+          val flags = new Flags.Create().setFileEvents.setNoDefer
+          val latency = 40.milliseconds
+          val options = Options(latency, flags)
+          usingAsync(FileCache(options)(events.add)) { c =>
+            c.register(parent)
+            c.list(parent, recursive = true, (_: Path) => true) === Seq(f)
+            val callbacks = Callbacks()
+            val lastModified = 1000
+            usingAsync(DirectoryWatcher.default(1.millis)(callbacks)) { w =>
+              callbacks.addCallback { _ =>
+                executor.schedule(latency / 10)(f.setLastModifiedTime(lastModified))
+                w.close()
+              }
+              w.register(parent)
+              f.setLastModifiedTime(0)
+              events.poll(DEFAULT_TIMEOUT)(_.kind ==> Modify).flatMap { _ =>
+                f.lastModified ==> lastModified
+                executor.schedule(latency / 2)(f.delete())
+                events.poll(DEFAULT_TIMEOUT)(_.kind ==> Delete)
+              }
             }
           }
         }
         'addmany - withTempDirectory { dir =>
-          val filesToAdd = if (Properties.isMac) 100 else 5
+          val filesToAdd = 100
+          val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
           val latch = new CountDownLatch(filesToAdd * 2)
           val added = mutable.Set.empty[Path]
           val callback: Callback = e =>
-            added.synchronized {
-              if (e.kind == Create && added.add(e.path)) {
-                latch.countDown()
+            executor.run {
+              added.synchronized {
+                if (e.kind == Create && added.add(e.path)) {
+                  latch.countDown()
+                }
               }
           }
           usingAsync(FileCache(options)(callback)) { c =>
             c.register(dir)
-            val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
             val files = mutable.Set.empty[Path]
             executor.run {
               (0 until filesToAdd) foreach { i =>
@@ -80,33 +112,12 @@ object FileCacheTest extends TestSuite {
                 files ++= Seq(subdir, file)
               }
             }
-            try {
-              latch.waitFor(DEFAULT_TIMEOUT * 10) {
-                added.clear()
-                val found = c.list(dir, recursive = true, _ => true).toSet
-                found === files.toSet
-              }
-            } finally {
-              executor.close()
+            latch.waitFor(DEFAULT_TIMEOUT * 10) {
+              added.clear()
+              val found = c.list(dir, recursive = true, PathFilter.AllPass).toSet
+              found === files.toSet
             }
-          }
-        }
-      }
-      'reuseDirectories - withTempDirectory { dir =>
-        val directory = Directory(dir)
-        val directories = mutable.Set(directory)
-        val latch = new CountDownLatch(1)
-        usingAsync(new FileCacheImpl(options, directories) {
-          override def close() = closeImpl(clearDirectoriesOnClose = false)
-        }) { c =>
-          c.addCallback(_ => latch.countDown())
-          withTempFile(dir) { f =>
-            latch.waitFor(DEFAULT_TIMEOUT) {
-              c.list(dir, recursive = true, _ => true) === Seq(f)
-              c.close()
-              directories.toSet === Set(directory)
-            }
-          }
+          }.andThen { case _ => executor.close() }
         }
       }
     }

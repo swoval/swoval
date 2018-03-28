@@ -2,7 +2,6 @@ package com.swoval.files.apple
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation._
-import scala.util.Success
 
 @JSExportTopLevel("com.swoval.files.apple.FileEventsApi")
 @JSExportAll
@@ -21,10 +20,14 @@ class FileEventsApi(handle: Double) extends AutoCloseable {
 
 @JSExportTopLevel("com.swoval.files.apple.FileEventsApi$")
 object FileEventsApi {
+  trait Consumer[T] {
+    def accept(t: T): Unit
+  }
   @JSExport("apply")
-  def apply(consumer: FileEvent => Unit, pathConsumer: String => Unit): FileEventsApi = {
-    val jsConsumer: js.Function2[String, Int, Unit] = (s, i) => consumer(new FileEvent(s, i))
-    val jsPathConsumer: js.Function1[String, Unit] = s => pathConsumer(s)
+  def apply(consumer: Consumer[FileEvent], pathConsumer: Consumer[String]): FileEventsApi = {
+    val jsConsumer: js.Function2[String, Int, Unit] = (s: String, i: Int) =>
+      consumer.accept(new FileEvent(s, i))
+    val jsPathConsumer: js.Function1[String, Unit] = (s: String) => pathConsumer.accept(s)
     new FileEventsApi(FileEventsApiFacade.init(jsConsumer, jsPathConsumer))
   }
 }
