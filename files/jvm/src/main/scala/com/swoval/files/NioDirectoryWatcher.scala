@@ -5,6 +5,7 @@ import java.nio.file.{ Files => JFiles, Path => JPath, Paths => JPaths, _ }
 import java.util.concurrent.Executors
 import java.util.function.{ Consumer, Predicate }
 
+import com.swoval.concurrent.ThreadFactory
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.FileWatchEvent.{ Create, Delete, Modify }
 import com.swoval.files.JvmPath._
@@ -16,7 +17,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 class NioDirectoryWatcher(override val onFileEvent: Callback) extends DirectoryWatcher {
-  override def register(path: Path, recursive: Boolean = true): Boolean = {
+  override def register(path: Path, recursive: Boolean): Boolean = {
     def impl(p: JPath): Boolean = lock.synchronized {
       val realPath = p.toRealPath()
       try {
@@ -71,7 +72,9 @@ class NioDirectoryWatcher(override val onFileEvent: Callback) extends DirectoryW
   private[this] val watchedDirs = mutable.Map.empty[JPath, WatchedDir]
   private[this] val watchService = FileSystems.getDefault.newWatchService
   private[this] val lock = new Object
-  private[this] val executor = Executors.newSingleThreadExecutor
+  private[this] val executor =
+    Executors.newSingleThreadExecutor(
+      new ThreadFactory(s"${NioDirectoryWatcher.this.getClass.getName}.loop-thread"))
 
   executor.submit((() => {
     @tailrec
