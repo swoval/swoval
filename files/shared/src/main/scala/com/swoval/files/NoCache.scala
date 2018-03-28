@@ -9,13 +9,13 @@ class NoCache(options: Options) extends FileCache {
     executor.close()
   }
   override def list(path: Path, recursive: Boolean, filter: PathFilter): Seq[Path] = {
-    watcher.foreach(_.register(path))
+    watcher.foreach(_.register(path, recursive))
     if (path.exists) {
       path.list(recursive, filter)
     } else {
       Seq.empty
     }
   }
-  override def register(path: Path): Option[Directory] = None
+  override def register(path: Path, recursive: Boolean): Option[Directory] = None
 }
 object NoCache extends NoCache(Options.default)

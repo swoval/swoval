@@ -8,6 +8,9 @@ trait PathFilter extends Function[Path, Boolean] {
   def &&(other: PathFilter) = CombinedFilter(this, other)
 }
 object PathFilter {
+  case object AllPass extends PathFilter {
+    override final def apply(p: Path): Boolean = true
+  }
   case class CombinedFilter(left: PathFilter, right: PathFilter) extends PathFilter {
     override def apply(path: Path): Boolean = left(path) && right(path)
   }

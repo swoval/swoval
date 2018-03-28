@@ -5,6 +5,7 @@ import com.swoval.files.{ Path, PathFilter }
 trait SourcePath {
   def base: Path
   def filter: PathFilter
+  def recursive: Boolean
   private[this] case class Hash(b: Path, f: PathFilter)
   override def equals(o: Any): Boolean = o match {
     case other: SourcePath => other.base == base && other.filter == filter

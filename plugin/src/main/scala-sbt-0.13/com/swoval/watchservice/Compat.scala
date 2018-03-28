@@ -10,6 +10,7 @@ class FileSource(file: File, f: PathFilter) extends File(file.toString) with Sou
   private val _f = f
   override val base: Path = Path(file.toString)
   override val filter: PathFilter = f && ((_: Path).startsWith(base))
+  override def recursive: Boolean = true
   override lazy val toString: String = f.toString.replaceAll("SourceFilter", "SourcePath")
   override def equals(o: Any): Boolean = o match {
     case that: FileSource => (this.base == that.base) && (this._f == that._f)
@@ -34,8 +35,9 @@ class ExactFileSource(val file: File) extends FileSource(file, new ExactFileFilt
   }
   override lazy val toString: String = s"""ExactFileSource("$file")"""
 }
-class BaseFileSource(val file: File, filter: PathFilter) extends FileSource(file, filter) {
+class BaseFileSource(val file: File, filter: PathFilter) extends FileSource(file, filter)  {
   override lazy val hashCode: Int = file.hashCode
+  override def recursive = false
   override def equals(o: Any): Boolean = o match {
     case that: BaseFileSource => this.file == that.file
     case _                    => false

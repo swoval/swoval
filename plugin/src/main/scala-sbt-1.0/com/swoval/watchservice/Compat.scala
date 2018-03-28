@@ -82,6 +82,7 @@ object Compat {
         case AllPassFilter                => Some(new ExactFileFilter(file.base))
         case f                            => Some(f)
       }
+      override val recursive: Boolean = file.exclude != BaseFilter
       override val base: Path = Path(file.base.fullName)
       override val filter: PathFilter = SourcePathFilter(base, include, exclude)
       override lazy val toString: String = {

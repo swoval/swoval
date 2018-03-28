@@ -2,6 +2,7 @@ package com.swoval.files
 
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.FileWatchEvent.{ Delete, Modify }
+import com.swoval.files.PathFilter.AllPass
 import com.swoval.files.apple.Flags
 
 import scala.collection.mutable
@@ -10,34 +11,36 @@ import scala.concurrent.duration._
 import scala.util.Properties
 
 trait FileCache extends AutoCloseable with Callbacks {
-  def list(path: Path, recursive: Boolean, filter: PathFilter): Seq[Path]
-  def register(path: Path): Option[Directory]
+  def list(path: Path, recursive: Boolean = true, filter: PathFilter = AllPass): Seq[Path]
+  def register(path: Path, recursive: Boolean = true): Option[Directory]
 }
 
-class FileCacheImpl(options: Options, private[this] val directories: mutable.Set[Directory])
-    extends FileCache {
-  def this(options: Options) = this(options, mutable.Set.empty)
+class FileCacheImpl(options: Options) extends FileCache {
+  private[this] val directories: mutable.Set[Directory] = mutable.Set.empty[Directory]
   private[this] val executor: ScheduledExecutor =
     platform.makeScheduledExecutor("com.swoval.files.FileCacheImpl.executor-thread")
   private[this] val scheduledFutures = mutable.Map.empty[Path, Future[FileWatchEvent]]
+
   def list(path: Path, recursive: Boolean, filter: PathFilter): Seq[Path] =
     directories
       .synchronized {
         if (path.exists) {
           directories.find(path startsWith _.path) match {
             case Some(dir) => dir.list(path, recursive, filter)
-            case None      => register(path).fold(Seq.empty[Path])(_.list(recursive, filter))
+            case None =>
+              register(path, recursive).fold(Seq.empty[Path])(_.list(recursive, filter))
           }
         } else {
           Seq.empty
         }
       }
 
-  override def register(path: Path): Option[Directory] = {
+  override def register(path: Path, recursive: Boolean): Option[Directory] = {
     if (path.exists) {
-      watcher.foreach(_.register(path))
+      watcher.foreach(_.register(path, recursive))
       directories.synchronized {
         if (!directories.exists(dir => path.startsWith(dir.path))) {
+
           directories foreach { dir =>
             if (dir.path startsWith path) directories.remove(dir)
           }

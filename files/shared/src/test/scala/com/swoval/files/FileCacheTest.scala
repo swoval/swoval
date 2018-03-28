@@ -79,7 +79,7 @@ object FileCacheTest extends TestSuite {
                 executor.schedule(latency / 10)(f.setLastModifiedTime(lastModified))
                 w.close()
               }
-              w.register(parent, true)
+              w.register(parent)
               f.setLastModifiedTime(0)
               events.poll(DEFAULT_TIMEOUT)(_.kind ==> Modify).flatMap { _ =>
                 f.lastModified ==> lastModified

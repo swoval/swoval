@@ -5,7 +5,7 @@ import java.util.concurrent.{ ArrayBlockingQueue, BlockingQueue, ExecutorService
 
 import com.swoval.concurrent.ThreadFactory
 import com.swoval.files.DirectoryWatcher.Callback
-import com.swoval.files.{ FileCache, Path }
+import com.swoval.files.{ FileCache, Path, PathFilter }
 import com.swoval.watchservice.CloseWatchPlugin.autoImport._
 import sbt.BasicCommandStrings._
 import sbt.BasicCommands._
@@ -77,10 +77,13 @@ object Continuously {
     private[this] def debug(msg: => String): Unit = logger.debug(s"$tag $msg")
     private[this] def init(): Unit = {
       def sanitized(p: SourcePath) = p.base match {
-        case dir if dir.isDirectory => dir
-        case f                      => f.getParent
+        case dir if dir.isDirectory => (dir -> p.recursive)
+        case f                      => (f.getParent -> p.recursive)
       }
-      sources.map(sanitized).distinct.foreach(cache.register)
+      val filter = new PathFilter {
+        override def apply(p: Path) = sources.exists(_.filter(p))
+      }
+      sources.map(sanitized).distinct.foreach((cache.register _).tupled)
       executor.submit(new Runnable { override def run() { signalExit() } })
     }
     private[this] def offer(e: TriggerEvent) = callback.synchronized {
