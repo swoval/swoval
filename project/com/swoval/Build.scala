@@ -124,6 +124,7 @@ object Build {
       case `scala210` => Def.task((key in plugin).value)
       case v =>
         Def.taskDyn {
+          (key in appleFileEvents.js).value
           (key in reflect).value
           (key in files.js).value
           (key in testing.js).value
