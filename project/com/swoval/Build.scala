@@ -38,7 +38,7 @@ import scala.util.Properties
 
 object Build {
   val scalaCrossVersions @ Seq(scala210, scala211, scala212) = Seq("2.10.7", "2.11.12", "2.12.4")
-  def baseVersion: String = "1.2.4"
+  def baseVersion: String = "1.3.0"
   def settings(args: Def.Setting[_]*): SettingsDefinition =
     Def.SettingsDefinition.wrapSettingsDefinition(args)
   def commonSettings: SettingsDefinition =
