@@ -79,11 +79,14 @@ object Build {
       BuildKeys.java8rt in ThisBuild := {
         if (Properties.isMac) {
           import scala.sys.process._
-          Seq("mdfind", "-name", "rt.jar").!!.split("\n").find { n =>
-            !n.endsWith("alt-rt.jar") && {
-              val version =
-                new JarFile(n).getManifest.getMainAttributes.getValue("Specification-Version")
-              version.split("\\.").last == "8"
+          Seq("mdfind", "-name", "rt.jar").!! match {
+            case null => None
+            case res => res.split("\n").find { n =>
+              !n.endsWith("alt-rt.jar") && {
+                val version =
+                  Option(new JarFile(n).getManifest).map(_.getMainAttributes.getValue("Specification-Version"))
+                version.getOrElse("0").split("\\.").last == "8"
+              }
             }
           }
         } else {
