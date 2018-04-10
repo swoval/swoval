@@ -31,9 +31,8 @@ public:
   bool started = false;
   bool stopped = false;
   bool closed = false;
-  void (*callback)(std::unique_ptr<Events>, handle<T> *, Lock) = nullptr;
-  void (*stop_stream_callback)(std::unique_ptr<Strings>, handle<T> *,
-                               Lock) = nullptr;
+  void (*callback)(std::unique_ptr<Events>, handle<T> *, Lock);
+  void (*stop_stream_callback)(std::unique_ptr<Strings>, handle<T> *, Lock);
 
   handle(T *t, void (*cb)(std::unique_ptr<Events>, handle<T> *, Lock),
          void (*ss)(std::unique_ptr<Strings>, handle<T> *, Lock))
@@ -41,22 +40,33 @@ public:
 
   void close() {
     Lock lock(mutex);
+    if (!started) {
+      cond.wait(lock, [this] { return this->started; });
+    }
     if (!closed) {
       stopped = true;
-      closed = true;
-      CFRunLoopSourceInvalidate(sourceRef);
-      CFRunLoopRemoveSource(runLoop, sourceRef, mode);
-      if (context) {
-        delete context;
-        context = nullptr;
-      }
-      for (auto pair : stream_handles) {
-        stop_stream(pair.second.second, runLoop);
-      }
-      stream_handles.clear();
-      CFRunLoopStop(runLoop);
+      CFRunLoopSourceSignal(sourceRef);
+      CFRunLoopWakeUp(runLoop);
+    }
+    if (!closed) {
+      cond.wait(lock, [this] { return this->closed; });
     }
     lock.unlock();
+  }
+
+  void cleanupRunLoop() {
+    CFRunLoopStop(runLoop);
+    CFRunLoopSourceInvalidate(sourceRef);
+    CFRunLoopRemoveSource(runLoop, sourceRef, mode);
+    for (auto pair : stream_handles) {
+      stop_stream(pair.second.second, runLoop);
+    }
+    stream_handles.clear();
+    if (context) {
+      delete context;
+      context = nullptr;
+    }
+    closed = true;
   }
 
   int startStream(const char *path, double latency, int flags) {
@@ -102,6 +112,9 @@ public:
 
   void stopStream(int32_t stream_key) {
     Lock lock(mutex);
+    if (!started) {
+      cond.wait(lock, [this] { return this->started; });
+    }
     stopStream(stream_key, std::move(lock));
   }
   void stopStream(int32_t stream_key, Lock lock) {
@@ -163,6 +176,8 @@ template <typename T> static void cleanupFunc(handle<T> *h) {
   std::vector<int32_t> redundant_ids;
   Lock lock(h->mutex);
   if (h->stopped) {
+    h->cleanupRunLoop();
+    h->cond.notify_all();
     lock.unlock();
     return;
   }

@@ -70,6 +70,7 @@ static NodeHandle *get_handle_ptr(napi_env env, napi_value obj) {
 
 static void process_callback(uv_async_t *async) {
     auto *h = reinterpret_cast<NodeHandle *>(async->data);
+    Lock lock(h->mutex);
     if (h->stopped) {
         if (h->closed) {
             delete h->data;
