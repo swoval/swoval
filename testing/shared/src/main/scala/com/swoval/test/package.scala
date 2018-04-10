@@ -3,17 +3,20 @@ package com.swoval
 import java.util.concurrent.{ BlockingQueue, TimeUnit }
 
 import utest._
-import utest.framework.ExecutionContext.RunNow
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
-import scala.concurrent.{ Future, Promise }
+import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.language.experimental.macros
 import scala.language.higherKinds
 import scala.util.Try
 
 package object test {
   final val DEFAULT_TIMEOUT = 1.second
+  object Implicits {
+    implicit def executionContext: ExecutionContext = platform.executionContext
+  }
+  import Implicits.executionContext
 
   implicit class RichTraversable[T, M[_] <: Traversable[_]](val t: M[T]) {
     def ===(other: M[T]): Unit = {

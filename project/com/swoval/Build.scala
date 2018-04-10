@@ -245,6 +245,7 @@ object Build {
       cleanAllGlobals,
       nodeNativeLibs
     )
+    .dependsOn(testing % "test->test")
 
   def addLib(dir: File): File = {
     val target = dir.toPath.resolve("node_modules/lib")

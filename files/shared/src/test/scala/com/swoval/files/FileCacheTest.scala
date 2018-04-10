@@ -74,9 +74,13 @@ object FileCacheTest extends TestSuite {
             c.list(parent, recursive = true, (_: Path) => true) === Seq(f)
             val callbacks = Callbacks()
             val lastModified = 1000
+            var handle = -1
             usingAsync(DirectoryWatcher.default(1.millis)(callbacks)) { w =>
-              callbacks.addCallback { _ =>
-                executor.schedule(latency / 10)(f.setLastModifiedTime(lastModified))
+              handle = callbacks.addCallback { _ =>
+                executor.schedule(5.milliseconds) {
+                  callbacks.removeCallback(handle)
+                  f.setLastModifiedTime(lastModified)
+                }
                 w.close()
               }
               w.register(parent)
