@@ -16,7 +16,6 @@ import com.typesafe.sbt.GitVersioning
 import com.typesafe.sbt.SbtGit.git
 import com.typesafe.sbt.pgp.PgpKeys.publishSigned
 import org.apache.commons.codec.digest.DigestUtils
-import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport.toPlatformDepsGroupID
 import org.scalajs.core.tools.linker.backend.ModuleKind
 import org.scalajs.sbtplugin.JSPlatform
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ fastOptJS, fullOptJS, scalaJSModuleKind }
@@ -38,14 +37,15 @@ import scala.util.Properties
 
 object Build {
   val scalaCrossVersions @ Seq(scala210, scala211, scala212) = Seq("2.10.7", "2.11.12", "2.12.4")
+  val disableBintray = sys.props
+    .get("SonatypeSnapshot")
+    .orElse(sys.props.get("SonatypeRelease"))
+    .fold(false)(_ == "true")
   def baseVersion: String = "1.3.0"
   def settings(args: Def.Setting[_]*): SettingsDefinition =
     Def.SettingsDefinition.wrapSettingsDefinition(args)
   def commonSettings: SettingsDefinition =
     settings(
-      resolvers += Resolver.sonatypeRepo("releases"),
-      resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
-      resolvers += "Sonatype OSS Releases" at "https://oss.sonatype.org/content/repositories/releases",
       git.baseVersion := baseVersion,
       organization := "com.swoval",
       bintrayOrganization := Some("eatkins"),
@@ -60,12 +60,6 @@ object Build {
                   url("https://github.com/eatkins"))),
       licenses += ("MIT", url("https://opensource.org/licenses/MIT")),
       publishMavenStyle in publishLocal := false,
-      bintrayRelease := Def.taskDyn {
-        if (Seq("Snapshot", "Release").exists(t => sys.props.get(s"Sonatype$t").isDefined))
-          Def.task({})
-        else
-          Def.task(bintrayRelease.value)
-      }.value,
       publishTo := {
         val p = publishTo.value
         if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true"))
@@ -85,11 +79,14 @@ object Build {
       BuildKeys.java8rt in ThisBuild := {
         if (Properties.isMac) {
           import scala.sys.process._
-          Seq("mdfind", "-name", "rt.jar").!!.split("\n").find { n =>
-            !n.endsWith("alt-rt.jar") && {
-              val version =
-                new JarFile(n).getManifest.getMainAttributes.getValue("Specification-Version")
-              version.split("\\.").last == "8"
+          Seq("mdfind", "-name", "rt.jar").!! match {
+            case null => None
+            case res => res.split("\n").find { n =>
+              !n.endsWith("alt-rt.jar") && {
+                val version =
+                  Option(new JarFile(n).getManifest).map(_.getMainAttributes.getValue("Specification-Version"))
+                version.getOrElse("0").split("\\.").last == "8"
+              }
             }
           }
         } else {
@@ -136,6 +133,7 @@ object Build {
   lazy val root = project
     .in(file("."))
     .enablePlugins(CrossPerProjectPlugin)
+    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .aggregate(projects: _*)
     .settings(
       crossScalaVersions := scalaCrossVersions,
@@ -160,6 +158,7 @@ object Build {
     .in(file("apple-file-events"))
     .configurePlatform(JVMPlatform)(p => if (Properties.isMac) p.enablePlugins(JniNative) else p)
     .configurePlatform(JSPlatform)(_.enablePlugins(ScalaJSBundlerPlugin))
+    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .settings(
       commonSettings,
       name := "apple-file-events",
@@ -273,6 +272,7 @@ object Build {
   )
   lazy val files: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("files"))
+    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .enablePlugins(GitVersioning)
     .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
     .settings(
@@ -318,6 +318,7 @@ object Build {
   lazy val plugin: Project = project
     .in(file("plugin"))
     .enablePlugins(GitVersioning, BintrayPlugin)
+    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .settings(
       commonSettings,
       sbtVersion in pluginCrossBuild := {
@@ -340,6 +341,7 @@ object Build {
     .dependsOn(files.jvm % "compile->compile;test->test", testing.jvm % "test->test")
 
   lazy val reflect = project
+    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .settings(
       commonSettings,
       crossScalaVersions := scalaCrossVersions.drop(1),
@@ -433,6 +435,7 @@ object Build {
 
   lazy val testing: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("testing"))
+    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .jsSettings(
       scalaJSModuleKind := ModuleKind.CommonJSModule,
       crossScalaVersions := scalaCrossVersions.drop(1),
@@ -448,6 +451,7 @@ object Build {
     .jvmSettings(crossScalaVersions := scalaCrossVersions)
 
   lazy val util = project
+    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .settings(
       commonSettings,
       crossScalaVersions := scalaCrossVersions,
