@@ -6,6 +6,7 @@ import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 
 package object platform {
+  def executionContext = scala.concurrent.ExecutionContext.global
   def createTempFile(dir: String, prefix: String): String =
     JFiles.createTempFile(Paths.get(dir), prefix, "").toRealPath().toString
 
