@@ -319,7 +319,7 @@ object Build {
 
   lazy val plugin: Project = project
     .in(file("plugin"))
-    .enablePlugins(GitVersioning, BintrayPlugin)
+    .enablePlugins(GitVersioning)
     .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .settings(
       commonSettings,
