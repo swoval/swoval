@@ -81,13 +81,15 @@ object Build {
           import scala.sys.process._
           Seq("mdfind", "-name", "rt.jar").!! match {
             case null => None
-            case res => res.split("\n").find { n =>
-              !n.endsWith("alt-rt.jar") && {
-                val version =
-                  Option(new JarFile(n).getManifest).map(_.getMainAttributes.getValue("Specification-Version"))
-                version.getOrElse("0").split("\\.").last == "8"
+            case res =>
+              res.split("\n").find { n =>
+                !n.endsWith("alt-rt.jar") && {
+                  val version =
+                    Option(new JarFile(n).getManifest)
+                      .map(_.getMainAttributes.getValue("Specification-Version"))
+                  version.getOrElse("0").split("\\.").last == "8"
+                }
               }
-            }
           }
         } else {
           None
