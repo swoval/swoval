@@ -101,11 +101,9 @@ object FileCacheTest extends TestSuite {
           val latch = new CountDownLatch(filesToAdd * 2)
           val added = mutable.Set.empty[Path]
           val callback: Callback = e =>
-            executor.run {
-              added.synchronized {
-                if (e.kind == Create && added.add(e.path)) {
-                  latch.countDown()
-                }
+            added.synchronized {
+              if (e.kind == Create && added.add(e.path)) {
+                latch.countDown()
               }
           }
           usingAsync(FileCache(options)(callback)) { c =>

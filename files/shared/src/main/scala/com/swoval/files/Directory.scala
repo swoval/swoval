@@ -2,6 +2,7 @@ package com.swoval.files
 
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.FileWatchEvent.{ Create, Delete }
+import com.swoval.files.PathFilter.AllPass
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -36,9 +37,10 @@ case class Directory private (path: Path) {
           lock.synchronized(directory.subdirectories get p.name) match {
             case None =>
               lock.synchronized {
-                callback(FileWatchEvent(directory.resolve(p), Create))
-                val dir = Directory.of(directory.resolve(p), callback)
+                val dir = Directory.of(directory.resolve(p), Directory.EmptyCallback)
                 directory.subdirectories += p.name -> dir
+                @inline def notifyNewFile(p: Path): Unit = callback(FileWatchEvent(p, Create))
+                dir.list(recursive = true, AllPass).foreach(notifyNewFile)
                 val child = dir.path.resolve(Path(rest.map(_.name): _*))
                 dir.find(child).isDefined
               }
