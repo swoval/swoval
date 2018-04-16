@@ -14,7 +14,7 @@ object AppleDirectoryWatcherTest extends TestSuite {
   val dirFlags = new Flags.Create().setNoDefer()
   val fileFlags = new Flags.Create().setNoDefer().setFileEvents()
   val tests = testOn(MacOS) {
-    val events = new ArrayBlockingQueue[FileWatchEvent](10)
+    val events = new ArrayBlockingQueue[FileWatchEvent[Path]](10)
     "directories" - {
       'onCreate - {
         withTempDirectory { dir =>

@@ -6,7 +6,9 @@ class NoCache[P <: Path](options: Options)(implicit override val pathConverter: 
     extends FileCache[P] {
   private[this] val executor: Executor =
     platform.makeExecutor("com.swoval.files.NoCache.executor-thread")
-  private[this] val watcher = options.toWatcher(callback, executor)
+  private[this] val watcher = options.toWatcher(
+    fe => callback(FileWatchEvent(pathConverter.create(fe.path), fe.kind)),
+    executor)
   override def close(): Unit = {
     watcher.foreach(_.close())
     executor.close()

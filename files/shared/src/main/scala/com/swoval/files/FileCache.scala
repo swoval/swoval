@@ -11,7 +11,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Properties
 
-trait FileCache[P <: Path] extends AutoCloseable with Callbacks {
+trait FileCache[P <: Path] extends AutoCloseable with Callbacks[P] {
   protected implicit def pathConverter: PathConverter[P]
   def list(path: Path, recursive: Boolean = true, filter: PathFilter = AllPass): Seq[Path]
   def register(path: Path, recursive: Boolean = true): Option[Directory[P]]
@@ -24,16 +24,16 @@ class FileCacheImpl[P <: Path](options: Options)(
   private[this] val executor: ScheduledExecutor =
     platform.makeScheduledExecutor("com.swoval.files.FileCacheImpl.executor-thread")
 
-  private[this] val scheduledFutures = mutable.Map.empty[Path, Future[FileWatchEvent]]
+  private[this] val scheduledFutures = mutable.Map.empty[Path, Future[FileWatchEvent[Path]]]
 
-  def list(path: Path, recursive: Boolean, filter: PathFilter): Seq[Path] =
+  def list(path: Path, recursive: Boolean, filter: PathFilter): Seq[P] =
     directories
       .synchronized {
         if (path.exists) {
           directories.find(path startsWith _.path) match {
             case Some(dir) => dir.list(path, recursive, filter)
             case None =>
-              register(path, recursive).fold(Seq.empty[Path])(_.list(recursive, filter))
+              register(path, recursive).fold(Seq.empty[P])(_.list(recursive, filter))
           }
         } else {
           Seq.empty
@@ -45,7 +45,6 @@ class FileCacheImpl[P <: Path](options: Options)(
       watcher.foreach(_.register(path, recursive))
       directories.synchronized {
         if (!directories.exists(dir => path.startsWith(dir.path))) {
-
           directories foreach { dir =>
             if (dir.path startsWith path) directories.remove(dir)
           }
@@ -85,8 +84,11 @@ class FileCacheImpl[P <: Path](options: Options)(
 
     if (path.exists) {
       list(path, recursive = false, (_: Path) == path) match {
-        case Seq(_) =>
-          callback(FileWatchEvent(path, Modify))
+        case Seq(p) =>
+          directories.find(p startsWith _.path) match {
+            case Some(dir) => dir.update(path, !p.isDirectory, callback)
+            case _         => // should be unreachable
+          }
         case Seq() =>
           directories.synchronized {
             directories.filter(path startsWith _.path).toSeq.sortBy(_.path: Path).lastOption match {
@@ -103,7 +105,7 @@ class FileCacheImpl[P <: Path](options: Options)(
         directories.find(path startsWith _.path) match {
           case Some(dir) =>
             if (dir.remove(path)) {
-              callback(FileWatchEvent(path, Delete))
+              callback(FileWatchEvent[P](pathConverter.create(path), Delete))
             }
           case _ =>
         }
@@ -115,7 +117,8 @@ class FileCacheImpl[P <: Path](options: Options)(
 }
 
 object FileCache {
-  def apply[P <: Path: PathConverter](options: Options)(callback: Callback): FileCacheImpl[P] = {
+  def apply[P <: Path: PathConverter](options: Options)(
+      callback: Callbacks.Callback[P]): FileCacheImpl[P] = {
     val cache: FileCacheImpl[P] = new FileCacheImpl[P](options)
     cache.addCallback(callback)
     cache

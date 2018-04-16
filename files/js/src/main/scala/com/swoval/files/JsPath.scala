@@ -19,7 +19,10 @@ class JsPath(val path: String, parent: Option[JsPath] = None) extends Path {
 
   override lazy val name: String = path.toString
 
-  override lazy val parts: Seq[Path] = fullName.split(sep).map(JsPath(_))
+  override lazy val parts: Seq[Path] = fullName.split(sep) match {
+    case Array("", rest @ _*) => rest.map(JsPath(_))
+    case r                    => r.map(JsPath(_))
+  }
 
   override def createFile(): Path = {
     if (!exists) {
@@ -45,8 +48,8 @@ class JsPath(val path: String, parent: Option[JsPath] = None) extends Path {
   }
 
   override def equals(other: Any): Boolean = other match {
-    case that: JsPath => this.fullName == that.fullName
-    case _            => false
+    case that: Path => this.fullName == that.fullName
+    case _          => false
   }
 
   override def exists: Boolean = Fs.existsSync(fullName)
@@ -93,11 +96,13 @@ class JsPath(val path: String, parent: Option[JsPath] = None) extends Path {
 
   override def normalize: Path = JsPath(JPath.normalize(fullName).replaceAll(s"$sep$$", ""))
 
-  override def relativize(other: Path): Path =
-    other.fullName.split(s"$fullName$sep") match {
+  override def relativize(other: Path): Path = {
+    other.fullName.split(s"$fullName($sep?)") match {
       case Array(_, r) => JsPath(r)
+      case Array()     => JsPath("")
       case _           => other
     }
+  }
 
   override def renameTo(other: Path): Path = {
     Fs.renameSync(fullName, other.fullName)

@@ -41,6 +41,8 @@ object Path extends PathCompanion {
     companion.createTempDirectory(dir, prefix)
   trait DelegatePath extends Path {
     def path: Path
+    override def hashCode: Int = path.hashCode
+    override def equals(other: Any): Boolean = path.equals(other)
     override def createFile(): Path = path.createFile()
     override def delete(): Boolean = path.delete()
     override def exists: Boolean = path.exists
@@ -64,5 +66,6 @@ object Path extends PathCompanion {
     override def setLastModifiedTime(millis: Long): Path = path.setLastModifiedTime(millis)
     override def startsWith(other: Path): Boolean = path.startsWith(other)
     override def write(content: String): Unit = path.write(content)
+    override def toString: String = s"DelegatePath($path)"
   }
 }

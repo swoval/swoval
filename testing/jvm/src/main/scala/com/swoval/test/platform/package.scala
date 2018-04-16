@@ -2,11 +2,14 @@ package com.swoval.test
 
 import java.nio.file.{ Path, Paths, Files => JFiles }
 
+import utest.framework.ExecutionContext.RunNow
+
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
+import scala.concurrent.ExecutionContext
 
 package object platform {
-  def executionContext = scala.concurrent.ExecutionContext.global
+  def executionContext: ExecutionContext = RunNow
   def createTempFile(dir: String, prefix: String): String =
     JFiles.createTempFile(Paths.get(dir), prefix, "").toRealPath().toString
 

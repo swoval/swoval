@@ -85,7 +85,7 @@ object DirectoryTest extends TestSuite {
       'callback - withTempDirectory { dir =>
         val directory = Directory.of(dir)
         withTempFileSync(dir) { f =>
-          var event: Option[FileWatchEvent] = None
+          var event: Option[FileWatchEvent[Path]] = None
           directory.traverse(e => event = Some(e))
           event ==> Some(FileWatchEvent(f, Create))
           f.delete()
@@ -119,7 +119,7 @@ object DirectoryTest extends TestSuite {
         val directory = Directory.of(dir)
         withTempFileSync(dir) { f =>
           directory.list(f, recursive = false, AllPass) === Seq.empty
-          assert(directory.add(f, isFile = true, (_: FileWatchEvent) => {}))
+          assert(directory.add(f, isFile = true, FileWatchEvent.Ignore))
           directory.list(f, recursive = false, AllPass) === Seq(f)
         }
       }
@@ -128,7 +128,7 @@ object DirectoryTest extends TestSuite {
         withTempDirectory(dir) { subdir =>
           withTempFileSync(subdir) { f =>
             directory.list(f, recursive = true, AllPass) === Seq.empty
-            assert(directory.add(subdir, isFile = false, (_: FileWatchEvent) => {}))
+            assert(directory.add(subdir, isFile = false, FileWatchEvent.Ignore))
             directory.list(dir, recursive = true, AllPass) === Seq(subdir, f)
           }
         }
@@ -136,9 +136,9 @@ object DirectoryTest extends TestSuite {
       'sequentially - withTempDirectory { dir =>
         val directory = Directory.of(dir)
         withTempDirectory(dir) { subdir =>
-          assert(directory.add(subdir, isFile = false, (_: FileWatchEvent) => {}))
+          assert(directory.add(subdir, isFile = false, FileWatchEvent.Ignore))
           withTempFileSync(subdir) { f =>
-            assert(directory.add(f, isFile = true, (_: FileWatchEvent) => {}))
+            assert(directory.add(f, isFile = true, FileWatchEvent.Ignore))
             directory.list(recursive = true, AllPass).toSet === Set(subdir, f)
           }
         }
@@ -147,7 +147,7 @@ object DirectoryTest extends TestSuite {
         val directory = Directory.of(dir)
         withTempDirectory(dir) { subdir =>
           withTempFileSync(subdir) { f =>
-            assert(directory.add(f, isFile = true, (_: FileWatchEvent) => {}))
+            assert(directory.add(f, isFile = true, FileWatchEvent.Ignore))
             directory.list(recursive = true, AllPass).toSet === Set(f, subdir)
           }
         }
@@ -177,25 +177,6 @@ object DirectoryTest extends TestSuite {
       }
     }
     'subTypes - {
-      trait CachedLastModified extends Path
-      object CachedLastModified {
-        implicit object default extends PathConverter[CachedLastModified] {
-          def create(p: Path): CachedLastModified = new DelegatePath with CachedLastModified {
-            override def path: Path = p
-            override val lastModified: Long = super.lastModified
-          }
-          def resolve(left: Path, right: CachedLastModified): CachedLastModified =
-            new DelegatePath with CachedLastModified {
-              override def path: Path = left.resolve(right)
-              override val lastModified: Long = right.lastModified
-            }
-          def relativize(left: Path, right: CachedLastModified): CachedLastModified =
-            new DelegatePath with CachedLastModified {
-              override def path: Path = left.relativize(right)
-              override val lastModified: Long = right.lastModified
-            }
-        }
-      }
       withTempFileSync { f =>
         val dir = Directory.of[CachedLastModified](f.getParent)
         val lastModified = f.lastModified

@@ -2,7 +2,7 @@ package com.swoval.files
 
 import com.swoval.files.Directory.PathConverter
 import com.swoval.files.DirectoryWatcher.Callback
-import com.swoval.files.FileWatchEvent.{ Create, Delete }
+import com.swoval.files.FileWatchEvent.{ Create, Delete, Modify }
 import com.swoval.files.PathFilter.AllPass
 
 import scala.annotation.tailrec
@@ -14,34 +14,57 @@ case class Directory[P <: Path] private (path: P) {
     subdirectories.clear()
     files.clear()
   }
-  def add(abspath: Path, isFile: Boolean, callback: Callback)(
+  def add(abspath: Path, isFile: Boolean, callback: FileWatchEvent[P] => Unit)(
       implicit c: PathConverter[P]): Boolean = {
+    updateImpl(abspath, isFile, callback, update = false)
+  }
+  def update(abspath: Path, isFile: Boolean, callback: FileWatchEvent[P] => Unit)(
+      implicit c: PathConverter[P]): Boolean = {
+    updateImpl(abspath, isFile, callback, update = true)
+  }
+  private def updateImpl(abspath: Path,
+                         isFile: Boolean,
+                         callback: FileWatchEvent[P] => Unit,
+                         update: Boolean)(implicit c: PathConverter[P]): Boolean = {
+    @inline def notifyNewFile(p: P): Unit = callback(FileWatchEvent(p, Create))
     @tailrec def implRec(directory: Directory[P], parts: Seq[Path]): Boolean = {
       parts match {
         case Seq(p) =>
-          val newPath = lock.synchronized {
+          directory.lock.synchronized {
             if (isFile) {
-              directory.files.put(p.name, c.relativize(directory.path, c.create(abspath))).isEmpty
+              directory.files.get(p.name) match {
+                case None =>
+                  val newFile = c.relativize(directory.path, c.create(abspath))
+                  directory.files += p.name -> newFile
+                  callback(FileWatchEvent(newFile, Create))
+                  true
+                case _ =>
+                  if (update) {
+                    val newFile = c.relativize(directory.path, c.create(abspath))
+                    directory.files += p.name -> newFile
+                    callback(FileWatchEvent(newFile, Modify))
+                  }
+                  update
+              }
             } else {
               directory.subdirectories get p.name match {
                 case None =>
-                  val dir = Directory.of[P](directory.resolve(p), callback)
+                  val dir = Directory.of[P](directory.resolve(p))
                   directory.subdirectories += p.name -> dir
+                  dir.list(recursive = true, AllPass).foreach(notifyNewFile)
+                  callback(FileWatchEvent(dir.path, Create))
                   true
                 case _ =>
                   false
               }
             }
           }
-          if (newPath) callback(FileWatchEvent(directory.resolve(p), Create))
-          newPath
         case Seq(p, rest @ _*) =>
-          lock.synchronized(directory.subdirectories get p.name) match {
+          directory.lock.synchronized(directory.subdirectories get p.name) match {
             case None =>
-              lock.synchronized {
+              directory.lock.synchronized {
                 val dir = Directory.of(directory.resolve(p), Directory.EmptyCallback)
                 directory.subdirectories += p.name -> dir
-                @inline def notifyNewFile(p: Path): Unit = callback(FileWatchEvent(p, Create))
                 dir.list(recursive = true, AllPass).foreach(notifyNewFile)
                 val child = dir.path.resolve(Path(rest.map(_.name): _*))
                 dir.find(child).isDefined
@@ -61,12 +84,12 @@ case class Directory[P <: Path] private (path: P) {
     @tailrec def impl(dir: Directory[P], parts: Seq[Path]): Option[Either[P, Directory[P]]] = {
       parts match {
         case Seq(p) =>
-          lock.synchronized {
+          dir.lock.synchronized {
             val subdir = dir.subdirectories get p.name map Right.apply
             subdir orElse (dir.files get p.name map (f => Left(c.resolve(dir.path, f))))
           }
         case Seq(p, rest @ _*) =>
-          lock.synchronized(dir.subdirectories get p.name) match {
+          dir.lock.synchronized(dir.subdirectories get p.name) match {
             case Some(d) => impl(d, rest)
             case _       => None
           }
@@ -105,10 +128,10 @@ case class Directory[P <: Path] private (path: P) {
     @tailrec def impl(dir: Directory[P], parts: Seq[Path]): Boolean = {
       parts match {
         case Seq(p: Path) =>
-          lock.synchronized(
+          dir.lock.synchronized(
             dir.files.remove(p.name).isDefined || dir.subdirectories.remove(p.name).isDefined)
         case Seq(p: Path, rest @ _*) =>
-          lock.synchronized(dir.subdirectories get p.name) match {
+          dir.lock.synchronized(dir.subdirectories get p.name) match {
             case Some(d) => impl(d, rest)
             case _       => false
           }
@@ -155,7 +178,7 @@ case class Directory[P <: Path] private (path: P) {
 
   private val subdirectories: mutable.Map[String, Directory[P]] = mutable.Map.empty
   private val files: mutable.Map[String, P] = mutable.Map.empty
-  private[this] val lock = new Object
+  private val lock = new Object
 }
 
 object Directory {
@@ -174,7 +197,7 @@ object Directory {
     }
   }
   case object EmptyCallback extends Callback {
-    override def apply(e: FileWatchEvent): Unit = {}
+    override def apply(e: FileWatchEvent[Path]): Unit = {}
   }
   def of[P <: Path](path: Path, callback: Callback = EmptyCallback)(
       implicit p: PathConverter[P]): Directory[P] =

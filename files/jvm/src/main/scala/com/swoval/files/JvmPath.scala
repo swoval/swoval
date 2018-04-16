@@ -22,8 +22,8 @@ class JvmPath(val path: JPath, val parent: Option[JvmPath] = None) extends Path 
   override def delete(): Boolean = JFiles.deleteIfExists(path)
 
   override def equals(other: Any): Boolean = other match {
-    case that: JvmPath => this.fullJPath == that.fullJPath
-    case _             => false
+    case that: Path => this.fullName == that.fullName
+    case _          => false
   }
 
   override def exists: Boolean = JFiles.exists(fullJPath)

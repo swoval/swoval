@@ -6,7 +6,7 @@ import scala.concurrent.duration._
 import scala.util.Properties
 
 object DirectoryWatcher {
-  type Callback = FileWatchEvent => Unit
+  type Callback = FileWatchEvent[Path] => Unit
   def default(latency: FiniteDuration,
               flags: Flags.Create = new Flags.Create().setFileEvents.setNoDefer)(
       callback: DirectoryWatcher.Callback): DirectoryWatcher = {

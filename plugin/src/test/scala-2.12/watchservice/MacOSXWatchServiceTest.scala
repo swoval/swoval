@@ -87,6 +87,7 @@ object MacOSXWatchServiceTest extends TestSuite {
           events(subDir1) === (subDir1Paths take 2).toSet
           events(subDir2) === Set(subDir2File)
         }
+        ()
       }
     }
     "Not inadvertently exclude files in subdirectory" - {
@@ -134,7 +135,10 @@ object MacOSXWatchServiceTest extends TestSuite {
     using(new MacOSXWatchService(latency, queueSize)(offer, event))(f)
   }
 
-  def withService[R](f: MacOSXWatchService => R): Future[R] = withService()(f)
+  def withService[R](f: MacOSXWatchService => R): Future[Unit] = withService() { s =>
+    f(s)
+    ()
+  }
 
   class OnReg(f: WatchKey => Unit) extends (WatchKey => Unit) {
     private[this] val latches = mutable.Map.empty[Watchable, CountDownLatch]
