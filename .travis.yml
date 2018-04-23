@@ -1,0 +1,54 @@
+language: scala
+
+env:
+  global:
+  - SBT_VER=1.1.2
+matrix:
+  include:
+   - scala: 2.10.7
+     env:
+        CMD="filesJVM/test"
+        PLUGIN_VERSION="0.13.17"
+     - os: linux
+       dist: trusty
+     - os: osx
+       language: java
+       osx_image: xcode9.2
+
+   - scala: 2.11.12
+     env:
+        CMD="filesJVM/test"
+     - os: linux
+       dist: trusty
+     - os: osx
+       language: java
+       osx_image: xcode9.2
+
+   - scala: 2.12.4
+     env:
+        CMD="filesJVM/test"
+        PLUGIN_VERSION="1.1.2"
+     - os: linux
+       dist: trusty
+     - os: osx
+       language: java
+       osx_image: xcode9.2
+
+script: sbt ++$TRAVIS_SCALA_VERSION -Dsbt.version=$SBT_VER $CMD
+
+before_install:
+  # https://github.com/travis-ci/travis-ci/issues/8408
+  - unset _JAVA_OPTIONS
+  - if [[ "$TRAVIS_OS_NAME" = "osx" ]]; then
+      brew update;
+      brew install sbt;
+    fi
+
+cache:
+  directories:
+    - $HOME/.ivy2/cache
+    - $HOME/.sbt
+
+before_cache:
+  - find $HOME/.ivy2/cache -name "ivydata-*.properties" -print -delete
+  - find $HOME/.sbt        -name "*.lock"               -print -delete
