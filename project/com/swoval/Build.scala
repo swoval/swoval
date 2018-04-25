@@ -450,6 +450,12 @@ object Build {
       commonSettings,
       bintrayPackage := "testing",
       libraryDependencies += scalaMacros % scalaVersion.value,
+      libraryDependencies ++= {
+        if (scalaVersion.value == scala210)
+          Seq(compilerPlugin(paradise cross CrossVersion.full),
+              quasiquotes cross CrossVersion.binary)
+        else Nil
+      },
       utestCrossMain,
       utestFramework
     )

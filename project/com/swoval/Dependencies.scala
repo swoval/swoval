@@ -6,6 +6,8 @@ import sbt._
 
 object Dependencies {
   val logback = "ch.qos.logback" % "logback-classic" % "1.2.3"
+  val quasiquotes = "org.scalamacros" %% "quasiquotes" % "2.1.1"
+  val paradise = "org.scalamacros" %% "paradise" % "2.1.1"
   val sbtIO = "org.scala-sbt" %% "io" % "1.0.1" % "provided"
   val scalagen = "com.mysema.scalagen" % "scalagen_2.11" % "0.4.0"
   val scalaMacros = "org.scala-lang" % "scala-reflect"
