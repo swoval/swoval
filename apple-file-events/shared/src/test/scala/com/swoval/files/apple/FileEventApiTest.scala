@@ -13,7 +13,7 @@ object FileEventApiTest extends TestSuite {
     FileEventsApi.apply(new Consumer[FileEvent] {
       override def accept(fe: FileEvent): Unit = onFileEvent(fe)
     }, new Consumer[String] { override def accept(s: String): Unit = onStreamClosed(s) })
-  val tests = Tests {
+  val tests = testOn(MacOS) {
     'register - {
       val promise = Promise[FileEvent]
       usingAsync(getFileEventsApi(fe => promise.tryComplete(Success(fe)))) { api =>

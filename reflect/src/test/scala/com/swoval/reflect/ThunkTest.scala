@@ -144,7 +144,7 @@ object ThunkTest extends TestSuite {
              */
             Thread.currentThread.setContextClassLoader(l.copy(p =>
               new Predicates(n => p.getForceParent.test(n) || n == "com.swoval.reflect.Buzz",
-                             p.getForceChild)))
+                             p.getForceChild())))
             val dir = Files.createDirectories(path.resolve("com/swoval/reflect"))
             Files.copy(resourcePath.resolve(s"Buzz.class"), dir.resolve("Buzz.class"))
             Thunk(Bar.buzz(new com.swoval.reflect.Buzz)) ==> 3

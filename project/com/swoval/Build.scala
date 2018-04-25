@@ -8,9 +8,6 @@ import java.util.jar.JarFile
 
 import _root_.bintray.BintrayPlugin
 import bintray.BintrayKeys._
-import ch.jodersky.sbt.jni.plugins.JniJavah.autoImport.javah
-import ch.jodersky.sbt.jni.plugins.JniNative
-import ch.jodersky.sbt.jni.plugins.JniNative.autoImport._
 import com.swoval.Dependencies.{ logback => SLogback, _ }
 import com.typesafe.sbt.GitVersioning
 import com.typesafe.sbt.SbtGit.git
@@ -149,20 +146,13 @@ object Build {
     )
 
   private var swovalNodeMD5Sum = ""
-  val nativeCompileSettings =
-    if (Properties.isMac)
-      settings(
-        sourceDirectory in nativeCompile := sourceDirectory.value / "main" / "native",
-        target in javah := sourceDirectory.value / "main" / "native" / "include"
-      )
-    else settings()
   lazy val appleFileEvents: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("apple-file-events"))
-    .configurePlatform(JVMPlatform)(p => if (Properties.isMac) p.enablePlugins(JniNative) else p)
     .configurePlatform(JSPlatform)(_.enablePlugins(ScalaJSBundlerPlugin))
     .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .settings(
       commonSettings,
+      crossScalaVersions := scalaCrossVersions,
       name := "apple-file-events",
       bintrayPackage := "apple-file-events",
       description := "JNI library for apple file system",
@@ -185,9 +175,20 @@ object Build {
       utestFramework
     )
     .jvmSettings(
-      nativeCompileSettings,
       crossPaths := false,
-      autoScalaLibrary := false
+      autoScalaLibrary := false,
+      compile in Compile := {
+        val res = (compile in Compile).value
+        val log = state.value.log
+        if (Properties.isMac) {
+          val nativeDir = sourceDirectory.value.toPath.resolve("main/native").toFile
+          val proc = new ProcessBuilder("make").directory(nativeDir).start()
+          proc.waitFor(1, TimeUnit.MINUTES)
+          assert(proc.exitValue() == 0)
+          log.info(Source.fromInputStream(proc.getInputStream).mkString)
+        }
+        res
+      }
     )
     .jsSettings(
       crossScalaVersions := scalaCrossVersions,
@@ -346,6 +347,9 @@ object Build {
     .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .settings(
       commonSettings,
+      (scalacOptions in Compile) ++= {
+        if (scalaVersion.value == scala211) Seq("-Xexperimental") else Nil
+      },
       crossScalaVersions := scalaCrossVersions.drop(1),
       testFrameworks += new TestFramework("utest.runner.Framework"),
       scalacOptions := Seq("-unchecked", "-deprecation", "-feature"),
@@ -447,6 +451,12 @@ object Build {
       commonSettings,
       bintrayPackage := "testing",
       libraryDependencies += scalaMacros % scalaVersion.value,
+      libraryDependencies ++= {
+        if (scalaVersion.value == scala210)
+          Seq(compilerPlugin(paradise cross CrossVersion.full),
+              quasiquotes cross CrossVersion.binary)
+        else Nil
+      },
       utestCrossMain,
       utestFramework
     )

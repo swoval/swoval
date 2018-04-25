@@ -78,7 +78,6 @@ private[reflect] object ThunkMacros {
     }
     def fresh(name: String) = TermName(c.freshName(name))
     type Args = Seq[Seq[Tree]]
-    case class Arg(tree: c.Tree, name: TermName, clazz: c.Tree, boxed: c.Tree)
     object Arg {
       def apply(arg: c.Tree): Arg = {
         val tpe = arg.tpe
@@ -98,6 +97,7 @@ private[reflect] object ThunkMacros {
         }
       }
     }
+    case class Arg(tree: c.Tree, name: TermName, clazz: c.Tree, boxed: c.Tree)
     def moduleApply(obj: Tree, method: TermName, args: Args) = {
       val moduleName = s"${javaName(obj.tpe)}$$"
       val loaderName = fresh("loader")
