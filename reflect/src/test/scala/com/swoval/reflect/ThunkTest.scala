@@ -131,6 +131,7 @@ object ThunkTest extends TestSuite {
                 // There seems to be a bug in intercept that requires full qualification of Buzz
                 Thunk(Bar.buzz(new com.swoval.reflect.Buzz))
               }
+              ()
             }
           } else {
             println("Not running notBlocked test on embedded jvm.")
