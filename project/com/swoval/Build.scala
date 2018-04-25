@@ -152,6 +152,7 @@ object Build {
     .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .settings(
       commonSettings,
+      crossScalaVersions := scalaCrossVersions,
       name := "apple-file-events",
       bintrayPackage := "apple-file-events",
       description := "JNI library for apple file system",
