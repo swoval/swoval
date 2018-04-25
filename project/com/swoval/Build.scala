@@ -346,6 +346,9 @@ object Build {
     .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .settings(
       commonSettings,
+      (scalacOptions in Compile) ++= {
+        if (scalaVersion.value == scala211) Seq("-Xexperimental") else Nil
+      },
       crossScalaVersions := scalaCrossVersions.drop(1),
       testFrameworks += new TestFramework("utest.runner.Framework"),
       scalacOptions := Seq("-unchecked", "-deprecation", "-feature"),
