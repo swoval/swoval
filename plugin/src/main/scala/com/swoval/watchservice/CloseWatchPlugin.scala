@@ -12,12 +12,12 @@ import scala.concurrent.duration._
 
 object CloseWatchPlugin extends AutoPlugin {
   override def trigger = allRequirements
-  private[watchservice] var _internalFileCache: FileCache = _
+  private[watchservice] var _internalFileCache: FileCache[Path] = _
   object autoImport {
     lazy val closeWatchAntiEntropy = settingKey[Duration](
       "Set watch anti-entropy period for source files. For a given file that has triggered a" +
         "build, any updates occuring before the last event time plus this duration will be ignored.")
-    lazy val closeWatchFileCache = taskKey[FileCache]("Set the file cache to use.")
+    lazy val closeWatchFileCache = taskKey[FileCache[Path]]("Set the file cache to use.")
     lazy val closeWatchLegacyWatchLatency =
       settingKey[Duration]("Set the watch latency of the sbt watch service")
     lazy val closeWatchLegacyQueueSize =

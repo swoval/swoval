@@ -73,7 +73,7 @@ class MacOSXWatchService(watchLatency: Duration, val queueSize: Int)(
     }
   }
 
-  def onFileEvent(fileEvent: FileWatchEvent): Unit = executor.run {
+  def onFileEvent(fileEvent: FileWatchEvent[Path]): Unit = executor.run {
     registered.synchronized(registered get (fileEvent.path.getParent: Path)) foreach { key =>
       fileEvent.kind match {
         case Create if key.reportCreateEvents =>

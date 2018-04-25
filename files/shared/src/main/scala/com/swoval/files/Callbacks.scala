@@ -2,12 +2,13 @@ package com.swoval.files
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.swoval.files.DirectoryWatcher.Callback
+import com.swoval.files.Callbacks.Callback
+import com.swoval.files.Directory.PathConverter
 
 import scala.collection.mutable
 
-trait Callbacks extends AutoCloseable {
-  def addCallback(callback: Callback): Int = {
+trait Callbacks[P <: Path] extends AutoCloseable {
+  def addCallback(callback: Callback[P]): Int = {
     val key = counter.getAndIncrement()
     lock.synchronized(callbacks += key -> callback)
     key
@@ -20,8 +21,8 @@ trait Callbacks extends AutoCloseable {
   private[this] object lock
 
   private[this] val counter = new AtomicInteger(0)
-  private[this] val callbacks = mutable.Map.empty[Int, Callback]
-  final val callback: Callback = fe => {
+  private[this] val callbacks = mutable.Map.empty[Int, Callback[P]]
+  final val callback: Callback[P] = fe => {
     val cbs = lock.synchronized(callbacks.values)
     cbs.foreach(_.apply(fe))
   }
@@ -31,7 +32,9 @@ trait Callbacks extends AutoCloseable {
   }
 }
 object Callbacks {
-  def apply(): Callback with Callbacks = new Callback with Callbacks {
-    override def apply(fe: FileWatchEvent): Unit = callback.apply(fe)
-  }
+  type Callback[P <: Path] = FileWatchEvent[P] => Unit
+  def apply[P <: Path](): Callback[P] with Callbacks[P] =
+    new Callback[P] with Callbacks[P] {
+      override def apply(fe: FileWatchEvent[P]): Unit = callback.apply(fe)
+    }
 }

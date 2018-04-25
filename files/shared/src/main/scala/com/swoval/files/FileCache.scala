@@ -1,5 +1,6 @@
 package com.swoval.files
 
+import com.swoval.files.Directory.PathConverter
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.FileWatchEvent.{ Delete, Modify }
 import com.swoval.files.PathFilter.AllPass
@@ -10,37 +11,40 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Properties
 
-trait FileCache extends AutoCloseable with Callbacks {
+trait FileCache[P <: Path] extends AutoCloseable with Callbacks[P] {
+  protected implicit def pathConverter: PathConverter[P]
   def list(path: Path, recursive: Boolean = true, filter: PathFilter = AllPass): Seq[Path]
-  def register(path: Path, recursive: Boolean = true): Option[Directory]
+  def register(path: Path, recursive: Boolean = true): Option[Directory[P]]
 }
 
-class FileCacheImpl(options: Options) extends FileCache {
-  private[this] val directories: mutable.Set[Directory] = mutable.Set.empty[Directory]
+class FileCacheImpl[P <: Path](options: Options)(
+    implicit override val pathConverter: PathConverter[P])
+    extends FileCache[P] {
+  private[this] val directories: mutable.Set[Directory[P]] = mutable.Set.empty
   private[this] val executor: ScheduledExecutor =
     platform.makeScheduledExecutor("com.swoval.files.FileCacheImpl.executor-thread")
-  private[this] val scheduledFutures = mutable.Map.empty[Path, Future[FileWatchEvent]]
 
-  def list(path: Path, recursive: Boolean, filter: PathFilter): Seq[Path] =
+  private[this] val scheduledFutures = mutable.Map.empty[Path, Future[FileWatchEvent[Path]]]
+
+  def list(path: Path, recursive: Boolean, filter: PathFilter): Seq[P] =
     directories
       .synchronized {
         if (path.exists) {
           directories.find(path startsWith _.path) match {
             case Some(dir) => dir.list(path, recursive, filter)
             case None =>
-              register(path, recursive).fold(Seq.empty[Path])(_.list(recursive, filter))
+              register(path, recursive).fold(Seq.empty[P])(_.list(recursive, filter))
           }
         } else {
           Seq.empty
         }
       }
 
-  override def register(path: Path, recursive: Boolean): Option[Directory] = {
+  override def register(path: Path, recursive: Boolean): Option[Directory[P]] = {
     if (path.exists) {
       watcher.foreach(_.register(path, recursive))
       directories.synchronized {
         if (!directories.exists(dir => path.startsWith(dir.path))) {
-
           directories foreach { dir =>
             if (dir.path startsWith path) directories.remove(dir)
           }
@@ -80,11 +84,14 @@ class FileCacheImpl(options: Options) extends FileCache {
 
     if (path.exists) {
       list(path, recursive = false, (_: Path) == path) match {
-        case Seq(_) =>
-          callback(FileWatchEvent(path, Modify))
+        case Seq(p) =>
+          directories.find(p startsWith _.path) match {
+            case Some(dir) => dir.update(path, !p.isDirectory, callback)
+            case _         => // should be unreachable
+          }
         case Seq() =>
           directories.synchronized {
-            directories.filter(path startsWith _.path).toSeq.sortBy(_.path).lastOption match {
+            directories.filter(path startsWith _.path).toSeq.sortBy(_.path: Path).lastOption match {
               case Some(dir) if path != dir.path =>
                 dir.add(path, isFile = !path.isDirectory, callback)
               case _ =>
@@ -98,7 +105,7 @@ class FileCacheImpl(options: Options) extends FileCache {
         directories.find(path startsWith _.path) match {
           case Some(dir) =>
             if (dir.remove(path)) {
-              callback(FileWatchEvent(path, Delete))
+              callback(FileWatchEvent[P](pathConverter.create(path), Delete))
             }
           case _ =>
         }
@@ -110,12 +117,13 @@ class FileCacheImpl(options: Options) extends FileCache {
 }
 
 object FileCache {
-  def apply(options: Options)(callback: Callback): FileCacheImpl = {
-    val cache: FileCacheImpl = new FileCacheImpl(options)
+  def apply[P <: Path: PathConverter](options: Options)(
+      callback: Callbacks.Callback[P]): FileCacheImpl[P] = {
+    val cache: FileCacheImpl[P] = new FileCacheImpl[P](options)
     cache.addCallback(callback)
     cache
   }
-  def default: FileCacheImpl = new FileCacheImpl(Options.default)
+  def default[P <: Path: PathConverter]: FileCacheImpl[P] = new FileCacheImpl[P](Options.default)
 }
 
 sealed abstract class Options {

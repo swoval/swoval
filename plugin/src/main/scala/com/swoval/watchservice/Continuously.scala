@@ -5,7 +5,7 @@ import java.util.concurrent.{ ArrayBlockingQueue, BlockingQueue, ExecutorService
 
 import com.swoval.concurrent.ThreadFactory
 import com.swoval.files.DirectoryWatcher.Callback
-import com.swoval.files.{ FileCache, Path, PathFilter }
+import com.swoval.files.{ FileCache, FileWatchEvent, Path, PathFilter }
 import com.swoval.watchservice.CloseWatchPlugin.autoImport._
 import sbt.BasicCommandStrings._
 import sbt.BasicCommands._
@@ -33,7 +33,7 @@ object Continuously {
   case class State(
       command: String,
       sources: Seq[SourcePath],
-      cache: FileCache,
+      cache: FileCache[Path],
       logger: Logger,
       antiEntropy: Duration,
       onTrigger: State => Unit
@@ -59,7 +59,7 @@ object Continuously {
       }
     }
 
-    private[this] val callback: Callback = { e =>
+    private[this] val callback: FileWatchEvent[Path] => Unit = { e: FileWatchEvent[Path] =>
       if (sources.exists(s => s.filter(e.path))) {
         offer(Triggered(e.path))
       } else {
@@ -142,8 +142,9 @@ object Continuously {
         case Array(_, rest @ _*) if rest.nonEmpty => rest.map(_.trim)
         case Array(a)                             => Seq(a.trim)
       }
-      val sources = tasks.flatMap(t =>
-        extracted.runInputTask(closeWatchTransitiveSources, s" $t", s)._2).distinct
+      val sources = tasks
+        .flatMap(t => extracted.runInputTask(closeWatchTransitiveSources, s" $t", s)._2)
+        .distinct
       val log = Project.structure(s).streams(s)(Keys.streams in Global).log
       val antiEntropy = extracted.get(closeWatchAntiEntropy)
       val cache = CloseWatchPlugin._internalFileCache

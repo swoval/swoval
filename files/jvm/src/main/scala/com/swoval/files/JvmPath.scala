@@ -6,7 +6,7 @@ import java.util.function.Predicate
 
 import scala.collection.JavaConverters._
 
-class JvmPath(val path: JPath, parent: Option[JvmPath] = None) extends Path {
+class JvmPath(val path: JPath, val parent: Option[JvmPath] = None) extends Path {
   override lazy val fullName = fullJPath.toString
 
   override lazy val isDirectory: Boolean = JFiles.isDirectory(fullJPath)
@@ -22,8 +22,8 @@ class JvmPath(val path: JPath, parent: Option[JvmPath] = None) extends Path {
   override def delete(): Boolean = JFiles.deleteIfExists(path)
 
   override def equals(other: Any): Boolean = other match {
-    case that: JvmPath => this.fullJPath == that.fullJPath
-    case _             => false
+    case that: Path => this.fullName == that.fullName
+    case _          => false
   }
 
   override def exists: Boolean = JFiles.exists(fullJPath)
@@ -63,28 +63,25 @@ class JvmPath(val path: JPath, parent: Option[JvmPath] = None) extends Path {
 
   override def normalize: Path = JvmPath(fullJPath.normalize)
 
-  override def relativize(other: Path): Path = other match {
-    case o: JvmPath => new JvmPath(fullJPath.relativize(o.fullJPath), Some(this))
-  }
+  override def relativize(other: Path): Path =
+    new JvmPath(fullJPath.relativize(JPaths.get(other.fullName)))
 
-  override def renameTo(other: Path): Path = other match {
-    case o: JvmPath => JvmPath(JFiles.move(path, o.path))
-  }
+  override def renameTo(other: Path): Path =
+    JvmPath(JFiles.move(fullJPath, JPaths.get(other.fullName)))
 
-  override def resolve(other: Path): Path = other match {
-    case o: JvmPath => new JvmPath(fullJPath.resolve(o.path), None)
-  }
+  override def resolve(other: Path): Path = new JvmPath(fullJPath.resolve(other.fullName))
 
   override def setLastModifiedTime(millis: Long): Path =
     JvmPath(JFiles.setLastModifiedTime(path, FileTime.fromMillis(millis)))
 
-  override def startsWith(other: Path): Boolean = other match {
-    case o: JvmPath => fullJPath.startsWith(o.fullJPath)
-  }
+  override def startsWith(other: Path): Boolean = fullJPath.startsWith(other.fullName)
 
   override def toAbsolute: Path = JvmPath(fullJPath)
 
-  override def toString = s"JvmPath($fullName)"
+  override def toString = parent match {
+    case Some(p) => s"RelativeJvmPath($p, $path)"
+    case _       => s"JvmPath($fullName)"
+  }
 
   override def write(content: String): Unit = JFiles.write(path, content.getBytes)
 

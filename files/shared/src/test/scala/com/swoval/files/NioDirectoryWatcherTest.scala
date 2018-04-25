@@ -10,7 +10,7 @@ import scala.util.Properties
 object NioDirectoryWatcherTest extends TestSuite {
   val tests = if (!Properties.isMac) Tests {
     implicit val latch: com.swoval.files.test.CountDownLatch = new CountDownLatch(1)
-    val events = new ArrayBlockingQueue[FileWatchEvent](10)
+    val events = new ArrayBlockingQueue[FileWatchEvent[Path]](10)
     val callback: Callback = e => events.add(e)
     def check(file: Path)(f: Path => Unit) = events.poll(DEFAULT_TIMEOUT) { e =>
       e.path === file

@@ -10,7 +10,7 @@ import scala.util.Properties
 @JSExportTopLevel("com.swoval.files.DirectoryWatcher")
 class JsDirectoryWatcher(callback: js.UndefOr[js.Function2[String, String, Unit]])
     extends js.Object {
-  private[this] val callbacks = Callbacks()
+  private[this] val callbacks = Callbacks[Path]()
   callback.toOption.foreach(addCallback)
   private[this] val inner: DirectoryWatcher = if (Properties.isMac) {
     AppleDirectoryWatcher(10.milliseconds, new Flags.Create().setFileEvents.setNoDefer)(

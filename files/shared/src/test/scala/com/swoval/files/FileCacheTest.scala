@@ -2,6 +2,7 @@ package com.swoval.files
 
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.FileWatchEvent.{ Create, Delete, Modify }
+import com.swoval.files.PathFilter.AllPass
 import com.swoval.files.apple.Flags
 import com.swoval.files.test._
 import com.swoval.test._
@@ -14,36 +15,36 @@ import scala.util.Properties
 
 object FileCacheTest extends TestSuite {
   val tests: Tests = Tests {
+    val options = Options.default
     'files - {
-      val options = Options.default
       'register - {
         'existing - withTempFile { f =>
           val parent = f.getParent
-          using(FileCache(options)((_: FileWatchEvent) => {})) { c =>
+          using(FileCache(options)(FileWatchEvent.Ignore)) { c =>
             c.register(parent)
-            c.list(parent, recursive = true, (_: Path) => true) === Seq(f)
+            c.list(parent, recursive = true, AllPass) === Seq(f)
           }
         }
         'monitor - {
           'new - {
             'files - withTempDirectory { dir =>
               val latch = new CountDownLatch(1)
-              usingAsync(FileCache(options)(_ => latch.countDown())) { c =>
+              usingAsync(FileCache(options)((_: FileWatchEvent[Path]) => latch.countDown())) { c =>
                 c.register(dir)
                 withTempFile(dir) { f =>
                   latch.waitFor(DEFAULT_TIMEOUT) {
-                    c.list(dir, recursive = true, (_: Path) => true) === Seq(f)
+                    c.list(dir, recursive = true, AllPass) === Seq(f)
                   }
                 }
               }
             }
             'directories - withTempDirectory { dir =>
               val latch = new CountDownLatch(1)
-              usingAsync(FileCache(options)(_ => latch.countDown())) { c =>
+              usingAsync(FileCache(options)((_: FileWatchEvent[Path]) => latch.countDown())) { c =>
                 c.register(dir)
                 withTempDirectory(dir) { subdir =>
                   latch.waitFor(DEFAULT_TIMEOUT) {
-                    c.list(dir, recursive = true, (_: Path) => true) === Seq(subdir)
+                    c.list(dir, recursive = true, AllPass) === Seq(subdir)
                   }
                 }
               }
@@ -54,43 +55,41 @@ object FileCacheTest extends TestSuite {
           val latch = new CountDownLatch(2)
           val initial = Path.createTempFile(dir, "move")
           val moved = Path(s"${initial.name}.moved")
-          usingAsync(FileCache(options)((_: FileWatchEvent) => latch.countDown())) { c =>
-            c.list(dir, recursive = false, (_: Path) => true) === Seq(initial)
+          usingAsync(FileCache(options)((_: FileWatchEvent[Path]) => latch.countDown())) { c =>
+            c.list(dir, recursive = false, AllPass) === Seq(initial)
             initial.renameTo(moved)
             latch.waitFor(DEFAULT_TIMEOUT) {
-              c.list(dir, recursive = false, (_: Path) => true) === Seq(moved)
+              c.list(dir, recursive = false, AllPass) === Seq(moved)
             }
           }
         }
-        "anti-entropy" - retry(3) {
-          withTempFile { f =>
-            val parent = f.getParent
-            val events = new ArrayBlockingQueue[FileWatchEvent](2)
-            val executor: ScheduledExecutor = platform.makeScheduledExecutor("FileCacheTest")
-            val flags = new Flags.Create().setFileEvents.setNoDefer
-            val latency = 40.milliseconds
-            val options = Options(latency, flags)
-            usingAsync(FileCache(options)(events.add)) { c =>
-              c.register(parent)
-              c.list(parent, recursive = true, (_: Path) => true) === Seq(f)
-              val callbacks = Callbacks()
-              val lastModified = 1000
-              var handle = -1
-              usingAsync(DirectoryWatcher.default(1.millis)(callbacks)) { w =>
-                handle = callbacks.addCallback { _ =>
-                  executor.schedule(5.milliseconds) {
-                    callbacks.removeCallback(handle)
-                    f.setLastModifiedTime(lastModified)
-                  }
-                  w.close()
+        "anti-entropy" - withTempFile { f =>
+          val parent = f.getParent
+          val events = new ArrayBlockingQueue[FileWatchEvent[Path]](2)
+          val executor: ScheduledExecutor = platform.makeScheduledExecutor("FileCacheTest")
+          val flags = new Flags.Create().setFileEvents.setNoDefer
+          val latency = 40.milliseconds
+          val options = Options(latency, flags)
+          usingAsync(FileCache(options)(events.add)) { c =>
+            c.register(parent)
+            c.list(parent, recursive = true, AllPass) === Seq(f)
+            val callbacks = Callbacks[Path]()
+            val lastModified = 1000
+            var handle = -1
+            usingAsync(DirectoryWatcher.default(1.millis)(callbacks)) { w =>
+              handle = callbacks.addCallback { _ =>
+                executor.schedule(5.milliseconds) {
+                  callbacks.removeCallback(handle)
+                  f.setLastModifiedTime(lastModified)
                 }
-                w.register(parent)
-                f.setLastModifiedTime(0)
-                events.poll(DEFAULT_TIMEOUT)(_.kind ==> Modify).flatMap { _ =>
-                  f.lastModified ==> lastModified
-                  executor.schedule(latency / 2)(f.delete())
-                  events.poll(DEFAULT_TIMEOUT)(_.kind ==> Delete)
-                }
+                w.close()
+              }
+              w.register(parent)
+              f.setLastModifiedTime(0)
+              events.poll(DEFAULT_TIMEOUT)(_.kind ==> Modify).flatMap { _ =>
+                f.lastModified ==> lastModified
+                executor.schedule(latency / 2)(f.delete())
+                events.poll(DEFAULT_TIMEOUT)(_.kind ==> Delete)
               }
             }
           }
@@ -101,11 +100,9 @@ object FileCacheTest extends TestSuite {
           val latch = new CountDownLatch(filesToAdd * 2)
           val added = mutable.Set.empty[Path]
           val callback: Callback = e =>
-            executor.run {
-              added.synchronized {
-                if (e.kind == Create && added.add(e.path)) {
-                  latch.countDown()
-                }
+            added.synchronized {
+              if (e.kind == Create && added.add(e.path)) {
+                latch.countDown()
               }
           }
           usingAsync(FileCache(options)(callback)) { c =>
@@ -124,6 +121,30 @@ object FileCacheTest extends TestSuite {
               found === files.toSet
             }
           }.andThen { case _ => executor.close() }
+        }
+      }
+    }
+    'cache - {
+      'update - withTempFile { file =>
+        val latch = new CountDownLatch(1)
+        usingAsync(FileCache[CachedLastModified](options)((_: FileWatchEvent[CachedLastModified]) =>
+          latch.countDown())) { c =>
+          val cachedFile: Path = c.list(file.getParent, recursive = false, AllPass) match {
+            case Seq(f) if f == file => f
+            case p                   => throw new IllegalStateException(p.toString)
+          }
+          val lastModified = cachedFile.lastModified
+          lastModified ==> file.lastModified
+          val updatedLastModified = 2000
+          file.setLastModifiedTime(updatedLastModified)
+          latch.waitFor(DEFAULT_TIMEOUT) {
+            val newCachedFile: Path = c.list(file.getParent, recursive = false, AllPass) match {
+              case Seq(f) if f == file => f
+              case p                   => throw new IllegalStateException(p.toString)
+            }
+            assert(cachedFile.lastModified == lastModified)
+            newCachedFile.lastModified ==> updatedLastModified
+          }
         }
       }
     }

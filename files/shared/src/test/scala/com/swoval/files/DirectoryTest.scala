@@ -2,7 +2,10 @@ package com.swoval.files
 
 import java.io.{ File, FileFilter }
 
+import com.swoval.files.Directory.PathConverter
 import com.swoval.files.FileWatchEvent.{ Create, Delete }
+import com.swoval.files.Path.DelegatePath
+import com.swoval.files.PathFilter.AllPass
 import com.swoval.files.compat._
 import com.swoval.files.test.{
   withTempDirectory,
@@ -20,11 +23,11 @@ object DirectoryTest extends TestSuite {
   val tests = Tests {
     'list - {
       "empty" - withTempDirectorySync { dir =>
-        assert(Directory.of(dir).list(recursive = true, (_: Path) => true).isEmpty)
+        assert(Directory.of(dir).list(recursive = true, AllPass).isEmpty)
       }
       "files" - withTempFileSync { file =>
         val parent = file.getParent
-        Directory.of(parent).list(recursive = true, (_: Path) => true) === Seq(file)
+        Directory.of(parent).list(recursive = true, AllPass) === Seq(file)
       }
       "resolution" - withTempDirectory { dir =>
         withTempDirectory(dir) { subdir =>
@@ -33,7 +36,7 @@ object DirectoryTest extends TestSuite {
             val directory = Directory.of(dir)
             directory.list(recursive = true, parentEquals(dir)) === Seq(subdir)
             directory.list(recursive = true, parentEquals(subdir)) === Seq(f)
-            directory.list(recursive = true, (_: Path) => true) === Seq(subdir, f)
+            directory.list(recursive = true, AllPass) === Seq(subdir, f)
           }
         }
       }
@@ -42,8 +45,7 @@ object DirectoryTest extends TestSuite {
           withTempFile(dir) { f =>
             withTempDirectory(dir) { subdir =>
               withTempFileSync(subdir) { (_: Path) =>
-                Directory.of(dir).list(recursive = false, (_: Path) => true).toSet === Set(f,
-                                                                                           subdir)
+                Directory.of(dir).list(recursive = false, AllPass).toSet === Set(f, subdir)
               }
             }
           }
@@ -52,9 +54,7 @@ object DirectoryTest extends TestSuite {
           withTempFile(dir) { f =>
             withTempDirectory(dir) { subdir =>
               withTempFileSync(subdir) { f2 =>
-                Directory.of(dir).list(recursive = true, (_: Path) => true).toSet === Set(f,
-                                                                                          f2,
-                                                                                          subdir)
+                Directory.of(dir).list(recursive = true, AllPass).toSet === Set(f, f2, subdir)
               }
             }
           }
@@ -63,11 +63,11 @@ object DirectoryTest extends TestSuite {
       "subdirectories" - withTempDirectory { dir =>
         withTempDirectory(dir) { subdir =>
           withTempFileSync(subdir) { f =>
-            Directory.of(dir).list(subdir, recursive = true, (_: Path) => true) === Seq(f)
+            Directory.of(dir).list(subdir, recursive = true, AllPass) === Seq(f)
             assert(
               Directory
                 .of(dir)
-                .list(Path(s"${subdir.fullName}.1"), recursive = true, (_: Path) => true)
+                .list(Path(s"${subdir.fullName}.1"), recursive = true, AllPass)
                 .isEmpty)
           }
         }
@@ -85,7 +85,7 @@ object DirectoryTest extends TestSuite {
       'callback - withTempDirectory { dir =>
         val directory = Directory.of(dir)
         withTempFileSync(dir) { f =>
-          var event: Option[FileWatchEvent] = None
+          var event: Option[FileWatchEvent[Path]] = None
           directory.traverse(e => event = Some(e))
           event ==> Some(FileWatchEvent(f, Create))
           f.delete()
@@ -107,8 +107,8 @@ object DirectoryTest extends TestSuite {
             val directory = Directory.of(dir)
             directory
               .find(subdir)
-              .flatMap((_: Either[Path, Directory]).toOption)
-              .map(_.list(recursive = true, (_: Path) => true)) === Some(Seq(f))
+              .flatMap((_: Either[Path, Directory[Path]]).toOption)
+              .map(_.list(recursive = true, AllPass)) === Some(Seq(f))
             directory.find(f) === Some(Left(f))
           }
         }
@@ -118,28 +118,28 @@ object DirectoryTest extends TestSuite {
       'file - withTempDirectory { dir =>
         val directory = Directory.of(dir)
         withTempFileSync(dir) { f =>
-          directory.list(f, recursive = false, (_: Path) => true) === Seq.empty
-          assert(directory.add(f, isFile = true, (_: FileWatchEvent) => {}))
-          directory.list(f, recursive = false, (_: Path) => true) === Seq(f)
+          directory.list(f, recursive = false, AllPass) === Seq.empty
+          assert(directory.add(f, isFile = true, FileWatchEvent.Ignore))
+          directory.list(f, recursive = false, AllPass) === Seq(f)
         }
       }
       'directory - withTempDirectory { dir =>
         val directory = Directory.of(dir)
         withTempDirectory(dir) { subdir =>
           withTempFileSync(subdir) { f =>
-            directory.list(f, recursive = true, (_: Path) => true) === Seq.empty
-            assert(directory.add(subdir, isFile = false, (_: FileWatchEvent) => {}))
-            directory.list(dir, recursive = true, (_: Path) => true) === Seq(subdir, f)
+            directory.list(f, recursive = true, AllPass) === Seq.empty
+            assert(directory.add(subdir, isFile = false, FileWatchEvent.Ignore))
+            directory.list(dir, recursive = true, AllPass) === Seq(subdir, f)
           }
         }
       }
       'sequentially - withTempDirectory { dir =>
         val directory = Directory.of(dir)
         withTempDirectory(dir) { subdir =>
-          assert(directory.add(subdir, isFile = false, (_: FileWatchEvent) => {}))
+          assert(directory.add(subdir, isFile = false, FileWatchEvent.Ignore))
           withTempFileSync(subdir) { f =>
-            assert(directory.add(f, isFile = true, (_: FileWatchEvent) => {}))
-            directory.list(recursive = true, (_: Path) => true).toSet === Set(subdir, f)
+            assert(directory.add(f, isFile = true, FileWatchEvent.Ignore))
+            directory.list(recursive = true, AllPass).toSet === Set(subdir, f)
           }
         }
       }
@@ -147,8 +147,8 @@ object DirectoryTest extends TestSuite {
         val directory = Directory.of(dir)
         withTempDirectory(dir) { subdir =>
           withTempFileSync(subdir) { f =>
-            assert(directory.add(f, isFile = true, (_: FileWatchEvent) => {}))
-            directory.list(recursive = true, (_: Path) => true).toSet === Set(f, subdir)
+            assert(directory.add(f, isFile = true, FileWatchEvent.Ignore))
+            directory.list(recursive = true, AllPass).toSet === Set(f, subdir)
           }
         }
       }
@@ -157,9 +157,9 @@ object DirectoryTest extends TestSuite {
       'direct - withTempDirectory { dir =>
         withTempFileSync(dir) { f =>
           val directory = Directory.of(dir)
-          directory.list(recursive = false, (_: Path) => true) === Seq(f)
+          directory.list(recursive = false, AllPass) === Seq(f)
           assert(directory.remove(f))
-          assert(directory.list(recursive = false, (_: Path) => true).isEmpty)
+          assert(directory.list(recursive = false, AllPass).isEmpty)
         }
       }
       'recursive - withTempDirectory { dir =>
@@ -167,13 +167,24 @@ object DirectoryTest extends TestSuite {
           withTempDirectory(subdir) { nestedSubdir =>
             withTempFileSync(nestedSubdir) { f =>
               val directory = Directory.of(dir)
-              def list = directory.list(recursive = true, (_: Path) => true).toSet
+              def list = directory.list(recursive = true, AllPass).toSet
               list === Set(f, subdir, nestedSubdir)
               assert(directory.remove(f))
               list === Set(subdir, nestedSubdir)
             }
           }
         }
+      }
+    }
+    'subTypes - {
+      withTempFileSync { f =>
+        val dir = Directory.of[CachedLastModified](f.getParent)
+        val lastModified = f.lastModified
+        val updatedLastModified = 2000
+        f.setLastModifiedTime(updatedLastModified)
+        f.lastModified ==> updatedLastModified
+        val cachedFile = dir.list(f, recursive = true, AllPass).head
+        cachedFile.lastModified ==> lastModified
       }
     }
   }
