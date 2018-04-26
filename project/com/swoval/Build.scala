@@ -101,6 +101,7 @@ object Build {
   lazy val releaseLocal = taskKey[Unit]("Release local project")
   lazy val releaseSigned = taskKey[Unit]("Release signed project")
   lazy val generateJSSources = taskKey[Unit]("Generate scala sources from java")
+  lazy val clangFmt = taskKey[Unit]("Run clang format")
   def projects: Seq[ProjectReference] = Seq[ProjectReference](
     appleFileEvents.jvm,
     appleFileEvents.js,
@@ -143,7 +144,26 @@ object Build {
       publishLocal := {},
       releaseLocal := releaseTask(publishLocal).value,
       releaseSigned := releaseTask(publishSigned).value,
-      release := releaseTask(publish).value
+      release := releaseTask(publish).value,
+      clangFmt := {
+        val npm = appleFileEvents.js.base.toPath.toAbsolutePath.resolve("npm/src")
+        val jvm = appleFileEvents.jvm.base.toPath.toAbsolutePath.resolve("src/main/native")
+        val args = Seq(npm, jvm).flatMap { p =>
+          val allFiles = Files.list(p).iterator.asScala.toSeq
+          allFiles.flatMap { f =>
+            f.toString.split("\\.").lastOption.flatMap {
+              case "cc" | "hpp" => Some(f.toString)
+              case _            => None
+            }
+          }
+        }
+        val proc = new ProcessBuilder((Seq("clang-format", "-i") ++ args): _*).start()
+        val log = state.value.log
+        if (!proc.waitFor(20, TimeUnit.SECONDS) || proc.exitValue != 0) {
+          log.error(Source.fromInputStream(proc.getInputStream).mkString)
+          log.error(Source.fromInputStream(proc.getErrorStream).mkString)
+        }
+      }
     )
 
   private var swovalNodeMD5Sum = ""
