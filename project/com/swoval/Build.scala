@@ -115,20 +115,31 @@ object Build {
   )
 
   def releaseTask(key: TaskKey[Unit]) = Def.taskDyn {
-    (key in files.jvm).value
-    (key in testing.jvm).value
-    (key in util).value
-    (scalaVersion in crossVersion).value match {
-      case `scala210` => Def.task((key in plugin).value)
-      case v =>
-        Def.taskDyn {
-          (key in appleFileEvents.js).value
-          (key in reflect).value
-          (key in files.js).value
-          (key in testing.js).value
-          if (v == scala212)
-            Def.task { (key in plugin).value; (key in appleFileEvents.jvm).value } else Def.task(())
+    import sys.process._
+    clangFmt.value
+    if (!Seq("git", "status").!!.contains("working tree clean"))
+      throw new IllegalStateException("There are local diffs")
+    else {
+      Def.taskDyn {
+        (key in files.jvm).value
+        (key in testing.jvm).value
+        (key in util).value
+        (scalaVersion in crossVersion).value match {
+          case `scala210` => Def.task((key in plugin).value)
+          case v =>
+            Def.taskDyn {
+              (key in appleFileEvents.js).value
+              (key in reflect).value
+              (key in files.js).value
+              (key in testing.js).value
+              if (v == scala212)
+                Def.task {
+                  (key in plugin).value;
+                  (key in appleFileEvents.jvm).value
+                } else Def.task(())
+            }
         }
+      }
     }
   }
   lazy val root = project
