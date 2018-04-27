@@ -1,6 +1,6 @@
 package com.swoval
 
-import java.io.{ ByteArrayInputStream, File, InputStream, SequenceInputStream }
+import java.io._
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{ Files, StandardCopyOption, Path => JPath }
 import java.util.concurrent.TimeUnit
@@ -197,6 +197,7 @@ object Build {
       useYarn := false,
       scalaJSModuleKind := ModuleKind.CommonJSModule,
       (compile in Compile) := {
+        val log = state.value.log
         val npm = baseDirectory.value.toPath.resolve("npm")
         def is(path: JPath) =
           if (Files.exists(path)) Files.newInputStream(path)
@@ -212,13 +213,20 @@ object Build {
             is(npm.resolve("lib/swoval_apple_file_system.node"))
           )
           try DigestUtils.md5Hex(inputStream)
-          finally inputStream.close()
+          catch { case _: IOException => "" } finally inputStream.close()
         }
         if (digest != swovalNodeMD5Sum) {
           val proc =
             new java.lang.ProcessBuilder("node", "install.js").directory(npm.toFile).start()
-          proc.waitFor(5, TimeUnit.SECONDS)
-          println(Source.fromInputStream(proc.getInputStream).mkString(""))
+          proc.waitFor(30, TimeUnit.SECONDS)
+          if (proc.exitValue() != 0) {
+            log.error(Source.fromInputStream(proc.getInputStream).mkString(""))
+            log.error(Source.fromInputStream(proc.getErrorStream).mkString(""))
+            swovalNodeMD5Sum = ""
+            throw new IllegalStateException("Couldn't build native node library")
+          } else {
+            log.info(Source.fromInputStream(proc.getInputStream).mkString(""))
+          }
         }
         swovalNodeMD5Sum = digest
         (compile in Compile).value
