@@ -4,9 +4,10 @@ import java.nio.file.{ NoSuchFileException, Path, Paths, Files => JFiles }
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
+import scala.concurrent.ExecutionContext
 
 package object platform {
-  def executionContext = scala.concurrent.ExecutionContext.global
+  def executionContext: ExecutionContext = ExecutionContext.global
   def createTempFile(dir: String, prefix: String): String =
     JFiles.createTempFile(Paths.get(dir), prefix, "").toRealPath().toString
 
