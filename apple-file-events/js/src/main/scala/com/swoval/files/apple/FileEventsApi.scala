@@ -6,8 +6,12 @@ import scala.scalajs.js.annotation._
 @JSExportTopLevel("com.swoval.files.apple.FileEventsApi")
 @JSExportAll
 class FileEventsApi(handle: Double) extends AutoCloseable {
+  private[this] var closed = false;
   override def close(): Unit = {
-    FileEventsApiFacade.close(handle)
+    if (!closed) {
+      FileEventsApiFacade.close(handle)
+      closed = true
+    }
   }
 
   def createStream(path: String, latency: Double, flags: Int) = {
