@@ -19,6 +19,7 @@ object DuckTest extends TestSuite {
         'unspecified - {
           object Bar
           compileError("Bar.duckType[Foo].foo() ==> 3")
+          ()
         }
       }
       'default - {
@@ -63,6 +64,7 @@ object DuckTest extends TestSuite {
             import Duck.features.AllowReflection
             val foo = Bar.weakDuckType[Foo]
             intercept[IllegalArgumentException](foo.close() ==> {})
+            ()
           }
           'delegate - {
             var x = 0

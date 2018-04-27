@@ -17,8 +17,9 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 object MacOSXWatchServiceTest extends TestSuite {
+  import scala.language.implicitConversions
   implicit def toJPath(p: Path): JPath = JPaths.get(p.fullName)
-  val tests = testOn(MacOS) {
+  val tests: Tests = testOn(MacOS) {
     'poll - {
       "return create events" - {
         withService { service =>
@@ -87,6 +88,7 @@ object MacOSXWatchServiceTest extends TestSuite {
           events(subDir1) === (subDir1Paths take 2).toSet
           events(subDir2) === Set(subDir2File)
         }
+        ()
       }
     }
     "Not inadvertently exclude files in subdirectory" - {
@@ -125,16 +127,19 @@ object MacOSXWatchServiceTest extends TestSuite {
   )(f: MacOSXWatchService => R): Future[R] = {
     val offer = onOffer match {
       case o: OnOffer => o
-      case f          => new OnOffer(f)
+      case o          => new OnOffer(o)
     }
     val event = onEvent match {
-      case r: OnEvent => r
-      case f          => new OnEvent(f)
+      case o: OnEvent => o
+      case o          => new OnEvent(o)
     }
     using(new MacOSXWatchService(latency, queueSize)(offer, event))(f)
   }
 
-  def withService[R](f: MacOSXWatchService => R): Future[R] = withService()(f)
+  def withService[R](f: MacOSXWatchService => R): Future[Unit] = withService() { s =>
+    f(s)
+    ()
+  }
 
   class OnReg(f: WatchKey => Unit) extends (WatchKey => Unit) {
     private[this] val latches = mutable.Map.empty[Watchable, CountDownLatch]
@@ -145,7 +150,7 @@ object MacOSXWatchServiceTest extends TestSuite {
       f(key)
     }
 
-    def waitFor(path: JPath, duration: Duration) = {
+    def waitFor(path: JPath, duration: Duration): Boolean = {
       duration.waitOn(lock.synchronized(latches.getOrElseUpdate(path, new CountDownLatch(1))))
     }
   }
@@ -162,7 +167,7 @@ object MacOSXWatchServiceTest extends TestSuite {
       f(t)
     }
 
-    def count = lock.synchronized(_count)
+    def count: Int = lock.synchronized(_count)
 
     final def waitForCount(i: Int, duration: Duration): Unit = {
       val ceiling = System.nanoTime + duration.toNanos
@@ -180,7 +185,7 @@ object MacOSXWatchServiceTest extends TestSuite {
       waitUntil(i)
     }
 
-    def reset() = lock.synchronized {
+    def reset(): Unit = lock.synchronized {
       _count = 0
     }
   }
@@ -195,11 +200,11 @@ object MacOSXWatchServiceTest extends TestSuite {
   }
   implicit class RichSwovalPath(val s: Path) extends AnyVal {
     def createNewFile(): Path = Path(JFiles.createFile(s).toRealPath().toString)
-    def setLastModified(ms: Long) = JFiles.setLastModifiedTime(s, FileTime.fromMillis(ms))
+    def setLastModified(ms: Long): Unit = JFiles.setLastModifiedTime(s, FileTime.fromMillis(ms))
   }
   implicit class RichDuration(val d: Duration) {
-    def waitOn(l: CountDownLatch) = l.await(d.toNanos, TimeUnit.NANOSECONDS)
-    def waitOn(o: Object) = o.synchronized(o.wait(d.toMillis))
+    def waitOn(l: CountDownLatch): Boolean = l.await(d.toNanos, TimeUnit.NANOSECONDS)
+    def waitOn(o: Object): Unit = o.synchronized(o.wait(d.toMillis))
   }
   implicit class RichService(val s: MacOSXWatchService) extends AnyVal {
     def watch(dir: Path): Unit =

@@ -1,5 +1,5 @@
-#include "swoval_apple_file_system.hpp"
 #include "node_api.h"
+#include "swoval_apple_file_system.hpp"
 #include "uv.h"
 
 #include <stdlib.h>
@@ -40,7 +40,7 @@ class handle_data {
 typedef handle<handle_data> NodeHandle;
 
 static void close_impl(NodeHandle *h) {
-    if (h && h->stopped) {
+    if (h) {
         uint32_t ref_count;
         napi_env env    = h->data->env;
         napi_ref cb_ref = h->data->callback_ref;
@@ -58,7 +58,8 @@ static void close_impl(NodeHandle *h) {
 
         uv_thread_join(&h->data->thread);
         lock.unlock();
-        uv_async_send(h->data->async_work);
+        delete h->data;
+        delete h;
     }
 }
 
@@ -70,14 +71,9 @@ static NodeHandle *get_handle_ptr(napi_env env, napi_value obj) {
 
 static void process_callback(uv_async_t *async) {
     auto *h = reinterpret_cast<NodeHandle *>(async->data);
+    if (h->stopped)
+        return;   // should be unreachable
     Lock lock(h->mutex);
-    if (h->stopped) {
-        if (h->closed) {
-            delete h->data;
-            delete h;
-        }
-        return;
-    }
     napi_handle_scope scope;
     NAPI(napi_open_handle_scope(h->data->env, &scope));
     if (h->data->events.size()) {

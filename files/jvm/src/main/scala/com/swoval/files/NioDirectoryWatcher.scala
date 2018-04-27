@@ -88,12 +88,12 @@ class NioDirectoryWatcher(override val onFileEvent: Callback) extends DirectoryW
           e: WatchEvent[_] =>
             val path = key.watchable.asInstanceOf[JPath].resolve(e.context().asInstanceOf[JPath])
             val jvmPath = JvmPath(path)
+            onFileEvent(FileWatchEvent(jvmPath, e.kind.toSwoval))
             if (e.kind == ENTRY_CREATE && JFiles.exists(path) && JFiles.isDirectory(path)) {
               val recursive = watchedDirs.get(keyPath).exists(_.recursive)
               if (register(jvmPath, recursive))
                 walk(path, recursive)(_.filter((_: JPath) != path).forEach(notifyNewFile))
             }
-            onFileEvent(FileWatchEvent(jvmPath, e.kind.toSwoval))
         }
         if (!key.reset()) lock.synchronized(watchedDirs -= keyPath)
         true

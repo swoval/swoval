@@ -1,12 +1,13 @@
 package com.swoval.test
 
-import java.nio.file.{ Path, Paths, Files => JFiles }
+import java.nio.file.{ NoSuchFileException, Path, Paths, Files => JFiles }
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
+import scala.concurrent.ExecutionContext
 
 package object platform {
-  def executionContext = scala.concurrent.ExecutionContext.global
+  def executionContext: ExecutionContext = ExecutionContext.global
   def createTempFile(dir: String, prefix: String): String =
     JFiles.createTempFile(Paths.get(dir), prefix, "").toRealPath().toString
 
@@ -18,11 +19,14 @@ package object platform {
   }
 
   def delete(dir: String): Unit = {
-    def list(p: Path): Seq[Path] = {
-      val stream = JFiles.list(p)
-      try stream.iterator.asScala.toIndexedSeq
-      finally stream.close()
-    }
+    def list(p: Path): Seq[Path] =
+      try {
+        val stream = JFiles.list(p)
+        try stream.iterator.asScala.toIndexedSeq
+        finally stream.close()
+      } catch {
+        case _: NoSuchFileException => Nil
+      }
 
     @tailrec
     def impl(allFiles: Seq[Path], directoriesToDelete: Seq[Path]): Unit = {

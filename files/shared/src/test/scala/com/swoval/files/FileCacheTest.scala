@@ -14,8 +14,29 @@ import scala.util.Properties
 
 object FileCacheTest extends TestSuite {
   val tests: Tests = Tests {
+    val options = Options.default
+    'directory - {
+      'subdirectories - {
+        'callback - withTempDirectory { dir =>
+          val events = new ArrayBlockingQueue[Path](2)
+          usingAsync(FileCache(options)(f => events.add(f.path))) { c =>
+            c.register(dir)
+            withTempDirectory(dir) { subdir =>
+              withTempFile(subdir) { f =>
+                events.poll(DEFAULT_TIMEOUT)(_ ==> subdir).flatMap { _ =>
+                  events.poll(DEFAULT_TIMEOUT) { e =>
+                    e ==> f
+                    c.list(dir, recursive = true, (_: Path) => true).toSet === Set(subdir, f)
+                    ()
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
     'files - {
-      val options = Options.default
       'register - {
         'existing - withTempFile { f =>
           val parent = f.getParent
@@ -62,35 +83,31 @@ object FileCacheTest extends TestSuite {
             }
           }
         }
-        "anti-entropy" - retry(3) {
-          withTempFile { f =>
-            val parent = f.getParent
-            val events = new ArrayBlockingQueue[FileWatchEvent](2)
-            val executor: ScheduledExecutor = platform.makeScheduledExecutor("FileCacheTest")
-            val flags = new Flags.Create().setFileEvents.setNoDefer
-            val latency = 40.milliseconds
-            val options = Options(latency, flags)
-            usingAsync(FileCache(options)(events.add)) { c =>
-              c.register(parent)
-              c.list(parent, recursive = true, (_: Path) => true) === Seq(f)
-              val callbacks = Callbacks()
-              val lastModified = 1000
-              var handle = -1
-              usingAsync(DirectoryWatcher.default(1.millis)(callbacks)) { w =>
-                handle = callbacks.addCallback { _ =>
-                  executor.schedule(5.milliseconds) {
-                    callbacks.removeCallback(handle)
-                    f.setLastModifiedTime(lastModified)
-                  }
-                  w.close()
-                }
-                w.register(parent)
-                f.setLastModifiedTime(0)
-                events.poll(DEFAULT_TIMEOUT)(_.kind ==> Modify).flatMap { _ =>
-                  f.lastModified ==> lastModified
-                  executor.schedule(latency / 2)(f.delete())
-                  events.poll(DEFAULT_TIMEOUT)(_.kind ==> Delete)
-                }
+        "anti-entropy" - withTempFile { f =>
+          val parent = f.getParent
+          val events = new ArrayBlockingQueue[FileWatchEvent](2)
+          val executor: ScheduledExecutor = platform.makeScheduledExecutor("FileCacheTest")
+          val flags = new Flags.Create().setFileEvents.setNoDefer
+          val latency = 40.milliseconds
+          val options = Options(latency, flags)
+          usingAsync(FileCache(options)(events.add)) { c =>
+            c.register(parent)
+            c.list(parent, recursive = true, (_: Path) => true) === Seq(f)
+            val callbacks = Callbacks()
+            val lastModified = 1000
+            var handle = -1
+            usingAsync(DirectoryWatcher.default(1.millis)(callbacks)) { w =>
+              handle = callbacks.addCallback { _ =>
+                callbacks.removeCallback(handle)
+                f.setLastModifiedTime(lastModified)
+                w.close()
+              }
+              w.register(parent)
+              f.setLastModifiedTime(0)
+              events.poll(DEFAULT_TIMEOUT)(_.kind ==> Modify).flatMap { _ =>
+                f.lastModified ==> lastModified
+                executor.schedule(latency / 2)(f.delete())
+                events.poll(DEFAULT_TIMEOUT)(_.kind ==> Delete)
               }
             }
           }
@@ -101,11 +118,9 @@ object FileCacheTest extends TestSuite {
           val latch = new CountDownLatch(filesToAdd * 2)
           val added = mutable.Set.empty[Path]
           val callback: Callback = e =>
-            executor.run {
-              added.synchronized {
-                if (e.kind == Create && added.add(e.path)) {
-                  latch.countDown()
-                }
+            added.synchronized {
+              if (e.kind == Create && added.add(e.path)) {
+                latch.countDown()
               }
           }
           usingAsync(FileCache(options)(callback)) { c =>

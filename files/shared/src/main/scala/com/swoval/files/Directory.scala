@@ -2,6 +2,7 @@ package com.swoval.files
 
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.FileWatchEvent.{ Create, Delete }
+import com.swoval.files.PathFilter.AllPass
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -14,6 +15,14 @@ case class Directory private (path: Path) {
   }
   def add(abspath: Path, isFile: Boolean, callback: Callback): Boolean = {
     @tailrec def implRec(directory: Directory, parts: Seq[Path]): Boolean = {
+      def addDirectory(p: Path): Directory = {
+        val dir = Directory.of(directory.resolve(p))
+        directory.subdirectories += p.name -> dir
+        callback(FileWatchEvent(dir.path, Create))
+        dir.list(recursive = true, AllPass).foreach(notifyNewFile)
+        dir
+      }
+      @inline def notifyNewFile(p: Path): Unit = callback(FileWatchEvent(p, Create))
       parts match {
         case Seq(p) =>
           val newPath = lock.synchronized {
@@ -22,8 +31,7 @@ case class Directory private (path: Path) {
             } else {
               directory.subdirectories get p.name match {
                 case None =>
-                  val dir = Directory.of(directory.resolve(p), callback)
-                  directory.subdirectories += p.name -> dir
+                  addDirectory(p)
                   true
                 case _ =>
                   false
@@ -36,9 +44,7 @@ case class Directory private (path: Path) {
           lock.synchronized(directory.subdirectories get p.name) match {
             case None =>
               lock.synchronized {
-                callback(FileWatchEvent(directory.resolve(p), Create))
-                val dir = Directory.of(directory.resolve(p), callback)
-                directory.subdirectories += p.name -> dir
+                val dir = addDirectory(p)
                 val child = dir.path.resolve(Path(rest.map(_.name): _*))
                 dir.find(child).isDefined
               }

@@ -1,6 +1,6 @@
 package com.swoval
 
-import java.io.{ ByteArrayInputStream, File, InputStream, SequenceInputStream }
+import java.io._
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{ Files, StandardCopyOption, Path => JPath }
 import java.util.concurrent.TimeUnit
@@ -14,13 +14,14 @@ import com.typesafe.sbt.SbtGit.git
 import com.typesafe.sbt.pgp.PgpKeys.publishSigned
 import org.apache.commons.codec.digest.DigestUtils
 import org.scalajs.core.tools.linker.backend.ModuleKind
-import org.scalajs.sbtplugin.JSPlatform
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ fastOptJS, fullOptJS, scalaJSModuleKind }
 import sbt.Keys._
 import sbt._
 import sbtcrossproject.CrossPlugin.autoImport._
 import sbtcrossproject.CrossProject
+import sbtcrossproject.{ CrossType, crossProject }
 import sbtdoge.CrossPerProjectPlugin
+import scalajscrossproject.JSPlatform
 import scalajsbundler.BundlingMode
 import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin
 import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin.autoImport._
@@ -100,6 +101,7 @@ object Build {
   lazy val releaseLocal = taskKey[Unit]("Release local project")
   lazy val releaseSigned = taskKey[Unit]("Release signed project")
   lazy val generateJSSources = taskKey[Unit]("Generate scala sources from java")
+  lazy val clangFmt = taskKey[Unit]("Run clang format")
   def projects: Seq[ProjectReference] = Seq[ProjectReference](
     appleFileEvents.jvm,
     appleFileEvents.js,
@@ -113,20 +115,31 @@ object Build {
   )
 
   def releaseTask(key: TaskKey[Unit]) = Def.taskDyn {
-    (key in files.jvm).value
-    (key in testing.jvm).value
-    (key in util).value
-    (scalaVersion in crossVersion).value match {
-      case `scala210` => Def.task((key in plugin).value)
-      case v =>
-        Def.taskDyn {
-          (key in appleFileEvents.js).value
-          (key in reflect).value
-          (key in files.js).value
-          (key in testing.js).value
-          if (v == scala212)
-            Def.task { (key in plugin).value; (key in appleFileEvents.jvm).value } else Def.task(())
+    import sys.process._
+    clangFmt.value
+    if (!Seq("git", "status").!!.contains("working tree clean"))
+      throw new IllegalStateException("There are local diffs")
+    else {
+      Def.taskDyn {
+        (key in files.jvm).value
+        (key in testing.jvm).value
+        (key in util).value
+        (scalaVersion in crossVersion).value match {
+          case `scala210` => Def.task((key in plugin).value)
+          case v =>
+            Def.taskDyn {
+              (key in appleFileEvents.js).value
+              (key in reflect).value
+              (key in files.js).value
+              (key in testing.js).value
+              if (v == scala212)
+                Def.task {
+                  (key in plugin).value;
+                  (key in appleFileEvents.jvm).value
+                } else Def.task(())
+            }
         }
+      }
     }
   }
   lazy val root = project
@@ -142,7 +155,26 @@ object Build {
       publishLocal := {},
       releaseLocal := releaseTask(publishLocal).value,
       releaseSigned := releaseTask(publishSigned).value,
-      release := releaseTask(publish).value
+      release := releaseTask(publish).value,
+      clangFmt := {
+        val npm = appleFileEvents.js.base.toPath.toAbsolutePath.resolve("npm/src")
+        val jvm = appleFileEvents.jvm.base.toPath.toAbsolutePath.resolve("src/main/native")
+        val args = Seq(npm, jvm).flatMap { p =>
+          val allFiles = Files.list(p).iterator.asScala.toSeq
+          allFiles.flatMap { f =>
+            f.toString.split("\\.").lastOption.flatMap {
+              case "cc" | "hpp" => Some(f.toString)
+              case _            => None
+            }
+          }
+        }
+        val proc = new ProcessBuilder((Seq("clang-format", "-i") ++ args): _*).start()
+        val log = state.value.log
+        if (!proc.waitFor(20, TimeUnit.SECONDS) || proc.exitValue != 0) {
+          log.error(Source.fromInputStream(proc.getInputStream).mkString)
+          log.error(Source.fromInputStream(proc.getErrorStream).mkString)
+        }
+      }
     )
 
   private var swovalNodeMD5Sum = ""
@@ -196,6 +228,7 @@ object Build {
       useYarn := false,
       scalaJSModuleKind := ModuleKind.CommonJSModule,
       (compile in Compile) := {
+        val log = state.value.log
         val npm = baseDirectory.value.toPath.resolve("npm")
         def is(path: JPath) =
           if (Files.exists(path)) Files.newInputStream(path)
@@ -211,13 +244,20 @@ object Build {
             is(npm.resolve("lib/swoval_apple_file_system.node"))
           )
           try DigestUtils.md5Hex(inputStream)
-          finally inputStream.close()
+          catch { case _: IOException => "" } finally inputStream.close()
         }
         if (digest != swovalNodeMD5Sum) {
           val proc =
             new java.lang.ProcessBuilder("node", "install.js").directory(npm.toFile).start()
-          proc.waitFor(5, TimeUnit.SECONDS)
-          println(Source.fromInputStream(proc.getInputStream).mkString(""))
+          proc.waitFor(30, TimeUnit.SECONDS)
+          if (proc.exitValue() != 0) {
+            log.error(Source.fromInputStream(proc.getInputStream).mkString(""))
+            log.error(Source.fromInputStream(proc.getErrorStream).mkString(""))
+            swovalNodeMD5Sum = ""
+            throw new IllegalStateException("Couldn't build native node library")
+          } else {
+            log.info(Source.fromInputStream(proc.getInputStream).mkString(""))
+          }
         }
         swovalNodeMD5Sum = digest
         (compile in Compile).value

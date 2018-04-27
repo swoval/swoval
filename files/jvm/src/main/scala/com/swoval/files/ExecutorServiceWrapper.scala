@@ -1,10 +1,13 @@
 package com.swoval.files
 
-import java.util.concurrent.{ ExecutorService, Executors, ScheduledExecutorService, TimeUnit }
+import java.util.concurrent._
+import java.util.concurrent.atomic.AtomicBoolean
 
 import com.swoval.concurrent.ThreadFactory
 
-import scala.concurrent.duration.FiniteDuration
+import scala.collection.JavaConverters._
+import scala.collection.mutable
+import scala.concurrent.duration.{ Deadline, FiniteDuration }
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.util.Try
 
@@ -27,11 +30,32 @@ class ExecutorServiceWrapper(val s: ExecutorService) extends Executor {
 class ScheduledExecutorServiceWrapper(override val s: ScheduledExecutorService)
     extends ExecutorServiceWrapper(s)
     with ScheduledExecutor {
-  override def schedule[R](delay: FiniteDuration)(f: => R): Future[R] = {
+  private[this] class job[R](f: => R, p: Promise[R], val deadline: Deadline) {
+    def run(): Unit = p.tryComplete(Try(f))
+  }
+  private[this] val pending = new AtomicBoolean(false)
+  private[this] val scheduledJobs = new LinkedBlockingDeque[job[_]]
+  private[this] val runnable = new Runnable { override def run(): Unit = executeJobs() }
+  private[this] def executeJobs(): Unit = pending.synchronized {
+    val buffer: mutable.Buffer[job[_]] = mutable.Buffer.empty[job[_]]
+    scheduledJobs.drainTo(buffer.asJava)
+    val (ready, deferred) = buffer.partition(_.deadline.isOverdue)
+    ready.foreach(_.run())
+    if (deferred.nonEmpty) {
+      deferred.foreach(scheduledJobs.putLast)
+      val deadline = deferred.minBy(_.deadline).deadline
+      s.schedule(runnable, (deadline - Deadline.now).toNanos, TimeUnit.NANOSECONDS)
+    } else {
+      pending.set(false)
+    }
+  }
+  override def schedule[R](delay: FiniteDuration)(f: => R): Future[R] = pending.synchronized {
     val p = Promise[R]
-    s.schedule(new Runnable {
-      override def run(): Unit = p.tryComplete(Try(f))
-    }, delay.toNanos, TimeUnit.NANOSECONDS)
+    scheduledJobs.putLast(new job(f, p, delay.fromNow))
+    if (!pending.get) {
+      s.schedule(runnable, delay.toNanos, TimeUnit.NANOSECONDS)
+      pending.set(true)
+    }
     p.future
   }
 }
