@@ -83,35 +83,33 @@ object FileCacheTest extends TestSuite {
             }
           }
         }
-        "anti-entropy" - retry(3) {
-          withTempFile { f =>
-            val parent = f.getParent
-            val events = new ArrayBlockingQueue[FileWatchEvent](2)
-            val executor: ScheduledExecutor = platform.makeScheduledExecutor("FileCacheTest")
-            val flags = new Flags.Create().setFileEvents.setNoDefer
-            val latency = 40.milliseconds
-            val options = Options(latency, flags)
-            usingAsync(FileCache(options)(events.add)) { c =>
-              c.register(parent)
-              c.list(parent, recursive = true, (_: Path) => true) === Seq(f)
-              val callbacks = Callbacks()
-              val lastModified = 1000
-              var handle = -1
-              usingAsync(DirectoryWatcher.default(1.millis)(callbacks)) { w =>
-                handle = callbacks.addCallback { _ =>
-                  executor.schedule(5.milliseconds) {
-                    callbacks.removeCallback(handle)
-                    f.setLastModifiedTime(lastModified)
-                  }
-                  w.close()
+        "anti-entropy" - withTempFile { f =>
+          val parent = f.getParent
+          val events = new ArrayBlockingQueue[FileWatchEvent](2)
+          val executor: ScheduledExecutor = platform.makeScheduledExecutor("FileCacheTest")
+          val flags = new Flags.Create().setFileEvents.setNoDefer
+          val latency = 40.milliseconds
+          val options = Options(latency, flags)
+          usingAsync(FileCache(options)(events.add)) { c =>
+            c.register(parent)
+            c.list(parent, recursive = true, (_: Path) => true) === Seq(f)
+            val callbacks = Callbacks()
+            val lastModified = 1000
+            var handle = -1
+            usingAsync(DirectoryWatcher.default(1.millis)(callbacks)) { w =>
+              handle = callbacks.addCallback { _ =>
+                executor.schedule(5.milliseconds) {
+                  callbacks.removeCallback(handle)
+                  f.setLastModifiedTime(lastModified)
                 }
-                w.register(parent)
-                f.setLastModifiedTime(0)
-                events.poll(DEFAULT_TIMEOUT)(_.kind ==> Modify).flatMap { _ =>
-                  f.lastModified ==> lastModified
-                  executor.schedule(latency / 2)(f.delete())
-                  events.poll(DEFAULT_TIMEOUT)(_.kind ==> Delete)
-                }
+                w.close()
+              }
+              w.register(parent)
+              f.setLastModifiedTime(0)
+              events.poll(DEFAULT_TIMEOUT)(_.kind ==> Modify).flatMap { _ =>
+                f.lastModified ==> lastModified
+                executor.schedule(latency / 2)(f.delete())
+                events.poll(DEFAULT_TIMEOUT)(_.kind ==> Delete)
               }
             }
           }
