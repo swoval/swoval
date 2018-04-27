@@ -98,10 +98,8 @@ object FileCacheTest extends TestSuite {
             var handle = -1
             usingAsync(DirectoryWatcher.default(1.millis)(callbacks)) { w =>
               handle = callbacks.addCallback { _ =>
-                executor.schedule(5.milliseconds) {
-                  callbacks.removeCallback(handle)
-                  f.setLastModifiedTime(lastModified)
-                }
+                callbacks.removeCallback(handle)
+                f.setLastModifiedTime(lastModified)
                 w.close()
               }
               w.register(parent)
