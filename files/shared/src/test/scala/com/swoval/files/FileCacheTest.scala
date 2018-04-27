@@ -14,8 +14,29 @@ import scala.util.Properties
 
 object FileCacheTest extends TestSuite {
   val tests: Tests = Tests {
+    val options = Options.default
+    'directory - {
+      'subdirectories - {
+        'callback - withTempDirectory { dir =>
+          val events = new ArrayBlockingQueue[Path](2)
+          usingAsync(FileCache(options)(f => events.add(f.path))) { c =>
+            c.register(dir)
+            withTempDirectory(dir) { subdir =>
+              withTempFile(subdir) { f =>
+                events.poll(DEFAULT_TIMEOUT)(_ ==> subdir).flatMap { _ =>
+                  events.poll(DEFAULT_TIMEOUT) { e =>
+                    e ==> f
+                    c.list(dir, recursive = true, (_: Path) => true).toSet === Set(subdir, f)
+                    ()
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
     'files - {
-      val options = Options.default
       'register - {
         'existing - withTempFile { f =>
           val parent = f.getParent

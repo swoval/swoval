@@ -40,7 +40,6 @@ class FileCacheImpl(options: Options) extends FileCache {
       watcher.foreach(_.register(path, recursive))
       directories.synchronized {
         if (!directories.exists(dir => path.startsWith(dir.path))) {
-
           directories foreach { dir =>
             if (dir.path startsWith path) directories.remove(dir)
           }
