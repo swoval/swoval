@@ -1,6 +1,6 @@
 package com.swoval.test
 
-import java.nio.file.{ Path, Paths, Files => JFiles }
+import java.nio.file.{ NoSuchFileException, Path, Paths, Files => JFiles }
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -18,11 +18,14 @@ package object platform {
   }
 
   def delete(dir: String): Unit = {
-    def list(p: Path): Seq[Path] = {
-      val stream = JFiles.list(p)
-      try stream.iterator.asScala.toIndexedSeq
-      finally stream.close()
-    }
+    def list(p: Path): Seq[Path] =
+      try {
+        val stream = JFiles.list(p)
+        try stream.iterator.asScala.toIndexedSeq
+        finally stream.close()
+      } catch {
+        case _: NoSuchFileException => Nil
+      }
 
     @tailrec
     def impl(allFiles: Seq[Path], directoriesToDelete: Seq[Path]): Unit = {
