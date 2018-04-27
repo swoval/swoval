@@ -14,13 +14,14 @@ import com.typesafe.sbt.SbtGit.git
 import com.typesafe.sbt.pgp.PgpKeys.publishSigned
 import org.apache.commons.codec.digest.DigestUtils
 import org.scalajs.core.tools.linker.backend.ModuleKind
-import org.scalajs.sbtplugin.JSPlatform
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ fastOptJS, fullOptJS, scalaJSModuleKind }
 import sbt.Keys._
 import sbt._
 import sbtcrossproject.CrossPlugin.autoImport._
 import sbtcrossproject.CrossProject
+import sbtcrossproject.{ CrossType, crossProject }
 import sbtdoge.CrossPerProjectPlugin
+import scalajscrossproject.JSPlatform
 import scalajsbundler.BundlingMode
 import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin
 import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin.autoImport._
