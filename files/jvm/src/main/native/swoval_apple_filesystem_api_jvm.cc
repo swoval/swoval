@@ -92,9 +92,7 @@ JNIEXPORT jlong JNICALL Java_com_swoval_files_apple_FileEventsApi_init(JNIEnv *e
     handle->fileEvent         = (jclass)env->NewGlobalRef(eventClass);
     handle->fileEventCons     = env->GetMethodID(eventClass, "<init>", EVENT_INIT_SIG);
     handle->env               = env;
-    auto *h                   = new JNIHandle(handle, jni_callback, jni_stop_stream);
-
-    return reinterpret_cast<jlong>(h);
+    return reinterpret_cast<jlong>(new JNIHandle(handle, jni_callback, jni_stop_stream));
 }
 
 JNIEXPORT jint JNICALL Java_com_swoval_files_apple_FileEventsApi_createStream(
