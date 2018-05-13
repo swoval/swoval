@@ -2,8 +2,6 @@ package com.swoval.files.test
 
 import java.nio.file.{ Files, Path => JPath }
 
-import com.swoval.files.Directory.Entry
-
 trait LastModified {
   val lastModified: Long
 }
