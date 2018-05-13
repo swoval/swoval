@@ -52,6 +52,12 @@ object DirectoryWatcher {
 
   object Event {
 
+    val Create: Kind = new Kind("Create")
+
+    val Delete: Kind = new Kind("Delete")
+
+    val Modify: Kind = new Kind("Modify")
+
     /**
      * An enum like class to indicate the type of file event. It isn't an actual enum because the
      * scala.js codegen has problems with enum types.
@@ -61,12 +67,6 @@ object DirectoryWatcher {
       override def toString(): String = name
 
     }
-
-    val Create: Kind = new Kind("Create")
-
-    val Delete: Kind = new Kind("Delete")
-
-    val Modify: Kind = new Kind("Modify")
 
   }
 

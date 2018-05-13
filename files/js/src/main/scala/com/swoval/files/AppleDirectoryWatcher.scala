@@ -19,6 +19,9 @@ import AppleDirectoryWatcher._
 
 object AppleDirectoryWatcher {
 
+  private val DefaultOnStreamRemoved: DefaultOnStreamRemoved =
+    new DefaultOnStreamRemoved()
+
   /**
    * Callback to run when the native file events api removes a redundant stream. This can occur when
    * a child directory is registered with the watcher before the parent.
@@ -35,9 +38,6 @@ object AppleDirectoryWatcher {
 
   }
 
-  var DefaultOnStreamRemoved: DefaultOnStreamRemoved =
-    new DefaultOnStreamRemoved()
-
 }
 
 /**
@@ -49,6 +49,58 @@ class AppleDirectoryWatcher(private val latency: Double,
                             onFileEvent: DirectoryWatcher.Callback,
                             onStreamRemoved: OnStreamRemoved)
     extends DirectoryWatcher {
+
+  private val registered: Map[String, Boolean] = new HashMap()
+
+  private val streams: Map[String, Integer] = new HashMap()
+
+  private val lock: AnyRef = new AnyRef()
+
+  private val closed: AtomicBoolean = new AtomicBoolean(false)
+
+  private val fileEventsApi: FileEventsApi = FileEventsApi.apply(
+    new Consumer[FileEvent]() {
+      override def accept(fileEvent: FileEvent): Unit = {
+        executor.run(new Runnable() {
+          override def run(): Unit = {
+            val fileName: String = fileEvent.fileName
+            val path: Path = Paths.get(fileName)
+            val it: Iterator[Entry[String, Boolean]] =
+              registered.entrySet().iterator()
+            var validKey: Boolean = false
+            while (it.hasNext && !validKey) {
+              val entry: Entry[String, Boolean] = it.next()
+              var key: String = entry.getKey
+              validKey = fileName == key || (fileName
+                .startsWith(key) && entry.getValue)
+            }
+            if (validKey) {
+              var event: DirectoryWatcher.Event = null
+              event =
+                if (fileEvent.itemIsFile())
+                  if (fileEvent.isNewFile && Files.exists(path))
+                    new DirectoryWatcher.Event(path, Create)
+                  else if (fileEvent.isRemoved || !Files.exists(path))
+                    new DirectoryWatcher.Event(path, Delete)
+                  else new DirectoryWatcher.Event(path, Modify)
+                else if (Files.exists(path))
+                  new DirectoryWatcher.Event(path, Modify)
+                else new DirectoryWatcher.Event(path, Delete)
+              onFileEvent.apply(event)
+            }
+          }
+        })
+      }
+    },
+    new Consumer[String]() {
+      override def accept(stream: String): Unit = {
+        onStreamRemoved.apply(stream)
+        lock.synchronized {
+          streams.remove(stream)
+        }
+      }
+    }
+  )
 
   /**
    * Registers a path
@@ -130,57 +182,5 @@ class AppleDirectoryWatcher(private val latency: Double,
   private def alreadyWatching(path: Path): Boolean =
     path != path.getRoot &&
       (streams.containsKey(path.toString) || alreadyWatching(path.getParent))
-
-  private val registered: Map[String, Boolean] = new HashMap()
-
-  private val streams: Map[String, Integer] = new HashMap()
-
-  private val lock: AnyRef = new AnyRef()
-
-  private val closed: AtomicBoolean = new AtomicBoolean(false)
-
-  private val fileEventsApi: FileEventsApi = FileEventsApi.apply(
-    new Consumer[FileEvent]() {
-      override def accept(fileEvent: FileEvent): Unit = {
-        executor.run(new Runnable() {
-          override def run(): Unit = {
-            val fileName: String = fileEvent.fileName
-            val path: Path = Paths.get(fileName)
-            val it: Iterator[Entry[String, Boolean]] =
-              registered.entrySet().iterator()
-            var validKey: Boolean = false
-            while (it.hasNext && !validKey) {
-              val entry: Entry[String, Boolean] = it.next()
-              var key: String = entry.getKey
-              validKey = fileName == key || (fileName
-                .startsWith(key) && entry.getValue)
-            }
-            if (validKey) {
-              var event: DirectoryWatcher.Event = null
-              event =
-                if (fileEvent.itemIsFile())
-                  if (fileEvent.isNewFile && Files.exists(path))
-                    new DirectoryWatcher.Event(path, Create)
-                  else if (fileEvent.isRemoved || !Files.exists(path))
-                    new DirectoryWatcher.Event(path, Delete)
-                  else new DirectoryWatcher.Event(path, Modify)
-                else if (Files.exists(path))
-                  new DirectoryWatcher.Event(path, Modify)
-                else new DirectoryWatcher.Event(path, Delete)
-              onFileEvent.apply(event)
-            }
-          }
-        })
-      }
-    },
-    new Consumer[String]() {
-      override def accept(stream: String): Unit = {
-        onStreamRemoved.apply(stream)
-        lock.synchronized {
-          streams.remove(stream)
-        }
-      }
-    }
-  )
 
 }

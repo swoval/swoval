@@ -26,6 +26,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class NioDirectoryWatcher extends DirectoryWatcher {
+  private final Object lock = new Object();
+  private final Map<Path, WatchedDir> watchedDirs = new HashMap<>();
+  private final WatchService watchService;
+  private ExecutorService executor =
+      Executors.newSingleThreadExecutor(
+          new ThreadFactory(NioDirectoryWatcher.class.getName() + ".loop-thread"));
+
   public NioDirectoryWatcher(final Callback callback) throws IOException {
     watchService = FileSystems.getDefault().newWatchService();
     executor.submit(
@@ -102,8 +109,6 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
         });
   }
 
-  private final Object lock = new Object();
-
   @SuppressWarnings("EmptyCatchBlock")
   @Override
   public void close() {
@@ -131,12 +136,6 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
       this.recursive = recursive;
     }
   }
-
-  private final Map<Path, WatchedDir> watchedDirs = new HashMap<>();
-  private final WatchService watchService;
-  private ExecutorService executor =
-      Executors.newSingleThreadExecutor(
-          new ThreadFactory(NioDirectoryWatcher.class.getName() + ".loop-thread"));
 
   private boolean registerImpl(final Path path, final boolean recursive) {
     synchronized (lock) {
