@@ -1,25 +1,29 @@
 package com.swoval.watchservice
 
 import java.io.File
+import java.nio.file._
 
-import com.swoval.files.{ FileCache, Path, PathFilter }
+import com.swoval.files.Directory.Entry
+import com.swoval.files.{Directory, FileCache, EntryFilter}
 import com.swoval.watchservice.CloseWatchPlugin.autoImport.closeWatchFileCache
 import sbt.Keys._
 
-class FileSource(file: File, f: PathFilter) extends File(file.toString) with SourcePath {
+class FileSource(file: File, f: EntryFilter[Path]) extends File(file.toString) with SourcePath {
   private val _f = f
-  override val base: Path = Path(file.toString)
-  override val filter: PathFilter = f && ((_: Path).startsWith(base))
+  override val base: Path = file.toPath
+  override val filter: EntryFilter[Path] = new EntryFilter[Path] {
+    override def accept(p: Entry[_ <: Path]) = f.accept(p) && p.path.startsWith(base)
+  }
   override def recursive: Boolean = true
   override lazy val toString: String = f.toString.replaceAll("SourceFilter", "SourcePath")
   override def equals(o: Any): Boolean = o match {
     case that: FileSource => (this.base == that.base) && (this._f == that._f)
     case _                => false
   }
-  override lazy val hashCode = hash(f)
+  override lazy val hashCode = (f :: base :: Nil).hashCode()
 }
-class ExactFileFilter(f: File) extends PathFilter {
-  override def apply(p: Path) = new File(p.fullName) == f
+class ExactFileFilter(val f: File) extends EntryFilter[Path] {
+  override def accept(p: Entry[_ <: Path]): Boolean = p.path.toFile == f
   override val toString: String = s"""ExactFileFilter("$f")"""
   override def equals(o: Any): Boolean = o match {
     case that: ExactFileFilter => this.f == that.f
@@ -35,7 +39,7 @@ class ExactFileSource(val file: File) extends FileSource(file, new ExactFileFilt
   }
   override lazy val toString: String = s"""ExactFileSource("$file")"""
 }
-class BaseFileSource(val file: File, filter: PathFilter) extends FileSource(file, filter)  {
+class BaseFileSource(val file: File, filter: EntryFilter[Path]) extends FileSource(file, filter) {
   override lazy val hashCode: Int = file.hashCode
   override def recursive = false
   override def equals(o: Any): Boolean = o match {
@@ -65,18 +69,20 @@ object Compat {
   val global = Scope(Global, Global, Global, Global)
   def extraProjectSettings: Seq[Def.Setting[_]] = Seq(
     pollInterval := 75,
-    closeWatchFileCache := FileCache.default
+    closeWatchFileCache := FileCache.apply(new Directory.Converter[Path] {
+      override def apply(p: Path): Path = p
+    })
   )
   implicit class FileFilterOps(val filter: java.io.FileFilter) extends AnyVal {
     def &&(other: java.io.FileFilter) = new sbt.FileFilter {
       override def accept(f: File): Boolean = filter.accept(f) && other.accept(f)
     }
   }
-  def makeScopedSource(p: Path, pathFilter: PathFilter, id: Def.ScopedKey[_]): WatchSource = {
-    new BaseFileSource(file(p.fullName), pathFilter)
+  def makeScopedSource(p: Path, pathFilter: EntryFilter[Path], id: Def.ScopedKey[_]): WatchSource = {
+    new BaseFileSource(p.toFile, pathFilter)
   }
-  def makeSource(p: Path, pathFilter: PathFilter): WatchSource =
-    new FileSource(new File(p.fullName), pathFilter)
+  def makeSource(p: Path, pathFilter: EntryFilter[Path]): WatchSource =
+    new FileSource(p.toFile, pathFilter)
   def filter(files: Seq[WatchSource]): Seq[SourcePath] = {
     val (sources, rawFiles) =
       files.foldLeft((Seq.empty[File with SourcePath], Seq.empty[WatchSource])) {
@@ -84,7 +90,7 @@ object Compat {
         case ((s, rf), f)                       => (s, rf :+ f)
       }
     val extra = rawFiles
-      .filterNot(f => sources.exists(_.filter(Path(f.toString))))
+      .filterNot(f => sources.exists(_.filter.accept(new Entry(f.toPath, f.toPath))))
       .map(new ExactFileSource(_))
     sources ++ extra
   }

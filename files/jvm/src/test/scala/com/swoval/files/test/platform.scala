@@ -6,13 +6,13 @@ import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
 import scala.util.{ Failure, Try }
 
-import com.swoval.files.compat._
-
 object platform {
   def newTimedPromise[T](p: Promise[T], timeout: FiniteDuration): TimedPromise[T] =
     new TimedPromise[T] {
       val timer = Executors.newSingleThreadScheduledExecutor()
-      val runnable: Runnable = () => tryComplete(Failure(new TimeoutException("Future timed out")))
+      val runnable: Runnable = new Runnable {
+        override def run(): Unit = tryComplete(Failure(new TimeoutException("Future timed out")))
+      }
       val future: ScheduledFuture[_] =
         timer.schedule(runnable, timeout.toNanos, TimeUnit.NANOSECONDS)
       override def tryComplete(r: Try[T]): Unit = {

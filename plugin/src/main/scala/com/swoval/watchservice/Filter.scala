@@ -1,8 +1,10 @@
 package com.swoval.watchservice
 
 import java.io.File
+import java.nio.file.Path
 
-import com.swoval.files.{ Path, PathFilter }
+import com.swoval.files.Directory.Entry
+import com.swoval.files.EntryFilter
 import com.swoval.watchservice.Compat.io._
 import com.swoval.watchservice.Filter._
 
@@ -23,7 +25,7 @@ object Filter {
   case class Hash(path: Path, id: ID)
 }
 
-trait Filter extends PathFilter {
+trait Filter extends EntryFilter[Path] {
   def id: ID
   def base: Path
   override def equals(o: Any): Boolean = o match {
@@ -35,11 +37,12 @@ trait Filter extends PathFilter {
   override def hashCode(): Int = Hash(base, id).hashCode()
 }
 
-class SourceFilter(override val base: Path, filter: PathFilter, override val id: ID)
+class SourceFilter(override val base: Path, filter: EntryFilter[Path], override val id: ID)
     extends Filter
     with Compat.FileFilter {
-  override def accept(pathname: File): Boolean = apply(Path(pathname.toString))
-  def apply(p: Path): Boolean = p.startsWith(base) && filter(p)
+  override def accept(cacheEntry: Entry[_ <: Path]): Boolean = apply(cacheEntry.path)
+  override def accept(file: File): Boolean = apply(file.toPath)
+  def apply(p: Path): Boolean = p.startsWith(base) && filter.accept(new Entry(p, p))
   override lazy val toString: String = {
     val filterStr = Filter.show(filter, 0) match {
       case f if f.length > 80 =>
@@ -52,6 +55,7 @@ class SourceFilter(override val base: Path, filter: PathFilter, override val id:
           .mkString("\n", "\n", "")
       case f => s" $f"
     }
-    s"""SourceFilter(\n  base = "${base.fullName}"""" + s",\n  filter =$filterStr\n)"
+    s"""SourceFilter(\n  base = "$base"""" + s",\n  filter =$filterStr\n)"
   }
+
 }

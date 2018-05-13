@@ -1,1 +1,6 @@
-../../../apple-file-events/js/npm/.gitignore
+build
+node_modules
+package-lock.json
+*.tgz
+test.js
+lib

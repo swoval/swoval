@@ -1,33 +1,31 @@
 package com.swoval.watchservice
 
 import java.nio.file.StandardWatchEventKinds.{ ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY, OVERFLOW }
-import java.nio.file.attribute.FileTime
-import java.nio.file.{ Files => JFiles, Path => JPath, Paths => JPaths, _ }
+import java.nio.file._
 import java.util.concurrent.{ CountDownLatch, TimeUnit }
 
 import com.swoval.files.Path
 import com.swoval.files.test._
-import com.swoval.test._
+import com.swoval.test.{ Files => _, _ }
 import utest._
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.concurrent.{ Future, Promise }
 
 object MacOSXWatchServiceTest extends TestSuite {
   import scala.language.implicitConversions
-  implicit def toJPath(p: Path): JPath = JPaths.get(p.fullName)
   val tests: Tests = testOn(MacOS) {
     'poll - {
       "return create events" - {
         withService { service =>
           withTempDirectorySync { dir =>
             service.watch(dir)
-            val f = dir.resolve(Path("foo")).createNewFile()
+            val f = Files.createFile(dir.resolve("foo"))
             service.poll(DEFAULT_TIMEOUT).pollEvents().asScala match {
-              case Seq(event) => (f: JPath) ==> event.context
+              case Seq(event) => (f: Path) ==> event.context
             }
           }
         }
@@ -36,28 +34,28 @@ object MacOSXWatchServiceTest extends TestSuite {
         withService { service =>
           withTempDirectorySync { dir =>
             service.watch(dir)
-            val f = dir.resolve(Path("foo")).createNewFile()
+            val f = Files.createFile(dir.resolve("foo"))
             service.waitForEventCount(1, DEFAULT_TIMEOUT)
-            f.setLastModified(System.currentTimeMillis + 5000)
+            f.toFile.setLastModified(System.currentTimeMillis + 5000)
             service.waitForEventCount(2, DEFAULT_TIMEOUT)
             service.poll(DEFAULT_TIMEOUT).pollEvents().asScala match {
               case Seq(createEvent, modifyEvent) =>
                 createEvent.kind ==> ENTRY_CREATE
-                createEvent.context ==> (f: JPath)
+                createEvent.context ==> (f: Path)
                 modifyEvent.kind ==> ENTRY_MODIFY
-                modifyEvent.context ==> (f: JPath)
+                modifyEvent.context ==> (f: Path)
             }
           }
         }
       }
       "return correct subdirectory" - {
         withService { service =>
-          withTempDirectorySync { dir =>
-            val subDir = dir.resolve(Path("foo")).mkdirs()
+          withTempDirectory { dir =>
+            val subDir = Files.createDirectories(dir.resolve("foo"))
             withDirectorySync(subDir) {
               service.watch(dir)
               service.watch(subDir)
-              subDir.resolve(Path("bar")).createNewFile()
+              Files.createFile(subDir.resolve("bar"))
               service.filterPoll(DEFAULT_TIMEOUT)(_.watchable() === subDir).watchable ===> subDir
             }
           }
@@ -70,15 +68,15 @@ object MacOSXWatchServiceTest extends TestSuite {
           val subDir1 = dir.resolve(Path("subdir1"))
           val subDir2 = dir.resolve(Path(s"subdir2"))
           Seq(subDir1, subDir2) foreach { f =>
-            f.mkdir()
+            Files.createDirectory(f)
             service.watch(f)
           }
           val subDir1Paths = (0 to 5) map { i =>
-            val f = subDir1.resolve(Path(s"file$i")).createNewFile()
+            val f = Files.createFile(subDir1.resolve(s"file$i"))
             service.waitForEventCount(i + 1, DEFAULT_TIMEOUT)
-            f: JPath
+            f: Path
           }
-          val subDir2File: JPath = subDir2.resolve(Path("file")).createNewFile()
+          val subDir2File: Path = Files.createFile(subDir2.resolve("file"))
           service.waitForOfferCount(2, DEFAULT_TIMEOUT)
           val rawEvents = service.pollEvents()
           rawEvents exists { case (_, v) => v.exists(_.kind == OVERFLOW) }
@@ -88,7 +86,6 @@ object MacOSXWatchServiceTest extends TestSuite {
           events(subDir1) === (subDir1Paths take 2).toSet
           events(subDir2) === Set(subDir2File)
         }
-        ()
       }
     }
     "Not inadvertently exclude files in subdirectory" - {
@@ -101,16 +98,19 @@ object MacOSXWatchServiceTest extends TestSuite {
        * This test case catches that bug.
        */
       withTempDirectory { dir =>
-        val subDir = dir.resolve(Path("foo"))
-        subDir.mkdirs()
-        val file: Path = subDir.resolve(Path("baz.scala")).createNewFile()
-        withService { service =>
+        val subDir = dir.resolve("foo")
+        Files.createDirectories(subDir)
+        val file: Path = Files.createFile(subDir.resolve("baz.scala"))
+        withServiceSync { service =>
           service.watch(dir)
           service.watch(subDir)
-          file.setLastModified(System.currentTimeMillis() + 10000)
-          service.filterPoll(DEFAULT_TIMEOUT)(_.watchable === subDir).pollEvents().asScala match {
-            case Seq(Event(k, _, f: JPath)) =>
-              (file: JPath) ===> f
+          file.toFile.setLastModified(System.currentTimeMillis() + 10000)
+          service
+            .filterPoll(DEFAULT_TIMEOUT)(_.watchable === subDir)
+            .pollEvents()
+            .asScala match {
+            case Seq(Event(k, _, f: Path)) =>
+              (file: Path) ===> f
               // This would be ENTRY_CREATE if the bug described above were present.
               k ==> ENTRY_MODIFY
           }
@@ -124,7 +124,7 @@ object MacOSXWatchServiceTest extends TestSuite {
       queueSize: Int = 10,
       onOffer: WatchKey => Unit = _ => {},
       onEvent: WatchEvent[_] => Unit = _ => {}
-  )(f: MacOSXWatchService => R): Future[R] = {
+  )(f: MacOSXWatchService => Future[Unit]): Future[Unit] = {
     val offer = onOffer match {
       case o: OnOffer => o
       case o          => new OnOffer(o)
@@ -133,12 +133,14 @@ object MacOSXWatchServiceTest extends TestSuite {
       case o: OnEvent => o
       case o          => new OnEvent(o)
     }
-    using(new MacOSXWatchService(latency, queueSize)(offer, event))(f)
+    usingAsync(new MacOSXWatchService(latency, queueSize)(offer, event))(f)
   }
 
-  def withService[R](f: MacOSXWatchService => R): Future[Unit] = withService() { s =>
-    f(s)
-    ()
+  def withService[R](f: MacOSXWatchService => Future[Unit]): Future[Unit] = withService()(f)
+  def withServiceSync[R](f: MacOSXWatchService => R): Future[Unit] = withService() { s =>
+    val p = Promise[Unit]
+    p.tryComplete(util.Try { f(s); () })
+    p.future
   }
 
   class OnReg(f: WatchKey => Unit) extends (WatchKey => Unit) {
@@ -150,7 +152,7 @@ object MacOSXWatchServiceTest extends TestSuite {
       f(key)
     }
 
-    def waitFor(path: JPath, duration: Duration): Boolean = {
+    def waitFor(path: Path, duration: Duration): Boolean = {
       duration.waitOn(lock.synchronized(latches.getOrElseUpdate(path, new CountDownLatch(1))))
     }
   }
@@ -198,17 +200,13 @@ object MacOSXWatchServiceTest extends TestSuite {
     def ===[R](r: R)(implicit ev: R => T): Boolean = t == ev(r)
     def ===>[R](r: R)(implicit ev: R => T): Unit = t ==> ev(r)
   }
-  implicit class RichSwovalPath(val s: Path) extends AnyVal {
-    def createNewFile(): Path = Path(JFiles.createFile(s).toRealPath().toString)
-    def setLastModified(ms: Long): Unit = JFiles.setLastModifiedTime(s, FileTime.fromMillis(ms))
-  }
   implicit class RichDuration(val d: Duration) {
     def waitOn(l: CountDownLatch): Boolean = l.await(d.toNanos, TimeUnit.NANOSECONDS)
     def waitOn(o: Object): Unit = o.synchronized(o.wait(d.toMillis))
   }
   implicit class RichService(val s: MacOSXWatchService) extends AnyVal {
     def watch(dir: Path): Unit =
-      s.register(JPaths.get(dir.fullName), ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY)
+      s.register(dir, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY)
     def waitForEventCount(i: Int, duration: Duration): Unit = {
       s.onEvent match { case e: OnEvent => e.waitForCount(i, duration) }
     }

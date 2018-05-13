@@ -1,9 +1,8 @@
 package sbt
 
 import java.io.{ File => JFile }
-import java.nio.file.{ Paths, WatchEvent, WatchKey, Path => JPath }
+import java.nio.file.{ Path => JPath, WatchEvent, WatchKey }
 
-import com.swoval.files.{ JvmPath, Path => SPath }
 import com.swoval.watchservice.Continuously.{ State => CState }
 import sbt.internal.io.{ Source, WatchState }
 import sbt.internal.{ BuildStructure, Load }
@@ -21,7 +20,7 @@ object SourceWrapper {
   Seq(baseField, excludeField, includeField) foreach (f => f.setAccessible(true))
   implicit class RichSource(val s: Source) extends AnyVal {
     def accept(path: JPath) = s.accept(path)
-    def base: SPath = JvmPath(baseField.get(s).asInstanceOf[JFile].toPath)
+    def base: JPath = baseField.get(s).asInstanceOf[JFile].toPath
     def exclude: FileFilter = excludeField.get(s).asInstanceOf[FileFilter]
     def include: FileFilter = includeField.get(s).asInstanceOf[FileFilter]
   }
@@ -37,8 +36,7 @@ object WatchedWrapper {
         override def close(): Unit = {}
         override def register(path: JPath, events: WatchEvent.Kind[JPath]*): WatchKey = null
       },
-      s.sources.map(s =>
-        sbt.internal.io.Source(Paths.get(s.base.fullName).toFile, AllPassFilter, NothingFilter))
+      s.sources.map(s => sbt.internal.io.Source(s.base.toFile, AllPassFilter, NothingFilter))
     )
     Watched.printIfDefined(watched triggeredMessage ws)
   }
