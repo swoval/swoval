@@ -73,7 +73,7 @@ object Compat {
       case that: ExactFileFilter => this.p == that.p
       case _                     => false
     }
-    override lazy val hashCode = p.hashCode
+    override def hashCode(): Int = p.hashCode()
   }
   def sourcePath(file: WatchSource): SourcePath = {
     val isDirectory = Files.isDirectory(file.base)
