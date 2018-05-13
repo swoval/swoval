@@ -58,40 +58,24 @@ package object test {
     val c = closeable
     val p = Promise[R]
     p.tryComplete(Try(f(c)))
-    p.future.andThen {
-      case r =>
-        c.close()
-        r
-    }
+    p.future.andThen { case _ => c.close() }
   }
 
   def usingAsync[C <: AutoCloseable, R](closeable: => C)(f: C => Future[R]): Future[R] = {
     val c = closeable
-    f(c).andThen {
-      case r =>
-        c.close()
-        r
-    }
+    f(c).andThen { case _ => c.close() }
   }
 
   object Files {
     def withTempFile[R](dir: String)(f: String => Future[R]): Future[R] = {
       val file: String = platform.createTempFile(dir, "file")
-      f(file).andThen {
-        case r =>
-          platform.delete(file)
-          r
-      }
+      f(file).andThen { case _ => platform.delete(file) }
     }
 
     def withTempFile[R](f: String => Future[R]): Future[R] =
       withTempDirectory { dir =>
         val file: String = platform.createTempFile(dir, "file")
-        f(file).andThen {
-          case r =>
-            platform.delete(file)
-            r
-        }
+        f(file).andThen { case _ => platform.delete(file) }
       }
 
     def withTempDirectory[R](f: String => Future[R]): Future[R] = {
@@ -106,11 +90,7 @@ package object test {
 
     def withDirectory[R](path: String)(f: => Future[R]): Future[R] = {
       platform.mkdir(path)
-      f.andThen {
-        case r =>
-          platform.delete(path)
-          r
-      }
+      f.andThen { case _ => platform.delete(path) }
     }
   }
   def testOn(desc: String, platforms: Platform*)(tests: Any): Tests = macro Macros.testOnWithDesc
