@@ -93,6 +93,9 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   public static final class Event {
     public final Path path;
     public final Event.Kind kind;
+    public static final Kind Create = new Kind("Create");
+    public static final Kind Delete = new Kind("Delete");
+    public static final Kind Modify = new Kind("Modify");
 
     public Event(final Path path, final Event.Kind kind) {
       this.path = path;
@@ -135,9 +138,5 @@ public abstract class DirectoryWatcher implements AutoCloseable {
         return name;
       }
     }
-
-    public static final Kind Create = new Kind("Create");
-    public static final Kind Delete = new Kind("Delete");
-    public static final Kind Modify = new Kind("Modify");
   }
 }

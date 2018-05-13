@@ -210,6 +210,57 @@ private[files] object FileCacheImpl {
 
 private[files] class FileCacheImpl[T](private val converter: Converter[T]) extends FileCache[T] {
 
+  private val directories: Map[Path, Directory[T]] = new HashMap()
+
+  private val callback: DirectoryWatcher.Callback =
+    new DirectoryWatcher.Callback() {
+      override def apply(event: DirectoryWatcher.Event): Unit = {
+        val path: Path = event.path
+        if (Files.exists(path)) {
+          val pair: Pair[Directory[T], List[Entry[T]]] =
+            listImpl(path, false, new EntryFilter[T]() {
+              override def accept(path: Entry[_ <: T]): Boolean =
+                event.path == path.path
+            })
+          if (pair != null) {
+            val dir: Directory[T] = pair.first
+            val paths: List[Entry[T]] = pair.second
+            val toUpdate: Path =
+              if (paths.isEmpty) path
+              else if ((path != dir.path)) paths.get(0).path
+              else null
+            if (toUpdate != null) {
+              val it: Iterator[Array[Entry[T]]] =
+                dir.addUpdate(toUpdate, !Files.isDirectory(path)).iterator()
+              while (it.hasNext) {
+                val entry: Array[Entry[T]] = it.next()
+                if (entry.length == 2) {
+                  observers.onUpdate(entry(0), entry(1))
+                } else {
+                  observers.onCreate(entry(0))
+                }
+              }
+            }
+          }
+        } else {
+          directories.synchronized {
+            val it: Iterator[Directory[T]] = directories.values.iterator()
+            while (it.hasNext) {
+              val dir: Directory[T] = it.next()
+              if (path.startsWith(dir.path)) {
+                val removeIterator: Iterator[Entry[T]] =
+                  dir.remove(path).iterator()
+                while (removeIterator.hasNext) observers.onDelete(removeIterator.next())
+              }
+            }
+          }
+        }
+      }
+    }
+
+  private val watcher: DirectoryWatcher =
+    DirectoryWatcher.defaultWatcher(callback)
+
   private def listImpl(path: Path,
                        recursive: Boolean,
                        filter: EntryFilter[_ >: T]): Pair[Directory[T], List[Entry[T]]] =
@@ -269,56 +320,5 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T]) exten
     }
     result
   }
-
-  private val directories: Map[Path, Directory[T]] = new HashMap()
-
-  private val callback: DirectoryWatcher.Callback =
-    new DirectoryWatcher.Callback() {
-      override def apply(event: DirectoryWatcher.Event): Unit = {
-        val path: Path = event.path
-        if (Files.exists(path)) {
-          val pair: Pair[Directory[T], List[Entry[T]]] =
-            listImpl(path, false, new EntryFilter[T]() {
-              override def accept(path: Entry[_ <: T]): Boolean =
-                event.path == path.path
-            })
-          if (pair != null) {
-            val dir: Directory[T] = pair.first
-            val paths: List[Entry[T]] = pair.second
-            val toUpdate: Path =
-              if (paths.isEmpty) path
-              else if ((path != dir.path)) paths.get(0).path
-              else null
-            if (toUpdate != null) {
-              val it: Iterator[Array[Entry[T]]] =
-                dir.addUpdate(toUpdate, !Files.isDirectory(path)).iterator()
-              while (it.hasNext) {
-                val entry: Array[Entry[T]] = it.next()
-                if (entry.length == 2) {
-                  observers.onUpdate(entry(0), entry(1))
-                } else {
-                  observers.onCreate(entry(0))
-                }
-              }
-            }
-          }
-        } else {
-          directories.synchronized {
-            val it: Iterator[Directory[T]] = directories.values.iterator()
-            while (it.hasNext) {
-              val dir: Directory[T] = it.next()
-              if (path.startsWith(dir.path)) {
-                val removeIterator: Iterator[Entry[T]] =
-                  dir.remove(path).iterator()
-                while (removeIterator.hasNext) observers.onDelete(removeIterator.next())
-              }
-            }
-          }
-        }
-      }
-    }
-
-  private val watcher: DirectoryWatcher =
-    DirectoryWatcher.defaultWatcher(callback)
 
 }

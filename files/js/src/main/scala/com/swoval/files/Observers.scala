@@ -67,6 +67,12 @@ private[files] object Observers {
  */
 private[files] class Observers[T] extends Observer[T] with AutoCloseable {
 
+  private val counter: AtomicInteger = new AtomicInteger(0)
+
+  private val lock: AnyRef = new AnyRef()
+
+  private val observers: Map[Integer, Observer[T]] = new HashMap()
+
   override def onCreate(newEntry: Entry[T]): Unit = {
     var cbs: Collection[Observer[T]] = null
     lock.synchronized {
@@ -93,12 +99,6 @@ private[files] class Observers[T] extends Observer[T] with AutoCloseable {
     val it: Iterator[Observer[T]] = cbs.iterator()
     while (it.hasNext) it.next().onUpdate(oldEntry, newEntry)
   }
-
-  private val counter: AtomicInteger = new AtomicInteger(0)
-
-  private val lock: AnyRef = new AnyRef()
-
-  private val observers: Map[Integer, Observer[T]] = new HashMap()
 
   def addObserver(observer: Observer[T]): Int = {
     val key: Int = counter.getAndIncrement

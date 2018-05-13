@@ -23,6 +23,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * target="_blank">Apple File System Events Api</a>
  */
 public class AppleDirectoryWatcher extends DirectoryWatcher {
+  private final Map<String, Boolean> registered = new HashMap<>();
+  private final Map<String, Integer> streams = new HashMap<>();
+  private final Object lock = new Object();
+  private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final double latency;
+  private final Executor executor;
+  private final Flags.Create flags;
+  private final FileEventsApi fileEventsApi;
+  private final static DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
 
   /**
    * Registers a path
@@ -103,8 +112,6 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     @Override
     public void apply(String stream) {}
   }
-
-  static DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
 
   public AppleDirectoryWatcher(
       final double latency, final Flags.Create flags, final DirectoryWatcher.Callback onFileEvent)
@@ -208,13 +215,4 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     return path != path.getRoot()
         && (streams.containsKey(path.toString()) || alreadyWatching(path.getParent()));
   }
-
-  private final Map<String, Boolean> registered = new HashMap<>();
-  private final Map<String, Integer> streams = new HashMap<>();
-  private final Object lock = new Object();
-  private final AtomicBoolean closed = new AtomicBoolean(false);
-  private final double latency;
-  private final Executor executor;
-  private final Flags.Create flags;
-  private final FileEventsApi fileEventsApi;
 }

@@ -13,6 +13,10 @@ import Directory._
 
 object Directory {
 
+  private val PATH_CONVERTER: Converter[Path] = new Converter[Path]() {
+    override def apply(path: Path): Path = path
+  }
+
   /**
    * Converts a Path into an arbitrary value to be cached
    *
@@ -22,10 +26,6 @@ object Directory {
 
     def apply(path: Path): R
 
-  }
-
-  val PATH_CONVERTER: Converter[Path] = new Converter[Path]() {
-    override def apply(path: Path): Path = path
   }
 
   private class MapByName[T] extends HashMap[String, T] {
@@ -167,6 +167,15 @@ class Directory[T] private (val path: Path,
                             val recursive: Boolean)
     extends AutoCloseable {
 
+  private val _cacheEntry: AtomicReference[Entry[T]] = new AtomicReference(
+    new Entry(path, converter.apply(path)))
+
+  private val lock: AnyRef = new AnyRef()
+
+  private val subdirectories: MapByName[Directory[T]] = new MapByName()
+
+  private val files: MapByName[Entry[T]] = new MapByName()
+
   override def close(): Unit = {
     this.lock.synchronized {
       val it: Iterator[Directory[T]] = subdirectories.values.iterator()
@@ -182,11 +191,6 @@ class Directory[T] private (val path: Path,
    * @return The Entry for the directory itself
    */
   def entry(): Entry[T] = _cacheEntry.get
-
-  private val _cacheEntry: AtomicReference[Entry[T]] = new AtomicReference(
-    new Entry(path, converter.apply(path)))
-
-  private val lock: AnyRef = new AnyRef()
 
   /**
    * List all of the files for the <code>path</code>
@@ -443,9 +447,5 @@ class Directory[T] private (val path: Path,
 
   private def right(directory: Directory[T]): FindResult =
     new FindResult(null, directory)
-
-  private val subdirectories: MapByName[Directory[T]] = new MapByName()
-
-  private val files: MapByName[Entry[T]] = new MapByName()
 
 }

@@ -27,6 +27,8 @@ import java.util.Map;
  * @param <T> The type of data stored in the {@link Directory.Entry} instances for the cache
  */
 public abstract class FileCache<T> implements AutoCloseable {
+  protected final Observers<T> observers = new Observers<>();
+
   /**
    * Callback to fire when a file in a monitored directory is created or deleted
    *
@@ -57,8 +59,6 @@ public abstract class FileCache<T> implements AutoCloseable {
 
     void onUpdate(Entry<T> oldEntry, Entry<T> newEntry);
   }
-
-  protected final Observers<T> observers = new Observers<>();
 
   /**
    * Add observer of file events
@@ -205,6 +205,60 @@ public abstract class FileCache<T> implements AutoCloseable {
 }
 
 class FileCacheImpl<T> extends FileCache<T> {
+  private final Map<Path, Directory<T>> directories = new HashMap<>();
+  private final Converter<T> converter;
+  private final DirectoryWatcher.Callback callback =
+      new DirectoryWatcher.Callback() {
+        @SuppressWarnings("unchecked")
+        @Override
+        public void apply(final DirectoryWatcher.Event event) {
+          final Path path = event.path;
+          if (Files.exists(path)) {
+            Pair<Directory<T>, List<Entry<T>>> pair =
+                listImpl(
+                    path,
+                    false,
+                    new EntryFilter<T>() {
+                      @Override
+                      public boolean accept(Entry<? extends T> path) {
+                        return event.path.equals(path.path);
+                      }
+                    });
+            if (pair != null) {
+              final Directory<T> dir = pair.first;
+              final List<Entry<T>> paths = pair.second;
+              final Path toUpdate =
+                  paths.isEmpty() ? path : (path != dir.path) ? paths.get(0).path : null;
+              if (toUpdate != null) {
+                final Iterator<Entry<T>[]> it =
+                    dir.addUpdate(toUpdate, !Files.isDirectory(path)).iterator();
+                while (it.hasNext()) {
+                  final Entry<T>[] entry = it.next();
+                  if (entry.length == 2) {
+                    observers.onUpdate(entry[0], entry[1]);
+                  } else {
+                    observers.onCreate(entry[0]);
+                  }
+                }
+              }
+            }
+          } else {
+            synchronized (directories) {
+              final Iterator<Directory<T>> it = directories.values().iterator();
+              while (it.hasNext()) {
+                final Directory<T> dir = it.next();
+                if (path.startsWith(dir.path)) {
+                  final Iterator<Entry<T>> removeIterator = dir.remove(path).iterator();
+                  while (removeIterator.hasNext()) {
+                    observers.onDelete(removeIterator.next());
+                  }
+                }
+              }
+            }
+          }
+        }
+      };
+  private final DirectoryWatcher watcher = DirectoryWatcher.defaultWatcher(callback);
 
   FileCacheImpl(final Converter<T> converter) throws IOException, InterruptedException {
     this.converter = converter;
@@ -271,65 +325,9 @@ class FileCacheImpl<T> extends FileCache<T> {
     }
     return result;
   }
-
-  private final Map<Path, Directory<T>> directories = new HashMap<>();
-  private final Converter<T> converter;
-  private final DirectoryWatcher.Callback callback =
-      new DirectoryWatcher.Callback() {
-        @SuppressWarnings("unchecked")
-        @Override
-        public void apply(final DirectoryWatcher.Event event) {
-          final Path path = event.path;
-          if (Files.exists(path)) {
-            Pair<Directory<T>, List<Entry<T>>> pair =
-                listImpl(
-                    path,
-                    false,
-                    new EntryFilter<T>() {
-                      @Override
-                      public boolean accept(Entry<? extends T> path) {
-                        return event.path.equals(path.path);
-                      }
-                    });
-            if (pair != null) {
-              final Directory<T> dir = pair.first;
-              final List<Entry<T>> paths = pair.second;
-              final Path toUpdate =
-                  paths.isEmpty() ? path : (path != dir.path) ? paths.get(0).path : null;
-              if (toUpdate != null) {
-                final Iterator<Entry<T>[]> it =
-                    dir.addUpdate(toUpdate, !Files.isDirectory(path)).iterator();
-                while (it.hasNext()) {
-                  final Entry<T>[] entry = it.next();
-                  if (entry.length == 2) {
-                    observers.onUpdate(entry[0], entry[1]);
-                  } else {
-                    observers.onCreate(entry[0]);
-                  }
-                }
-              }
-            }
-          } else {
-            synchronized (directories) {
-              final Iterator<Directory<T>> it = directories.values().iterator();
-              while (it.hasNext()) {
-                final Directory<T> dir = it.next();
-                if (path.startsWith(dir.path)) {
-                  final Iterator<Entry<T>> removeIterator = dir.remove(path).iterator();
-                  while (removeIterator.hasNext()) {
-                    observers.onDelete(removeIterator.next());
-                  }
-                }
-              }
-            }
-          }
-        }
-      };
-  private final DirectoryWatcher watcher = DirectoryWatcher.defaultWatcher(callback);
-
   private static class Pair<A, B> {
-    final A first;
-    final B second;
+    public final A first;
+    public final B second;
 
     Pair(A first, B second) {
       this.first = first;

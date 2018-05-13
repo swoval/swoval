@@ -16,6 +16,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @param <T> The data type for the {@link FileCache} to which the observers correspond
  */
 class Observers<T> implements Observer<T>, AutoCloseable {
+  private final AtomicInteger counter = new AtomicInteger(0);
+  private final Object lock = new Object();
+  private final Map<Integer, Observer<T>> observers = new HashMap<>();
+
   @Override
   public void onCreate(final Entry<T> newEntry) {
     final Collection<Observer<T>> cbs;
@@ -45,10 +49,6 @@ class Observers<T> implements Observer<T>, AutoCloseable {
     final Iterator<Observer<T>> it = cbs.iterator();
     while (it.hasNext()) it.next().onUpdate(oldEntry, newEntry);
   }
-
-  private final AtomicInteger counter = new AtomicInteger(0);
-  private final Object lock = new Object();
-  private final Map<Integer, Observer<T>> observers = new HashMap<>();
 
   public int addObserver(Observer<T> observer) {
     final int key = counter.getAndIncrement();

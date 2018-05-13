@@ -22,6 +22,21 @@ import java.util.concurrent.atomic.AtomicReference;
  * @param <T> The cache value type
  */
 public class Directory<T> implements AutoCloseable {
+  public final Path path;
+  public final boolean recursive;
+  private final Converter<T> converter;
+  private final AtomicReference<Entry<T>> _cacheEntry;
+  private final Object lock = new Object();
+  private final MapByName<Directory<T>> subdirectories = new MapByName<>();
+  private final MapByName<Entry<T>> files = new MapByName<>();
+  private static final Converter<Path> PATH_CONVERTER =
+      new Converter<Path>() {
+        @Override
+        public Path apply(final Path path) {
+          return path;
+        }
+      };
+
   @Override
   public void close() {
     synchronized (this.lock) {
@@ -49,19 +64,6 @@ public class Directory<T> implements AutoCloseable {
   public Entry<T> entry() {
     return _cacheEntry.get();
   }
-
-  static final Converter<Path> PATH_CONVERTER =
-      new Converter<Path>() {
-        @Override
-        public Path apply(final Path path) {
-          return path;
-        }
-      };
-  public final Path path;
-  public final boolean recursive;
-  private final Converter<T> converter;
-  private final AtomicReference<Entry<T>> _cacheEntry;
-  private final Object lock = new Object();
 
   private Directory(final Path path, final Converter<T> converter, final boolean recursive) {
     this.path = path;
@@ -163,7 +165,7 @@ public class Directory<T> implements AutoCloseable {
 
   @SuppressWarnings("unchecked")
   private void addUpdate(List<Entry<T>[]> list, Entry<T> oldEntry, Entry<T> newEntry) {
-    list.add(oldEntry == null ? new Entry[] { newEntry } : new Entry[] { oldEntry, newEntry });
+    list.add(oldEntry == null ? new Entry[] {newEntry} : new Entry[] {oldEntry, newEntry});
   }
 
   @SuppressWarnings("unchecked")
@@ -396,9 +398,6 @@ public class Directory<T> implements AutoCloseable {
   private FindResult right(Directory<T> directory) {
     return new FindResult(null, directory);
   }
-
-  private final MapByName<Directory<T>> subdirectories = new MapByName<>();
-  private final MapByName<Entry<T>> files = new MapByName<>();
 
   /**
    * Container class for {@link Directory} entries. Contains both the path to which the path
