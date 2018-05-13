@@ -35,7 +35,7 @@ import scala.tools.nsc.reporters.StoreReporter
 import scala.util.Properties
 
 object Build {
-  val scalaCrossVersions @ Seq(scala210, scala211, scala212) = Seq("2.10.7", "2.11.12", "2.12.4")
+  val scalaCrossVersions @ Seq(scala210, scala211, scala212) = Seq("2.10.7", "2.11.12", "2.12.6")
   val disableBintray = sys.props
     .get("SonatypeSnapshot")
     .orElse(sys.props.get("SonatypeRelease"))
