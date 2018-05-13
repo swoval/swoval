@@ -1,19 +1,19 @@
 package com.swoval.files
 
+import java.nio.file.{ Path => JPath }
+
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.test._
 import com.swoval.test._
 import utest._
 
-import scala.util.Properties
-
 object NioDirectoryWatcherTest extends TestSuite {
-  val tests = if (!Properties.isMac) Tests {
+  val tests = if (!Platform.isMac) Tests {
     implicit val latch: com.swoval.files.test.CountDownLatch = new CountDownLatch(1)
-    val events = new ArrayBlockingQueue[FileWatchEvent](10)
-    val callback: Callback = e => events.add(e)
-    def check(file: Path)(f: Path => Unit) = events.poll(DEFAULT_TIMEOUT) { e =>
-      e.path === file
+    val events = new ArrayBlockingQueue[DirectoryWatcher.Event](10)
+    val callback: Callback = (e: DirectoryWatcher.Event) => events.add(e)
+    def check(file: JPath)(f: JPath => Unit) = events.poll(DEFAULT_TIMEOUT) { e =>
+      e.path ==> file
       f(e.path)
     }
     'onCreate - withTempDirectory { dir =>
@@ -43,7 +43,8 @@ object NioDirectoryWatcherTest extends TestSuite {
     'subdirectories - {
       'onCreate - withTempDirectory { dir =>
         withTempDirectory(dir) { subdir =>
-          val callback: Callback = e => if (e.path != dir && !e.path.isDirectory) events.add(e)
+          val callback: Callback =
+            (e: DirectoryWatcher.Event) => if (e.path != dir && !e.path.isDirectory) events.add(e)
           usingAsync(new NioDirectoryWatcher(callback)) { w =>
             w.register(dir)
             val f = subdir.resolve(Path("foo")).createFile()

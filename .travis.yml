@@ -2,21 +2,21 @@ language: node_js
 
 env:
   global:
-  - SBT_VER=1.1.4
+  - SBT_VER=1.1.5
 
 matrix:
   include:
-   - scala: 2.12.4
+   - scala: 2.12.6
      os: osx
      env:
        CMD="test"
-       TRAVIS_SCALA_VERSION=2.12.4
+       TRAVIS_SCALA_VERSION=2.12.6
      osx_image: xcode9.3
 
-   - scala: 2.12.4
+   - scala: 2.12.6
      env:
        CMD="test"
-       TRAVIS_SCALA_VERSION=2.12.4
+       TRAVIS_SCALA_VERSION=2.12.6
 
    - scala: 2.11.12
      os: osx
@@ -33,13 +33,13 @@ matrix:
    - scala: 2.10.7
      os: osx
      env:
-       CMD="filesJVM/test"
+       CMD="filesJVM/test plugin/compile"
        TRAVIS_SCALA_VERSION=2.10.7
      osx_image: xcode9.3
 
    - scala: 2.10.7
      env:
-       CMD="filesJVM/test"
+       CMD="filesJVM/test plugin/compile"
        TRAVIS_SCALA_VERSION=2.10.7
 
 script: ./sbt/bin/sbt -Dsbt.version=$SBT_VER ++$TRAVIS_SCALA_VERSION $CMD

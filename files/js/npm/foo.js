@@ -1,5 +1,0 @@
-const files = require("./files.js")
-const cb = (x, y) => console.log(x, y)
-const c = new files.com.swoval.files.FileCache(cb)
-console.log(c)
-c.list("/Users/ethanatkins/work/foo")

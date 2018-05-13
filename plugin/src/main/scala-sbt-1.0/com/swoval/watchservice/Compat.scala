@@ -1,8 +1,10 @@
 package com.swoval.watchservice
 
 import java.io.File
+import java.nio.file.{ Files, Path }
 
-import com.swoval.files.{ Path, PathFilter }
+import com.swoval.files.Directory.Entry
+import com.swoval.files.EntryFilter
 import sbt.Keys._
 import sbt.SourceWrapper._
 import sbt._
@@ -43,8 +45,11 @@ object Compat {
                                             closeWatchLegacyQueueSize.value)))
   def settings(s: Seq[Def.Setting[_]]): Seq[Def.Setting[_]] = s
 
-  private class PathFileFilter(val pathFilter: PathFilter) extends FileFilter {
-    override def accept(file: File): Boolean = pathFilter.apply(Path(file.toString))
+  private class PathFileFilter(val pathFilter: EntryFilter[Path]) extends FileFilter {
+    override def accept(file: File): Boolean = pathFilter.accept {
+      val p = file.toPath
+      new Entry(p, p)
+    }
     override def equals(o: Any): Boolean = o match {
       case that: PathFileFilter => this.pathFilter == that.pathFilter
       case _                    => false
@@ -52,18 +57,18 @@ object Compat {
     override def hashCode(): Int = pathFilter.hashCode()
     override def toString: String = pathFilter.toString
   }
-  def makeSource(p: Path, f: PathFilter): WatchSource =
-    Source(new File(p.fullName), new PathFileFilter(f), NothingFilter)
-  case class SourcePathFilter(base: Path, include: Option[FileFilter], exclude: Option[FileFilter])
-      extends PathFilter {
-    override def apply(p: Path): Boolean = p.startsWith(base) && {
-      val f = file(p.fullName)
+  def makeSource(p: Path, f: EntryFilter[Path]): WatchSource =
+    Source(p.toFile, new PathFileFilter(f), NothingFilter)
+  case class SourceEntryFilter(base: Path, include: Option[FileFilter], exclude: Option[FileFilter])
+      extends EntryFilter[Path] {
+    override def accept(p: Entry[_ <: Path]): Boolean = p.path.startsWith(base) && {
+      val f = p.path.toFile
       include.fold(true)(_.accept(f)) && !exclude.fold(false)(_.accept(f))
     }
   }
   class ExactFileFilter(val p: Path) extends sbt.io.FileFilter {
-    override def accept(o: File): Boolean = o.toString == p.fullName
-    override def toString = s"""ExactFileFilter("${p.fullName}")"""
+    override def accept(o: File): Boolean = o == p.toFile
+    override def toString = s"""ExactFileFilter("$p")"""
     override def equals(o: Any): Boolean = o match {
       case that: ExactFileFilter => this.p == that.p
       case _                     => false
@@ -71,7 +76,7 @@ object Compat {
     override lazy val hashCode = p.hashCode
   }
   def sourcePath(file: WatchSource): SourcePath = {
-    val isDirectory = file.base.isDirectory
+    val isDirectory = Files.isDirectory(file.base)
     new SourcePath {
       private[this] val exclude = file.exclude match {
         case NothingFilter => None
@@ -83,8 +88,8 @@ object Compat {
         case f                            => Some(f)
       }
       override val recursive: Boolean = file.exclude != BaseFilter
-      override val base: Path = Path(file.base.fullName)
-      override val filter: PathFilter = SourcePathFilter(base, include, exclude)
+      override val base: Path = file.base
+      override val filter: EntryFilter[Path] = SourceEntryFilter(base, include, exclude)
       override lazy val toString: String = {
         if (isDirectory) {
           (if (file.exclude == BaseFilter) {
@@ -94,7 +99,7 @@ object Compat {
                s" && !${Filter.show(f, 0)}")}"
            }).replaceAll("SourceFilter", "SourcePath")
         } else {
-          s"""ExactPath("${file.base.fullName}")"""
+          s"""ExactPath("${file.base}")"""
         }
       }
     }
@@ -104,8 +109,10 @@ object Compat {
     override def toString = "NothingFilter"
   }
   def filter(files: Seq[WatchSource]): Seq[SourcePath] = files map sourcePath
-  def makeScopedSource(p: Path, pathFilter: PathFilter, id: Def.ScopedKey[_]): WatchSource = {
-    Source(file(p.fullName), new SourceFilter(p, pathFilter, id) {
+  def makeScopedSource(p: Path,
+                       pathFilter: EntryFilter[Path],
+                       id: Def.ScopedKey[_]): WatchSource = {
+    Source(p.toFile, new SourceFilter(p, pathFilter, id) {
       override lazy val toString: String = pathFilter.toString
     }, BaseFilter)
   }

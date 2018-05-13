@@ -1,11 +1,13 @@
 package com.swoval.watchservice
 
 import java.lang.System.currentTimeMillis
+import java.nio.file.{ Files, Path }
 import java.util.concurrent.{ ArrayBlockingQueue, BlockingQueue, ExecutorService, Executors }
 
 import com.swoval.concurrent.ThreadFactory
-import com.swoval.files.DirectoryWatcher.Callback
-import com.swoval.files.{ FileCache, Path, PathFilter }
+import com.swoval.files.Directory.Entry
+import com.swoval.files.FileCache.{ Observer, OnChange }
+import com.swoval.files._
 import com.swoval.watchservice.CloseWatchPlugin.autoImport._
 import sbt.BasicCommandStrings._
 import sbt.BasicCommands._
@@ -33,7 +35,7 @@ object Continuously {
   case class State(
       command: String,
       sources: Seq[SourcePath],
-      cache: FileCache,
+      cache: FileCache[Path],
       logger: Logger,
       antiEntropy: Duration,
       onTrigger: State => Unit
@@ -59,14 +61,16 @@ object Continuously {
       }
     }
 
-    private[this] val callback: Callback = { e =>
-      if (sources.exists(s => s.filter(e.path))) {
-        offer(Triggered(e.path))
-      } else {
-        debug(s"No source filter found for $e")
+    private[this] val onChange: OnChange[Path] = new OnChange[Path] {
+      override def apply(cacheEntry: Entry[Path]): Unit = {
+        if (sources.exists(s => s.filter.accept(cacheEntry))) {
+          offer(Triggered(cacheEntry.path))
+        } else {
+          debug(s"No source filter found for ${cacheEntry.path}")
+        }
       }
     }
-    private[this] val callbackHandle = cache.addCallback(callback)
+    private[this] val callbackHandle = cache.addCallback(onChange)
     private[this] val tag = "[com.swoval.watchservice]"
     private[this] val events: BlockingQueue[TriggerEvent] = new ArrayBlockingQueue(1)
     private[this] val executor: ExecutorService = Executors.newSingleThreadExecutor(
@@ -77,16 +81,17 @@ object Continuously {
     private[this] def debug(msg: => String): Unit = logger.debug(s"$tag $msg")
     private[this] def init(): Unit = {
       def sanitized(p: SourcePath) = p.base match {
-        case dir if dir.isDirectory => (dir -> p.recursive)
-        case f                      => (f.getParent -> p.recursive)
+        case dir if Files.isDirectory(dir) => dir -> p.recursive
+        case f                             => f.getParent -> p.recursive
       }
-      val filter = new PathFilter {
-        override def apply(p: Path) = sources.exists(_.filter(p))
+      val filter = new EntryFilter[Path] {
+        override def accept(cacheEntry: Entry[_ <: Path]): Boolean =
+          sources.exists(_.filter.accept(cacheEntry))
       }
-      sources.map(sanitized).distinct.foreach((cache.register _).tupled)
+      sources.map(sanitized).distinct.foreach { case (s, r) => cache.register(s, r) }
       executor.submit(new Runnable { override def run() { signalExit() } })
     }
-    private[this] def offer(e: TriggerEvent) = callback.synchronized {
+    private[this] def offer(e: TriggerEvent): Boolean = onChange.synchronized {
       if (!TriggerEvent.tooSoon(lastTriggerEvent, e, antiEntropy)) {
         debug(s"Not offering $e due to anti-entropy constraint")
         false
@@ -106,7 +111,7 @@ object Continuously {
         while (!offer(Exit)) {
           events.poll()
         }
-        cache.removeCallback(callbackHandle)
+        cache.removeObserver(callbackHandle)
         executor.shutdownNow()
       } else signalExit()
     }
@@ -142,8 +147,9 @@ object Continuously {
         case Array(_, rest @ _*) if rest.nonEmpty => rest.map(_.trim)
         case Array(a)                             => Seq(a.trim)
       }
-      val sources = tasks.flatMap(t =>
-        extracted.runInputTask(closeWatchTransitiveSources, s" $t", s)._2).distinct
+      val sources = tasks
+        .flatMap(t => extracted.runInputTask(closeWatchTransitiveSources, s" $t", s)._2)
+        .distinct
       val log = Project.structure(s).streams(s)(Keys.streams in Global).log
       val antiEntropy = extracted.get(closeWatchAntiEntropy)
       val cache = CloseWatchPlugin._internalFileCache

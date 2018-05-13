@@ -1,49 +1,62 @@
 package com.swoval.files
 
+import java.io.{ File, FileFilter }
+
+import java.nio.file.{ Files, Path, Paths }
+
 import com.swoval.files.DirectoryWatcher.Callback
-import com.swoval.files.FileWatchEvent.{ Create, Delete, Modify }
+import com.swoval.files.DirectoryWatcher.Event
+import com.swoval.files.DirectoryWatcher.Event.{ Create, Modify, Delete }
 import io.scalajs.nodejs
 import io.scalajs.nodejs.fs.{ FSWatcher, FSWatcherOptions, Fs }
 
 import scala.collection.mutable
+import scala.collection.JavaConverters._
 import scala.scalajs.js
 
-class NioDirectoryWatcher(override val onFileEvent: Callback) extends DirectoryWatcher {
+/**
+ * Native directory watcher implementation for Linux and Windows
+ * @param onFileEvent The callback to run on file events
+ */
+class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
+  private object DirectoryFilter extends FileFilter {
+    override def accept(pathname: File): Boolean = pathname.isDirectory
+  }
   override def register(path: Path, recursive: Boolean): Boolean = {
-    def impl(p: Path): Boolean = watchedDirs get p.fullName match {
-      case None if p.isDirectory =>
+    def impl(p: Path): Boolean = watchedDirs get p.toString match {
+      case None if Files.isDirectory(p) =>
         val options = new FSWatcherOptions(recursive = false)
         val callback: js.Function2[nodejs.EventType, String, Unit] =
           (tpe: nodejs.EventType, name: String) => {
-            val watchPath = p.resolve(Path(name))
-            val exists = watchPath.exists
-            val kind: FileWatchEvent.Kind = tpe match {
+            val watchPath = p.resolve(Paths.get(name))
+            val exists = Files.exists(watchPath)
+            val kind: Event.Kind = tpe match {
               case "rename" if !exists => Delete
               case _                   => Modify
             }
-            onFileEvent(FileWatchEvent(watchPath, kind))
-            if (recursive && tpe == "rename" && exists && watchPath.isDirectory) {
-              watchPath.list(recursive, _ => true) foreach { newPath =>
-                if (newPath.isDirectory) {
+            onFileEvent(new Event(watchPath, kind))
+            if (recursive && tpe == "rename" && exists && Files.isDirectory(watchPath)) {
+              FileOps.list(watchPath, recursive = true).asScala foreach { newPath =>
+                if (Files.isDirectory(newPath)) {
                   impl(newPath)
                 } else {
-                  onFileEvent(FileWatchEvent(newPath, Create))
+                  onFileEvent(new Event(watchPath, Create))
                 }
               }
             }
           }
-        watchedDirs += p.fullName -> WatchedDir(Fs.watch(p.fullName, options, callback), recursive)
+        watchedDirs += p.toString -> WatchedDir(Fs.watch(p.toString, options, callback), recursive)
         true
       case _ =>
         false
     }
-    path.exists && impl(path) && {
-      if (recursive) path.list(recursive, _.isDirectory).foreach(impl)
+    Files.exists(path) && impl(path) && {
+      if (recursive) FileOps.list(path, recursive, DirectoryFilter).asScala.foreach(impl(_: Path))
       true
     }
   }
   override def unregister(path: Path): Unit = {
-    watchedDirs.remove(path.fullName) foreach (_.watcher.close())
+    watchedDirs.remove(path.toString) foreach (_.watcher.close())
   }
 
   override def close(): Unit = {

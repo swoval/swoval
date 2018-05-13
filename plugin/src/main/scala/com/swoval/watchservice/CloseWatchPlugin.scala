@@ -1,23 +1,29 @@
 package com.swoval.watchservice
 
 import java.io.FileFilter
+import java.nio.file.{ Path, Paths }
 
-import com.swoval.files.{ FileCache, Path, PathFilter }
+import com.swoval.files.Directory.{ Converter, Entry }
+import com.swoval.files._
 import sbt.Keys._
 import sbt._
 import sbt.complete.{ DefaultParsers, Parser }
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.duration._
 
 object CloseWatchPlugin extends AutoPlugin {
   override def trigger = allRequirements
-  private[watchservice] var _internalFileCache: FileCache = _
+  private implicit class FileFilterOps(val fileFilter: FileFilter) extends EntryFilter[Path] {
+    override def accept(entry: Entry[_ <: Path]): Boolean = fileFilter.accept(entry.path.toFile)
+  }
+  private[watchservice] var _internalFileCache: FileCache[Path] = _
   object autoImport {
     lazy val closeWatchAntiEntropy = settingKey[Duration](
       "Set watch anti-entropy period for source files. For a given file that has triggered a" +
         "build, any updates occuring before the last event time plus this duration will be ignored.")
-    lazy val closeWatchFileCache = taskKey[FileCache]("Set the file cache to use.")
+    lazy val closeWatchFileCache = taskKey[FileCache[Path]]("Set the file cache to use.")
     lazy val closeWatchLegacyWatchLatency =
       settingKey[Duration]("Set the watch latency of the sbt watch service")
     lazy val closeWatchLegacyQueueSize =
@@ -35,17 +41,11 @@ object CloseWatchPlugin extends AutoPlugin {
   import autoImport._
 
   import scala.language.implicitConversions
-  private implicit def toSwovalPath(f: File): Path = Path(f.toString)
-  private def toFile(s: Path): File = new File(s.fullName)
+  private implicit def toSwovalPath(f: File): Path = Paths.get(f.toString)
   private def defaultSourcesFor(conf: Configuration) = Def.task[Seq[File]] {
-    def list(p: File) =
-      closeWatchFileCache.value
-        .list(Path(p.toPath.toString), recursive = false, (_: Path) => false)
-        .view
-        .map(toFile)
-    // This has the side effect of registering these directories with the watch service.
-    (unmanagedSourceDirectories in conf).value foreach list
-    (managedSourceDirectories in conf).value foreach list
+    val cache = closeWatchFileCache.value
+    (unmanagedSourceDirectories in conf).value foreach (f => cache.register(f.toPath))
+    (managedSourceDirectories in conf).value foreach (f => cache.register(f.toPath))
     Classpaths.concat(unmanagedSources in conf, managedSources in conf).value.distinct.toIndexedSeq
   }
   private def cachedSourcesFor(conf: Configuration, sourcesInBase: Boolean) = Def.task[Seq[File]] {
@@ -53,8 +53,14 @@ object CloseWatchPlugin extends AutoPlugin {
       override def accept(f: File) = in.accept(f) && !ex.accept(f)
       override def toString = s"${Filter.show(in)} && !${Filter.show(ex)}"
     }
-    def list(recursive: Boolean, filter: FileFilter) =
-      (f: File) => _internalFileCache.list(f, recursive = recursive, filter)
+    def list(recursive: Boolean, filter: FileFilter): File => Seq[File] =
+      (f: File) => {
+        _internalFileCache.register(f, recursive)
+        _internalFileCache
+          .list(f, recursive, filter)
+          .asScala
+          .map(_.path.toFile)
+      }
 
     val unmanagedDirs = (unmanagedSourceDirectories in conf).value.distinct
     val unmanagedIncludeFilter = ((includeFilter in unmanagedSources) in conf).value
@@ -66,7 +72,7 @@ object CloseWatchPlugin extends AutoPlugin {
 
     val unmanaged = unmanagedDirs flatMap list(recursive = true, unmanagedFilter)
     val base = baseDirs.flatMap(d => list(recursive = false, baseFilter && nodeFilter(d))(d))
-    ((unmanaged ++ base).view.map(toFile) ++ (managedSources in conf).value).distinct.toIndexedSeq
+    ((unmanaged ++ base).view ++ (managedSources in conf).value).distinct.toIndexedSeq
   }
 
   private def nodeFilter(dir: File) = new SimpleFileFilter(f => f.toPath.getParent == dir.toPath)
@@ -81,10 +87,10 @@ object CloseWatchPlugin extends AutoPlugin {
 
     val baseSources: Seq[Compat.WatchSource] =
       if (sourcesInBase.value && config != ConfigKey(Test.name)) {
-        val pathFilter = new PathFilter {
-          override def apply(p: Path): Boolean = {
-            val f = file(p.fullName)
-            file(p.getParent.fullName) == baseDir && include.accept(f) && !exclude.accept(f)
+        val pathFilter = new EntryFilter[Path] {
+          override def accept(cacheEntry: Entry[_ <: Path]): Boolean = {
+            val f = cacheEntry.path.toFile
+            cacheEntry.path.getParent == baseDir && include.accept(f) && !exclude.accept(f)
           }
           override def toString: String =
             s"""SourceFilter(
@@ -179,15 +185,15 @@ object CloseWatchPlugin extends AutoPlugin {
         case Some(e) => new SimpleFileFilter(p => ef.accept(p) || e.accept(p))
         case None    => ef
       }
-      def filter(dir: File) = {
-        val pathFilter = new PathFilter {
-          override def apply(p: Path): Boolean = {
-            val f = file(p.fullName)
+      def filter(dir: File): SourceFilter = {
+        val pathFilter = new EntryFilter[Path] {
+          override def accept(cacheEntry: Entry[_ <: Path]): Boolean = {
+            val f = cacheEntry.path.toFile
             include.accept(f) && !exclude.accept(f)
           }
           override def toString: String = s"${Filter.show(include)} && !${Filter.show(ef)}"
         }
-        new SourceFilter(Path(dir.toString), pathFilter, key.scopedKey)
+        new SourceFilter(dir, pathFilter, key.scopedKey)
       }
       dirs.map(d => Compat.makeSource(d, filter(d)))
     }
@@ -219,7 +225,9 @@ object CloseWatchPlugin extends AutoPlugin {
     parsed.fold(_ => commands(taskDef.mkString(" ").trim), paths)
   }
   override lazy val globalSettings: Seq[Def.Setting[_]] = super.globalSettings ++ Seq(
-    closeWatchFileCache := FileCache.default,
+    closeWatchFileCache := FileCache.apply(new Converter[Path] {
+      override def apply(path: Path): Path = path
+    }),
     closeWatchUseDefaultWatchService := false,
     closeWatchTransitiveSources := Def
       .inputTaskDyn {
