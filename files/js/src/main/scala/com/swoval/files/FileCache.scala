@@ -7,10 +7,10 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.ArrayList
-import java.util.HashSet
+import java.util.HashMap
 import java.util.Iterator
 import java.util.List
-import java.util.Set
+import java.util.Map
 import FileCache._
 import FileCacheImpl._
 
@@ -216,7 +216,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T]) exten
     directories.synchronized {
       if (Files.exists(path)) {
         var foundDir: Directory[T] = null
-        val it: Iterator[Directory[T]] = directories.iterator()
+        val it: Iterator[Directory[T]] = directories.values.iterator()
         while (it.hasNext) {
           val dir: Directory[T] = it.next()
           if (path.startsWith(dir.path) &&
@@ -253,7 +253,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T]) exten
     if (Files.exists(path)) {
       watcher.register(path)
       directories.synchronized {
-        val it: Iterator[Directory[T]] = directories.iterator()
+        val it: Iterator[Directory[T]] = directories.values.iterator()
         var existing: Directory[T] = null
         while (it.hasNext && existing == null) {
           val dir: Directory[T] = it.next()
@@ -263,14 +263,14 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T]) exten
         }
         if (existing == null) {
           result = Directory.cached(path, converter, recursive)
-          directories.add(result)
+          directories.put(path, result)
         }
       }
     }
     result
   }
 
-  private val directories: Set[Directory[T]] = new HashSet()
+  private val directories: Map[Path, Directory[T]] = new HashMap()
 
   private val callback: DirectoryWatcher.Callback =
     new DirectoryWatcher.Callback() {
@@ -304,7 +304,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T]) exten
           }
         } else {
           directories.synchronized {
-            val it: Iterator[Directory[T]] = directories.iterator()
+            val it: Iterator[Directory[T]] = directories.values.iterator()
             while (it.hasNext) {
               val dir: Directory[T] = it.next()
               if (path.startsWith(dir.path)) {

@@ -7,10 +7,14 @@ import com.swoval.files.Directory.Entry
 trait LastModified {
   val lastModified: Long
 }
-case class CachedFileBytes(path: JPath) extends LastModified {
-  val lastModified = Files.getLastModifiedTime(path).toMillis
-  val bytes: Array[Byte] = if (!Files.isDirectory(path)) Files.readAllBytes(path) else Array.empty
+object LastModified {
+  def apply(path: JPath): LastModified = new LastModified {
+    override val lastModified: Long = Files.getLastModifiedTime(path).toMillis
+  }
 }
-object CachedFileBytes {
-  def cacheEntry(p: JPath): Entry[CachedFileBytes] = new Entry(p, CachedFileBytes(p))
+case class FileBytes(bytes: Seq[Byte], override val lastModified: Long) extends LastModified
+object FileBytes {
+  def apply(p: JPath): FileBytes =
+    FileBytes(if (Files.isDirectory(p)) Seq.empty else Files.readAllBytes(p).toIndexedSeq,
+              Files.getLastModifiedTime(p).toMillis)
 }

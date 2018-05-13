@@ -8,10 +8,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 /**
  * Provides an in memory cache of portions of the file system. Directories are added to the cache
@@ -215,7 +215,7 @@ class FileCacheImpl<T> extends FileCache<T> {
     synchronized (directories) {
       if (Files.exists(path)) {
         Directory<T> foundDir = null;
-        final Iterator<Directory<T>> it = directories.iterator();
+        final Iterator<Directory<T>> it = directories.values().iterator();
         while (it.hasNext()) {
           final Directory<T> dir = it.next();
           if (path.startsWith(dir.path)
@@ -255,7 +255,7 @@ class FileCacheImpl<T> extends FileCache<T> {
     if (Files.exists(path)) {
       watcher.register(path);
       synchronized (directories) {
-        final Iterator<Directory<T>> it = directories.iterator();
+        final Iterator<Directory<T>> it = directories.values().iterator();
         Directory<T> existing = null;
         while (it.hasNext() && existing == null) {
           final Directory<T> dir = it.next();
@@ -265,14 +265,14 @@ class FileCacheImpl<T> extends FileCache<T> {
         }
         if (existing == null) {
           result = Directory.cached(path, converter, recursive);
-          directories.add(result);
+          directories.put(path, result);
         }
       }
     }
     return result;
   }
 
-  private final Set<Directory<T>> directories = new HashSet<>();
+  private final Map<Path, Directory<T>> directories = new HashMap<>();
   private final Converter<T> converter;
   private final DirectoryWatcher.Callback callback =
       new DirectoryWatcher.Callback() {
@@ -311,7 +311,7 @@ class FileCacheImpl<T> extends FileCache<T> {
             }
           } else {
             synchronized (directories) {
-              final Iterator<Directory<T>> it = directories.iterator();
+              final Iterator<Directory<T>> it = directories.values().iterator();
               while (it.hasNext()) {
                 final Directory<T> dir = it.next();
                 if (path.startsWith(dir.path)) {

@@ -191,17 +191,18 @@ object FileCacheTest extends TestSuite {
       'update - withTempFile { file =>
         val latch = new CountDownLatch(1)
         usingAsync(
-          FileCache.apply[CachedLastModified](
-            new CachedLastModified(_),
-            new Observer[CachedLastModified] {
-              override def onCreate(newEntry: Entry[CachedLastModified]): Unit = {}
-              override def onDelete(oldEntry: Entry[CachedLastModified]): Unit = {}
-              override def onUpdate(oldEntry: Entry[CachedLastModified],
-                                    newEntry: Entry[CachedLastModified]): Unit = latch.countDown()
+          FileCache.apply[LastModified](
+            LastModified(_),
+            new Observer[LastModified] {
+              override def onCreate(newEntry: Entry[LastModified]): Unit = {}
+              override def onDelete(oldEntry: Entry[LastModified]): Unit = {}
+              override def onUpdate(oldEntry: Entry[LastModified],
+                                    newEntry: Entry[LastModified]): Unit =
+                if (oldEntry != newEntry) latch.countDown()
             }
           )) { c =>
           c.reg(file.getParent, recursive = false)
-          val cachedFile: Entry[CachedLastModified] =
+          val cachedFile: Entry[LastModified] =
             c.ls(file.getParent, recursive = false) match {
               case Seq(f) if f.path == file => f
               case p                        => throw new IllegalStateException(p.toString)
@@ -211,7 +212,7 @@ object FileCacheTest extends TestSuite {
           val updatedLastModified = 2000
           file.setLastModifiedTime(updatedLastModified)
           latch.waitFor(DEFAULT_TIMEOUT) {
-            val newCachedFile: Entry[CachedLastModified] =
+            val newCachedFile: Entry[LastModified] =
               c.ls(file.getParent, recursive = false) match {
                 case Seq(f) if f.path == file => f
                 case p                        => throw new IllegalStateException(p.toString)
