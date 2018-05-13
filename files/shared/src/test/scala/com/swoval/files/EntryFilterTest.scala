@@ -5,7 +5,7 @@ import java.nio.file.{ Path => JPath }
 
 import com.swoval.files.Directory.Entry
 import com.swoval.files.test._
-import com.swoval.files.test.CachedFileBytes
+import com.swoval.files.test.FileBytes
 import utest._
 
 object EntryFilterTest extends TestSuite {
@@ -24,12 +24,12 @@ object EntryFilterTest extends TestSuite {
       f.setLastModifiedTime(lastModified)
       val base
         : EntryFilter[LastModified] = (_: Entry[LastModified]).value.lastModified == lastModified
-      val hashFilter: EntryFilter[CachedFileBytes] =
-        (_: Entry[CachedFileBytes]).value.bytes.sameElements(bytes)
+      val hashFilter: EntryFilter[FileBytes] =
+        (_: Entry[FileBytes]).value.bytes.sameElements(bytes)
       val filter = hashFilter && base
-      assert(filter.accept(CachedFileBytes.cacheEntry(f)))
+      assert(filter.accept(new Entry(f, FileBytes(f))))
       f.write("bar")
-      assert(!filter.accept(CachedFileBytes.cacheEntry(f)))
+      assert(!filter.accept(new Entry(f, FileBytes(f))))
       compileError("base && hashFilter") // hashFilter is not a subtype of base
       ()
     }

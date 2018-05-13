@@ -161,7 +161,7 @@ object DirectoryTest extends TestSuite {
       'overrides - {
         withTempFileSync { f =>
           val dir =
-            Directory.cached[CachedLastModified](f.getParent, new CachedLastModified(_), true)
+            Directory.cached[LastModified](f.getParent, LastModified(_: JPath), true)
           val lastModified = f.lastModified
           val updatedLastModified = 2000
           f.setLastModifiedTime(updatedLastModified)
@@ -172,14 +172,11 @@ object DirectoryTest extends TestSuite {
       }
       'newFields - withTempFileSync { f =>
         f.write("foo")
-        val initialBytes = "foo".getBytes
-        val dir =
-          Directory.cached[CachedFileBytes](f.getParent, new CachedFileBytes(_), true)
-        def filter(bytes: Array[Byte]): EntryFilter[CachedFileBytes] =
-          new EntryFilter[CachedFileBytes] {
-            override def accept(p: Entry[_ <: CachedFileBytes]): Boolean = {
-              p.value.bytes.sameElements(bytes)
-            }
+        val initialBytes = "foo".getBytes.toIndexedSeq
+        val dir = Directory.cached[FileBytes](f.getParent, FileBytes(_: JPath), true)
+        def filter(bytes: Seq[Byte]): EntryFilter[FileBytes] =
+          new EntryFilter[FileBytes] {
+            override def accept(p: Entry[_ <: FileBytes]): Boolean = p.value.bytes == bytes
           }
         val cachedFile =
           dir.ls(f, recursive = true, filter(initialBytes)).head
