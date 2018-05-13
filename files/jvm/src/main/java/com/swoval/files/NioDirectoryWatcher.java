@@ -163,7 +163,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
             @Override
             public FileVisitResult preVisitDirectory(
                 final Path dir, final BasicFileAttributes attrs) {
-              return (path == dir) || register(dir, true)
+              return (path.equals(dir)) || register(dir, true)
                   ? FileVisitResult.CONTINUE
                   : FileVisitResult.TERMINATE;
             }
