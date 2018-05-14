@@ -48,44 +48,47 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
                 final Iterator<WatchEvent<?>> it = key.pollEvents().iterator();
                 while (it.hasNext()) {
                   final WatchEvent<?> e = it.next();
-                  final Path path = ((Path) key.watchable()).resolve((Path) e.context());
-                  final WatchEvent.Kind<?> k = e.kind();
-                  final Event.Kind kind =
-                      k == ENTRY_DELETE ? Delete : k == ENTRY_CREATE ? Create : Modify;
-                  callback.apply(new DirectoryWatcher.Event(path, kind));
-                  if (k == ENTRY_CREATE && Files.exists(path) && Files.isDirectory(path)) {
-                    WatchedDir watchedDir = watchedDirs.get(keyPath);
-                    if (watchedDir != null && watchedDir.recursive) {
-                      register(path, true);
-                      Files.walkFileTree(
-                          path,
-                          new FileVisitor<Path>() {
-                            @Override
-                            public FileVisitResult preVisitDirectory(
-                                final Path dir, final BasicFileAttributes attrs) {
-                              if (path != dir) callback.apply(new DirectoryWatcher.Event(dir, Create));
-                              return FileVisitResult.CONTINUE;
-                            }
+                  if (e.context() != null) {
+                    final Path path = ((Path) key.watchable()).resolve((Path) e.context());
+                    final WatchEvent.Kind<?> k = e.kind();
+                    final Event.Kind kind =
+                        k == ENTRY_DELETE ? Delete : k == ENTRY_CREATE ? Create : Modify;
+                    callback.apply(new DirectoryWatcher.Event(path, kind));
+                    if (k == ENTRY_CREATE && Files.exists(path) && Files.isDirectory(path)) {
+                      WatchedDir watchedDir = watchedDirs.get(keyPath);
+                      if (watchedDir != null && watchedDir.recursive) {
+                        register(path, true);
+                        Files.walkFileTree(
+                            path,
+                            new FileVisitor<Path>() {
+                              @Override
+                              public FileVisitResult preVisitDirectory(
+                                  final Path dir, final BasicFileAttributes attrs) {
+                                if (path != dir)
+                                  callback.apply(new DirectoryWatcher.Event(dir, Create));
+                                return FileVisitResult.CONTINUE;
+                              }
 
-                            @Override
-                            public FileVisitResult visitFile(
-                                final Path file, final BasicFileAttributes attrs) {
-                              callback.apply(new DirectoryWatcher.Event(file, Create));
-                              return FileVisitResult.CONTINUE;
-                            }
+                              @Override
+                              public FileVisitResult visitFile(
+                                  final Path file, final BasicFileAttributes attrs) {
+                                callback.apply(new DirectoryWatcher.Event(file, Create));
+                                return FileVisitResult.CONTINUE;
+                              }
 
-                            @Override
-                            public FileVisitResult visitFileFailed(
-                                final Path file, final IOException exc) {
-                              return FileVisitResult.CONTINUE;
-                            }
+                              @Override
+                              public FileVisitResult visitFileFailed(
+                                  final Path file, final IOException exc) {
+                                return FileVisitResult.CONTINUE;
+                              }
 
-                            @Override
-                            public FileVisitResult postVisitDirectory(
-                                final Path dir, final IOException exc) {
-                              return FileVisitResult.CONTINUE;
-                            }
-                          });
+                              @Override
+                              public FileVisitResult postVisitDirectory(
+                                  final Path dir, final IOException exc) {
+                                return FileVisitResult.CONTINUE;
+                              }
+                            });
+                      }
                     }
                   }
                 }
