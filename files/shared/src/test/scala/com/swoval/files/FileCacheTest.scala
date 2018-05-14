@@ -101,35 +101,36 @@ object FileCacheTest extends TestSuite {
         'addmany - withTempDirectory { dir =>
           val filesToAdd = 100
           val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
-          val latch = new CountDownLatch(filesToAdd * 2)
-          val added = mutable.Set.empty[JPath]
-          val onCreate: OnChange[JPath] = (cacheEntry: Entry[JPath]) => {
-            added.synchronized {
-              if (added.add(cacheEntry.path)) {
-                latch.countDown()
-              }
-            }
-          }
-          val observer = Observers.apply(onCreate,
-                                         (_: Entry[JPath], _: Entry[JPath]) => {},
-                                         (_: Entry[JPath]) => {})
-          usingAsync(FileCache.apply(identity, observer)) { c =>
+          val creationLatch = new CountDownLatch(filesToAdd * 2)
+          val deletionLatch = new CountDownLatch(filesToAdd * 2)
+          var files = Set.empty[JPath]
+          val observer = Observers.apply[JPath]((_: Entry[JPath]) => creationLatch.countDown(),
+                                                (_: Entry[JPath], _: Entry[JPath]) => {},
+                                                (_: Entry[JPath]) => deletionLatch.countDown())
+          usingAsync(FileCache.apply[JPath](identity, observer)) { c =>
             c.reg(dir)
-            val files = mutable.Set.empty[JPath]
             executor.run(new Runnable {
               override def run(): Unit = {
-                (0 until filesToAdd) foreach { i =>
+                files = (0 until filesToAdd).flatMap { i =>
                   val subdir = Files.createTempDirectory(dir, s"subdir-$i-")
                   val file = Files.createTempFile(subdir, s"file-$i-", "")
-                  files ++= Seq(subdir, file)
-                }
+                  Seq(subdir, file)
+                }.toSet
               }
             })
-            latch.waitFor(DEFAULT_TIMEOUT) {
-              added.clear()
-              val found = c.ls(dir).toSet
-              found.map(_.path) === files.toSet
-            }
+            creationLatch
+              .waitFor(DEFAULT_TIMEOUT) {
+                val found = c.ls(dir).toSet
+                found.map(_.path) === files
+              }
+              .flatMap { _ =>
+                executor.run(new Runnable {
+                  override def run(): Unit = files.foreach(_.deleteRecursive())
+                })
+                deletionLatch.waitFor(DEFAULT_TIMEOUT) {
+                  c.ls(dir) === Seq.empty
+                }
+              }
           }.andThen { case _ => executor.close() }
         }
       }
