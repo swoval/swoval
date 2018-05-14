@@ -96,11 +96,11 @@ object Build {
           None
         }
       },
-      release := {},
+      releaseSnapshot := {},
       releaseSigned := {},
       releaseLocal := {}
     ) ++ (if (Properties.isMac) Nil else settings(publish := {}, publishSigned := {}))
-  lazy val release = taskKey[Unit]("Release a project snapshot.")
+  lazy val releaseSnapshot = taskKey[Unit]("Release a project snapshot.")
   lazy val releaseLocal = taskKey[Unit]("Release local project")
   lazy val releaseSigned = taskKey[Unit]("Release signed project")
   lazy val generateJSSources = taskKey[Unit]("Generate scala sources from java")
@@ -154,7 +154,7 @@ object Build {
       publishLocal := {},
       releaseLocal := releaseTask(publishLocal).value,
       releaseSigned := releaseTask(publishSigned).value,
-      release := releaseTask(publish).value,
+      releaseSnapshot := releaseTask(publish).value,
       clangFmt := {
         val npm = files.js.base.toPath.toAbsolutePath.resolve("npm/src")
         val jvm = files.jvm.base.toPath.toAbsolutePath.resolve("src/main/native")
