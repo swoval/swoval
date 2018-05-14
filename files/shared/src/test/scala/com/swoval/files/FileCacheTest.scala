@@ -198,7 +198,7 @@ object FileCacheTest extends TestSuite {
               override def onDelete(oldEntry: Entry[LastModified]): Unit = {}
               override def onUpdate(oldEntry: Entry[LastModified],
                                     newEntry: Entry[LastModified]): Unit =
-                if (oldEntry != newEntry) latch.countDown()
+                if (oldEntry.value.lastModified != newEntry.value.lastModified) latch.countDown()
             }
           )) { c =>
           c.reg(file.getParent, recursive = false)
