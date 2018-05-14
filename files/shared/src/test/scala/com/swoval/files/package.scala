@@ -6,9 +6,8 @@ import java.nio.file.attribute.FileTime
 import java.nio.file.{ Files, NoSuchFileException, Path }
 
 import com.swoval.files.AppleDirectoryWatcher.OnStreamRemoved
-import com.swoval.files.Directory.{ Converter, Entry }
+import com.swoval.files.Directory._
 import com.swoval.files.DirectoryWatcher.Callback
-import com.swoval.files.FileCache.{ Observer, OnChange, OnUpdate }
 import com.swoval.test._
 import utest._
 

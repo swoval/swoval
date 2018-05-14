@@ -3,7 +3,7 @@ package com.swoval.files
 import java.nio.file.{ Files, Path => JPath }
 
 import com.swoval.files.Directory.{ Converter, Entry }
-import com.swoval.files.FileCache.{ Observer, OnChange, OnUpdate }
+import com.swoval.files.Directory.{ Observer, OnChange, OnUpdate }
 import com.swoval.files.DirectoryWatcher.Event.{ Create, Modify }
 import com.swoval.files.test._
 import com.swoval.test._

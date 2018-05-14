@@ -3,6 +3,8 @@ package com.swoval.files
 import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.Entry
+import com.swoval.files.Directory.Observer
+import com.swoval.files.Directory.OnChange
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -15,43 +17,6 @@ import FileCache._
 import FileCacheImpl._
 
 object FileCache {
-
-  /**
-   * Callback to fire when a file in a monitored directory is created or deleted
-   *
-   * @tparam T The cached value associated with the path
-   */
-  trait OnChange[T] {
-
-    def apply(entry: Entry[T]): Unit
-
-  }
-
-  /**
-   * Callback to fire when a file in a monitor is updated
-   *
-   * @tparam T The cached value associated with the path
-   */
-  trait OnUpdate[T] {
-
-    def apply(oldEntry: Entry[T], newEntry: Entry[T]): Unit
-
-  }
-
-  /**
-   * Provides callbacks to run when different types of file events are detected by the cache
-   *
-   * @tparam T The type for the [[Directory.Entry]] data
-   */
-  trait Observer[T] {
-
-    def onCreate(newEntry: Entry[T]): Unit
-
-    def onDelete(oldEntry: Entry[T]): Unit
-
-    def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit
-
-  }
 
   /**
    * Create a file cache
@@ -86,8 +51,8 @@ object FileCache {
  * method. The cache stores the path information in [[Directory.Entry]] instances.
  *
  * <p>A default implementation is provided by [[FileCache#apply(Directory.Converter,
- * Observer)]]. The user may cache arbitrary information in the cache by customizing the [[Directory.Converter]] that is passed into the factory [[FileCache#apply(Directory.Converter,
- * FileCache.Observer)]].
+ * Directory.Observer)]]. The user may cache arbitrary information in the cache by customizing the
+ * [[Directory.Converter]] that is passed into the factory [[FileCache.apply]].
  *
  * @tparam T The type of data stored in the [[Directory.Entry]] instances for the cache
  */

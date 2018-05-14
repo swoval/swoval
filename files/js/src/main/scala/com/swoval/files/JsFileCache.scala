@@ -2,8 +2,7 @@ package com.swoval.files
 
 import java.nio.file.{ Path, Paths }
 
-import com.swoval.files.Directory.{ Converter, Entry }
-import com.swoval.files.FileCache.OnChange
+import com.swoval.files.Directory.{ Converter, Entry, OnChange }
 
 import scala.collection.JavaConverters._
 import scala.scalajs.js

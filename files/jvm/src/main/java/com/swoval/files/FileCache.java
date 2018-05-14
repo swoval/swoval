@@ -4,6 +4,8 @@ import static com.swoval.files.EntryFilters.AllPass;
 
 import com.swoval.files.Directory.Converter;
 import com.swoval.files.Directory.Entry;
+import com.swoval.files.Directory.Observer;
+import com.swoval.files.Directory.OnChange;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,45 +22,14 @@ import java.util.Map;
  * method. The cache stores the path information in {@link Directory.Entry} instances.
  *
  * <p>A default implementation is provided by {@link FileCache#apply(Directory.Converter,
- * Observer)}. The user may cache arbitrary information in the cache by customizing the {@link
- * Directory.Converter} that is passed into the factory {@link FileCache#apply(Directory.Converter,
- * FileCache.Observer)}.
+ * Directory.Observer)}. The user may cache arbitrary information in the cache by customizing the
+ * {@link Directory.Converter} that is passed into the factory {@link
+ * FileCache#apply(Directory.Converter, Directory.Observer)}.
  *
  * @param <T> The type of data stored in the {@link Directory.Entry} instances for the cache
  */
 public abstract class FileCache<T> implements AutoCloseable {
   protected final Observers<T> observers = new Observers<>();
-
-  /**
-   * Callback to fire when a file in a monitored directory is created or deleted
-   *
-   * @param <T> The cached value associated with the path
-   */
-  public interface OnChange<T> {
-    void apply(Entry<T> entry);
-  }
-
-  /**
-   * Callback to fire when a file in a monitor is updated
-   *
-   * @param <T> The cached value associated with the path
-   */
-  public interface OnUpdate<T> {
-    void apply(Entry<T> oldEntry, Entry<T> newEntry);
-  }
-
-  /**
-   * Provides callbacks to run when different types of file events are detected by the cache
-   *
-   * @param <T> The type for the {@link Directory.Entry} data
-   */
-  public interface Observer<T> {
-    void onCreate(Entry<T> newEntry);
-
-    void onDelete(Entry<T> oldEntry);
-
-    void onUpdate(Entry<T> oldEntry, Entry<T> newEntry);
-  }
 
   /**
    * Add observer of file events
@@ -97,9 +68,9 @@ public abstract class FileCache<T> implements AutoCloseable {
 
   /**
    * Stop firing the previously registered callback where <code>handle</code> is returned by {@link
-   * #addObserver(Observer)}
+   * #addObserver(Directory.Observer)}
    *
-   * @param handle A handle to the observer added by {@link #addObserver(Observer)}
+   * @param handle A handle to the observer added by {@link #addObserver(Directory.Observer)}
    */
   public void removeObserver(final int handle) {
     observers.removeObserver(handle);
@@ -325,6 +296,7 @@ class FileCacheImpl<T> extends FileCache<T> {
     }
     return result;
   }
+
   private static class Pair<A, B> {
     public final A first;
     public final B second;

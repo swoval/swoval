@@ -506,4 +506,36 @@ public class Directory<T> implements AutoCloseable {
       return "Entry(" + path + ", " + value + ")";
     }
   }
+
+  /**
+   * Callback to fire when a file in a monitored directory is created or deleted
+   *
+   * @param <T> The cached value associated with the path
+   */
+  public interface OnChange<T> {
+    void apply(Entry<T> entry);
+  }
+
+  /**
+   * Callback to fire when a file in a monitor is updated
+   *
+   * @param <T> The cached value associated with the path
+   */
+  public interface OnUpdate<T> {
+    void apply(Entry<T> oldEntry, Entry<T> newEntry);
+  }
+
+  /**
+   * Provides callbacks to run when different types of file events are detected by the cache
+   *
+   * @param <T> The type for the {@link Directory.Entry} data
+   */
+  public interface Observer<T> {
+    void onCreate(Entry<T> newEntry);
+
+    void onDelete(Entry<T> oldEntry);
+
+    void onUpdate(Entry<T> oldEntry, Entry<T> newEntry);
+  }
+
 }

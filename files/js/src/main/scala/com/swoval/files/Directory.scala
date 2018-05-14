@@ -151,6 +151,43 @@ object Directory {
 
   }
 
+  /**
+   * Callback to fire when a file in a monitored directory is created or deleted
+   *
+   * @tparam T The cached value associated with the path
+   */
+  trait OnChange[T] {
+
+    def apply(entry: Entry[T]): Unit
+
+  }
+
+  /**
+   * Callback to fire when a file in a monitor is updated
+   *
+   * @tparam T The cached value associated with the path
+   */
+  trait OnUpdate[T] {
+
+    def apply(oldEntry: Entry[T], newEntry: Entry[T]): Unit
+
+  }
+
+  /**
+   * Provides callbacks to run when different types of file events are detected by the cache
+   *
+   * @tparam T The type for the [[Directory.Entry]] data
+   */
+  trait Observer[T] {
+
+    def onCreate(newEntry: Entry[T]): Unit
+
+    def onDelete(oldEntry: Entry[T]): Unit
+
+    def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit
+
+  }
+
 }
 
 /**
