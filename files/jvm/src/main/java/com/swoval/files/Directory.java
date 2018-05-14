@@ -287,10 +287,13 @@ public class Directory<T> implements AutoCloseable {
         synchronized (currentDir.lock) {
           final Entry<T> file = currentDir.files.removeByName(p);
           if (file != null) {
-            result.add(file);
+            result.add(file.resolvedFrom(currentDir.path, true));
           } else {
             final Directory<T> dir = currentDir.subdirectories.removeByName(p);
-            if (dir != null) result.add(dir.entry());
+            if (dir != null) {
+              result.addAll(dir.list(true, AllPass));
+              result.add(dir.entry());
+            }
           }
         }
       } else {

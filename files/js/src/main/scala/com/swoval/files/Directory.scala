@@ -441,10 +441,13 @@ class Directory[T] private (val path: Path,
         currentDir.lock.synchronized {
           val file: Entry[T] = currentDir.files.removeByName(p)
           if (file != null) {
-            result.add(file)
+            result.add(file.resolvedFrom(currentDir.path, true))
           } else {
             val dir: Directory[T] = currentDir.subdirectories.removeByName(p)
-            if (dir != null) result.add(dir.entry())
+            if (dir != null) {
+              result.addAll(dir.list(true, AllPass))
+              result.add(dir.entry())
+            }
           }
         }
       } else {
