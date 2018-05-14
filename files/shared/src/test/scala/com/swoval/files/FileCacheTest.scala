@@ -2,30 +2,24 @@ package com.swoval.files
 
 import java.nio.file.{ Files, Path => JPath }
 
-import com.swoval.files.Directory.{ Converter, Entry }
-import com.swoval.files.Directory.{ Observer, OnChange, OnUpdate }
-import com.swoval.files.DirectoryWatcher.Event.{ Create, Modify }
+import com.swoval.files.Directory._
 import com.swoval.files.test._
 import com.swoval.test._
 import utest._
 import utest.framework.ExecutionContext.RunNow
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
+import FileCacheTest.FileCacheOps
 
-object FileCacheTest extends TestSuite {
-  implicit class FileCacheOps[T <: AnyRef](val fileCache: FileCache[T]) extends AnyVal {
-    def ls(dir: JPath,
-           recursive: Boolean = true,
-           filter: Directory.EntryFilter[_ >: T] = EntryFilters.AllPass): Seq[Entry[T]] =
-      fileCache.list(dir, recursive, filter).asScala
-    def reg(dir: JPath, recursive: Boolean = true) = fileCache.register(dir, recursive)
-  }
+trait FileCacheTest extends TestSuite {
+  def factory: DirectoryWatcher.Factory
   def identity: Converter[JPath] = (p: JPath) => p
   def simpleCache(f: Entry[JPath] => Unit): FileCache[JPath] =
-    FileCache.apply(((p: JPath) => p): Converter[JPath], Observers.apply(f: OnChange[JPath]))
+    FileCache.apply(((p: JPath) => p): Converter[JPath],
+                    Observers.apply(f: OnChange[JPath]),
+                    factory)
 
-  val tests: Tests = Tests {
+  val testsImpl: Tests = Tests {
     'directory - {
       'subdirectories - {
         'callback - withTempDirectory { dir =>
@@ -89,7 +83,7 @@ object FileCacheTest extends TestSuite {
           val onChange: OnChange[JPath] = (_: Entry[JPath]) => latch.countDown()
           val onUpdate: OnUpdate[JPath] = (_: Entry[JPath], _: Entry[JPath]) => {}
           val observer = Observers.apply(onChange, onUpdate, onChange)
-          usingAsync(FileCache.apply(identity, observer)) { c =>
+          usingAsync(FileCache.apply(identity, observer, factory)) { c =>
             c.reg(dir, recursive = false)
             c.ls(dir, recursive = false) === Seq(initial)
             initial.renameTo(moved)
@@ -99,39 +93,55 @@ object FileCacheTest extends TestSuite {
           }
         }
         'addmany - withTempDirectory { dir =>
-          val filesToAdd = 100
+          val subdirsToAdd = if (System.getProperty("java.vm.name", "") == "Scala.js") 50 else 2000
+          val filesPerSubdir = 4
           val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
-          val creationLatch = new CountDownLatch(filesToAdd * 2)
-          val deletionLatch = new CountDownLatch(filesToAdd * 2)
+          val creationLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
+          val deletionLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
           var files = Set.empty[JPath]
           val observer = Observers.apply[JPath]((_: Entry[JPath]) => creationLatch.countDown(),
                                                 (_: Entry[JPath], _: Entry[JPath]) => {},
                                                 (_: Entry[JPath]) => deletionLatch.countDown())
-          usingAsync(FileCache.apply[JPath](identity, observer)) { c =>
+          usingAsync(FileCache.apply[JPath](identity, observer, factory)) { c =>
             c.reg(dir)
             executor.run(new Runnable {
-              override def run(): Unit = {
-                files = (0 until filesToAdd).flatMap { i =>
-                  val subdir = Files.createTempDirectory(dir, s"subdir-$i-")
-                  val file = Files.createTempFile(subdir, s"file-$i-", "")
-                  Seq(subdir, file)
-                }.toSet
+              override def run(): Unit = files.synchronized {
+                val subdirs = (1 to subdirsToAdd).map { i =>
+                  Files.createDirectory(dir.resolve(s"subdir-$i"))
+                }
+                val regularFiles = subdirs.flatMap { subdir =>
+                  (1 to filesPerSubdir).map { j =>
+                    Files.createFile(subdir.resolve(s"file-$j"))
+                  }
+                }
+                files = (subdirs ++ regularFiles).toSet
               }
             })
             creationLatch
-              .waitFor(DEFAULT_TIMEOUT) {
-                val found = c.ls(dir).toSet
-                found.map(_.path) === files
+              .waitFor(DEFAULT_TIMEOUT * 10) {
+                val found = c.ls(dir).map(_.path).toSet
+                // Need to synchronize since files is first set on a different thread
+                files.synchronized { found === files }
               }
               .flatMap { _ =>
                 executor.run(new Runnable {
-                  override def run(): Unit = files.foreach(_.deleteRecursive())
+                  override def run(): Unit = {
+                    files.synchronized(files.foreach(_.deleteRecursive()))
+                  }
+
                 })
-                deletionLatch.waitFor(DEFAULT_TIMEOUT) {
+                deletionLatch.waitFor(DEFAULT_TIMEOUT * 10) {
                   c.ls(dir) === Seq.empty
                 }
               }
-          }.andThen { case _ => executor.close() }
+          }.andThen {
+            case _ =>
+              executor.close()
+              if (creationLatch.getCount != 0)
+                println(s"$this Creation latch not triggered (${creationLatch.getCount})")
+              if (deletionLatch.getCount != 0)
+                println(s"$this Deletion latch not triggered (${deletionLatch.getCount})")
+          }
         }
       }
     }
@@ -200,7 +210,8 @@ object FileCacheTest extends TestSuite {
               override def onUpdate(oldEntry: Entry[LastModified],
                                     newEntry: Entry[LastModified]): Unit =
                 if (oldEntry.value.lastModified != newEntry.value.lastModified) latch.countDown()
-            }
+            },
+            factory
           )) { c =>
           c.reg(file.getParent, recursive = false)
           val cachedFile: Entry[LastModified] =
@@ -225,4 +236,33 @@ object FileCacheTest extends TestSuite {
       }
     }
   }
+}
+
+object FileCacheTest {
+  implicit class FileCacheOps[T <: AnyRef](val fileCache: FileCache[T]) extends AnyVal {
+    def ls(dir: JPath,
+           recursive: Boolean = true,
+           filter: EntryFilter[_ >: T] = EntryFilters.AllPass): Seq[Entry[T]] =
+      fileCache.list(dir, recursive, filter).asScala
+    def reg(dir: JPath, recursive: Boolean = true): Directory[T] =
+      fileCache.register(dir, recursive)
+  }
+}
+
+object DefaultFileCacheTest extends FileCacheTest {
+  val factory = DirectoryWatcher.DEFAULT_FACTORY
+  val tests = testsImpl
+}
+
+object NioFileCacheTest extends FileCacheTest {
+  val factory = new DirectoryWatcher.Factory {
+    override def create(callback: DirectoryWatcher.Callback): DirectoryWatcher =
+      new NioDirectoryWatcher(callback)
+  }
+  val tests =
+    if (Platform.isMac && System.getProperty("java.vm.name") != "Scala.js") testsImpl
+    else
+      Tests('ignore - {
+        println("Not running NioFileCacheTest on platform other than the jvm on osx")
+      })
 }

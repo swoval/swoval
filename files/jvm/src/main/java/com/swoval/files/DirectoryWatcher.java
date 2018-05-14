@@ -89,14 +89,24 @@ public abstract class DirectoryWatcher implements AutoCloseable {
         10, TimeUnit.MILLISECONDS, new Flags.Create().setNoDefer().setFileEvents(), callback);
   }
 
-  /** Container for {@link DirectoryWatcher} events */
+  public interface Factory {
+    DirectoryWatcher create(Callback callback) throws InterruptedException, IOException;
+  }
+  public static final Factory DEFAULT_FACTORY = new Factory() {
+    @Override
+    public DirectoryWatcher create(Callback callback) throws InterruptedException, IOException {
+      return defaultWatcher(callback);
+    }
+  };
 
+  /** Container for {@link DirectoryWatcher} events */
   public static final class Event {
     public final Path path;
     public final Event.Kind kind;
     public static final Kind Create = new Kind("Create");
     public static final Kind Delete = new Kind("Delete");
     public static final Kind Modify = new Kind("Modify");
+    public static final Kind Overflow = new Kind("Overflow");
 
     public Event(final Path path, final Event.Kind kind) {
       this.path = path;

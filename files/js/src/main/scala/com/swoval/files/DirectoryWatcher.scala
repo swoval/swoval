@@ -50,6 +50,17 @@ object DirectoryWatcher {
                    new Flags.Create().setNoDefer().setFileEvents(),
                    callback)
 
+  trait Factory {
+
+    def create(callback: Callback): DirectoryWatcher
+
+  }
+
+  val DEFAULT_FACTORY: Factory = new Factory() {
+    override def create(callback: Callback): DirectoryWatcher =
+      defaultWatcher(callback)
+  }
+
   object Event {
 
     val Create: Kind = new Kind("Create")
@@ -57,6 +68,8 @@ object DirectoryWatcher {
     val Delete: Kind = new Kind("Delete")
 
     val Modify: Kind = new Kind("Modify")
+
+    val Overflow: Kind = new Kind("Overflow")
 
     /**
      * An enum like class to indicate the type of file event. It isn't an actual enum because the
@@ -70,6 +83,9 @@ object DirectoryWatcher {
 
   }
 
+  /**
+ Container for [[DirectoryWatcher]] events
+   */
   class Event(val path: Path, val kind: Event.Kind) {
 
     override def equals(other: Any): Boolean = other match {

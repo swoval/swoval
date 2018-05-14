@@ -9,7 +9,7 @@ import com.swoval.files.test.FileBytes
 import utest._
 
 object EntryFilterTest extends TestSuite {
-  implicit class PathFilterOps[T](val pathFilter: EntryFilter[T]) extends AnyVal {
+  implicit class EntryFilterOps[T](val pathFilter: EntryFilter[T]) extends AnyVal {
     def &&(other: EntryFilter[_ >: T]): EntryFilter[T] = EntryFilters.AND[T](pathFilter, other)
   }
   override val tests = Tests {
