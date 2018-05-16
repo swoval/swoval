@@ -115,27 +115,6 @@ object Directory {
     def resolvedFrom(other: Path, isDirectory: Boolean): Entry[T] =
       new Entry(other.resolve(path), this.value, isDirectory)
 
-    /**
-     * Relativize a cache entry
-     *
-     * @param other The path to relativize <code>path</code> against
-     * @return A Entry where the <code>path</code> has been relativized against <code>other
-     *     </code>
-     */
-    def relativizedFrom(other: Path): Entry[T] =
-      new Entry(other.relativize(path), this.value, this.isDirectory)
-
-    /**
-     * Relativize a cache entry where <code>isDirectory</code> is known
-     *
-     * @param other The path to relativize <code>path</code> against
-     * @param isDirectory True if the path for this entry is a directory
-     * @return A Entry where the <code>path</code> has been relativized against <code>other
-     *     </code>
-     */
-    def relativizedFrom(other: Path, isDirectory: Boolean): Entry[T] =
-      new Entry(other.relativize(path), this.value, isDirectory)
-
     override def equals(other: Any): Boolean = other match {
       case other: Directory.Entry[_] => {
         val that: Entry[_] = other
