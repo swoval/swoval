@@ -86,7 +86,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     }
   }
 
-  /** Closes the FileEventsApi and shuts down the <code>executor</code>. */
+  /** Closes the FileEventsApi and shuts down the {@code executor}. */
   @Override
   public void close() {
     if (closed.compareAndSet(false, true)) {

@@ -73,7 +73,7 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * List all of the files for the <code>path</code>
+   * List all of the files for the {@code path}
    *
    * @param recursive Toggles whether or not to include children of subdirectories in the results
    * @param filter Include only entries accepted by the filter
@@ -86,7 +86,7 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * List all of the files for the <code>path</code> that are accepted by the <code>filter</code>.
+   * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
    *
    * @param path The path to list. If this is a file, returns a list containing the Entry for the
    *     file or an empty list if the file is not monitored by the path.
@@ -118,7 +118,7 @@ public class Directory<T> implements AutoCloseable {
    * Update the Directory entry for a particular path.
    *
    * @param path The path to addUpdate
-   * @param isFile Indicates whether <code>path</code> is a regular file
+   * @param isFile Indicates whether {@code path} is a regular file
    * @return A list of updates for the path. When the path is new, the updates have the
    *     oldCachedPath field set to null and will contain all of the children of the new path when
    *     it is a directory. For an existing path, the List contains a single Update that contains
@@ -359,7 +359,7 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * Make a new recursive Directory with cache entries created by <code>converter</code>
+   * Make a new recursive Directory with cache entries created by {@code converter}
    *
    * @param path The path to cache
    * @param converter Function to create the cache value for each path
@@ -371,7 +371,7 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * Make a new Directory with a cache entries created by <code>converter</code>
+   * Make a new Directory with a cache entries created by {@code converter}
    *
    * @param path The path to cache
    * @param converter Function to create the cache value for each path
@@ -417,7 +417,7 @@ public class Directory<T> implements AutoCloseable {
      * Create a new Entry
      *
      * @param path The path to which this entry corresponds blah
-     * @param value The <code>path</code> derived value for this entry
+     * @param value The {@code path} derived value for this entry
      * @param isDirectory True when the path is a directory -- this is an optimization to avoid
      *     having to query the file system to check whether the cache entry is a directory or not.
      */
@@ -431,7 +431,7 @@ public class Directory<T> implements AutoCloseable {
      * Create a new Entry using the FileSystem to check if the Entry is for a directory
      *
      * @param path The path to which this entry corresponds
-     * @param value The <code>path</code> derived value for this entry
+     * @param value The {@code path} derived value for this entry
      */
     public Entry(final Path path, final T value) {
       this(path, value, Files.isDirectory(path));
@@ -442,22 +442,22 @@ public class Directory<T> implements AutoCloseable {
     }
 
     /**
-     * Resolve a Entry for a relative <code>path</code>
+     * Resolve a Entry for a relative {@code path}
      *
-     * @param other The path to resolve <code>path</code> against
-     * @return A Entry where the <code>path</code> has been resolved against <code>other</code>
+     * @param other The path to resolve {@code path} against
+     * @return A Entry where the {@code path</code> has been resolved against <code>other}
      */
     @SuppressWarnings("unchecked")
     public Entry<T> resolvedFrom(Path other) {
       return new Entry(other.resolve(path), this.value, this.isDirectory);
     }
     /**
-     * Resolve a Entry for a relative <code>path</code> where <code>isDirectory</code> is known in
+     * Resolve a Entry for a relative {@code path</code> where <code>isDirectory} is known in
      * advance
      *
-     * @param other The path to resolve <code>path</code> against
+     * @param other The path to resolve {@code path} against
      * @param isDirectory Indicates whether the path is a directory
-     * @return A Entry where the <code>path</code> has been resolved against <code>other</code>
+     * @return A Entry where the {@code path</code> has been resolved against <code>other}
      */
     @SuppressWarnings("unchecked")
     public Entry<T> resolvedFrom(Path other, boolean isDirectory) {
