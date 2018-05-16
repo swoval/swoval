@@ -245,7 +245,6 @@ object Build {
       name := "file-utilities",
       bintrayPackage := "file-utilities",
       description := "File system apis.",
-      libraryDependencies += scalaMacros % scalaVersion.value,
       sources in Compile := {
         val unfiltered = (sources in Compile).value
         val base = baseDirectory.value.toPath.getParent.resolve("shared")
@@ -269,7 +268,6 @@ object Build {
           .toSeq
       },
       createCrossLinks,
-      addParadise,
       utestCrossTest,
       utestFramework
     )
