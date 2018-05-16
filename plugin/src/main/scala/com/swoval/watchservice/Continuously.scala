@@ -83,7 +83,7 @@ object Continuously {
         case dir if Files.isDirectory(dir) => dir -> p.recursive
         case f                             => f.getParent -> p.recursive
       }
-      val filter = new EntryFilter[Path] {
+      val filter = new Directory.EntryFilter[Path] {
         override def accept(cacheEntry: Entry[_ <: Path]): Boolean =
           sources.exists(_.filter.accept(cacheEntry))
       }

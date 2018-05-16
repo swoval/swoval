@@ -3,8 +3,7 @@ package com.swoval.watchservice
 import java.io.File
 import java.nio.file.{ Files, Path }
 
-import com.swoval.files.Directory.Entry
-import com.swoval.files.EntryFilter
+import com.swoval.files.Directory.{ Entry, EntryFilter }
 import sbt.SourceWrapper._
 import sbt._
 import sbt.internal.BuildStructure

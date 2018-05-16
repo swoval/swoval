@@ -3,8 +3,8 @@ package com.swoval.watchservice
 import java.io.File
 import java.nio.file._
 
-import com.swoval.files.Directory.Entry
-import com.swoval.files.{Directory, FileCache, EntryFilter}
+import com.swoval.files.Directory.{ Entry, EntryFilter }
+import com.swoval.files.{ Directory, FileCache }
 import com.swoval.watchservice.CloseWatchPlugin.autoImport.closeWatchFileCache
 import sbt.Keys._
 

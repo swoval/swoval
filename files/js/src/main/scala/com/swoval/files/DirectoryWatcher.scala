@@ -70,9 +70,6 @@ object DirectoryWatcher {
 
   }
 
-  /**
- Container for [[DirectoryWatcher]] events
-   */
   class Event(val path: Path, val kind: Event.Kind) {
 
     override def equals(other: Any): Boolean = other match {

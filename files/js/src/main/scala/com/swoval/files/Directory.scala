@@ -131,6 +131,16 @@ object Directory {
   }
 
   /**
+   * Filter [[Directory.Entry]] elements
+   * @tparam T The data value type for the [[Directory.Entry]]
+   */
+  trait EntryFilter[T] {
+
+    def accept(entry: Entry[_ <: T]): Boolean
+
+  }
+
+  /**
    * Callback to fire when a file in a monitored directory is created or deleted
    *
    * @tparam T The cached value associated with the path

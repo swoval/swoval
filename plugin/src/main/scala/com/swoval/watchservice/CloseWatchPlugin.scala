@@ -3,7 +3,7 @@ package com.swoval.watchservice
 import java.io.FileFilter
 import java.nio.file.{ Path, Paths }
 
-import com.swoval.files.Directory.{ Converter, Entry }
+import com.swoval.files.Directory.{ Converter, Entry, EntryFilter }
 import com.swoval.files._
 import sbt.Keys._
 import sbt._

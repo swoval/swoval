@@ -2,7 +2,7 @@ package com.swoval.files
 
 import java.nio.file.{ Path, Paths }
 
-import com.swoval.files.Directory.{ Converter, Entry, OnChange }
+import com.swoval.files.Directory.{ Converter, Entry, EntryFilter, OnChange }
 
 import scala.collection.JavaConverters._
 import scala.scalajs.js
@@ -20,10 +20,7 @@ class JsFileCache[T](converter: js.UndefOr[js.Function1[Path, T]],
           override def apply(path: Path): T = c(path)
       })
       .getOrElse(new Converter[T] {
-        override def apply(path: Path): T = {
-          println(path)
-          path.asInstanceOf[T]
-        }
+        override def apply(path: Path): T = path.asInstanceOf[T]
       }))
   callback.toOption.foreach(addCallback)
   def list(path: String,

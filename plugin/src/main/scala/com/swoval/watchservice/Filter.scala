@@ -3,8 +3,7 @@ package com.swoval.watchservice
 import java.io.File
 import java.nio.file.Path
 
-import com.swoval.files.Directory.Entry
-import com.swoval.files.EntryFilter
+import com.swoval.files.Directory.{ Entry, EntryFilter }
 import com.swoval.watchservice.Compat.io._
 import com.swoval.watchservice.Filter._
 

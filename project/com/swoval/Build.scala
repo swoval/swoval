@@ -350,7 +350,7 @@ object Build {
                 "AppleDirectoryWatcher",
                 "Directory",
                 "DirectoryWatcher",
-                "EntryFilter",
+                "EntryFilters",
                 "FileCache",
                 "FileOps",
                 "Observers"

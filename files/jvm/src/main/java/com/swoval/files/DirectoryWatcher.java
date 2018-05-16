@@ -90,6 +90,7 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   }
 
   /** Container for {@link DirectoryWatcher} events */
+
   public static final class Event {
     public final Path path;
     public final Event.Kind kind;

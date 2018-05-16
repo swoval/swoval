@@ -1,7 +1,5 @@
 package com.swoval.files;
 
-import static com.swoval.files.EntryFilters.AllPass;
-
 import com.swoval.files.Directory.Converter;
 import com.swoval.files.Directory.Entry;
 import com.swoval.files.Directory.Observer;
@@ -18,7 +16,7 @@ import java.util.Map;
 /**
  * Provides an in memory cache of portions of the file system. Directories are added to the cache
  * using the {@link FileCache#register(Path, boolean)} method. Once a directory is added the cache,
- * its contents may be retrieved using the {@link FileCache#list(Path, boolean, EntryFilter)}
+ * its contents may be retrieved using the {@link FileCache#list(Path, boolean, Directory.EntryFilter)}
  * method. The cache stores the path information in {@link Directory.Entry} instances.
  *
  * <p>A default implementation is provided by {@link FileCache#apply(Directory.Converter,
@@ -90,7 +88,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    *     list will contain just the cache entry for the path.
    */
   public abstract List<Entry<T>> list(
-      final Path path, final boolean recursive, final EntryFilter<? super T> filter);
+      final Path path, final boolean recursive, final Directory.EntryFilter<? super T> filter);
 
   /**
    * Lists the cache elements in the particular path without any filtering
@@ -105,7 +103,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    *     list will contain just the cache entry for the path.
    */
   public List<Entry<T>> list(final Path path, final boolean recursive) {
-    return list(path, recursive, AllPass);
+    return list(path, recursive, EntryFilters.AllPass);
   }
 
   /**
@@ -118,7 +116,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    *     list will contain just the cache entry for the path.
    */
   public List<Entry<T>> list(final Path path) {
-    return list(path, true, AllPass);
+    return list(path, true, EntryFilters.AllPass);
   }
   /**
    * Register the directory for monitoring.
@@ -189,7 +187,7 @@ class FileCacheImpl<T> extends FileCache<T> {
                 listImpl(
                     path,
                     false,
-                    new EntryFilter<T>() {
+                    new Directory.EntryFilter<T>() {
                       @Override
                       public boolean accept(Entry<? extends T> path) {
                         return event.path.equals(path.path);
@@ -236,7 +234,7 @@ class FileCacheImpl<T> extends FileCache<T> {
   }
 
   private Pair<Directory<T>, List<Entry<T>>> listImpl(
-      final Path path, final boolean recursive, final EntryFilter<? super T> filter) {
+      final Path path, final boolean recursive, final Directory.EntryFilter<? super T> filter) {
     synchronized (directories) {
       if (Files.exists(path)) {
         Directory<T> foundDir = null;
@@ -269,7 +267,7 @@ class FileCacheImpl<T> extends FileCache<T> {
 
   @Override
   public List<Entry<T>> list(
-      final Path path, final boolean recursive, final EntryFilter<? super T> filter) {
+      final Path path, final boolean recursive, final Directory.EntryFilter<? super T> filter) {
     Pair<Directory<T>, List<Entry<T>>> pair = listImpl(path, recursive, filter);
     return pair == null ? new ArrayList<Entry<T>>() : pair.second;
   }

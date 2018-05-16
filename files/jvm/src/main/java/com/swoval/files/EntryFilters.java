@@ -1,15 +1,8 @@
 package com.swoval.files;
 
 import com.swoval.files.Directory.Entry;
+import com.swoval.files.Directory.EntryFilter;
 import java.io.FileFilter;
-
-/**
- * Filter {@link Directory.Entry} elements
- * @param <T> The data value type for the {@link Directory.Entry}
- */
-public interface EntryFilter<T> {
-  boolean accept(Entry<? extends T> entry);
-}
 
 class EntryFilters {
   public static EntryFilter<Object> AllPass =

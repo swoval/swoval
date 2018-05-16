@@ -486,6 +486,15 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
+   * Filter {@link Directory.Entry} elements
+   * @param <T> The data value type for the {@link Directory.Entry}
+   */
+  public interface EntryFilter<T> {
+    boolean accept(Entry<? extends T> entry);
+  }
+
+
+  /**
    * Callback to fire when a file in a monitored directory is created or deleted
    *
    * @param <T> The cached value associated with the path

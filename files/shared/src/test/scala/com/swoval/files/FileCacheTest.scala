@@ -17,7 +17,7 @@ object FileCacheTest extends TestSuite {
   implicit class FileCacheOps[T <: AnyRef](val fileCache: FileCache[T]) extends AnyVal {
     def ls(dir: JPath,
            recursive: Boolean = true,
-           filter: EntryFilter[_ >: T] = EntryFilters.AllPass): Seq[Entry[T]] =
+           filter: Directory.EntryFilter[_ >: T] = EntryFilters.AllPass): Seq[Entry[T]] =
       fileCache.list(dir, recursive, filter).asScala
     def reg(dir: JPath, recursive: Boolean = true) = fileCache.register(dir, recursive)
   }

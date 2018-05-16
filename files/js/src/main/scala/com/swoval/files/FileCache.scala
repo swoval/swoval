@@ -1,6 +1,5 @@
 package com.swoval.files
 
-import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.Entry
 import com.swoval.files.Directory.Observer
@@ -111,7 +110,7 @@ abstract class FileCache[T] extends AutoCloseable {
    *     monitored path. If the path is a file and the file is monitored by the cache, the returned
    *     list will contain just the cache entry for the path.
    */
-  def list(path: Path, recursive: Boolean, filter: EntryFilter[_ >: T]): List[Entry[T]]
+  def list(path: Path, recursive: Boolean, filter: Directory.EntryFilter[_ >: T]): List[Entry[T]]
 
   /**
    * Lists the cache elements in the particular path without any filtering
@@ -126,7 +125,7 @@ abstract class FileCache[T] extends AutoCloseable {
    *     list will contain just the cache entry for the path.
    */
   def list(path: Path, recursive: Boolean): List[Entry[T]] =
-    list(path, recursive, AllPass)
+    list(path, recursive, EntryFilters.AllPass)
 
   /**
    * Lists the cache elements in the particular path recursively and with no filter.
@@ -137,7 +136,7 @@ abstract class FileCache[T] extends AutoCloseable {
    *     monitored path. If the path is a file and the file is monitored by the cache, the returned
    *     list will contain just the cache entry for the path.
    */
-  def list(path: Path): List[Entry[T]] = list(path, true, AllPass)
+  def list(path: Path): List[Entry[T]] = list(path, true, EntryFilters.AllPass)
 
   /**
    * Register the directory for monitoring.
@@ -183,7 +182,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T]) exten
         val path: Path = event.path
         if (Files.exists(path)) {
           val pair: Pair[Directory[T], List[Entry[T]]] =
-            listImpl(path, false, new EntryFilter[T]() {
+            listImpl(path, false, new Directory.EntryFilter[T]() {
               override def accept(path: Entry[_ <: T]): Boolean =
                 event.path == path.path
             })
@@ -228,7 +227,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T]) exten
 
   private def listImpl(path: Path,
                        recursive: Boolean,
-                       filter: EntryFilter[_ >: T]): Pair[Directory[T], List[Entry[T]]] =
+                       filter: Directory.EntryFilter[_ >: T]): Pair[Directory[T], List[Entry[T]]] =
     directories.synchronized {
       if (Files.exists(path)) {
         var foundDir: Directory[T] = null
@@ -258,7 +257,9 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T]) exten
     directories.clear()
   }
 
-  override def list(path: Path, recursive: Boolean, filter: EntryFilter[_ >: T]): List[Entry[T]] = {
+  override def list(path: Path,
+                    recursive: Boolean,
+                    filter: Directory.EntryFilter[_ >: T]): List[Entry[T]] = {
     val pair: Pair[Directory[T], List[Entry[T]]] =
       listImpl(path, recursive, filter)
     if (pair == null) new ArrayList[Entry[T]]() else pair.second
