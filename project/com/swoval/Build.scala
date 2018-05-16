@@ -59,6 +59,7 @@ object Build {
                   "ethan.atkins@gmail.com",
                   url("https://github.com/eatkins"))),
       licenses += ("MIT", url("https://opensource.org/licenses/MIT")),
+      scalacOptions ++= Seq("-feature"),
       publishMavenStyle in publishLocal := false,
       publishTo := {
         val p = publishTo.value
