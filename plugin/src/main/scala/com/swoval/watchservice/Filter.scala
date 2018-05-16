@@ -22,7 +22,6 @@ object Filter {
       case f: SimpleFileFilter => s"SimpleFileFilter(${f.acceptFunction})"
       case _                   => f.toString
     })
-  case class Hash(path: Path, id: ID)
 }
 
 trait Filter extends EntryFilter[Path] {
@@ -34,7 +33,7 @@ trait Filter extends EntryFilter[Path] {
     case _ => false
   }
 
-  override def hashCode(): Int = Hash(base, id).hashCode()
+  override lazy val hashCode: Int = (base :: id :: Nil).hashCode()
 }
 
 class SourceFilter(override val base: Path, filter: EntryFilter[Path], override val id: ID)
