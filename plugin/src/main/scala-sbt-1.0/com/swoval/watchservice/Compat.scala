@@ -3,17 +3,12 @@ package com.swoval.watchservice
 import java.io.File
 import java.nio.file.{ Files, Path }
 
-import com.swoval.files.Directory.Entry
-import com.swoval.files.EntryFilter
-import sbt.Keys._
+import com.swoval.files.Directory.{ Entry, EntryFilter }
 import sbt.SourceWrapper._
 import sbt._
 import sbt.internal.BuildStructure
 import sbt.internal.io.Source
-import sbt.io.{ NothingFilter, WatchService }
-
-import scala.concurrent.duration._
-import scala.util.Properties
+import sbt.io.NothingFilter
 
 object Compat {
   object internal {
@@ -33,16 +28,7 @@ object Compat {
   type WatchSource = sbt.internal.io.Source
   type FileFilter = sbt.io.FileFilter
   val global = Global
-  import CloseWatchPlugin.autoImport._
-  private def createWatchService(interval: Duration, queueSize: Int): WatchService = {
-    if (Properties.isMac) new MacOSXWatchService(interval, queueSize)(_ => {})
-    else Watched.createWatchService()
-  }
-  def extraProjectSettings: Seq[Def.Setting[_]] =
-    Seq(
-      watchService := (() =>
-                         createWatchService(closeWatchLegacyWatchLatency.value,
-                                            closeWatchLegacyQueueSize.value)))
+  def extraProjectSettings: Seq[Def.Setting[_]] = Nil
   def settings(s: Seq[Def.Setting[_]]): Seq[Def.Setting[_]] = s
 
   private class PathFileFilter(val pathFilter: EntryFilter[Path]) extends FileFilter {

@@ -54,7 +54,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    * @return true if the path is a directory and has not previously been registered
    */
   public boolean register(final Path path, final Flags.Create flags, final boolean recursive) {
-    if (Files.isDirectory(path) && path != path.getRoot()) {
+    if (Files.isDirectory(path) && !path.equals(path.getRoot())) {
       if (!alreadyWatching(path)) {
         int id = fileEventsApi.createStream(path.toString(), latency, flags.getValue());
         if (id == -1) System.err.println("Error watching " + path + ".");
@@ -86,7 +86,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     }
   }
 
-  /** Closes the FileEventsApi and shuts down the <code>executor</code>. */
+  /** Closes the FileEventsApi and shuts down the {@code executor}. */
   @Override
   public void close() {
     if (closed.compareAndSet(false, true)) {
@@ -212,7 +212,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
   }
 
   private boolean alreadyWatching(Path path) {
-    return path != path.getRoot()
+    return !path.equals(path.getRoot())
         && (streams.containsKey(path.toString()) || alreadyWatching(path.getParent()));
   }
 }

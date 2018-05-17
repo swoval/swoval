@@ -154,7 +154,7 @@ class AppleDirectoryWatcher(private val latency: Double,
   }
 
   /**
- Closes the FileEventsApi and shuts down the <code>executor</code>.
+ Closes the FileEventsApi and shuts down the {@code executor}.
    */
   override def close(): Unit = {
     if (closed.compareAndSet(false, true)) {

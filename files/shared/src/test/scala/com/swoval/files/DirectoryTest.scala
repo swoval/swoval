@@ -3,7 +3,7 @@ package com.swoval.files
 import java.io.File
 import java.nio.file.{ Path => JPath }
 
-import com.swoval.files.Directory.Entry
+import com.swoval.files.Directory.{ Entry, EntryFilter }
 import EntryFilters.AllPass
 import com.swoval.files.test._
 import utest._

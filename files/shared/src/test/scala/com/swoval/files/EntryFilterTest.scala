@@ -3,13 +3,13 @@ package com.swoval.files
 import java.io.File
 import java.nio.file.{ Path => JPath }
 
-import com.swoval.files.Directory.Entry
+import com.swoval.files.Directory.{ Entry, EntryFilter }
 import com.swoval.files.test._
 import com.swoval.files.test.FileBytes
 import utest._
 
 object EntryFilterTest extends TestSuite {
-  implicit class PathFilterOps[T](val pathFilter: EntryFilter[T]) extends AnyVal {
+  implicit class EntryFilterOps[T](val pathFilter: EntryFilter[T]) extends AnyVal {
     def &&(other: EntryFilter[_ >: T]): EntryFilter[T] = EntryFilters.AND[T](pathFilter, other)
   }
   override val tests = Tests {

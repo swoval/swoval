@@ -1,17 +1,8 @@
 package com.swoval.files
 
 import com.swoval.files.Directory.Entry
+import com.swoval.files.Directory.EntryFilter
 import java.io.FileFilter
-
-/**
- * Filter [[Directory.Entry]] elements
- * @tparam T The data value type for the [[Directory.Entry]]
- */
-trait EntryFilter[T] {
-
-  def accept(entry: Entry[_ <: T]): Boolean
-
-}
 
 private[files] object EntryFilters {
 

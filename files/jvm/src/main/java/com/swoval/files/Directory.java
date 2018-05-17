@@ -73,7 +73,7 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * List all of the files for the <code>path</code>
+   * List all of the files for the {@code path}
    *
    * @param recursive Toggles whether or not to include children of subdirectories in the results
    * @param filter Include only entries accepted by the filter
@@ -86,7 +86,7 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * List all of the files for the <code>path</code> that are accepted by the <code>filter</code>.
+   * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
    *
    * @param path The path to list. If this is a file, returns a list containing the Entry for the
    *     file or an empty list if the file is not monitored by the path.
@@ -118,7 +118,7 @@ public class Directory<T> implements AutoCloseable {
    * Update the Directory entry for a particular path.
    *
    * @param path The path to addUpdate
-   * @param isFile Indicates whether <code>path</code> is a regular file
+   * @param isFile Indicates whether {@code path} is a regular file
    * @return A list of updates for the path. When the path is new, the updates have the
    *     oldCachedPath field set to null and will contain all of the children of the new path when
    *     it is a directory. For an existing path, the List contains a single Update that contains
@@ -287,10 +287,13 @@ public class Directory<T> implements AutoCloseable {
         synchronized (currentDir.lock) {
           final Entry<T> file = currentDir.files.removeByName(p);
           if (file != null) {
-            result.add(file);
+            result.add(file.resolvedFrom(currentDir.path, true));
           } else {
             final Directory<T> dir = currentDir.subdirectories.removeByName(p);
-            if (dir != null) result.add(dir.entry());
+            if (dir != null) {
+              result.addAll(dir.list(true, AllPass));
+              result.add(dir.entry());
+            }
           }
         }
       } else {
@@ -356,7 +359,7 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * Make a new recursive Directory with cache entries created by <code>converter</code>
+   * Make a new recursive Directory with cache entries created by {@code converter}
    *
    * @param path The path to cache
    * @param converter Function to create the cache value for each path
@@ -368,7 +371,7 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * Make a new Directory with a cache entries created by <code>converter</code>
+   * Make a new Directory with a cache entries created by {@code converter}
    *
    * @param path The path to cache
    * @param converter Function to create the cache value for each path
@@ -414,7 +417,7 @@ public class Directory<T> implements AutoCloseable {
      * Create a new Entry
      *
      * @param path The path to which this entry corresponds blah
-     * @param value The <code>path</code> derived value for this entry
+     * @param value The {@code path} derived value for this entry
      * @param isDirectory True when the path is a directory -- this is an optimization to avoid
      *     having to query the file system to check whether the cache entry is a directory or not.
      */
@@ -428,7 +431,7 @@ public class Directory<T> implements AutoCloseable {
      * Create a new Entry using the FileSystem to check if the Entry is for a directory
      *
      * @param path The path to which this entry corresponds
-     * @param value The <code>path</code> derived value for this entry
+     * @param value The {@code path} derived value for this entry
      */
     public Entry(final Path path, final T value) {
       this(path, value, Files.isDirectory(path));
@@ -439,51 +442,26 @@ public class Directory<T> implements AutoCloseable {
     }
 
     /**
-     * Resolve a Entry for a relative <code>path</code>
+     * Resolve a Entry for a relative {@code path}
      *
-     * @param other The path to resolve <code>path</code> against
-     * @return A Entry where the <code>path</code> has been resolved against <code>other</code>
+     * @param other The path to resolve {@code path} against
+     * @return A Entry where the {@code path</code> has been resolved against <code>other}
      */
     @SuppressWarnings("unchecked")
     public Entry<T> resolvedFrom(Path other) {
       return new Entry(other.resolve(path), this.value, this.isDirectory);
     }
     /**
-     * Resolve a Entry for a relative <code>path</code> where <code>isDirectory</code> is known in
+     * Resolve a Entry for a relative {@code path</code> where <code>isDirectory} is known in
      * advance
      *
-     * @param other The path to resolve <code>path</code> against
+     * @param other The path to resolve {@code path} against
      * @param isDirectory Indicates whether the path is a directory
-     * @return A Entry where the <code>path</code> has been resolved against <code>other</code>
+     * @return A Entry where the {@code path</code> has been resolved against <code>other}
      */
     @SuppressWarnings("unchecked")
     public Entry<T> resolvedFrom(Path other, boolean isDirectory) {
       return new Entry(other.resolve(path), this.value, isDirectory);
-    }
-
-    /**
-     * Relativize a cache entry
-     *
-     * @param other The path to relativize <code>path</code> against
-     * @return A Entry where the <code>path</code> has been relativized against <code>other
-     *     </code>
-     */
-    @SuppressWarnings("unchecked")
-    public Entry<T> relativizedFrom(Path other) {
-      return new Entry(other.relativize(path), this.value, this.isDirectory);
-    }
-
-    /**
-     * Relativize a cache entry where <code>isDirectory</code> is known
-     *
-     * @param other The path to relativize <code>path</code> against
-     * @param isDirectory True if the path for this entry is a directory
-     * @return A Entry where the <code>path</code> has been relativized against <code>other
-     *     </code>
-     */
-    @SuppressWarnings("unchecked")
-    public Entry<T> relativizedFrom(Path other, boolean isDirectory) {
-      return new Entry(other.relativize(path), this.value, isDirectory);
     }
 
     @Override
@@ -506,4 +484,45 @@ public class Directory<T> implements AutoCloseable {
       return "Entry(" + path + ", " + value + ")";
     }
   }
+
+  /**
+   * Filter {@link Directory.Entry} elements
+   * @param <T> The data value type for the {@link Directory.Entry}
+   */
+  public interface EntryFilter<T> {
+    boolean accept(Entry<? extends T> entry);
+  }
+
+
+  /**
+   * Callback to fire when a file in a monitored directory is created or deleted
+   *
+   * @param <T> The cached value associated with the path
+   */
+  public interface OnChange<T> {
+    void apply(Entry<T> entry);
+  }
+
+  /**
+   * Callback to fire when a file in a monitor is updated
+   *
+   * @param <T> The cached value associated with the path
+   */
+  public interface OnUpdate<T> {
+    void apply(Entry<T> oldEntry, Entry<T> newEntry);
+  }
+
+  /**
+   * Provides callbacks to run when different types of file events are detected by the cache
+   *
+   * @param <T> The type for the {@link Directory.Entry} data
+   */
+  public interface Observer<T> {
+    void onCreate(Entry<T> newEntry);
+
+    void onDelete(Entry<T> oldEntry);
+
+    void onUpdate(Entry<T> oldEntry, Entry<T> newEntry);
+  }
+
 }

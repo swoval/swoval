@@ -5,8 +5,7 @@ import java.nio.file.{ Files, Path }
 import java.util.concurrent.{ ArrayBlockingQueue, BlockingQueue, ExecutorService, Executors }
 
 import com.swoval.concurrent.ThreadFactory
-import com.swoval.files.Directory.Entry
-import com.swoval.files.FileCache.{ Observer, OnChange }
+import com.swoval.files.Directory.{ Entry, Observer, OnChange }
 import com.swoval.files._
 import com.swoval.watchservice.CloseWatchPlugin.autoImport._
 import sbt.BasicCommandStrings._
@@ -84,7 +83,7 @@ object Continuously {
         case dir if Files.isDirectory(dir) => dir -> p.recursive
         case f                             => f.getParent -> p.recursive
       }
-      val filter = new EntryFilter[Path] {
+      val filter = new Directory.EntryFilter[Path] {
         override def accept(cacheEntry: Entry[_ <: Path]): Boolean =
           sources.exists(_.filter.accept(cacheEntry))
       }

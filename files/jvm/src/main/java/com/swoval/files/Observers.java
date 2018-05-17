@@ -1,9 +1,9 @@
 package com.swoval.files;
 
 import com.swoval.files.Directory.Entry;
-import com.swoval.files.FileCache.Observer;
-import com.swoval.files.FileCache.OnChange;
-import com.swoval.files.FileCache.OnUpdate;
+import com.swoval.files.Directory.Observer;
+import com.swoval.files.Directory.OnChange;
+import com.swoval.files.Directory.OnUpdate;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -69,7 +69,7 @@ class Observers<T> implements Observer<T>, AutoCloseable {
     observers.clear();
   }
 
-  public static <T> Observer<T> apply(final FileCache.OnChange<T> onchange) {
+  public static <T> Observer<T> apply(final OnChange<T> onchange) {
     return new Observer<T>() {
       @Override
       public void onCreate(Entry<T> newEntry) {

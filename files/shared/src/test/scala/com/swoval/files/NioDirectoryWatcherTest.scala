@@ -7,24 +7,30 @@ import com.swoval.files.test._
 import com.swoval.test._
 import utest._
 
+import scala.concurrent.Future
+
 object NioDirectoryWatcherTest extends TestSuite {
-  val tests = if (!Platform.isMac) Tests {
+  // I am pretty sure there is a bug in libuv apple file system event implementation that
+  // can cause events to be dropped. This is why I exclude the test from running on osx on scala.js.
+  val tests = if (!((System.getProperty("java.vm.name") == "Scala.js") && Platform.isMac)) Tests {
+    val events = new ArrayBlockingQueue[DirectoryWatcher.Event](1)
     implicit val latch: com.swoval.files.test.CountDownLatch = new CountDownLatch(1)
-    val events = new ArrayBlockingQueue[DirectoryWatcher.Event](10)
-    val callback: Callback = (e: DirectoryWatcher.Event) => events.add(e)
-    def check(file: JPath)(f: JPath => Unit) = events.poll(DEFAULT_TIMEOUT) { e =>
+    def check(file: JPath)(f: JPath => Unit): Future[Unit] = events.poll(DEFAULT_TIMEOUT) { e =>
       e.path ==> file
       f(e.path)
     }
     'onCreate - withTempDirectory { dir =>
+      val f = dir.resolve(Path("create"))
+      val callback: Callback = (e: DirectoryWatcher.Event) => if (e.path == f) events.add(e)
       usingAsync(new NioDirectoryWatcher(callback)) { w =>
         w.register(dir)
-        val f = dir.resolve(Path("foo")).createFile()
+        f.createFile()
         check(f)(_.exists)
       }
     }
     'onModify - withTempDirectory { dir =>
-      val f = dir.resolve(Path("foo"))
+      val f = dir.resolve(Path("modify"))
+      val callback: Callback = (e: DirectoryWatcher.Event) => if (e.path == f) events.add(e)
       usingAsync(new NioDirectoryWatcher(callback)) { w =>
         f.createFile()
         w.register(dir)
@@ -33,8 +39,10 @@ object NioDirectoryWatcherTest extends TestSuite {
       }
     }
     'onDelete - withTempDirectory { dir =>
+      val f = dir.resolve(Path("delete"))
+      val callback: Callback = (e: DirectoryWatcher.Event) => if (e.path == f) events.add(e)
       usingAsync(new NioDirectoryWatcher(callback)) { w =>
-        val f = dir.resolve(Path("foo")).createFile()
+        f.createFile()
         w.register(dir)
         f.delete()
         check(f)(p => assert(!p.exists))
@@ -55,6 +63,6 @@ object NioDirectoryWatcherTest extends TestSuite {
     }
   } else
     Tests {
-      'ignore - { println("Not running NioDirectoryWatcherTest on the JVM for Mac OS") }
+      'ignore - { println("Not running NioDirectoryWatcherTest on scala.js for Mac OS") }
     }
 }

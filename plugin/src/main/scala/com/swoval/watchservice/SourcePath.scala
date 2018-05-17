@@ -2,7 +2,7 @@ package com.swoval.watchservice
 
 import java.nio.file.Path
 
-import com.swoval.files.EntryFilter
+import com.swoval.files.Directory.EntryFilter
 
 trait SourcePath {
   def base: Path

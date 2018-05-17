@@ -59,6 +59,7 @@ object Build {
                   "ethan.atkins@gmail.com",
                   url("https://github.com/eatkins"))),
       licenses += ("MIT", url("https://opensource.org/licenses/MIT")),
+      scalacOptions ++= Seq("-feature"),
       publishMavenStyle in publishLocal := false,
       publishTo := {
         val p = publishTo.value
@@ -95,11 +96,11 @@ object Build {
           None
         }
       },
-      release := {},
+      releaseSnapshot := {},
       releaseSigned := {},
       releaseLocal := {}
     ) ++ (if (Properties.isMac) Nil else settings(publish := {}, publishSigned := {}))
-  lazy val release = taskKey[Unit]("Release a project snapshot.")
+  lazy val releaseSnapshot = taskKey[Unit]("Release a project snapshot.")
   lazy val releaseLocal = taskKey[Unit]("Release local project")
   lazy val releaseSigned = taskKey[Unit]("Release signed project")
   lazy val generateJSSources = taskKey[Unit]("Generate scala sources from java")
@@ -121,7 +122,6 @@ object Build {
       throw new IllegalStateException("There are local diffs")
     else {
       Def.taskDyn {
-        (key in files.jvm).value
         (key in testing.jvm).value
         (key in util).value
         (scalaVersion in crossVersion).value match {
@@ -133,7 +133,8 @@ object Build {
               (key in testing.js).value
               if (v == scala212)
                 Def.task {
-                  (key in plugin).value;
+                  (key in files.jvm).value
+                  (key in plugin).value
                 } else Def.task(())
             }
         }
@@ -153,7 +154,7 @@ object Build {
       publishLocal := {},
       releaseLocal := releaseTask(publishLocal).value,
       releaseSigned := releaseTask(publishSigned).value,
-      release := releaseTask(publish).value,
+      releaseSnapshot := releaseTask(publish).value,
       clangFmt := {
         val npm = files.js.base.toPath.toAbsolutePath.resolve("npm/src")
         val jvm = files.jvm.base.toPath.toAbsolutePath.resolve("src/main/native")
@@ -244,7 +245,6 @@ object Build {
       name := "file-utilities",
       bintrayPackage := "file-utilities",
       description := "File system apis.",
-      libraryDependencies += scalaMacros % scalaVersion.value,
       sources in Compile := {
         val unfiltered = (sources in Compile).value
         val base = baseDirectory.value.toPath.getParent.resolve("shared")
@@ -268,7 +268,6 @@ object Build {
           .toSeq
       },
       createCrossLinks,
-      addParadise,
       utestCrossTest,
       utestFramework
     )
@@ -351,7 +350,7 @@ object Build {
                 "AppleDirectoryWatcher",
                 "Directory",
                 "DirectoryWatcher",
-                "EntryFilter",
+                "EntryFilters",
                 "FileCache",
                 "FileOps",
                 "Observers"

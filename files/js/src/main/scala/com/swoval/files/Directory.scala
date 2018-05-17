@@ -55,7 +55,7 @@ object Directory {
     new Directory(path, PATH_CONVERTER, recursive).init()
 
   /**
-   * Make a new recursive Directory with cache entries created by <code>converter</code>
+   * Make a new recursive Directory with cache entries created by {@code converter}
    *
    * @param path The path to cache
    * @param converter Function to create the cache value for each path
@@ -66,7 +66,7 @@ object Directory {
     cached(path, converter, true)
 
   /**
-   * Make a new Directory with a cache entries created by <code>converter</code>
+   * Make a new Directory with a cache entries created by {@code converter}
    *
    * @param path The path to cache
    * @param converter Function to create the cache value for each path
@@ -89,52 +89,31 @@ object Directory {
      * Create a new Entry using the FileSystem to check if the Entry is for a directory
      *
      * @param path The path to which this entry corresponds
-     * @param value The <code>path</code> derived value for this entry
+     * @param value The {@code path} derived value for this entry
      */
     def this(path: Path, value: T) = this(path, value, Files.isDirectory(path))
 
     def exists(): Boolean = Files.exists(path)
 
     /**
-     * Resolve a Entry for a relative <code>path</code>
+     * Resolve a Entry for a relative {@code path}
      *
-     * @param other The path to resolve <code>path</code> against
-     * @return A Entry where the <code>path</code> has been resolved against <code>other</code>
+     * @param other The path to resolve {@code path} against
+     * @return A Entry where the {@code path</code> has been resolved against <code>other}
      */
     def resolvedFrom(other: Path): Entry[T] =
       new Entry(other.resolve(path), this.value, this.isDirectory)
 
     /**
-     * Resolve a Entry for a relative <code>path</code> where <code>isDirectory</code> is known in
+     * Resolve a Entry for a relative {@code path</code> where <code>isDirectory} is known in
      * advance
      *
-     * @param other The path to resolve <code>path</code> against
+     * @param other The path to resolve {@code path} against
      * @param isDirectory Indicates whether the path is a directory
-     * @return A Entry where the <code>path</code> has been resolved against <code>other</code>
+     * @return A Entry where the {@code path</code> has been resolved against <code>other}
      */
     def resolvedFrom(other: Path, isDirectory: Boolean): Entry[T] =
       new Entry(other.resolve(path), this.value, isDirectory)
-
-    /**
-     * Relativize a cache entry
-     *
-     * @param other The path to relativize <code>path</code> against
-     * @return A Entry where the <code>path</code> has been relativized against <code>other
-     *     </code>
-     */
-    def relativizedFrom(other: Path): Entry[T] =
-      new Entry(other.relativize(path), this.value, this.isDirectory)
-
-    /**
-     * Relativize a cache entry where <code>isDirectory</code> is known
-     *
-     * @param other The path to relativize <code>path</code> against
-     * @param isDirectory True if the path for this entry is a directory
-     * @return A Entry where the <code>path</code> has been relativized against <code>other
-     *     </code>
-     */
-    def relativizedFrom(other: Path, isDirectory: Boolean): Entry[T] =
-      new Entry(other.relativize(path), this.value, isDirectory)
 
     override def equals(other: Any): Boolean = other match {
       case other: Directory.Entry[_] => {
@@ -148,6 +127,53 @@ object Directory {
     override def hashCode(): Int = path.hashCode ^ value.hashCode
 
     override def toString(): String = "Entry(" + path + ", " + value + ")"
+
+  }
+
+  /**
+   * Filter [[Directory.Entry]] elements
+   * @tparam T The data value type for the [[Directory.Entry]]
+   */
+  trait EntryFilter[T] {
+
+    def accept(entry: Entry[_ <: T]): Boolean
+
+  }
+
+  /**
+   * Callback to fire when a file in a monitored directory is created or deleted
+   *
+   * @tparam T The cached value associated with the path
+   */
+  trait OnChange[T] {
+
+    def apply(entry: Entry[T]): Unit
+
+  }
+
+  /**
+   * Callback to fire when a file in a monitor is updated
+   *
+   * @tparam T The cached value associated with the path
+   */
+  trait OnUpdate[T] {
+
+    def apply(oldEntry: Entry[T], newEntry: Entry[T]): Unit
+
+  }
+
+  /**
+   * Provides callbacks to run when different types of file events are detected by the cache
+   *
+   * @tparam T The type for the [[Directory.Entry]] data
+   */
+  trait Observer[T] {
+
+    def onCreate(newEntry: Entry[T]): Unit
+
+    def onDelete(oldEntry: Entry[T]): Unit
+
+    def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit
 
   }
 
@@ -193,7 +219,7 @@ class Directory[T] private (val path: Path,
   def entry(): Entry[T] = _cacheEntry.get
 
   /**
-   * List all of the files for the <code>path</code>
+   * List all of the files for the {@code path}
    *
    * @param recursive Toggles whether or not to include children of subdirectories in the results
    * @param filter Include only entries accepted by the filter
@@ -206,7 +232,7 @@ class Directory[T] private (val path: Path,
   }
 
   /**
-   * List all of the files for the <code>path</code> that are accepted by the <code>filter</code>.
+   * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
    *
    * @param path The path to list. If this is a file, returns a list containing the Entry for the
    *     file or an empty list if the file is not monitored by the path.
@@ -237,7 +263,7 @@ class Directory[T] private (val path: Path,
    * Update the Directory entry for a particular path.
    *
    * @param path The path to addUpdate
-   * @param isFile Indicates whether <code>path</code> is a regular file
+   * @param isFile Indicates whether {@code path} is a regular file
    * @return A list of updates for the path. When the path is new, the updates have the
    *     oldCachedPath field set to null and will contain all of the children of the new path when
    *     it is a directory. For an existing path, the List contains a single Update that contains
@@ -404,10 +430,13 @@ class Directory[T] private (val path: Path,
         currentDir.lock.synchronized {
           val file: Entry[T] = currentDir.files.removeByName(p)
           if (file != null) {
-            result.add(file)
+            result.add(file.resolvedFrom(currentDir.path, true))
           } else {
             val dir: Directory[T] = currentDir.subdirectories.removeByName(p)
-            if (dir != null) result.add(dir.entry())
+            if (dir != null) {
+              result.addAll(dir.list(true, AllPass))
+              result.add(dir.entry())
+            }
           }
         }
       } else {
