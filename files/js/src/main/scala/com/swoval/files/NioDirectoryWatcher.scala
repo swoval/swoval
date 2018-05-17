@@ -19,6 +19,7 @@ import scala.scalajs.js
  * @param onFileEvent The callback to run on file events
  */
 class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
+  def this(onFileEvent: Callback, registerable: Registerable) = this(onFileEvent)
   private object DirectoryFilter extends FileFilter {
     override def accept(pathname: File): Boolean = pathname.isDirectory
   }
@@ -35,7 +36,8 @@ class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
               case _                   => Modify
             }
             onFileEvent(new Event(watchPath, kind))
-            if (recursive && tpe == "rename" && exists && Files.isDirectory(watchPath)) {
+            if (recursive && exists && Files.isDirectory(watchPath)) {
+              impl(watchPath)
               FileOps.list(watchPath, recursive = true).asScala foreach { newPath =>
                 if (Files.isDirectory(newPath)) {
                   impl(newPath)

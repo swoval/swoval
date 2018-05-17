@@ -148,6 +148,16 @@ public abstract class DirectoryWatcher implements AutoCloseable {
       public String toString() {
         return name;
       }
+
+      @Override
+      public boolean equals(Object other) {
+        return other instanceof Kind && ((Kind) other).name.equals(this.name);
+      }
+
+      @Override
+      public int hashCode() {
+        return name.hashCode();
+      }
     }
   }
 }

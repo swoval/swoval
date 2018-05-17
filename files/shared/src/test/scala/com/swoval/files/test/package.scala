@@ -15,7 +15,7 @@ package object test {
     def countDown(): Unit = lock.synchronized {
       i -= 1
       if (i == 0) {
-        promise.complete(Success(true))
+        promise.tryComplete(Success(true))
       }
     }
     def getCount = i

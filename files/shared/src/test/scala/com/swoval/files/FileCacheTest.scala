@@ -11,6 +11,8 @@ import utest.framework.ExecutionContext.RunNow
 import scala.collection.JavaConverters._
 import FileCacheTest.FileCacheOps
 
+import scala.util.Failure
+
 trait FileCacheTest extends TestSuite {
   def factory: DirectoryWatcher.Factory
   def identity: Converter[JPath] = (p: JPath) => p
@@ -135,12 +137,15 @@ trait FileCacheTest extends TestSuite {
                 }
               }
           }.andThen {
-            case _ =>
+            case Failure(e) =>
+              println(s"Task failed $e")
               executor.close()
               if (creationLatch.getCount != 0)
                 println(s"$this Creation latch not triggered (${creationLatch.getCount})")
               if (deletionLatch.getCount != 0)
                 println(s"$this Deletion latch not triggered (${deletionLatch.getCount})")
+            case _ =>
+              executor.close()
           }
         }
       }

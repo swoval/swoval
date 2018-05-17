@@ -158,6 +158,7 @@ class AppleDirectoryWatcher(private val latency: Double,
    */
   override def close(): Unit = {
     if (closed.compareAndSet(false, true)) {
+      super.close()
       lock.synchronized {
         streams.clear()
       }
