@@ -371,7 +371,6 @@ object Build {
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty) ++
         Seq("-Xlint:unchecked"),
       jacocoExcludes in Test := Seq(
-        "com.swoval.files.NioDirectory*",
         "com.swoval.files.apple.Event*",
         "com.swoval.files.apple.Flag*",
         "com.swoval.files.apple.Native*"

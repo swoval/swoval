@@ -129,17 +129,18 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
 
   private boolean registerImpl(final Path realPath, final boolean recursive) {
     synchronized (lock) {
-      try {
-        if (watchedDirs.containsKey(realPath)) {
-          return false;
-        } else {
+      boolean result = true;
+      if (watchedDirs.containsKey(realPath)) {
+        result = false;
+      } else {
+        try {
           WatchKey key = watchService.register(realPath, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
           watchedDirs.put(realPath, new WatchedDir(key, recursive));
+        } catch (IOException e) {
+          result = false;
         }
-      } catch (IOException e) {
-        return false;
       }
-      return !recursive || recursiveRegister(realPath);
+      return result && (!recursive || recursiveRegister(realPath));
     }
   }
 
@@ -181,16 +182,14 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
         key.cancel();
         watchedDirs.remove(key.watchable());
       }
-      callback.apply(new DirectoryWatcher.Event((Path) key.watchable(), Overflow));
       final WatchedDir watchedDir = watchedDirs.get(key.watchable());
       boolean stop = false;
-      while (watchedDir != null && watchedDir.recursive && !stop) {
+      while ((watchedDir != null && watchedDir.recursive) && !stop) {
         final Iterator<Path> pathIterator = FileOps.list((Path) key.watchable(), true).iterator();
         boolean registered = false;
         while (pathIterator.hasNext()) {
           final Path path = pathIterator.next();
-          if (Files.isDirectory(path) && register(pathIterator.next(), true))
-            registered = true;
+          if (Files.isDirectory(path) && register(path, true)) registered = true;
         }
         stop = !registered;
       }
@@ -206,6 +205,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
       while (toRemoveIterator.hasNext()) {
         unregister((Path) toRemoveIterator.next());
       }
+      callback.apply(new DirectoryWatcher.Event((Path) key.watchable(), Overflow));
     }
   }
 

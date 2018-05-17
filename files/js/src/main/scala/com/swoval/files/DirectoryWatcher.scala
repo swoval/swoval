@@ -79,6 +79,14 @@ object DirectoryWatcher {
 
       override def toString(): String = name
 
+      override def equals(other: Any): Boolean = other match {
+        case other: Kind => other.name == this.name
+        case _           => false
+
+      }
+
+      override def hashCode(): Int = name.hashCode
+
     }
 
   }

@@ -39,6 +39,9 @@ object Files {
   def isDirectory(path: Path, linkOptions: Array[LinkOption] = Array.empty): Boolean = {
     Try(path.toFile.isDirectory).getOrElse(false)
   }
+  def isRegularFile(path: Path, linkOptions: Array[LinkOption] = Array.empty): Boolean = {
+    Try(path.toFile.isFile).getOrElse(false)
+  }
   def move(src: Path, target: Path, options: Array[CopyOption] = Array.empty): Path = {
     if (!src.toFile.renameTo(target.toFile()))
       throw new IOException(s"Couldn't move $src to $target")
@@ -55,7 +58,7 @@ object Files {
     path
   }
   def write(path: Path, bytes: Array[Byte], options: Array[OpenOption] = Array.empty): Path = {
-    Fs.writeFileSync(path.toRealPath().toString, new String(bytes))
+    Fs.writeFileSync(path.toString, new String(bytes))
     path
   }
 }
