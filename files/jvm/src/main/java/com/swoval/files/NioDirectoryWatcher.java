@@ -95,6 +95,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
   @Override
   public void close() {
     if (isStopped.compareAndSet(false, true)) {
+      super.close();
       try {
         loopThread.interrupt();
         try {

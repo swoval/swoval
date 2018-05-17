@@ -34,6 +34,7 @@ public abstract class Executor implements AutoCloseable {
       @SuppressWarnings("EmptyCatchBlock")
       @Override
       public void close() {
+        super.close();
         service.shutdownNow();
         try {
           service.awaitTermination(5, TimeUnit.SECONDS);

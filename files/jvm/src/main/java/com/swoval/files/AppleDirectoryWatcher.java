@@ -90,6 +90,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
   @Override
   public void close() {
     if (closed.compareAndSet(false, true)) {
+      super.close();
       synchronized (lock) {
         streams.clear();
       }
