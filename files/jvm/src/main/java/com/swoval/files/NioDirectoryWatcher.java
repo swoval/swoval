@@ -33,7 +33,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class NioDirectoryWatcher extends DirectoryWatcher {
   private final ReentrantLock lock = new ReentrantLock();
   private final Map<Watchable, WatchedDir> watchedDirs = new HashMap<>();
-  private final WatchService watchService;
+  private final Registerable watchService;
   private final Thread loopThread;
   private final AtomicBoolean isStopped = new AtomicBoolean(false);
   private final CountDownLatch shutdownLatch = new CountDownLatch(1);
@@ -42,10 +42,10 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
   public NioDirectoryWatcher(final Callback callback) throws IOException, InterruptedException {
     this(
         callback,
-        Platform.isMac() ? new MacOSXWatchService() : FileSystems.getDefault().newWatchService());
+        Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchService());
   }
 
-  public NioDirectoryWatcher(final Callback callback, final WatchService watchService)
+  public NioDirectoryWatcher(final Callback callback, final Registerable watchService)
       throws IOException {
     this.watchService = watchService;
     loopThread =
@@ -133,11 +133,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
         if (watchedDirs.containsKey(realPath)) {
           return false;
         } else {
-          WatchKey key =
-              watchService instanceof MacOSXWatchService
-                  ? ((MacOSXWatchService) watchService)
-                      .register(realPath, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY)
-                  : realPath.register(watchService, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
+          WatchKey key = watchService.register(realPath, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
           watchedDirs.put(realPath, new WatchedDir(key, recursive));
         }
       } catch (IOException e) {

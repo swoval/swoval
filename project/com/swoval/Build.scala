@@ -353,7 +353,8 @@ object Build {
                 "EntryFilters",
                 "FileCache",
                 "FileOps",
-                "Observers"
+                "Observers",
+                "Registerable"
               ).value
               convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
             }

@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-class MacOSXWatchService implements WatchService, AutoCloseable {
+class MacOSXWatchService implements WatchService, AutoCloseable, Registerable {
   private final double watchLatency;
   private final int queueSize;
   private final AtomicBoolean open = new AtomicBoolean(true);
