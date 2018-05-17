@@ -27,21 +27,6 @@ private[files] object Observers {
     }
   }
 
-  def apply[T](onchange: OnChange[T], onupdate: OnUpdate[T]): Observer[T] =
-    new Observer[T]() {
-      override def onCreate(newEntry: Entry[T]): Unit = {
-        onchange.apply(newEntry)
-      }
-
-      override def onDelete(oldEntry: Entry[T]): Unit = {
-        onchange.apply(oldEntry)
-      }
-
-      override def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit = {
-        onupdate.apply(oldEntry, newEntry)
-      }
-    }
-
   def apply[T](oncreate: OnChange[T], onupdate: OnUpdate[T], ondelete: OnChange[T]): Observer[T] =
     new Observer[T]() {
       override def onCreate(newEntry: Entry[T]): Unit = {

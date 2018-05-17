@@ -88,25 +88,6 @@ class Observers<T> implements Observer<T>, AutoCloseable {
     };
   }
 
-  public static <T> Observer<T> apply(final OnChange<T> onchange, final OnUpdate<T> onupdate) {
-    return new Observer<T>() {
-      @Override
-      public void onCreate(Entry<T> newEntry) {
-        onchange.apply(newEntry);
-      }
-
-      @Override
-      public void onDelete(Entry<T> oldEntry) {
-        onchange.apply(oldEntry);
-      }
-
-      @Override
-      public void onUpdate(Entry<T> oldEntry, Entry<T> newEntry) {
-        onupdate.apply(oldEntry, newEntry);
-      }
-    };
-  }
-
   public static <T> Observer<T> apply(
       final OnChange<T> oncreate, final OnUpdate<T> onupdate, final OnChange<T> ondelete) {
     return new Observer<T>() {
