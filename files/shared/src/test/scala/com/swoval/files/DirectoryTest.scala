@@ -150,7 +150,7 @@ object DirectoryTest extends TestSuite {
               val directory = Directory.of(dir)
               def ls = directory.ls(recursive = true, AllPass)
               ls === Set(f, subdir, nestedSubdir)
-              assert(Option(directory.remove(f)).isDefined)
+              directory.remove(f).asScala === Seq(f)
               ls === Set(subdir, nestedSubdir)
             }
           }
@@ -192,7 +192,7 @@ object DirectoryTest extends TestSuite {
       }
     }
     'recursive - withTempDirectory { dir =>
-      withTempDirectorySync(dir) { subdir =>
+      withTempDirectory(dir) { subdir =>
         withTempFileSync(subdir) { f =>
           assert(f.exists)
           Directory.of(subdir).ls(recursive = true, AllPass) === Seq(f)
