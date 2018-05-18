@@ -2,19 +2,32 @@ package com.swoval.files;
 
 import java.io.File;
 import java.io.FileFilter;
+import java.io.IOException;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
+import java.nio.file.FileVisitor;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 /** Provides utilities for listing files and getting subpaths */
 class FileOps {
-  public static final FileFilter AllPass = new FileFilter() {
-    @Override
-    public boolean accept(File file) {
-      return true;
-    }
-  };
+  public static final FileFilter AllPass =
+      new FileFilter() {
+        @Override
+        public boolean accept(File file) {
+          return true;
+        }
+        @Override
+        public String toString() {
+          return "AllPass";
+        }
+      };
 
   /**
    * Returns the files in a directory.
@@ -23,7 +36,7 @@ class FileOps {
    * @param recursive Include paths in subdirectories when set to true
    * @return Array of paths
    */
-  public static List<Path> list(final Path path, final boolean recursive) {
+  public static List<File> list(final Path path, final boolean recursive) {
     return list(path, recursive, AllPass);
   }
 
@@ -35,24 +48,61 @@ class FileOps {
    * @param filter Include only paths accepted by the filter
    * @return Array of Paths
    */
-  public static List<Path> list(final Path path, final boolean recursive, final FileFilter filter) {
-    final List<Path> res = new ArrayList<>();
-    listImpl(path.toFile(), recursive, filter, res);
-    return res;
-  }
+  @SuppressWarnings("EmptyCatchBlock")
+  public static List<File> list(final Path path, final boolean recursive, final FileFilter filter) {
+    final List<File> res = new ArrayList<>();
+    final int maxDepth = recursive ? Integer.MAX_VALUE : 1;
+    final Set<FileVisitOption> options = new HashSet<>();
+    final FileVisitor<Path> visitor =
+        new FileVisitor<Path>() {
+          @Override
+          public FileVisitResult preVisitDirectory(
+              final Path dir, final BasicFileAttributes attrs) {
+            if (!dir.equals(path)) {
+              final File file =
+                  new File(dir.toString()) {
+                    @Override
+                    public boolean isDirectory() {
+                      return true;
+                    }
+                  };
+              if (filter.accept(file)) {
+                res.add(file);
+              }
+            }
+            return FileVisitResult.CONTINUE;
+          }
 
-  private static void listImpl(
-      final File file, final boolean recursive, final FileFilter filter, final List<Path> result) {
-    File[] files = file.listFiles(filter);
-    if (files != null) {
-      int i = 0;
-      while (i < files.length) {
-        final File f = files[i];
-        result.add(f.toPath());
-        if (f.isDirectory() && recursive) listImpl(f, recursive, filter, result);
-        i += 1;
-      }
+          @Override
+          public FileVisitResult visitFile(final Path file, final BasicFileAttributes attrs) {
+            final File ioFile =
+                new File(file.toString()) {
+                  @Override
+                  public boolean isDirectory() {
+                    return attrs.isDirectory();
+                  }
+                };
+            if (filter.accept(ioFile)) {
+              res.add(ioFile);
+            }
+            return FileVisitResult.CONTINUE;
+          }
+
+          @Override
+          public FileVisitResult visitFileFailed(final Path file, final IOException exc) {
+            return FileVisitResult.SKIP_SUBTREE;
+          }
+
+          @Override
+          public FileVisitResult postVisitDirectory(final Path dir, final IOException exc) {
+            return FileVisitResult.CONTINUE;
+          }
+        };
+    try {
+      Files.walkFileTree(path, options, maxDepth, visitor);
+    } catch (IOException e) {
     }
+    return res;
   }
 
   /**

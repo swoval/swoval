@@ -1,6 +1,7 @@
 package com.swoval.files
 
 import com.swoval.files.EntryFilters.AllPass
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.ArrayList
@@ -451,11 +452,12 @@ class Directory[T] private (val path: Path,
   private def init(): Directory[T] = {
     if (Files.exists(path)) {
       lock.synchronized {
-        val it: Iterator[Path] = FileOps.list(path, false).iterator()
+        val it: Iterator[File] = FileOps.list(path, false).iterator()
         while (it.hasNext) {
-          val p: Path = it.next()
+          val file: File = it.next()
+          val p: Path = file.toPath()
           val key: Path = path.relativize(p).getFileName
-          if (Files.isDirectory(p)) {
+          if (file.isDirectory) {
             if (recursive) {
               subdirectories.put(key.toString, cached(p, converter))
             } else {

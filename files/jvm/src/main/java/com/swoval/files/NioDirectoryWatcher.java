@@ -9,6 +9,7 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.FileSystems;
@@ -145,10 +146,10 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
   }
 
   private boolean recursiveRegister(final Path path) {
-    final Iterator<Path> it = FileOps.list(path, false).iterator();
+    final Iterator<File> it = FileOps.list(path, false).iterator();
     while (it.hasNext()) {
-      final Path toRegister = it.next();
-      if (Files.isDirectory(toRegister)) register(toRegister, true);
+      final File toRegister = it.next();
+      if (toRegister.isDirectory()) register(toRegister.toPath(), true);
     }
     return true;
   }
@@ -160,10 +161,10 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
       WatchedDir watchedDir = watchedDirs.get(keyPath);
       if (watchedDir != null && watchedDir.recursive) {
         if (register(path, true)) {
-          final Iterator<Path> it = FileOps.list(path, false).iterator();
+          final Iterator<File> it = FileOps.list(path, false).iterator();
           while (it.hasNext()) {
-            final Path toRegister = it.next();
-            if (Files.isDirectory(toRegister)) register(toRegister, true);
+            final File toRegister = it.next();
+            if (toRegister.isDirectory()) register(toRegister.toPath(), true);
           }
         }
       }
@@ -185,11 +186,11 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
       final WatchedDir watchedDir = watchedDirs.get(key.watchable());
       boolean stop = false;
       while ((watchedDir != null && watchedDir.recursive) && !stop) {
-        final Iterator<Path> pathIterator = FileOps.list((Path) key.watchable(), true).iterator();
+        final Iterator<File> fileIterator = FileOps.list((Path) key.watchable(), true).iterator();
         boolean registered = false;
-        while (pathIterator.hasNext()) {
-          final Path path = pathIterator.next();
-          if (Files.isDirectory(path) && register(path, true)) registered = true;
+        while (fileIterator.hasNext()) {
+          final File file = fileIterator.next();
+          if (file.isDirectory() && register(file.toPath(), true)) registered = true;
         }
         stop = !registered;
       }

@@ -372,7 +372,6 @@ object Build {
                 "DirectoryWatcher",
                 "EntryFilters",
                 "FileCache",
-                "FileOps",
                 "Observers",
                 "Registerable"
               ).value

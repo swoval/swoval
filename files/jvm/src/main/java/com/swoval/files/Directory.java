@@ -2,6 +2,7 @@ package com.swoval.files;
 
 import static com.swoval.files.EntryFilters.AllPass;
 
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -308,11 +309,12 @@ public class Directory<T> implements AutoCloseable {
   private Directory<T> init() {
     if (Files.exists(path)) {
       synchronized (lock) {
-        final Iterator<Path> it = FileOps.list(path, false).iterator();
+        final Iterator<File> it = FileOps.list(path, false).iterator();
         while (it.hasNext()) {
-          final Path p = it.next();
+          final File file = it.next();
+          final Path p = file.toPath();
           final Path key = path.relativize(p).getFileName();
-          if (Files.isDirectory(p)) {
+          if (file.isDirectory()) {
             if (recursive) {
               subdirectories.put(key.toString(), cached(p, converter));
             } else {

@@ -20,7 +20,7 @@ private[files] object FileOps {
    * @param recursive Include paths in subdirectories when set to true
    * @return Array of paths
    */
-  def list(path: Path, recursive: Boolean): List[Path] =
+  def list(path: Path, recursive: Boolean): List[File] =
     list(path, recursive, AllPass)
 
   /**
@@ -31,8 +31,8 @@ private[files] object FileOps {
    * @param filter Include only paths accepted by the filter
    * @return Array of Paths
    */
-  def list(path: Path, recursive: Boolean, filter: FileFilter): List[Path] = {
-    val res: List[Path] = new ArrayList[Path]()
+  def list(path: Path, recursive: Boolean, filter: FileFilter): List[File] = {
+    val res: List[File] = new ArrayList[File]()
     listImpl(path.toFile(), recursive, filter, res)
     res
   }
@@ -40,13 +40,13 @@ private[files] object FileOps {
   private def listImpl(file: File,
                        recursive: Boolean,
                        filter: FileFilter,
-                       result: List[Path]): Unit = {
+                       result: List[File]): Unit = {
     val files: Array[File] = file.listFiles(filter)
     if (files != null) {
       var i: Int = 0
       while (i < files.length) {
         val f: File = files(i)
-        result.add(f.toPath())
+        result.add(f)
         if (f.isDirectory && recursive) listImpl(f, recursive, filter, result)
         i += 1
       }

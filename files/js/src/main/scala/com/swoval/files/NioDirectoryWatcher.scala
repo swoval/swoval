@@ -24,21 +24,21 @@ class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
     override def accept(pathname: File): Boolean = pathname.isDirectory
   }
   override def register(path: Path, recursive: Boolean): Boolean = {
-    def impl(p: Path): Boolean = watchedDirs get p.toString match {
-      case None if Files.isDirectory(p) =>
+    def impl(p: File): Boolean = watchedDirs get p.toString match {
+      case None if p.isDirectory =>
         val options = new FSWatcherOptions(recursive = false)
         val callback: js.Function2[nodejs.EventType, String, Unit] =
           (tpe: nodejs.EventType, name: String) => {
-            val watchPath = p.resolve(Paths.get(name))
+            val watchPath = p.toPath.resolve(Paths.get(name))
             val exists = Files.exists(watchPath)
             val kind: Event.Kind = tpe match {
               case "rename" if !exists => Delete
               case _                   => Modify
             }
-            if (recursive && exists && Files.isDirectory(watchPath)) {
-              impl(watchPath)
+            if (recursive && Files.isDirectory(watchPath)) {
+              impl(watchPath.toFile)
               FileOps.list(watchPath, recursive = true).asScala foreach { newPath =>
-                if (Files.isDirectory(newPath)) {
+                if (newPath.isDirectory) {
                   impl(newPath)
                 } else {
                   onFileEvent(new Event(watchPath, Create))
@@ -52,8 +52,8 @@ class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
       case _ =>
         false
     }
-    Files.exists(path) && impl(path) && {
-      if (recursive) FileOps.list(path, recursive, DirectoryFilter).asScala.foreach(impl(_: Path))
+    Files.exists(path) && impl(path.toFile) && {
+      if (recursive) FileOps.list(path, recursive, DirectoryFilter).asScala.foreach(impl)
       true
     }
   }

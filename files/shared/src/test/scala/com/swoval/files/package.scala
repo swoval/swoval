@@ -70,7 +70,7 @@ package object files {
         try FileOps
           .list(path, true)
           .asScala
-          .foreach(p => new PathOps(p).deleteRecursive())
+          .foreach(p => new PathOps(p.toPath).deleteRecursive())
         catch { case _: NoSuchFileException => }
       }
       Files.deleteIfExists(path)
@@ -79,7 +79,7 @@ package object files {
     def isDirectory: Boolean = Files.isDirectory(path)
     def lastModified: Long = Files.getLastModifiedTime(path).toMillis
     def list(recursive: Boolean, filter: FileFilter = FileOps.AllPass): Seq[Path] =
-      FileOps.list(path, recursive, filter).asScala
+      FileOps.list(path, recursive, filter).asScala.map(_.toPath)
     def mkdir(): Path = Files.createDirectory(path)
     def mkdirs(): Path = Files.createDirectories(path)
     def name: String = path.getFileName.toString
