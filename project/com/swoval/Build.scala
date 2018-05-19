@@ -201,35 +201,60 @@ object Build {
     (fullOptJS in Compile) := cleanGlobals((fullOptJS in Compile).value),
     (fullOptJS in Test) := cleanGlobals((fullOptJS in Test).value)
   )
-  def createCrossLinks: SettingsDefinition = {
+  def createCrossLinks(projectName: String): SettingsDefinition = {
     def createLinks(conf: Configuration): Def.Setting[Task[Seq[File]]] =
       managedSources in conf ++= {
         val base = baseDirectory.value.toPath
+        val root = base.getParent.getParent
         val shared = base.getParent.resolve("shared")
         val sourceDirectories = (unmanagedSourceDirectories in conf).value.collect {
-          case dir if dir.getName != "java" => dir.toPath
+          case dir if dir.getName != "java" && dir.exists && !dir.toPath.startsWith(shared) =>
+            dir.toPath
         }
         val filter = (includeFilter in unmanagedSources).value --
           (excludeFilter in unmanagedSources).value
-        sourceDirectories.foreach { dir =>
+        val links = sourceDirectories.distinct.flatMap { dir =>
           val relative = base.relativize(dir)
           val sharedBase = shared.resolve(relative)
-          if (Files.exists(sharedBase)) {
-            Files.walk(sharedBase).iterator.asScala.foreach { p =>
-              if (filter.accept(p.toFile)) {
-                val relativeSource = sharedBase.relativize(p)
-                val resolved = dir.resolve(relativeSource)
-                if (!Files.exists(resolved.getParent)) Files.createDirectories(resolved.getParent)
-                if (!Files.exists(resolved) && !Files.isSymbolicLink(resolved))
-                  Files.createSymbolicLink(resolved, resolved.getParent.relativize(p))
-              }
-            }
-          }
           if (Files.exists(dir)) {
             Files.walk(dir).iterator.asScala.foreach { p =>
               if (!Files.exists(p)) Files.deleteIfExists(p)
             }
           }
+          if (Files.exists(sharedBase)) {
+            Files.walk(sharedBase).iterator.asScala.flatMap { p =>
+              if (filter.accept(p.toFile)) {
+                val relativeSource = sharedBase.relativize(p)
+                val resolved = dir.resolve(relativeSource)
+                if (!Files.exists(resolved.getParent)) Files.createDirectories(resolved.getParent)
+                if (!Files.exists(resolved) && !Files.isSymbolicLink(resolved)) {
+                  try {
+                    Files.createSymbolicLink(resolved, resolved.getParent.relativize(p))
+                    Some(root.relativize(resolved))
+                  } catch {
+                    case e: IOException if e.toString.contains("A required privilege") =>
+                      Files.copy(p, resolved, REPLACE_EXISTING)
+                      Some(root.relativize(resolved))
+                  }
+                } else {
+                  None
+                }
+              } else {
+                None
+              }
+            }
+          } else None
+        }
+        this.synchronized {
+          val content = new String(Files.readAllBytes(root.resolve(".gitignore")))
+          val name = s"$projectName ${conf.name.toUpperCase}"
+          val newGitignore = if (content.contains(name)) {
+            content.replaceAll(s"(?s)(#BEGIN $name SYMLINKS)(.*)(#END $name SYMLINKS)",
+                               s"$$1\n${links.mkString("\n")}\n$$3")
+          } else {
+            s"$content${links.mkString(s"\n#BEGIN $name SYMLINKS\n", "\n", s"\n#END $name SYMLINKS\n")}"
+          }
+          Files.write(root.resolve(".gitignore"), newGitignore.getBytes)
         }
         Nil
       }
@@ -267,7 +292,6 @@ object Build {
           .filterNot(_.toString contains "target")
           .toSeq
       },
-      createCrossLinks,
       utestCrossTest,
       utestFramework
     )
@@ -277,6 +301,7 @@ object Build {
       scalaJSModuleKind := ModuleKind.CommonJSModule,
       webpackBundlingMode := BundlingMode.LibraryOnly(),
       useYarn := false,
+      createCrossLinks("FILESJS"),
       cleanAllGlobals,
       nodeNativeLibs,
       (fullOptJS in Compile) := {
@@ -367,6 +392,7 @@ object Build {
       ioScalaJS
     )
     .jvmSettings(
+      createCrossLinks("FILESJVM"),
       javacOptions ++= Seq("-source", "1.7", "-target", "1.7") ++
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty) ++
         Seq("-Xlint:unchecked"),

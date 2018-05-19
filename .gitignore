@@ -2,3 +2,43 @@
 .idea
 .ensime*
 out
+
+#BEGIN FILESJVM TEST SYMLINKS
+files/jvm/src/test/scala/com/swoval/files/apple/FileEventApiTest.scala
+files/jvm/src/test/scala/com/swoval/files/test/package.scala
+files/jvm/src/test/scala/com/swoval/files/test/FileBytes.scala
+files/jvm/src/test/scala/com/swoval/files/BoundedWatchService.scala
+files/jvm/src/test/scala/com/swoval/files/FileCacheTest.scala
+files/jvm/src/test/scala/com/swoval/files/DirectoryWatcherTest.scala
+files/jvm/src/test/scala/com/swoval/files/Path.scala
+files/jvm/src/test/scala/com/swoval/files/package.scala
+files/jvm/src/test/scala/com/swoval/files/EntryFilterTest.scala
+files/jvm/src/test/scala/com/swoval/files/NioDirectoryWatcherTest.scala
+files/jvm/src/test/scala/com/swoval/files/DirectoryTest.scala
+files/jvm/src/test/scala/com/swoval/files/AppleDirectoryWatcherTest.scala
+files/jvm/src/test/scala/com/swoval/files/PathTest.scala
+#END FILESJVM TEST SYMLINKS
+
+#BEGIN FILESJS TEST SYMLINKS
+files/js/src/test/scala/com/swoval/files/apple/FileEventApiTest.scala
+files/js/src/test/scala/com/swoval/files/test/package.scala
+files/js/src/test/scala/com/swoval/files/test/FileBytes.scala
+files/js/src/test/scala/com/swoval/files/BoundedWatchService.scala
+files/js/src/test/scala/com/swoval/files/FileCacheTest.scala
+files/js/src/test/scala/com/swoval/files/DirectoryWatcherTest.scala
+files/js/src/test/scala/com/swoval/files/Path.scala
+files/js/src/test/scala/com/swoval/files/package.scala
+files/js/src/test/scala/com/swoval/files/EntryFilterTest.scala
+files/js/src/test/scala/com/swoval/files/NioDirectoryWatcherTest.scala
+files/js/src/test/scala/com/swoval/files/DirectoryTest.scala
+files/js/src/test/scala/com/swoval/files/AppleDirectoryWatcherTest.scala
+files/js/src/test/scala/com/swoval/files/PathTest.scala
+#END FILESJS TEST SYMLINKS
+
+#BEGIN FILESJS COMPILE SYMLINKS
+
+#END FILESJS COMPILE SYMLINKS
+
+#BEGIN FILESJVM COMPILE SYMLINKS
+
+#END FILESJVM COMPILE SYMLINKS
