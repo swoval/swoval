@@ -32,7 +32,7 @@ object Macros {
                                         context: c.Expr[String],
                                         tests: c.Expr[Any]): c.Expr[Tests] = {
     import c.universe._
-    val thisPlatform = if (Properties.isMac) MacOS else Linux
+    val thisPlatform = if (Properties.isMac) MacOS else if (Properties.isWin) Windows else Linux
     if (platforms.contains(thisPlatform)) {
       c.Expr[Tests](q"utest.Tests { ..$tests }")
     } else ignore(c)(context, thisPlatform)

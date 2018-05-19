@@ -180,8 +180,10 @@ object Build {
 
   def addLib(dir: File): File = {
     val target = dir.toPath.resolve("node_modules/lib")
-    if (!Files.isSymbolicLink(target))
-      Files.createSymbolicLink(target, files.js.base.toPath.toAbsolutePath.resolve("npm/lib"))
+    if (Properties.isMac) {
+      if (!Files.exists(target) && !Files.isSymbolicLink(target))
+        Files.createSymbolicLink(target, files.js.base.toPath.toAbsolutePath.resolve("npm/lib"))
+    }
     dir
   }
   def nodeNativeLibs: SettingsDefinition = settings(
@@ -203,7 +205,8 @@ object Build {
   )
   def createCrossLinks(projectName: String): SettingsDefinition = {
     def createLinks(conf: Configuration): Def.Setting[Task[Seq[File]]] =
-      managedSources in conf ++= {
+      sources in conf := {
+        val original = (sources in conf).value
         val base = baseDirectory.value.toPath
         val root = base.getParent.getParent
         val shared = base.getParent.resolve("shared")
@@ -227,36 +230,38 @@ object Build {
                 val relativeSource = sharedBase.relativize(p)
                 val resolved = dir.resolve(relativeSource)
                 if (!Files.exists(resolved.getParent)) Files.createDirectories(resolved.getParent)
-                if (!Files.exists(resolved) && !Files.isSymbolicLink(resolved)) {
-                  try {
-                    Files.createSymbolicLink(resolved, resolved.getParent.relativize(p))
-                    Some(root.relativize(resolved))
-                  } catch {
-                    case e: IOException if e.toString.contains("A required privilege") =>
-                      Files.copy(p, resolved, REPLACE_EXISTING)
-                      Some(root.relativize(resolved))
-                  }
-                } else {
-                  None
+                if (Properties.isWin) {
+                  val needCopy = scala.util
+                    .Try(
+                      new String(Files.readAllBytes(p)) != new String(Files.readAllBytes(resolved)))
+                    .getOrElse(true)
+                  if (needCopy) Files.copy(p, resolved, REPLACE_EXISTING)
+                } else if (!Files.exists(resolved) && !Files.isSymbolicLink(resolved)) {
+                  Files.createSymbolicLink(resolved, resolved.getParent.relativize(p))
                 }
+                Some(root.relativize(resolved))
               } else {
                 None
               }
             }
           } else None
         }
-        this.synchronized {
-          val content = new String(Files.readAllBytes(root.resolve(".gitignore")))
-          val name = s"$projectName ${conf.name.toUpperCase}"
-          val newGitignore = if (content.contains(name)) {
-            content.replaceAll(s"(?s)(#BEGIN $name SYMLINKS)(.*)(#END $name SYMLINKS)",
-                               s"$$1\n${links.mkString("\n")}\n$$3")
-          } else {
-            s"$content${links.mkString(s"\n#BEGIN $name SYMLINKS\n", "\n", s"\n#END $name SYMLINKS\n")}"
+        if (!Properties.isWin) {
+          this.synchronized {
+            val content = new String(Files.readAllBytes(root.resolve(".gitignore")))
+            val name = s"$projectName ${conf.name.toUpperCase}"
+            val newGitignore = if (content.contains(name)) {
+              content.replaceAll(s"(?s)(#BEGIN $name SYMLINKS)(.*)(#END $name SYMLINKS)",
+                                 s"$$1\n${links.mkString("\n")}\n$$3")
+            } else {
+              s"$content${links.mkString(s"\n#BEGIN $name SYMLINKS\n", "\n", s"\n#END $name SYMLINKS\n")}"
+            }
+            Files.write(root.resolve(".gitignore"), newGitignore.getBytes)
           }
-          Files.write(root.resolve(".gitignore"), newGitignore.getBytes)
         }
-        Nil
+        (original
+          .map(_.toPath)
+          .filterNot(_.startsWith(shared)) ++ links.map(_.toAbsolutePath())).distinct.map(_.toFile)
       }
     settings(createLinks(Compile), createLinks(Test))
   }
@@ -270,16 +275,6 @@ object Build {
       name := "file-utilities",
       bintrayPackage := "file-utilities",
       description := "File system apis.",
-      sources in Compile := {
-        val unfiltered = (sources in Compile).value
-        val base = baseDirectory.value.toPath.getParent.resolve("shared")
-        unfiltered.filterNot(_.toPath.startsWith(base))
-      },
-      sources in Test := {
-        val unfiltered = (sources in Test).value
-        val base = baseDirectory.value.toPath.getParent.resolve("shared")
-        unfiltered.filterNot(_.toPath.startsWith(base))
-      },
       watchSources in Compile ++= {
         Files
           .walk(baseDirectory.value.toPath.getParent)

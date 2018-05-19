@@ -40,12 +40,21 @@ trait Path {
   def compareTo(other: Path): Int
 }
 
-class JSPath(rawPath: String) extends Path {
-  val path = rawPath.replaceAll("//", "/").replaceAll("/./", "/").replaceAll("/$", "")
+import JSPath._
+class JSPath(val rawPath: String) extends Path {
+  val path = if (isWin) {
+    JPath.normalize(rawPath.replaceAll("[\\\\](?![\\\\])", "\\\\\\\\"))
+  } else {
+    JPath.normalize(rawPath)
+  }.replaceAll("(/|\\\\\\\\)$", "")
+  val parsed = JPath.parse(rawPath)
+  val root = parsed.root.toOption.getOrElse("")
+  val dir = parsed.dir.toOption.getOrElse("")
+  val fullPath = dir.drop(root.length) + JPath.sep + parsed.base
   private lazy val file = new File(path)
-  private lazy val parts: Seq[String] = path.split(JPath.sep) match {
+  lazy val parts: Seq[String] = fullPath.split(JSPath.regexSep) match {
     case Array("", rest @ _*) => rest
-    case a                    => a
+    case a                    => a.toSeq
   }
   override def endsWith(other: Path): Boolean = endsWith(other.toString);
   override def endsWith(other: String): Boolean = this.file.getAbsolutePath.endsWith(other)
@@ -61,29 +70,18 @@ class JSPath(rawPath: String) extends Path {
   override def startsWith(other: Path): Boolean = path.toString.startsWith(other.toString)
   override def startsWith(other: String): Boolean = path.toString.startsWith(other)
   override def normalize(): Path = new JSPath(file.getCanonicalPath)
-  override def resolve(other: Path): Path = resolve(other.toString)
-  override def resolve(other: String): Path = {
-    if (other.toString.startsWith(this.toString) || other.toString.startsWith(JPath.sep)) {
-      new JSPath(other)
-    } else {
-      new JSPath(toString() + JPath.sep + other)
-    }
+  override def resolve(other: Path): Path = {
+    if (!this.isAbsolute && !other.isAbsolute)
+      new JSPath(this.toString + JPath.sep + other.toString)
+    else if (other.isAbsolute) other
+    else new JSPath(JPath.resolve(path, other.toString))
   }
+  override def resolve(other: String): Path = resolve(Paths.get(other))
   override def resolveSibling(other: Path): Path = ???
   override def resolveSibling(other: String): Path = ???
   override def relativize(other: Path): Path = {
-    other.toString.split(s"$this(${JPath.sep}?)") match {
-      case Array("", r) => new JSPath(r)
-      case Array()      => new JSPath("")
-      case res =>
-        if (other.isAbsolute && this.isAbsolute) {
-          new JSPath(
-            (parts.map(_ => "..") ++ other.iterator().asScala.toSeq).mkString(File.separator))
-        } else {
-          other
-        }
-
-    }
+    val raw = JPath.relative(path, other.asInstanceOf[JSPath].path)
+    new JSPath(if (isWin) raw.replaceAll("\\\\\\\\", "\\\\") else raw)
   }
   override def toUri(): URI = file.toURI
   override def toAbsolutePath: Path = if (isAbsolute()) this else new JSPath(file.getAbsolutePath)
@@ -111,4 +109,8 @@ class JSPath(rawPath: String) extends Path {
     case that: Path => this.toString == that.toString
     case _          => false
   }
+}
+object JSPath {
+  val isWin = com.swoval.files.Platform.isWin
+  val regexSep = if (isWin) JPath.sep + JPath.sep else JPath.sep
 }

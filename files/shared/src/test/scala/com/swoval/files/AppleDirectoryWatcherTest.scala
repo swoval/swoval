@@ -58,7 +58,7 @@ object AppleDirectoryWatcherTest extends TestSuite {
             usingAsync(defaultWatcher(DEFAULT_LATENCY, dirFlags, callback)) { w =>
               w.register(dir)
               subdir.resolve(Path("foo")).createFile()
-              events.poll(DEFAULT_TIMEOUT)(_.path === subdir)
+              events.poll(DEFAULT_TIMEOUT)(_.path ==> subdir)
             }
           }
         }

@@ -5,6 +5,7 @@ import scala.scalajs.js.annotation.JSImport
 
 object Platform {
   def isMac(): Boolean = os.platform() == "darwin"
+  def isWin(): Boolean = os.platform() == "win32"
   def tmpDir(): String = os.tmpdir()
 }
 @js.native
