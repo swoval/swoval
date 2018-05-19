@@ -73,22 +73,22 @@ class File(pathname: String) {
     val atime = Fs.statSync(absolutePath).atime.getTime.toInt
     Try(Fs.utimesSync(absolutePath, atime, (millis / 1000).toInt)).isSuccess
   }
-  def setReadOnly(): Boolean = Try(Fs.chmodSync(absolutePath, Integer.decode("0444"))).isSuccess
+  def setReadOnly(): Boolean = Try(Fs.chmodSync(absolutePath, 292)).isSuccess
   def setWritable(writable: Boolean, ownerOnly: Boolean): Boolean = {
     val mode = Fs.statSync(getAbsolutePath).mode.intValue
-    val mask = if (ownerOnly) Integer.decode("0200") else Integer.decode("0222")
-    Try(Fs.chmodSync(getAbsolutePath, mode & mask)).isSuccess
+    val mask = if (ownerOnly) 128 else 146
+    Try(Fs.chmodSync(getAbsolutePath, if (writable) mode | mask else mode & ~mask)).isSuccess
   }
   def setWritable(writable: Boolean): Boolean = setWritable(writable, ownerOnly = false)
   def setReadable(readable: Boolean, ownerOnly: Boolean): Boolean = {
     val mode = Fs.statSync(getAbsolutePath).mode.intValue
-    val mask = if (ownerOnly) Integer.decode("0400") else Integer.decode("0444")
-    Try(Fs.chmodSync(getAbsolutePath, mode & mask)).isSuccess
+    val mask = if (ownerOnly) 256 else 292
+    Try(Fs.chmodSync(getAbsolutePath, if (readable) mode | mask else mode & ~mask)).isSuccess
   }
   def setReadable(readable: Boolean): Boolean = setReadable(readable, ownerOnly = false)
   def setExecutable(executable: Boolean, ownerOnly: Boolean): Boolean = {
     val mode = Fs.statSync(getAbsolutePath).mode.intValue
-    val mask = if (ownerOnly) Integer.decode("0100") else Integer.decode("0111")
+    val mask = if (ownerOnly) 64 else 73
     Try(Fs.chmodSync(getAbsolutePath, mode & mask)).isSuccess
   }
   def setExecutable(executable: Boolean): Boolean = setExecutable(executable, false)

@@ -138,7 +138,8 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @param recursive Recursively monitor the path if true
    * @return The registered directory if it hasn't previously been registered, null otherwise
    */
-  public abstract Directory<T> register(final Path path, final boolean recursive);
+  public abstract Directory<T> register(final Path path, final boolean recursive)
+      throws IOException;
 
   /**
    * Register the directory for monitoring recursively.
@@ -146,7 +147,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @param path The path to monitor
    * @return The registered directory if it hasn't previously been registered, null otherwise
    */
-  public Directory<T> register(final Path path) {
+  public Directory<T> register(final Path path) throws IOException {
     return register(path, true);
   }
 
@@ -234,7 +235,11 @@ class FileCacheImpl<T> extends FileCache<T> {
           synchronized (lock) {
             final Path path = event.path;
             if (event.kind.equals(Overflow)) {
-              handleOverflow(path);
+              try {
+                handleOverflow(path);
+              } catch (IOException e) {
+                System.err.println("FileCache caught IOException while processing overflow: " + e);
+              }
             } else {
               handleEvent(path, event.path);
             }
@@ -264,7 +269,7 @@ class FileCacheImpl<T> extends FileCache<T> {
   }
 
   @Override
-  public Directory<T> register(final Path path, final boolean recursive) {
+  public Directory<T> register(final Path path, final boolean recursive) throws IOException {
     Directory<T> result = null;
     if (Files.exists(path)) {
       watcher.register(path);
@@ -305,7 +310,7 @@ class FileCacheImpl<T> extends FileCache<T> {
           return null;
         }
       } else {
-       return null;
+        return null;
       }
     }
   }
@@ -336,7 +341,7 @@ class FileCacheImpl<T> extends FileCache<T> {
   }
 
   @SuppressWarnings("unchecked")
-  private boolean handleOverflow(final Path path) {
+  private boolean handleOverflow(final Path path) throws IOException {
     synchronized (directories) {
       final Iterator<Directory<T>> directoryIterator = directories.values().iterator();
       final List<Directory<T>> toReplace = new ArrayList<>();
@@ -425,15 +430,20 @@ class FileCacheImpl<T> extends FileCache<T> {
         final List<Directory.Entry<T>> paths = pair.second;
         if (!paths.isEmpty() || !path.equals(dir.path)) {
           final Path toUpdate = paths.isEmpty() ? path : paths.get(0).path;
-          final Iterator<Directory.Entry<T>[]> it =
-              dir.addUpdate(toUpdate, !Files.isDirectory(path)).iterator();
-          while (it.hasNext()) {
-            final Directory.Entry<T>[] entry = it.next();
-            if (entry.length == 2) {
-              observers.onUpdate(entry[0], entry[1]);
-            } else {
-              observers.onCreate(entry[0]);
+          try {
+            final Iterator<Directory.Entry<T>[]> it =
+                dir.addUpdate(toUpdate, !Files.isDirectory(path)).iterator();
+            while (it.hasNext()) {
+              final Directory.Entry<T>[] entry = it.next();
+              if (entry.length == 2) {
+                observers.onUpdate(entry[0], entry[1]);
+              } else {
+                observers.onCreate(entry[0]);
+              }
             }
+          } catch (IOException e) {
+            System.err.println(
+                "FileCache caught IOException handling event for " + path + ": " + e);
           }
         }
       }

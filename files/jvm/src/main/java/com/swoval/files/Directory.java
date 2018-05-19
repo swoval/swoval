@@ -2,7 +2,7 @@ package com.swoval.files;
 
 import static com.swoval.files.EntryFilters.AllPass;
 
-import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -125,7 +125,7 @@ public class Directory<T> implements AutoCloseable {
    *     it is a directory. For an existing path, the List contains a single Update that contains
    *     the previous and new {@link Directory.Entry}
    */
-  public List<Entry<T>[]> addUpdate(final Path path, final boolean isFile) {
+  public List<Entry<T>[]> addUpdate(final Path path, final boolean isFile) throws IOException {
     return !path.isAbsolute()
         ? updateImpl(FileOps.parts(path), isFile)
         : (path.startsWith(this.path))
@@ -162,7 +162,8 @@ public class Directory<T> implements AutoCloseable {
   }
 
   private void addDirectory(
-      final Directory<T> currentDir, final Path path, final List<Entry<T>[]> updates) {
+      final Directory<T> currentDir, final Path path, final List<Entry<T>[]> updates)
+      throws IOException {
     final Directory<T> dir = cached(path, converter, subdirectoryDepth());
     currentDir.subdirectories.put(path.getFileName().toString(), dir);
     addUpdate(updates, dir.entry());
@@ -182,7 +183,8 @@ public class Directory<T> implements AutoCloseable {
     addUpdate(list, null, entry);
   }
 
-  private List<Entry<T>[]> updateImpl(final List<Path> parts, final boolean isFile) {
+  private List<Entry<T>[]> updateImpl(final List<Path> parts, final boolean isFile)
+      throws IOException {
     final Iterator<Path> it = parts.iterator();
     Directory<T> currentDir = this;
     List<Entry<T>[]> result = new ArrayList<>();
@@ -314,12 +316,12 @@ public class Directory<T> implements AutoCloseable {
     return result;
   }
 
-  private Directory<T> init() {
+  private Directory<T> init() throws IOException {
     if (Files.exists(path)) {
       synchronized (lock) {
-        final Iterator<File> it = FileOps.list(path, false).iterator();
+        final Iterator<QuickFile> it = QuickList.list(path, 0, true).iterator();
         while (it.hasNext()) {
-          final File file = it.next();
+          final QuickFile file = it.next();
           final Path p = file.toPath();
           final Path key = path.relativize(p).getFileName();
           if (file.isDirectory()) {
@@ -353,7 +355,7 @@ public class Directory<T> implements AutoCloseable {
    * @param path The path to monitor
    * @return A directory whose entries just contain the path itself
    */
-  public static Directory<Path> of(final Path path) {
+  public static Directory<Path> of(final Path path) throws IOException {
     return of(path, true);
   }
 
@@ -364,7 +366,7 @@ public class Directory<T> implements AutoCloseable {
    * @param depth Sets how the limit for how deep to traverse the children of this directory
    * @return A directory whose entries just contain the path itself
    */
-  public static Directory<Path> of(final Path path, final int depth) {
+  public static Directory<Path> of(final Path path, final int depth) throws IOException {
     return new Directory<>(path, PATH_CONVERTER, depth).init();
   }
   /**
@@ -374,7 +376,7 @@ public class Directory<T> implements AutoCloseable {
    * @param recursive Toggles whether or not to cache the children of subdirectories
    * @return A directory whose entries just contain the path itself
    */
-  public static Directory<Path> of(final Path path, final boolean recursive) {
+  public static Directory<Path> of(final Path path, final boolean recursive) throws IOException {
     return new Directory<>(path, PATH_CONVERTER, recursive ? Integer.MAX_VALUE : 0).init();
   }
 
@@ -386,10 +388,10 @@ public class Directory<T> implements AutoCloseable {
    * @param <T> The cache value type
    * @return A directory with entries of type T
    */
-  public static <T> Directory<T> cached(final Path path, final Converter<T> converter) {
+  public static <T> Directory<T> cached(final Path path, final Converter<T> converter)
+      throws IOException {
     return new Directory<>(path, converter, Integer.MAX_VALUE).init();
   }
-
   /**
    * Make a new Directory with a cache entries created by {@code converter}
    *
@@ -400,7 +402,7 @@ public class Directory<T> implements AutoCloseable {
    * @return A directory with entries of type T
    */
   public static <T> Directory<T> cached(
-      final Path path, final Converter<T> converter, final boolean recursive) {
+      final Path path, final Converter<T> converter, final boolean recursive) throws IOException {
     return new Directory<>(path, converter, recursive ? Integer.MAX_VALUE : 0).init();
   }
 
@@ -414,7 +416,7 @@ public class Directory<T> implements AutoCloseable {
    * @return A directory with entries of type T
    */
   public static <T> Directory<T> cached(
-      final Path path, final Converter<T> converter, final int depth) {
+      final Path path, final Converter<T> converter, final int depth) throws IOException {
     return new Directory<>(path, converter, depth).init();
   }
 

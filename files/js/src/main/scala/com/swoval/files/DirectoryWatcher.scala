@@ -50,6 +50,10 @@ object DirectoryWatcher {
                    new Flags.Create().setNoDefer().setFileEvents(),
                    callback)
 
+  /**
+   * Instantiates new [[DirectoryWatcher]] instances with a [[Callback]]. This is primarily
+   * so that the [[DirectoryWatcher]] in [[FileCache]] may be changed in testing.
+   */
   trait Factory {
 
     def create(callback: Callback): DirectoryWatcher

@@ -89,15 +89,21 @@ public abstract class DirectoryWatcher implements AutoCloseable {
         10, TimeUnit.MILLISECONDS, new Flags.Create().setNoDefer().setFileEvents(), callback);
   }
 
+  /**
+   * Instantiates new {@link DirectoryWatcher} instances with a {@link Callback}. This is primarily
+   * so that the {@link DirectoryWatcher} in {@link FileCache} may be changed in testing.
+   */
   public interface Factory {
     DirectoryWatcher create(Callback callback) throws InterruptedException, IOException;
   }
-  public static final Factory DEFAULT_FACTORY = new Factory() {
-    @Override
-    public DirectoryWatcher create(Callback callback) throws InterruptedException, IOException {
-      return defaultWatcher(callback);
-    }
-  };
+
+  public static final Factory DEFAULT_FACTORY =
+      new Factory() {
+        @Override
+        public DirectoryWatcher create(Callback callback) throws InterruptedException, IOException {
+          return defaultWatcher(callback);
+        }
+      };
 
   /** Container for {@link DirectoryWatcher} events */
   public static final class Event {

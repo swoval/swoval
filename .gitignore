@@ -11,6 +11,7 @@ files/jvm/src/test/scala/com/swoval/files/BoundedWatchService.scala
 files/jvm/src/test/scala/com/swoval/files/FileCacheTest.scala
 files/jvm/src/test/scala/com/swoval/files/DirectoryWatcherTest.scala
 files/jvm/src/test/scala/com/swoval/files/Path.scala
+files/jvm/src/test/scala/com/swoval/files/QuickListTest.scala
 files/jvm/src/test/scala/com/swoval/files/package.scala
 files/jvm/src/test/scala/com/swoval/files/EntryFilterTest.scala
 files/jvm/src/test/scala/com/swoval/files/NioDirectoryWatcherTest.scala
@@ -27,6 +28,7 @@ files/js/src/test/scala/com/swoval/files/BoundedWatchService.scala
 files/js/src/test/scala/com/swoval/files/FileCacheTest.scala
 files/js/src/test/scala/com/swoval/files/DirectoryWatcherTest.scala
 files/js/src/test/scala/com/swoval/files/Path.scala
+files/js/src/test/scala/com/swoval/files/QuickListTest.scala
 files/js/src/test/scala/com/swoval/files/package.scala
 files/js/src/test/scala/com/swoval/files/EntryFilterTest.scala
 files/js/src/test/scala/com/swoval/files/NioDirectoryWatcherTest.scala

@@ -1,12 +1,8 @@
 package com.swoval.files.apple;
 
 import com.swoval.concurrent.ThreadFactory;
-import java.io.File;
-import java.io.FileOutputStream;
+import com.swoval.files.NativeLoader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.file.Files;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -121,65 +117,12 @@ public class FileEventsApi implements AutoCloseable {
 
   private static native void stopStream(long handle, int streamHandle);
   static {
-    NativeLoader.loadPackaged();
-  }
-}
-
-class NativeLoader {
-  private static final String NATIVE_LIBRARY = "apple-file-events0";
-
-  private static void exit(String msg) {
-    System.err.println(msg);
-    System.exit(1);
-  }
-
-  static void loadPackaged() {
     try {
-      String lib = System.mapLibraryName(NATIVE_LIBRARY);
-      File temp = File.createTempFile("jni-", "");
-      if (!temp.delete()) {
-        throw new IOException("Couldn't remove temp file");
-      }
-      if (!temp.mkdir()) {
-        throw new IOException("Couldn't remove temp file");
-      }
-      String resourcePath = "/native/x86_64-darwin/" + lib;
-      InputStream resourceStream = FileEventsApi.class.getResourceAsStream(resourcePath);
-      if (resourceStream == null) {
-        String msg = "Native library " + lib + " (" + resourcePath + ") can't be loaded.";
-        throw new UnsatisfiedLinkError(msg);
-      }
-
-      final File extractedPath = new File(temp.getAbsolutePath() + "/" + lib);
-      OutputStream out = new FileOutputStream(extractedPath);
-      try {
-        byte[] buf = new byte[1024];
-        int len = 0;
-        while ((len = resourceStream.read(buf)) >= 0) {
-          out.write(buf, 0, len);
-        }
-      } catch (Exception e) {
-        throw new UnsatisfiedLinkError("Error while extracting native library: " + e);
-      } finally {
-        resourceStream.close();
-        out.close();
-      }
-
-      Runtime.getRuntime()
-          .addShutdownHook(
-              new Thread() {
-                public void run() {
-                  try {
-                    Files.delete(extractedPath.toPath());
-                  } catch (IOException e) {
-                    System.err.println("Error deleting temporary files: " + e);
-                  }
-                }
-              });
-
-      System.load(extractedPath.getAbsolutePath());
-    } catch (Exception e) {
-      exit("Couldn't load packaged library " + NATIVE_LIBRARY);
+      NativeLoader.loadPackaged();
+    } catch (IOException | UnsatisfiedLinkError e) {
+      System.err.println("Couldn't load native library " + e);
+      throw new ExceptionInInitializerError(e);
     }
   }
 }
+

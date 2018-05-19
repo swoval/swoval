@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
+/** Provides a DirectoryWatcher that is backed by a {@link java.nio.file.WatchService}. */
 public class NioDirectoryWatcher extends DirectoryWatcher {
   private final ReentrantLock lock = new ReentrantLock();
   private final Map<Watchable, WatchedDir> watchedDirs = new HashMap<>();
@@ -40,14 +41,20 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
   private final CountDownLatch shutdownLatch = new CountDownLatch(1);
   private static final AtomicInteger threadId = new AtomicInteger(0);
 
+  /**
+   * Instantiate a NioDirectoryWatch using the default {@link Registerable}.
+   * @param callback The callback to invoke on a created/deleted/modified path
+   */
   public NioDirectoryWatcher(final Callback callback) throws IOException, InterruptedException {
-    this(
-        callback,
-        Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchService());
+    this(callback, Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchService());
   }
 
-  public NioDirectoryWatcher(final Callback callback, final Registerable watchService)
-      throws IOException {
+  /**
+   * Instantiate a NioDirectoryWatch with a particular {@link Registerable}.
+   * @param callback The callback to invoke on a created/deleted/modified path
+   * @param watchService The underlying watchservice that is used to monitor directories for events
+   */
+  public NioDirectoryWatcher(final Callback callback, final Registerable watchService) {
     this.watchService = watchService;
     loopThread =
         new Thread("NioDirectoryWatcher-loop-thread-" + threadId.incrementAndGet()) {
@@ -146,10 +153,14 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
   }
 
   private boolean recursiveRegister(final Path path) {
-    final Iterator<File> it = FileOps.list(path, false).iterator();
-    while (it.hasNext()) {
-      final File toRegister = it.next();
-      if (toRegister.isDirectory()) register(toRegister.toPath(), true);
+    try {
+      final Iterator<File> it = FileOps.list(path, false).iterator();
+      while (it.hasNext()) {
+        final File toRegister = it.next();
+        if (toRegister.isDirectory()) register(toRegister.toPath(), true);
+      }
+    } catch (IOException e) {
+      System.err.println("NioDirectoryWatcher caught IOException registering " + path + ": " + e);
     }
     return true;
   }
@@ -161,10 +172,15 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
       WatchedDir watchedDir = watchedDirs.get(keyPath);
       if (watchedDir != null && watchedDir.recursive) {
         if (register(path, true)) {
-          final Iterator<File> it = FileOps.list(path, false).iterator();
-          while (it.hasNext()) {
-            final File toRegister = it.next();
-            if (toRegister.isDirectory()) register(toRegister.toPath(), true);
+          try {
+            final Iterator<File> it = FileOps.list(path, false).iterator();
+            while (it.hasNext()) {
+              final File toRegister = it.next();
+              if (toRegister.isDirectory()) register(toRegister.toPath(), true);
+            }
+          } catch (IOException e) {
+            System.err.println(
+                "NioDirectoryWatcher caught IOException handling event for " + path + ": " + e);
           }
         }
       }
@@ -186,13 +202,21 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
       final WatchedDir watchedDir = watchedDirs.get(key.watchable());
       boolean stop = false;
       while ((watchedDir != null && watchedDir.recursive) && !stop) {
-        final Iterator<File> fileIterator = FileOps.list((Path) key.watchable(), true).iterator();
-        boolean registered = false;
-        while (fileIterator.hasNext()) {
-          final File file = fileIterator.next();
-          if (file.isDirectory() && register(file.toPath(), true)) registered = true;
+        try {
+          final Iterator<File> fileIterator = FileOps.list((Path) key.watchable(), true).iterator();
+          boolean registered = false;
+          while (fileIterator.hasNext()) {
+            final File file = fileIterator.next();
+            if (file.isDirectory() && register(file.toPath(), true)) registered = true;
+          }
+          stop = !registered;
+        } catch (IOException e) {
+          System.err.println(
+              "NioDirectoryWatcher caught IOException handling overflow for "
+                  + key.watchable()
+                  + ": "
+                  + e);
         }
-        stop = !registered;
       }
       final Iterator<Watchable> pathIterator = watchedDirs.keySet().iterator();
       final List<Watchable> toRemove = new ArrayList<>();
@@ -210,6 +234,13 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     }
   }
 
+  /**
+   * Register a path to monitor for file events
+   *
+   * @param path The directory to watch for file events
+   * @param recursive Toggles whether or not to monitor subdirectories
+   * @return true if the registration is successful
+   */
   @Override
   public boolean register(final Path path, final boolean recursive) {
     try {
@@ -219,6 +250,11 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     }
   }
 
+  /**
+   * Stop watching a directory
+   *
+   * @param path The directory to remove from monitoring
+   */
   @Override
   public void unregister(final Path path) {
     final WatchedDir watchedDir = watchedDirs.remove(path);

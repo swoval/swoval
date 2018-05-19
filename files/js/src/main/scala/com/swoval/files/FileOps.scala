@@ -2,6 +2,7 @@ package com.swoval.files
 
 import java.io.File
 import java.io.FileFilter
+import java.io.IOException
 import java.nio.file.Path
 import java.util.ArrayList
 import java.util.Iterator
@@ -11,6 +12,8 @@ private[files] object FileOps {
 
   val AllPass: FileFilter = new FileFilter() {
     override def accept(file: File): Boolean = true
+
+    override def toString(): String = "AllPass"
   }
 
   /**
@@ -32,25 +35,17 @@ private[files] object FileOps {
    * @return Array of Paths
    */
   def list(path: Path, recursive: Boolean, filter: FileFilter): List[File] = {
-    val res: List[File] = new ArrayList[File]()
-    listImpl(path.toFile(), recursive, filter, res)
-    res
-  }
-
-  private def listImpl(file: File,
-                       recursive: Boolean,
-                       filter: FileFilter,
-                       result: List[File]): Unit = {
-    val files: Array[File] = file.listFiles(filter)
-    if (files != null) {
-      var i: Int = 0
-      while (i < files.length) {
-        val f: File = files(i)
-        result.add(f)
-        if (f.isDirectory && recursive) listImpl(f, recursive, filter, result)
-        i += 1
+    val result: List[File] = new ArrayList[File]()
+    val it: Iterator[QuickFile] = QuickList
+      .list(path, if (recursive) java.lang.Integer.MAX_VALUE else 1, true)
+      .iterator()
+    while (it.hasNext) {
+      val quickFile: QuickFile = it.next()
+      if (filter.accept(quickFile.asFile())) {
+        result.add(quickFile.toFile())
       }
     }
+    result
   }
 
   /**

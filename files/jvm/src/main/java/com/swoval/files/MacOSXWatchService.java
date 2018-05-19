@@ -35,6 +35,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Provides an alternative @{link java.nio.file.WatchService} for mac that uses native file
+ * system events rather than polling for file changes.
+ */
 class MacOSXWatchService implements WatchService, AutoCloseable, Registerable {
   private final double watchLatency;
   private final int queueSize;

@@ -7,6 +7,7 @@ import com.swoval.files.Directory.{ Entry, EntryFilter }
 import EntryFilters.AllPass
 import com.swoval.files.test._
 import utest._
+import EntryOps._
 
 import scala.collection.JavaConverters._
 

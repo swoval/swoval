@@ -86,7 +86,7 @@ class JSPath(val rawPath: String) extends Path {
   override def toUri(): URI = file.toURI
   override def toAbsolutePath: Path = if (isAbsolute()) this else new JSPath(file.getAbsolutePath)
   override def toRealPath(options: Array[LinkOption]): Path =
-    new JSPath(Fs.realpathSync(path))
+    Errors.wrap(this, new JSPath(Fs.realpathSync(path)))
   override def toFile(): File = file
   override def register(watcher: WatchService,
                         events: Array[WatchEvent.Kind[_]],

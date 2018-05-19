@@ -78,8 +78,10 @@ object PathTest extends TestSuite {
       'absolute - {
         val path = Paths.get(Platform.tmpDir).resolve(s"foo${random.nextInt}")
         path.delete()
-        path.mkdir ==> path
-        assert(path.exists)
+        try {
+          path.mkdir ==> path
+          assert(path.exists)
+        } finally path.delete()
       }
       'relative - {
         val path = Path(s"foo${random.nextInt}")

@@ -20,7 +20,7 @@ import scala.collection.JavaConverters._
  * flag set.
  *
  */
-package object files {
+package object files extends PlatformFiles {
   val Ignore = Observers.apply(new OnChange[Path] {
     override def apply(cacheEntry: Entry[Path]): Unit = {}
   })
@@ -53,13 +53,15 @@ package object files {
   implicit class OnStreamRemovedFunctionOps[T](val f: String => Unit) extends OnStreamRemoved {
     override def apply(s: String): Unit = f(s)
   }
-  implicit class SeqCachedPathOps[T](val l: Seq[Path]) extends AnyVal {
+  implicit class SeqPathOps[T](val l: Seq[Path]) extends AnyVal {
     def ===(r: Seq[Path]): Unit = new RichTraversable(l) === r
     def ===(r: Set[Path]): Unit = new RichTraversable(l.toSet) === r
   }
-  implicit class SeqOps[T](val l: Seq[Entry[T]]) extends AnyVal {
-    def ===(r: Seq[Path]): Unit = new RichTraversable(l.map(_.path)) === r
-    def ===(r: Set[Path]): Unit = new RichTraversable(l.map(_.path).toSet) === r
+  object EntryOps {
+    implicit class SeqEntryOps[T](val l: Seq[Entry[T]]) extends AnyVal {
+      def ===(r: Seq[Path]): Unit = new RichTraversable(l.map(_.path)) === r
+      def ===(r: Set[Path]): Unit = new RichTraversable(l.map(_.path).toSet) === r
+    }
   }
   implicit class PathOps(val path: Path) {
     def getBytes: Array[Byte] = Files.readAllBytes(path)
