@@ -156,7 +156,6 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
   private void handleEvent(
       final Callback callback, final Path path, final WatchKey key, final Event.Kind kind) {
     final Path keyPath = (Path) key.watchable();
-    callback.apply(new DirectoryWatcher.Event(path, kind));
     if (Files.isDirectory(path)) {
       WatchedDir watchedDir = watchedDirs.get(keyPath);
       if (watchedDir != null && watchedDir.recursive) {
@@ -169,6 +168,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
         }
       }
     }
+    callback.apply(new DirectoryWatcher.Event(path, kind));
     if (!key.reset()) {
       synchronized (lock) {
         watchedDirs.remove(keyPath);
