@@ -95,44 +95,47 @@ trait FileCacheTest extends TestSuite {
           }
         }
         'addmany - withTempDirectory { dir =>
-          val subdirsToAdd = if (System.getProperty("java.vm.name", "") == "Scala.js") 50 else 2000
+          // Windows is slow (at least on my vm)
+          val subdirsToAdd = if (System.getProperty("java.vm.name", "") == "Scala.js") {
+            if (Platform.isWin) 5 else 50
+          } else 2000
+          val timeout = if (Platform.isWin) DEFAULT_TIMEOUT * 60 else DEFAULT_TIMEOUT * 10
           val filesPerSubdir = 4
           val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
           val creationLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
           val deletionLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
-          var files = Set.empty[JPath]
+          val subdirs = (1 to subdirsToAdd).map { i => dir.resolve(s"subdir-$i") }
+          val files = subdirs.flatMap { subdir =>
+            (1 to filesPerSubdir).map { j =>
+              subdir.resolve(s"file-$j")
+            }
+          }
+          var allFiles = (subdirs ++ files).toSet
           val observer = Observers.apply[JPath]((_: Entry[JPath]) => creationLatch.countDown(),
                                                 (_: Entry[JPath], _: Entry[JPath]) => {},
-                                                (_: Entry[JPath]) => deletionLatch.countDown())
+                                                (e: Entry[JPath]) => deletionLatch.countDown())
           usingAsync(FileCache.apply[JPath](identity, observer, factory)) { c =>
             c.reg(dir)
             executor.run(new Runnable {
-              override def run(): Unit = files.synchronized {
-                val subdirs = (1 to subdirsToAdd).map { i =>
-                  Files.createDirectory(dir.resolve(s"subdir-$i"))
-                }
-                val regularFiles = subdirs.flatMap { subdir =>
-                  (1 to filesPerSubdir).map { j =>
-                    Files.createFile(subdir.resolve(s"file-$j"))
-                  }
-                }
-                files = (subdirs ++ regularFiles).toSet
+              override def run(): Unit = {
+                subdirs.foreach(Files.createDirectories(_))
+                files.foreach(Files.createFile(_))
               }
             })
             creationLatch
-              .waitFor(DEFAULT_TIMEOUT * 10) {
+              .waitFor(timeout) {
                 val found = c.ls(dir).map(_.path).toSet
                 // Need to synchronize since files is first set on a different thread
-                files.synchronized { found === files }
+                allFiles.synchronized { found === allFiles }
               }
               .flatMap { _ =>
                 executor.run(new Runnable {
                   override def run(): Unit = {
-                    files.synchronized(files.foreach(_.deleteRecursive()))
+                    files.foreach(Files.deleteIfExists(_))
+                    subdirs.foreach(Files.deleteIfExists(_))
                   }
-
                 })
-                deletionLatch.waitFor(DEFAULT_TIMEOUT * 10) {
+                deletionLatch.waitFor(timeout) {
                   c.ls(dir) === Seq.empty
                 }
               }
@@ -140,9 +143,9 @@ trait FileCacheTest extends TestSuite {
             case Failure(e) =>
               println(s"Task failed $e")
               executor.close()
-              if (creationLatch.getCount != 0)
+              if (creationLatch.getCount > 0)
                 println(s"$this Creation latch not triggered (${creationLatch.getCount})")
-              if (deletionLatch.getCount != 0)
+              if (deletionLatch.getCount > 0)
                 println(s"$this Deletion latch not triggered (${deletionLatch.getCount})")
             case _ =>
               executor.close()

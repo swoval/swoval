@@ -9,6 +9,7 @@ import scala.util.Try
 
 class File(pathname: String) {
   private[this] lazy val absolutePath = JPath.resolve(pathname)
+  private[this] lazy val parsed = JPath.parse(absolutePath)
   def canRead: Boolean = Try(Fs.accessSync(pathname, Fs.R_OK)).isSuccess
   def canWrite: Boolean = Try(Fs.accessSync(pathname, Fs.W_OK)).isSuccess
   def exists(): Boolean = Fs.existsSync(absolutePath)
@@ -53,11 +54,11 @@ class File(pathname: String) {
   def mkdir(): Boolean = !exists && Try(Fs.mkdirSync(pathname)).isSuccess
   def mkdirs(): Boolean = {
     !exists && {
-      val parts =
-        if (isAbsolute) absolutePath.split(JPath.sep).drop(1)
-        else absolutePath.split(JPath.sep)
+      val parts = new JSPath(JPath.resolve(pathname)).parts
+      if (isAbsolute) absolutePath.split(JSPath.regexSep).drop(1)
+      else absolutePath.split(JSPath.regexSep)
       parts
-        .foldLeft((new File(JPath.sep), false)) {
+        .foldLeft((new File(parsed.root.toOption.getOrElse(JPath.sep)), false)) {
           case ((a, r), p) =>
             val path = new File(s"$a${JPath.sep}$p")
             (path, path.mkdir())

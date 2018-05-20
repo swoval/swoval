@@ -35,7 +35,6 @@ class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
               case "rename" if !exists => Delete
               case _                   => Modify
             }
-            onFileEvent(new Event(watchPath, kind))
             if (recursive && exists && Files.isDirectory(watchPath)) {
               impl(watchPath)
               FileOps.list(watchPath, recursive = true).asScala foreach { newPath =>
@@ -46,6 +45,7 @@ class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
                 }
               }
             }
+            onFileEvent(new Event(watchPath, kind))
           }
         watchedDirs += p.toString -> WatchedDir(Fs.watch(p.toString, options, callback), recursive)
         true
