@@ -202,5 +202,13 @@ object DirectoryTest extends TestSuite {
         }
       }
     }
+    'depth - withTempDirectory { dir =>
+      withTempDirectory(dir) { subdir =>
+        withTempFileSync(subdir) { file =>
+          Directory.of(dir, 0).ls(recursive = true, AllPass) === Set(subdir)
+          Directory.of(dir, 1).ls(recursive = true, AllPass) === Set(subdir, file)
+        }
+      }
+    }
   }
 }

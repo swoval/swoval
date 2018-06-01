@@ -258,7 +258,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
         var existing: Directory[T] = null
         while (it.hasNext && existing == null) {
           val dir: Directory[T] = it.next()
-          if (path.startsWith(dir.path) && dir.recursive) {
+          if (path.startsWith(dir.path) && dir.recursive()) {
             existing = dir
           }
         }
@@ -298,12 +298,12 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
 
   private def diff(left: Directory[T], right: Directory[T]): Boolean = {
     val oldEntries: List[Directory.Entry[T]] =
-      left.list(left.recursive, AllPass)
+      left.list(left.recursive(), AllPass)
     val oldPaths: Set[Path] = new HashSet[Path]()
     val oldEntryIterator: Iterator[Directory.Entry[T]] = oldEntries.iterator()
     while (oldEntryIterator.hasNext) oldPaths.add(oldEntryIterator.next().path)
     val newEntries: List[Directory.Entry[T]] =
-      right.list(left.recursive, AllPass)
+      right.list(left.recursive(), AllPass)
     val newPaths: Set[Path] = new HashSet[Path]()
     val newEntryIterator: Iterator[Directory.Entry[T]] = newEntries.iterator()
     while (newEntryIterator.hasNext) newPaths.add(newEntryIterator.next().path)
@@ -332,23 +332,23 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       if (path.startsWith(currentDir.path)) {
         var oldDir: Directory[T] = currentDir
         var newDir: Directory[T] =
-          Directory.cached(oldDir.path, converter, oldDir.recursive)
+          Directory.cached(oldDir.path, converter, oldDir.recursive())
         while (diff(oldDir, newDir)) {
           oldDir = newDir
-          newDir = Directory.cached(oldDir.path, converter, oldDir.recursive)
+          newDir = Directory.cached(oldDir.path, converter, oldDir.recursive())
         }
         val oldEntries: Map[Path, Directory.Entry[T]] =
           new HashMap[Path, Directory.Entry[T]]()
         val newEntries: Map[Path, Directory.Entry[T]] =
           new HashMap[Path, Directory.Entry[T]]()
         val oldEntryIterator: Iterator[Directory.Entry[T]] =
-          currentDir.list(currentDir.recursive, AllPass).iterator()
+          currentDir.list(currentDir.recursive(), AllPass).iterator()
         while (oldEntryIterator.hasNext) {
           val entry: Directory.Entry[T] = oldEntryIterator.next()
           oldEntries.put(entry.path, entry)
         }
         val newEntryIterator: Iterator[Directory.Entry[T]] =
-          newDir.list(currentDir.recursive, AllPass).iterator()
+          newDir.list(currentDir.recursive(), AllPass).iterator()
         while (newEntryIterator.hasNext) {
           val entry: Directory.Entry[T] = newEntryIterator.next()
           newEntries.put(entry.path, entry)

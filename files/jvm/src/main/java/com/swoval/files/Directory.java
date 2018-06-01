@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class Directory<T> implements AutoCloseable {
   public final Path path;
-  public final boolean recursive;
+  private final int depth;
   private final Converter<T> converter;
   private final AtomicReference<Entry<T>> _cacheEntry;
   private final Object lock = new Object();
@@ -66,10 +66,10 @@ public class Directory<T> implements AutoCloseable {
     return _cacheEntry.get();
   }
 
-  private Directory(final Path path, final Converter<T> converter, final boolean recursive) {
+  private Directory(final Path path, final Converter<T> converter, final int d) {
     this.path = path;
     this.converter = converter;
-    this.recursive = recursive;
+    this.depth = d > 0 ? d : 0;
     this._cacheEntry = new AtomicReference<>(new Entry<>(path, converter.apply(path)));
   }
 
@@ -148,14 +148,22 @@ public class Directory<T> implements AutoCloseable {
     }
   }
 
+  public boolean recursive() {
+    return depth == Integer.MAX_VALUE;
+  }
+
   @Override
   public String toString() {
-    return "Directory(" + path + ", recursive = " + recursive + ")";
+    return "Directory(" + path + ", depth = " + depth + ")";
+  }
+
+  private int subdirectoryDepth() {
+    return depth == Integer.MAX_VALUE ? depth : depth > 0 ? depth - 1 : 0;
   }
 
   private void addDirectory(
       final Directory<T> currentDir, final Path path, final List<Entry<T>[]> updates) {
-    final Directory<T> dir = cached(path, converter, true);
+    final Directory<T> dir = cached(path, converter, subdirectoryDepth());
     currentDir.subdirectories.put(path.getFileName().toString(), dir);
     addUpdate(updates, dir.entry());
     final Iterator<Entry<T>> it = dir.list(true, AllPass).iterator();
@@ -185,7 +193,7 @@ public class Directory<T> implements AutoCloseable {
       if (!it.hasNext()) {
         // We will always return from this block
         synchronized (currentDir.lock) {
-          if (isFile || !currentDir.recursive) {
+          if (isFile || currentDir.depth == 0) {
             final Entry<T> oldEntry = currentDir.files.getByName(p);
             final Entry<T> newEntry = new Entry<>(p, converter.apply(resolved), false);
             currentDir.files.put(p.toString(), newEntry);
@@ -209,7 +217,7 @@ public class Directory<T> implements AutoCloseable {
       } else {
         synchronized (currentDir.lock) {
           final Directory<T> dir = currentDir.subdirectories.getByName(p);
-          if (dir == null && currentDir.recursive) {
+          if (dir == null && currentDir.depth > 0) {
             addDirectory(currentDir, currentDir.path.resolve(p), result);
           }
           currentDir = dir;
@@ -315,8 +323,8 @@ public class Directory<T> implements AutoCloseable {
           final Path p = file.toPath();
           final Path key = path.relativize(p).getFileName();
           if (file.isDirectory()) {
-            if (recursive) {
-              subdirectories.put(key.toString(), cached(p, converter));
+            if (depth > 0) {
+              subdirectories.put(key.toString(), cached(p, converter, subdirectoryDepth()));
             } else {
               files.put(key.toString(), new Entry<>(key, converter.apply(p), true));
             }
@@ -353,23 +361,21 @@ public class Directory<T> implements AutoCloseable {
    * Make a new Directory with no cache value associated with the path
    *
    * @param path The path to monitor
+   * @param depth Sets how the limit for how deep to traverse the children of this directory
+   * @return A directory whose entries just contain the path itself
+   */
+  public static Directory<Path> of(final Path path, final int depth) {
+    return new Directory<>(path, PATH_CONVERTER, depth).init();
+  }
+  /**
+   * Make a new Directory with no cache value associated with the path
+   *
+   * @param path The path to monitor
    * @param recursive Toggles whether or not to cache the children of subdirectories
    * @return A directory whose entries just contain the path itself
    */
   public static Directory<Path> of(final Path path, final boolean recursive) {
-    return new Directory<>(path, PATH_CONVERTER, recursive).init();
-  }
-
-  /**
-   * Make a new recursive Directory with cache entries created by {@code converter}
-   *
-   * @param path The path to cache
-   * @param converter Function to create the cache value for each path
-   * @param <T> The cache value type
-   * @return A directory with entries of type T
-   */
-  public static <T> Directory<T> cached(final Path path, final Converter<T> converter) {
-    return cached(path, converter, true);
+    return new Directory<>(path, PATH_CONVERTER, recursive ? Integer.MAX_VALUE : 0).init();
   }
 
   /**
@@ -377,13 +383,39 @@ public class Directory<T> implements AutoCloseable {
    *
    * @param path The path to cache
    * @param converter Function to create the cache value for each path
-   * @param recursive Toggles whether or not to cache the children of subdirectories
+   * @param <T> The cache value type
+   * @return A directory with entries of type T
+   */
+  public static <T> Directory<T> cached(final Path path, final Converter<T> converter) {
+    return new Directory<>(path, converter, Integer.MAX_VALUE).init();
+  }
+
+  /**
+   * Make a new Directory with a cache entries created by {@code converter}
+   *
+   * @param path The path to cache
+   * @param converter Function to create the cache value for each path
+   * @param recursive How many levels of children to accept for this directory
    * @param <T> The cache value type
    * @return A directory with entries of type T
    */
   public static <T> Directory<T> cached(
       final Path path, final Converter<T> converter, final boolean recursive) {
-    return new Directory<>(path, converter, recursive).init();
+    return new Directory<>(path, converter, recursive ? Integer.MAX_VALUE : 0).init();
+  }
+
+  /**
+   * Make a new Directory with a cache entries created by {@code converter}
+   *
+   * @param path The path to cache
+   * @param converter Function to create the cache value for each path
+   * @param depth How many levels of children to accept for this directory
+   * @param <T> The cache value type
+   * @return A directory with entries of type T
+   */
+  public static <T> Directory<T> cached(
+      final Path path, final Converter<T> converter, final int depth) {
+    return new Directory<>(path, converter, depth).init();
   }
 
   private class FindResult {
@@ -489,12 +521,12 @@ public class Directory<T> implements AutoCloseable {
 
   /**
    * Filter {@link Directory.Entry} elements
+   *
    * @param <T> The data value type for the {@link Directory.Entry}
    */
   public interface EntryFilter<T> {
     boolean accept(Entry<? extends T> entry);
   }
-
 
   /**
    * Callback to fire when a file in a monitored directory is created or deleted
@@ -526,5 +558,4 @@ public class Directory<T> implements AutoCloseable {
 
     void onUpdate(Entry<T> oldEntry, Entry<T> newEntry);
   }
-
 }

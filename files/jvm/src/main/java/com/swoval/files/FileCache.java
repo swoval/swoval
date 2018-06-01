@@ -273,7 +273,7 @@ class FileCacheImpl<T> extends FileCache<T> {
         Directory<T> existing = null;
         while (it.hasNext() && existing == null) {
           final Directory<T> dir = it.next();
-          if (path.startsWith(dir.path) && dir.recursive) {
+          if (path.startsWith(dir.path) && dir.recursive()) {
             existing = dir;
           }
         }
@@ -311,13 +311,13 @@ class FileCacheImpl<T> extends FileCache<T> {
   }
 
   private boolean diff(Directory<T> left, Directory<T> right) {
-    List<Directory.Entry<T>> oldEntries = left.list(left.recursive, AllPass);
+    List<Directory.Entry<T>> oldEntries = left.list(left.recursive(), AllPass);
     Set<Path> oldPaths = new HashSet<>();
     final Iterator<Directory.Entry<T>> oldEntryIterator = oldEntries.iterator();
     while (oldEntryIterator.hasNext()) {
       oldPaths.add(oldEntryIterator.next().path);
     }
-    List<Directory.Entry<T>> newEntries = right.list(left.recursive, AllPass);
+    List<Directory.Entry<T>> newEntries = right.list(left.recursive(), AllPass);
     Set<Path> newPaths = new HashSet<>();
     final Iterator<Directory.Entry<T>> newEntryIterator = newEntries.iterator();
     while (newEntryIterator.hasNext()) {
@@ -347,21 +347,21 @@ class FileCacheImpl<T> extends FileCache<T> {
         final Directory<T> currentDir = directoryIterator.next();
         if (path.startsWith(currentDir.path)) {
           Directory<T> oldDir = currentDir;
-          Directory<T> newDir = Directory.cached(oldDir.path, converter, oldDir.recursive);
+          Directory<T> newDir = Directory.cached(oldDir.path, converter, oldDir.recursive());
           while (diff(oldDir, newDir)) {
             oldDir = newDir;
-            newDir = Directory.cached(oldDir.path, converter, oldDir.recursive);
+            newDir = Directory.cached(oldDir.path, converter, oldDir.recursive());
           }
           final Map<Path, Directory.Entry<T>> oldEntries = new HashMap<>();
           final Map<Path, Directory.Entry<T>> newEntries = new HashMap<>();
           final Iterator<Directory.Entry<T>> oldEntryIterator =
-              currentDir.list(currentDir.recursive, AllPass).iterator();
+              currentDir.list(currentDir.recursive(), AllPass).iterator();
           while (oldEntryIterator.hasNext()) {
             final Directory.Entry<T> entry = oldEntryIterator.next();
             oldEntries.put(entry.path, entry);
           }
           final Iterator<Directory.Entry<T>> newEntryIterator =
-              newDir.list(currentDir.recursive, AllPass).iterator();
+              newDir.list(currentDir.recursive(), AllPass).iterator();
           while (newEntryIterator.hasNext()) {
             final Directory.Entry<T> entry = newEntryIterator.next();
             newEntries.put(entry.path, entry);
