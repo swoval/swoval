@@ -105,6 +105,10 @@ object Build {
   lazy val releaseSigned = taskKey[Unit]("Release signed project")
   lazy val generateJSSources = taskKey[Unit]("Generate scala sources from java")
   lazy val clangFmt = taskKey[Unit]("Run clang format")
+  lazy val travisQuickListReflectionTest =
+    taskKey[Unit]("Check that reflection works for quick list")
+  lazy val quickListReflectionTest = inputKey[Unit]("Check that reflection works for quick list")
+
   def projects: Seq[ProjectReference] = Seq[ProjectReference](
     files.js,
     files.jvm,
@@ -230,7 +234,7 @@ object Build {
                 val relativeSource = sharedBase.relativize(p)
                 val resolved = dir.resolve(relativeSource)
                 if (!Files.exists(resolved.getParent)) Files.createDirectories(resolved.getParent)
-                if (Properties.isWin) {
+                if (Properties.isWin && false) {
                   val needCopy = scala.util
                     .Try(
                       new String(Files.readAllBytes(p)) != new String(Files.readAllBytes(resolved)))
@@ -372,8 +376,10 @@ object Build {
                 "DirectoryWatcher",
                 "EntryFilters",
                 "FileCache",
-                "FileOps",
+                "NioQuickLister",
                 "Observers",
+                "QuickFile",
+                "QuickLister",
                 "Registerable"
               ).value
               convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
@@ -388,7 +394,12 @@ object Build {
     )
     .jvmSettings(
       createCrossLinks("FILESJVM"),
-      javacOptions ++= Seq("-source", "1.7", "-target", "1.7") ++
+      javacOptions ++= Seq("-source",
+                           "1.7",
+                           "-target",
+                           "1.7",
+                           "-h",
+                           sourceDirectory.value.toPath.resolve("main/native/include").toString) ++
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty) ++
         Seq("-Xlint:unchecked"),
       jacocoExcludes in Test := Seq(
@@ -400,17 +411,42 @@ object Build {
       crossScalaVersions := scalaCrossVersions,
       crossPaths := false,
       autoScalaLibrary := false,
-      compile in Compile := {
-        val res = (compile in Compile).value
+      unmanagedResources in Compile := {
         val log = state.value.log
-        if (Properties.isMac) {
+        if (System.getProperty("swoval.skip.native", "false") == "false") {
           val nativeDir = sourceDirectory.value.toPath.resolve("main/native").toFile
-          val proc = new ProcessBuilder("make").directory(nativeDir).start()
+          val proc = new ProcessBuilder("make", "-j", "8").directory(nativeDir).start()
           proc.waitFor(1, TimeUnit.MINUTES)
-          assert(proc.exitValue() == 0)
           log.info(Source.fromInputStream(proc.getInputStream).mkString)
+          if (proc.exitValue() != 0) {
+            log.error(Source.fromInputStream(proc.getErrorStream).mkString)
+            throw new IllegalStateException("Couldn't build native library!")
+          }
         }
-        res
+        (unmanagedResources in Compile).value
+      },
+      travisQuickListReflectionTest := {
+        quickListReflectionTest
+          .toTask(" com.swoval.files.NioQuickLister com.swoval.files.NativeQuickLister")
+          .value
+      },
+      quickListReflectionTest := {
+        ("" +: Def.spaceDelimited("<arg>").parsed) foreach {
+          arg =>
+            val cp =
+              (fullClasspath in Test).value.map(_.data).filterNot(_.toString.contains("jacoco"))
+            val prefix = Seq("java", "-classpath", cp.mkString(File.pathSeparator))
+            val args = prefix ++ (if (arg.nonEmpty) Seq(s"-Dswoval.quicklister=$arg") else Nil) ++
+              Seq("com.swoval.files.QuickListReflectionTest",
+                  if (arg.isEmpty) "com.swoval.files.NativeQuickLister" else arg)
+            val proc = new ProcessBuilder(args: _*).start()
+            proc.waitFor(5, TimeUnit.SECONDS)
+            val in = Source.fromInputStream(proc.getInputStream).mkString
+            if (in.nonEmpty) System.err.println(in)
+            val err = Source.fromInputStream(proc.getErrorStream).mkString
+            if (err.nonEmpty) System.err.println(err)
+            assert(proc.exitValue() == 0)
+        }
       }
     )
     .dependsOn(testing % "test->test")

@@ -9,13 +9,13 @@ matrix:
    - scala: 2.12.6
      os: osx
      env:
-       CMD="filesJVM/test filesJS/test reflect/test plugin/compile"
+       CMD="filesJVM/test filesJS/test reflect/test plugin/compile filesJVM/travisQuickListReflectionTest"
        TRAVIS_SCALA_VERSION=2.12.6
      osx_image: xcode9.3
 
    - scala: 2.12.6
      env:
-       CMD="filesJVM/test filesJS/test reflect/test plugin/compile"
+       CMD="filesJVM/test filesJS/test reflect/test plugin/compile filesJVM/travisQuickListReflectionTest"
        TRAVIS_SCALA_VERSION=2.12.6
 
    - scala: 2.11.12
@@ -42,7 +42,7 @@ matrix:
        CMD="filesJVM/test plugin/compile"
        TRAVIS_SCALA_VERSION=2.10.7
 
-script: ./sbt/bin/sbt -Dsbt.version=$SBT_VER ++$TRAVIS_SCALA_VERSION $CMD
+script: ./sbt/bin/sbt -Dsbt.version=$SBT_VER -Dswoval.skip.native=true ++$TRAVIS_SCALA_VERSION $CMD
 
 before_install:
   # https://github.com/travis-ci/travis-ci/issues/8408

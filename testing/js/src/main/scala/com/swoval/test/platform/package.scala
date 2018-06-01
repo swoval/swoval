@@ -28,7 +28,10 @@ package object platform {
     if (Fs.existsSync(dir)) {
       if (Fs.statSync(dir).isDirectory()) {
         Fs.readdirSync(dir).view map (p => s"$dir$sep$p") foreach { p =>
-          if (Fs.statSync(p).isDirectory) delete(p) else Fs.unlinkSync(p)
+          try {
+            val realPath = Fs.realpathSync(p)
+            if (Fs.statSync(realPath).isDirectory) delete(p)
+          } catch { case e: Exception => } finally Fs.unlinkSync(p)
         }
         Fs.rmdirSync(dir)
       } else {

@@ -2,6 +2,7 @@ package com.swoval.files;
 
 import java.io.File;
 import java.io.FileFilter;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -9,12 +10,18 @@ import java.util.List;
 
 /** Provides utilities for listing files and getting subpaths */
 class FileOps {
-  public static final FileFilter AllPass = new FileFilter() {
-    @Override
-    public boolean accept(File file) {
-      return true;
-    }
-  };
+  public static final FileFilter AllPass =
+      new FileFilter() {
+        @Override
+        public boolean accept(File file) {
+          return true;
+        }
+
+        @Override
+        public String toString() {
+          return "AllPass";
+        }
+      };
 
   /**
    * Returns the files in a directory.
@@ -23,7 +30,7 @@ class FileOps {
    * @param recursive Include paths in subdirectories when set to true
    * @return Array of paths
    */
-  public static List<Path> list(final Path path, final boolean recursive) {
+  public static List<File> list(final Path path, final boolean recursive) throws IOException {
     return list(path, recursive, AllPass);
   }
 
@@ -35,24 +42,17 @@ class FileOps {
    * @param filter Include only paths accepted by the filter
    * @return Array of Paths
    */
-  public static List<Path> list(final Path path, final boolean recursive, final FileFilter filter) {
-    final List<Path> res = new ArrayList<>();
-    listImpl(path.toFile(), recursive, filter, res);
-    return res;
-  }
-
-  private static void listImpl(
-      final File file, final boolean recursive, final FileFilter filter, final List<Path> result) {
-    File[] files = file.listFiles(filter);
-    if (files != null) {
-      int i = 0;
-      while (i < files.length) {
-        final File f = files[i];
-        result.add(f.toPath());
-        if (f.isDirectory() && recursive) listImpl(f, recursive, filter, result);
-        i += 1;
+  public static List<File> list(final Path path, final boolean recursive, final FileFilter filter) throws IOException {
+    final List<File> result = new ArrayList<>();
+    final Iterator<QuickFile> it =
+        QuickList.list(path, recursive ? Integer.MAX_VALUE : 1, true).iterator();
+    while (it.hasNext()) {
+      final QuickFile quickFile = it.next();
+      if (filter.accept(quickFile.asFile())) {
+        result.add(quickFile.toFile());
       }
     }
+    return result;
   }
 
   /**

@@ -8,6 +8,9 @@ import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Wraps a WatchService and implements {@link Registerable}
+ */
 public class RegisterableWatchService implements WatchService, Registerable {
   private final WatchService watchService;
 

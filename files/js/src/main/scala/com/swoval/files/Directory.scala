@@ -1,6 +1,7 @@
 package com.swoval.files
 
 import com.swoval.files.EntryFilters.AllPass
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.ArrayList
@@ -48,14 +49,24 @@ object Directory {
    * Make a new Directory with no cache value associated with the path
    *
    * @param path The path to monitor
+   * @param depth Sets how the limit for how deep to traverse the children of this directory
+   * @return A directory whose entries just contain the path itself
+   */
+  def of(path: Path, depth: Int): Directory[Path] =
+    new Directory(path, PATH_CONVERTER, depth).init()
+
+  /**
+   * Make a new Directory with no cache value associated with the path
+   *
+   * @param path The path to monitor
    * @param recursive Toggles whether or not to cache the children of subdirectories
    * @return A directory whose entries just contain the path itself
    */
   def of(path: Path, recursive: Boolean): Directory[Path] =
-    new Directory(path, PATH_CONVERTER, recursive).init()
+    new Directory(path, PATH_CONVERTER, if (recursive) java.lang.Integer.MAX_VALUE else 0).init()
 
   /**
-   * Make a new recursive Directory with cache entries created by {@code converter}
+   * Make a new Directory with a cache entries created by {@code converter}
    *
    * @param path The path to cache
    * @param converter Function to create the cache value for each path
@@ -63,19 +74,31 @@ object Directory {
    * @return A directory with entries of type T
    */
   def cached[T](path: Path, converter: Converter[T]): Directory[T] =
-    cached(path, converter, true)
+    new Directory(path, converter, java.lang.Integer.MAX_VALUE).init()
 
   /**
    * Make a new Directory with a cache entries created by {@code converter}
    *
    * @param path The path to cache
    * @param converter Function to create the cache value for each path
-   * @param recursive Toggles whether or not to cache the children of subdirectories
+   * @param recursive How many levels of children to accept for this directory
    * @tparam T The cache value type
    * @return A directory with entries of type T
    */
   def cached[T](path: Path, converter: Converter[T], recursive: Boolean): Directory[T] =
-    new Directory(path, converter, recursive).init()
+    new Directory(path, converter, if (recursive) java.lang.Integer.MAX_VALUE else 0).init()
+
+  /**
+   * Make a new Directory with a cache entries created by {@code converter}
+   *
+   * @param path The path to cache
+   * @param converter Function to create the cache value for each path
+   * @param depth How many levels of children to accept for this directory
+   * @tparam T The cache value type
+   * @return A directory with entries of type T
+   */
+  def cached[T](path: Path, converter: Converter[T], depth: Int): Directory[T] =
+    new Directory(path, converter, depth).init()
 
   /**
    * Container class for [[Directory]] entries. Contains both the path to which the path
@@ -132,6 +155,7 @@ object Directory {
 
   /**
    * Filter [[Directory.Entry]] elements
+   *
    * @tparam T The data value type for the [[Directory.Entry]]
    */
   trait EntryFilter[T] {
@@ -188,10 +212,10 @@ object Directory {
  *
  * @tparam T The cache value type
  */
-class Directory[T] private (val path: Path,
-                            private val converter: Converter[T],
-                            val recursive: Boolean)
+class Directory[T] private (val path: Path, private val converter: Converter[T], d: Int)
     extends AutoCloseable {
+
+  private val depth: Int = if (d > 0) d else 0
 
   private val _cacheEntry: AtomicReference[Entry[T]] = new AtomicReference(
     new Entry(path, converter.apply(path)))
@@ -289,13 +313,20 @@ class Directory[T] private (val path: Path,
       new ArrayList()
     }
 
+  def recursive(): Boolean = depth == java.lang.Integer.MAX_VALUE
+
   override def toString(): String =
-    "Directory(" + path + ", recursive = " + recursive + ")"
+    "Directory(" + path + ", depth = " + depth + ")"
+
+  private def subdirectoryDepth(): Int =
+    if (depth == java.lang.Integer.MAX_VALUE) depth
+    else if (depth > 0) depth - 1
+    else 0
 
   private def addDirectory(currentDir: Directory[T],
                            path: Path,
                            updates: List[Array[Entry[T]]]): Unit = {
-    val dir: Directory[T] = cached(path, converter, true)
+    val dir: Directory[T] = cached(path, converter, subdirectoryDepth())
     currentDir.subdirectories.put(path.getFileName.toString, dir)
     addUpdate(updates, dir.entry())
     val it: Iterator[Entry[T]] = dir.list(true, AllPass).iterator()
@@ -323,7 +354,7 @@ class Directory[T] private (val path: Path,
       if (!it.hasNext) {
 // We will always return from this block
         currentDir.lock.synchronized {
-          if (isFile || !currentDir.recursive) {
+          if (isFile || currentDir.depth == 0) {
             val oldEntry: Entry[T] = currentDir.files.getByName(p)
             val newEntry: Entry[T] =
               new Entry[T](p, converter.apply(resolved), false)
@@ -349,7 +380,7 @@ class Directory[T] private (val path: Path,
       } else {
         currentDir.lock.synchronized {
           val dir: Directory[T] = currentDir.subdirectories.getByName(p)
-          if (dir == null && currentDir.recursive) {
+          if (dir == null && currentDir.depth > 0) {
             addDirectory(currentDir, currentDir.path.resolve(p), result)
           }
           currentDir = dir
@@ -451,13 +482,14 @@ class Directory[T] private (val path: Path,
   private def init(): Directory[T] = {
     if (Files.exists(path)) {
       lock.synchronized {
-        val it: Iterator[Path] = FileOps.list(path, false).iterator()
+        val it: Iterator[QuickFile] = QuickList.list(path, 0, true).iterator()
         while (it.hasNext) {
-          val p: Path = it.next()
+          val file: QuickFile = it.next()
+          val p: Path = file.toPath()
           val key: Path = path.relativize(p).getFileName
-          if (Files.isDirectory(p)) {
-            if (recursive) {
-              subdirectories.put(key.toString, cached(p, converter))
+          if (file.isDirectory) {
+            if (depth > 0) {
+              subdirectories.put(key.toString, cached(p, converter, subdirectoryDepth()))
             } else {
               files.put(key.toString, new Entry(key, converter.apply(p), true))
             }

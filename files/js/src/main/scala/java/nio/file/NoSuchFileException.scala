@@ -1,5 +1,3 @@
 package java.nio.file
 
-import java.io.IOException
-
-class NoSuchFileException extends IOException {}
+class NoSuchFileException(file: String) extends FileSystemException(file)

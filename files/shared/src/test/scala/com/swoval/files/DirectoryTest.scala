@@ -7,6 +7,7 @@ import com.swoval.files.Directory.{ Entry, EntryFilter }
 import EntryFilters.AllPass
 import com.swoval.files.test._
 import utest._
+import EntryOps._
 
 import scala.collection.JavaConverters._
 
@@ -150,7 +151,7 @@ object DirectoryTest extends TestSuite {
               val directory = Directory.of(dir)
               def ls = directory.ls(recursive = true, AllPass)
               ls === Set(f, subdir, nestedSubdir)
-              assert(Option(directory.remove(f)).isDefined)
+              directory.remove(f).asScala === Seq(f)
               ls === Set(subdir, nestedSubdir)
             }
           }
@@ -192,13 +193,21 @@ object DirectoryTest extends TestSuite {
       }
     }
     'recursive - withTempDirectory { dir =>
-      withTempDirectorySync(dir) { subdir =>
+      withTempDirectory(dir) { subdir =>
         withTempFileSync(subdir) { f =>
           assert(f.exists)
           Directory.of(subdir).ls(recursive = true, AllPass) === Seq(f)
           Directory.of(dir, false).ls(recursive = true, AllPass) === Seq(subdir)
           Directory.of(dir).ls(recursive = true, AllPass) === Set(subdir, f)
           Directory.of(dir).ls(recursive = false, AllPass) === Seq(subdir)
+        }
+      }
+    }
+    'depth - withTempDirectory { dir =>
+      withTempDirectory(dir) { subdir =>
+        withTempFileSync(subdir) { file =>
+          Directory.of(dir, 0).ls(recursive = true, AllPass) === Set(subdir)
+          Directory.of(dir, 1).ls(recursive = true, AllPass) === Set(subdir, file)
         }
       }
     }

@@ -26,7 +26,7 @@ JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventsApi_close
 /*
  * Class:     com_swoval_files_apple_FileEventsApi
  * Method:    init
- * Signature: (Ljava/util/function/Consumer;Ljava/util/function/Consumer;)J
+ * Signature: (Lcom/swoval/files/apple/FileEventsApi/Consumer;Lcom/swoval/files/apple/FileEventsApi/Consumer;)J
  */
 JNIEXPORT jlong JNICALL Java_com_swoval_files_apple_FileEventsApi_init
   (JNIEnv *, jclass, jobject, jobject);

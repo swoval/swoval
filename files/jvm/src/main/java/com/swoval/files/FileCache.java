@@ -138,7 +138,8 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @param recursive Recursively monitor the path if true
    * @return The registered directory if it hasn't previously been registered, null otherwise
    */
-  public abstract Directory<T> register(final Path path, final boolean recursive);
+  public abstract Directory<T> register(final Path path, final boolean recursive)
+      throws IOException;
 
   /**
    * Register the directory for monitoring recursively.
@@ -146,7 +147,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @param path The path to monitor
    * @return The registered directory if it hasn't previously been registered, null otherwise
    */
-  public Directory<T> register(final Path path) {
+  public Directory<T> register(final Path path) throws IOException {
     return register(path, true);
   }
 
@@ -234,7 +235,11 @@ class FileCacheImpl<T> extends FileCache<T> {
           synchronized (lock) {
             final Path path = event.path;
             if (event.kind.equals(Overflow)) {
-              handleOverflow(path);
+              try {
+                handleOverflow(path);
+              } catch (IOException e) {
+                System.err.println("FileCache caught IOException while processing overflow: " + e);
+              }
             } else {
               handleEvent(path, event.path);
             }
@@ -264,7 +269,7 @@ class FileCacheImpl<T> extends FileCache<T> {
   }
 
   @Override
-  public Directory<T> register(final Path path, final boolean recursive) {
+  public Directory<T> register(final Path path, final boolean recursive) throws IOException {
     Directory<T> result = null;
     if (Files.exists(path)) {
       watcher.register(path);
@@ -273,7 +278,7 @@ class FileCacheImpl<T> extends FileCache<T> {
         Directory<T> existing = null;
         while (it.hasNext() && existing == null) {
           final Directory<T> dir = it.next();
-          if (path.startsWith(dir.path) && dir.recursive) {
+          if (path.startsWith(dir.path) && dir.recursive()) {
             existing = dir;
           }
         }
@@ -305,19 +310,19 @@ class FileCacheImpl<T> extends FileCache<T> {
           return null;
         }
       } else {
-       return null;
+        return null;
       }
     }
   }
 
   private boolean diff(Directory<T> left, Directory<T> right) {
-    List<Directory.Entry<T>> oldEntries = left.list(left.recursive, AllPass);
+    List<Directory.Entry<T>> oldEntries = left.list(left.recursive(), AllPass);
     Set<Path> oldPaths = new HashSet<>();
     final Iterator<Directory.Entry<T>> oldEntryIterator = oldEntries.iterator();
     while (oldEntryIterator.hasNext()) {
       oldPaths.add(oldEntryIterator.next().path);
     }
-    List<Directory.Entry<T>> newEntries = right.list(left.recursive, AllPass);
+    List<Directory.Entry<T>> newEntries = right.list(left.recursive(), AllPass);
     Set<Path> newPaths = new HashSet<>();
     final Iterator<Directory.Entry<T>> newEntryIterator = newEntries.iterator();
     while (newEntryIterator.hasNext()) {
@@ -336,7 +341,7 @@ class FileCacheImpl<T> extends FileCache<T> {
   }
 
   @SuppressWarnings("unchecked")
-  private boolean handleOverflow(final Path path) {
+  private boolean handleOverflow(final Path path) throws IOException {
     synchronized (directories) {
       final Iterator<Directory<T>> directoryIterator = directories.values().iterator();
       final List<Directory<T>> toReplace = new ArrayList<>();
@@ -347,21 +352,21 @@ class FileCacheImpl<T> extends FileCache<T> {
         final Directory<T> currentDir = directoryIterator.next();
         if (path.startsWith(currentDir.path)) {
           Directory<T> oldDir = currentDir;
-          Directory<T> newDir = Directory.cached(oldDir.path, converter, oldDir.recursive);
+          Directory<T> newDir = Directory.cached(oldDir.path, converter, oldDir.recursive());
           while (diff(oldDir, newDir)) {
             oldDir = newDir;
-            newDir = Directory.cached(oldDir.path, converter, oldDir.recursive);
+            newDir = Directory.cached(oldDir.path, converter, oldDir.recursive());
           }
           final Map<Path, Directory.Entry<T>> oldEntries = new HashMap<>();
           final Map<Path, Directory.Entry<T>> newEntries = new HashMap<>();
           final Iterator<Directory.Entry<T>> oldEntryIterator =
-              currentDir.list(currentDir.recursive, AllPass).iterator();
+              currentDir.list(currentDir.recursive(), AllPass).iterator();
           while (oldEntryIterator.hasNext()) {
             final Directory.Entry<T> entry = oldEntryIterator.next();
             oldEntries.put(entry.path, entry);
           }
           final Iterator<Directory.Entry<T>> newEntryIterator =
-              newDir.list(currentDir.recursive, AllPass).iterator();
+              newDir.list(currentDir.recursive(), AllPass).iterator();
           while (newEntryIterator.hasNext()) {
             final Directory.Entry<T> entry = newEntryIterator.next();
             newEntries.put(entry.path, entry);
@@ -425,15 +430,20 @@ class FileCacheImpl<T> extends FileCache<T> {
         final List<Directory.Entry<T>> paths = pair.second;
         if (!paths.isEmpty() || !path.equals(dir.path)) {
           final Path toUpdate = paths.isEmpty() ? path : paths.get(0).path;
-          final Iterator<Directory.Entry<T>[]> it =
-              dir.addUpdate(toUpdate, !Files.isDirectory(path)).iterator();
-          while (it.hasNext()) {
-            final Directory.Entry<T>[] entry = it.next();
-            if (entry.length == 2) {
-              observers.onUpdate(entry[0], entry[1]);
-            } else {
-              observers.onCreate(entry[0]);
+          try {
+            final Iterator<Directory.Entry<T>[]> it =
+                dir.addUpdate(toUpdate, !Files.isDirectory(path)).iterator();
+            while (it.hasNext()) {
+              final Directory.Entry<T>[] entry = it.next();
+              if (entry.length == 2) {
+                observers.onUpdate(entry[0], entry[1]);
+              } else {
+                observers.onCreate(entry[0]);
+              }
             }
+          } catch (IOException e) {
+            System.err.println(
+                "FileCache caught IOException handling event for " + path + ": " + e);
           }
         }
       }

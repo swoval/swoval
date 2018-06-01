@@ -1,6 +1,6 @@
 package com.swoval.files
 
-import java.nio.file.{ Files, Path => JPath }
+import java.nio.file.{ Files, Paths, Path => JPath }
 
 import com.swoval.files.Directory._
 import com.swoval.files.test._
@@ -9,9 +9,12 @@ import utest._
 import utest.framework.ExecutionContext.RunNow
 
 import scala.collection.JavaConverters._
+import scala.concurrent.duration._
 import FileCacheTest.FileCacheOps
 
 import scala.util.Failure
+
+import EntryOps._
 
 trait FileCacheTest extends TestSuite {
   def factory: DirectoryWatcher.Factory
@@ -99,12 +102,14 @@ trait FileCacheTest extends TestSuite {
           val subdirsToAdd = if (System.getProperty("java.vm.name", "") == "Scala.js") {
             if (Platform.isWin) 5 else 50
           } else 2000
-          val timeout = if (Platform.isWin) DEFAULT_TIMEOUT * 60 else DEFAULT_TIMEOUT * 10
+          val timeout = if (Platform.isWin) DEFAULT_TIMEOUT * 60 else DEFAULT_TIMEOUT * 20
           val filesPerSubdir = 4
           val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
           val creationLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
           val deletionLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
-          val subdirs = (1 to subdirsToAdd).map { i => dir.resolve(s"subdir-$i") }
+          val subdirs = (1 to subdirsToAdd).map { i =>
+            dir.resolve(s"subdir-$i")
+          }
           val files = subdirs.flatMap { subdir =>
             (1 to filesPerSubdir).map { j =>
               subdir.resolve(s"file-$j")
@@ -143,10 +148,26 @@ trait FileCacheTest extends TestSuite {
             case Failure(e) =>
               println(s"Task failed $e")
               executor.close()
-              if (creationLatch.getCount > 0)
-                println(s"$this Creation latch not triggered (${creationLatch.getCount})")
-              if (deletionLatch.getCount > 0)
-                println(s"$this Deletion latch not triggered (${deletionLatch.getCount})")
+              if (creationLatch.getCount > 0) {
+                val count = creationLatch.getCount
+                10.milliseconds.sleep
+                val newCount = creationLatch.getCount
+                if (newCount == count)
+                  println(s"$this Creation latch not triggered ($count)")
+                else
+                  println(
+                    s"$this Creation latch not triggered, but still being decremented $newCount")
+              }
+              if (deletionLatch.getCount > 0) {
+                val count = deletionLatch.getCount
+                10.milliseconds.sleep
+                val newCount = deletionLatch.getCount
+                if (newCount == count)
+                  println(s"$this Deletion latch not triggered ($count)")
+                else
+                  println(
+                    s"$this Deletion latch not triggered, but still being decremented $newCount")
+              }
             case _ =>
               executor.close()
           }
@@ -268,7 +289,7 @@ object NioFileCacheTest extends FileCacheTest {
       new NioDirectoryWatcher(callback)
   }
   val tests =
-    if (Platform.isMac && System.getProperty("java.vm.name") != "Scala.js") testsImpl
+    if (Platform.isJVM && Platform.isMac) testsImpl
     else
       Tests('ignore - {
         println("Not running NioFileCacheTest on platform other than the jvm on osx")
