@@ -13,7 +13,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.FileSystems;
+import java.nio.file.FileSystemLoopException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.WatchEvent;
@@ -22,9 +24,11 @@ import java.nio.file.WatchService;
 import java.nio.file.Watchable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -43,6 +47,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
 
   /**
    * Instantiate a NioDirectoryWatch using the default {@link Registerable}.
+   *
    * @param callback The callback to invoke on a created/deleted/modified path
    */
   public NioDirectoryWatcher(final Callback callback) throws IOException, InterruptedException {
@@ -51,6 +56,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
 
   /**
    * Instantiate a NioDirectoryWatch with a particular {@link Registerable}.
+   *
    * @param callback The callback to invoke on a created/deleted/modified path
    * @param watchService The underlying watchservice that is used to monitor directories for events
    */
@@ -136,61 +142,26 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     }
   }
 
-  private boolean registerImpl(final Path realPath, final int maxDepth) {
-    synchronized (lock) {
-      boolean result = true;
-      final WatchedDir watchedDir = watchedDirs.get(realPath);
-      boolean recursive = maxDepth > 0;
-      if (watchedDir != null) {
-        if (watchedDir.maxDepth >= maxDepth) result = false;
-      } else {
-        try {
-          WatchKey key = watchService.register(realPath, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
-          watchedDirs.put(realPath, new WatchedDir(key, maxDepth));
-        } catch (IOException e) {
-          result = false;
-        }
-      }
-      return result && (!recursive || recursiveRegister(realPath, maxDepth - 1));
-    }
-  }
-
-  private boolean recursiveRegister(final Path path, final int maxDepth) {
-    boolean result = true;
-    try {
-      final Iterator<File> it = FileOps.list(path, false).iterator();
-      while (it.hasNext()) {
-        final File toRegister = it.next();
-        if (toRegister.isDirectory()) register(toRegister.toPath(), maxDepth - 1);
-      }
-    } catch (IOException e) {
-      System.err.println("NioDirectoryWatcher caught IOException registering " + path + ": " + e);
-    }
-    return true;
-  }
-
   private void handleEvent(
       final Callback callback, final Path path, final WatchKey key, final Event.Kind kind) {
     final Path keyPath = (Path) key.watchable();
+    final Set<Path> newFiles = new HashSet<>();
     if (Files.isDirectory(path)) {
       WatchedDir watchedDir = watchedDirs.get(keyPath);
       if (watchedDir != null && watchedDir.accept(path)) {
-        if (register(path, true)) {
-          try {
-            final Iterator<File> it = FileOps.list(path, false).iterator();
-            while (it.hasNext()) {
-              final File toRegister = it.next();
-              if (toRegister.isDirectory()) register(toRegister.toPath(), true);
-            }
-          } catch (IOException e) {
-            System.err.println(
-                "NioDirectoryWatcher caught IOException handling event for " + path + ": " + e);
-          }
-        }
+        add(
+            path,
+            watchedDir.maxDepth - (watchedDir.maxDepth == Integer.MAX_VALUE ? 0 : 1),
+            newFiles);
       }
     }
     callback.apply(new DirectoryWatcher.Event(path, kind));
+    final Iterator<Path> it = newFiles.iterator();
+    while (it.hasNext()) {
+      callback.apply(new DirectoryWatcher.Event(it.next(), Event.Create));
+    }
     if (!key.reset()) {
+      key.cancel();
       synchronized (lock) {
         watchedDirs.remove(keyPath);
       }
@@ -207,27 +178,25 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
       boolean stop = false;
       while ((watchedDir != null && watchedDir.maxDepth > 0) && !stop) {
         try {
-          final Iterator<File> fileIterator = FileOps.list((Path) key.watchable(), true).iterator();
+          final Iterator<QuickFile> fileIterator = QuickList.list((Path) key.watchable(), watchedDir.maxDepth).iterator();
           boolean registered = false;
           while (fileIterator.hasNext()) {
-            final File file = fileIterator.next();
+            final QuickFile file = fileIterator.next();
             if (file.isDirectory() && register(file.toPath(), watchedDir.maxDepth - 1))
               registered = true;
           }
           stop = !registered;
+        } catch (NoSuchFileException e) {
+          stop = false;
         } catch (IOException e) {
-          System.err.println(
-              "NioDirectoryWatcher caught IOException handling overflow for "
-                  + key.watchable()
-                  + ": "
-                  + e);
+          stop = true;
         }
       }
       final Iterator<Watchable> pathIterator = watchedDirs.keySet().iterator();
       final List<Watchable> toRemove = new ArrayList<>();
       while (pathIterator.hasNext()) {
         final Path p = (Path) pathIterator.next();
-        if (!Files.exists(p)) {
+        if (!Files.exists(p, LinkOption.NOFOLLOW_LINKS)) {
           toRemove.add(p);
         }
       }
@@ -239,6 +208,93 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     }
   }
 
+  private <T> boolean differentElements(final Set<T> left, final Set right) {
+    boolean result = false;
+    final Iterator<T> it = left.iterator();
+    while (result && it.hasNext()) {
+      result = !right.contains(it.next());
+    }
+    return result;
+  }
+
+  private <T> boolean different(final Set<T> left, final Set<T> right) {
+    return left.size() != right.size() || differentElements(left, right);
+  }
+
+  /**
+   * Similar to register, but tracks all of the new files found in the directory. It polls the
+   * directory until the contents stop changing to ensure that a callback is fired for each path
+   * in the newly created directory (up to the maxDepth). The assumption is that once the callback
+   * is fired for the path, it is safe to assume that no event for a new file in the directory is
+   * missed. Without the polling, it would be possible that a new file was created in the directory
+   * before we registered it with the watch service. If this happened, then no callback would be
+   * invoked for that file.
+   *
+   * @param path The newly created directory to add
+   * @param maxDepth The maximum depth of the subdirectory traversal
+   * @param newFiles The set of files that are found for the newly created directory
+   * @return
+   */
+  private boolean add(final Path path, final int maxDepth, final Set<Path> newFiles) {
+    synchronized (lock) {
+      boolean result = true;
+      final Set<Path> files = new HashSet<>();
+      try {
+        final WatchKey key = watchService.register(path, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE);
+        final WatchedDir watchedDir = new WatchedDir(key, maxDepth);
+        final WatchedDir previous = watchedDirs.put(path, watchedDir);
+        if (previous != null && !Platform.isMac()) previous.key.cancel();
+        newFiles.add(path);
+        do {
+          files.addAll(newFiles);
+          final Iterator<QuickFile> it = QuickList.list(path, 0, false).iterator();
+          while (result && it.hasNext()) {
+            final QuickFile quickFile = it.next();
+            final Path file = quickFile.toPath();
+            if (quickFile.isDirectory() && maxDepth > 0 && newFiles.add(file)) {
+              result = add(file, maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - 1, newFiles);
+            } else {
+              newFiles.add(file);
+            }
+          }
+        } while (result && different(files, newFiles));
+      } catch (IOException e) {
+        result = false;
+      }
+      return result;
+    }
+  }
+
+  private boolean registerImpl(final Path path, final int maxDepth) {
+    synchronized (lock) {
+      boolean result = true;
+      try {
+        final WatchKey key = watchService.register(path, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE);
+        final WatchedDir watchedDir = new WatchedDir(key, maxDepth);
+        final WatchedDir previous = watchedDirs.put(path, watchedDir);
+        if (previous != null && !Platform.isMac()) previous.key.cancel();
+        final Set<QuickFile> files = new HashSet<>();
+        final Set<QuickFile> newFiles = new HashSet<>();
+        do {
+          files.addAll(newFiles);
+          final Iterator<QuickFile> it = QuickList.list(path, 0, false).iterator();
+          while (result && it.hasNext()) {
+            final QuickFile quickFile = it.next();
+            if (quickFile.isDirectory() && maxDepth > 0 && newFiles.add(quickFile)) {
+              result =
+                  register(
+                      quickFile.toPath(), maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - 1);
+            } else {
+              newFiles.add(quickFile);
+            }
+          }
+        } while (result && different(files, newFiles));
+      } catch (IOException e) {
+        result = false;
+      }
+      return result;
+    }
+  }
   /**
    * Register a path to monitor for file events
    *
@@ -248,23 +304,41 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    */
   @Override
   public boolean register(final Path path, final int maxDepth) {
-    try {
-      if (Files.exists(path)) {
-        return registerImpl(path.toRealPath(), maxDepth);
-      } else return false;
-    } catch (IOException e) {
-      return false;
+    synchronized (lock) {
+      boolean result = true;
+      try {
+        if (Files.exists(path)) {
+          final Path realPath = path.toRealPath();
+          final WatchedDir watchedDir = watchedDirs.get(realPath);
+          if (watchedDir == null) {
+            result = registerImpl(realPath, maxDepth);
+          } else if (!path.equals(realPath)) {
+            throw new FileSystemLoopException(path.toString());
+          } else if (watchedDir.maxDepth < maxDepth) {
+            result = registerImpl(realPath, maxDepth);
+          } else {
+            result = false;
+          }
+        }
+      } catch (IOException e) {
+        result = false;
+      }
+      return result;
     }
   }
-
   /**
    * Stop watching a directory
    *
    * @param path The directory to remove from monitoring
    */
   @Override
+  @SuppressWarnings("EmptyCatchBlock")
   public void unregister(final Path path) {
-    final WatchedDir watchedDir = watchedDirs.remove(path);
+    Path realPath = null;
+    try {
+      realPath = path.toRealPath();
+    } catch (IOException e) {}
+    final WatchedDir watchedDir = watchedDirs.remove(realPath == null ? path : realPath);
     if (watchedDir != null) {
       WatchKey key = watchedDir.key;
       key.cancel();

@@ -376,11 +376,13 @@ object Build {
                 "DirectoryWatcher",
                 "EntryFilters",
                 "FileCache",
+                "FileType",
                 "NioQuickLister",
                 "Observers",
                 "QuickFile",
                 "QuickLister",
-                "Registerable"
+                "Registerable",
+                "SymlinkWatcher"
               ).value
               convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
             }
@@ -403,6 +405,8 @@ object Build {
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty) ++
         Seq("-Xlint:unchecked"),
       jacocoExcludes in Test := Seq(
+        "com.swoval.files.NativeLoader*",
+        "com.swoval.files.QuickFileImpl$PathWithFileTypeImpl*",
         "com.swoval.files.apple.Event*",
         "com.swoval.files.apple.Flag*",
         "com.swoval.files.apple.Native*"

@@ -6,13 +6,12 @@ import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.Observer
 import com.swoval.files.Directory.OnChange
-import com.swoval.files.DirectoryWatcher.Callback
-import com.swoval.files.DirectoryWatcher.Factory
-import java.io.File
-import java.io.FileFilter
+import com.swoval.files.SymlinkWatcher.OnLoop
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
 import java.util.ArrayList
 import java.util.Collections
 import java.util.Comparator
@@ -24,6 +23,7 @@ import java.util.Map
 import java.util.Map.Entry
 import java.util.Set
 import java.util.concurrent.locks.ReentrantLock
+import Option._
 import FileCache._
 import FileCacheImpl._
 
@@ -36,8 +36,8 @@ object FileCache {
    * @tparam T The value type of the cache entries
    * @return A file cache
    */
-  def apply[T](converter: Converter[T]): FileCache[T] =
-    apply(converter, DEFAULT_FACTORY)
+  def apply[T](converter: Converter[T], options: FileCache.Option*): FileCache[T] =
+    new FileCacheImpl(converter, DEFAULT_FACTORY, options: _*)
 
   /**
    * Create a file cache using a specific DirectoryWatcher created by the provided factory
@@ -47,8 +47,10 @@ object FileCache {
    * @tparam T The value type of the cache entries
    * @return A file cache
    */
-  def apply[T](converter: Converter[T], factory: DirectoryWatcher.Factory): FileCache[T] =
-    new FileCacheImpl(converter, factory)
+  def apply[T](converter: Converter[T],
+               factory: DirectoryWatcher.Factory,
+               options: FileCache.Option*): FileCache[T] =
+    new FileCacheImpl(converter, factory, options: _*)
 
   /**
    * Create a file cache with an Observer of events
@@ -58,8 +60,14 @@ object FileCache {
    * @tparam T The value type of the cache entries
    * @return A file cache
    */
-  def apply[T](converter: Converter[T], observer: Observer[T]): FileCache[T] =
-    apply(converter, DEFAULT_FACTORY, observer)
+  def apply[T](converter: Converter[T],
+               observer: Observer[T],
+               options: FileCache.Option*): FileCache[T] = {
+    val res: FileCache[T] =
+      new FileCacheImpl[T](converter, DEFAULT_FACTORY, options: _*)
+    res.addObserver(observer)
+    res
+  }
 
   /**
    * Create a file cache with an Observer of events
@@ -72,11 +80,29 @@ object FileCache {
    */
   def apply[T](converter: Converter[T],
                factory: DirectoryWatcher.Factory,
-               observer: Observer[T]): FileCache[T] = {
-    val res: FileCache[T] = new FileCacheImpl[T](converter, factory)
+               observer: Observer[T],
+               options: FileCache.Option*): FileCache[T] = {
+    val res: FileCache[T] = new FileCacheImpl[T](converter, factory, options: _*)
     res.addObserver(observer)
     res
   }
+
+  object Option {
+
+    /**
+     * When the FileCache encounters a symbolic link with a directory as target, treat the symbolic
+     * link like a directory. Note that it is possible to create a loop if two directories mutually
+     * link to each other symbolically. When this happens, the FileCache will throw a [[java.nio.file.FileSystemLoopException]] when attempting to register one of these directories
+     * or if the link that completes the loop is added to a registered directory.
+     */
+    val NOFOLLOW_LINKS: FileCache.Option = new Option()
+
+  }
+
+  /**
+ Options for the implementation of a [[FileCache]]
+   */
+  class Option()
 
 }
 
@@ -87,9 +113,9 @@ object FileCache {
  * Directory.EntryFilter)]] method. The cache stores the path information in [[Directory.Entry]]
  * instances.
  *
- * <p>A default implementation is provided by [[FileCache#apply(Directory.Converter,
- * Directory.Observer)]]. The user may cache arbitrary information in the cache by customizing the
- * [[Directory.Converter]] that is passed into the factory [[FileCache.apply]].
+ * <p>A default implementation is provided by [[FileCache.apply]]
+ * . The user may cache arbitrary information in the cache by customizing the
+ * [[Directory.Converter]] that is passed into the factory [[FileCache.apply]]
  *
  * @tparam T The type of data stored in the [[Directory.Entry]] instances for the cache
  */
@@ -124,6 +150,8 @@ abstract class FileCache[T] extends AutoCloseable {
       override def onUpdate(oldEntry: Directory.Entry[T], newEntry: Directory.Entry[T]): Unit = {
         onChange.apply(newEntry)
       }
+
+      override def onError(path: Path, exception: IOException): Unit = {}
     })
 
   /**
@@ -223,12 +251,30 @@ private[files] object FileCacheImpl {
 }
 
 private[files] class FileCacheImpl[T](private val converter: Converter[T],
-                                      factory: DirectoryWatcher.Factory)
+                                      factory: DirectoryWatcher.Factory,
+                                      options: FileCache.Option*)
     extends FileCache[T] {
 
   private val directories: Map[Path, Directory[T]] = new HashMap()
 
   private val lock: ReentrantLock = new ReentrantLock()
+
+  private val symlinkWatcher: SymlinkWatcher =
+    if (!ArrayOps.contains(options, FileCache.Option.NOFOLLOW_LINKS))
+      new SymlinkWatcher(
+        new SymlinkWatcher.EventConsumer() {
+          override def accept(path: Path): Unit = {
+            handleEvent(path)
+          }
+        },
+        factory,
+        new OnLoop() {
+          override def accept(symlink: Path, exception: IOException): Unit = {
+            observers.onError(symlink, exception)
+          }
+        }
+      )
+    else null
 
   private val callback: DirectoryWatcher.Callback =
     new DirectoryWatcher.Callback() {
@@ -238,14 +284,18 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
           if (event.kind == Overflow) {
             try handleOverflow(path)
             catch {
-              case e: IOException =>
+              case e: IOException => {
                 System.err.println(
                   "FileCache caught IOException while processing overflow: " +
                     e)
+                for (el <- e.getStackTrace) {
+                  println(el)
+                }
+              }
 
             }
           } else {
-            handleEvent(path, event.path)
+            handleEvent(path)
           }
         }
       }
@@ -258,6 +308,10 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
    */
   override def close(): Unit = {
     watcher.close()
+    if (symlinkWatcher != null) symlinkWatcher.close()
+    val directoryIterator: Iterator[Directory[T]] =
+      directories.values.iterator()
+    while (directoryIterator.hasNext) directoryIterator.next().close()
     directories.clear()
   }
 
@@ -303,6 +357,16 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
         if (existing == null) {
           result = Directory.cached(path, converter, maxDepth)
           directories.put(path, result)
+          val entryIterator: Iterator[Directory.Entry[T]] =
+            result.list(true, EntryFilters.AllPass).iterator()
+          if (symlinkWatcher != null) {
+            while (entryIterator.hasNext) {
+              val entry: Directory.Entry[T] = entryIterator.next()
+              if (entry.isSymbolicLink) {
+                symlinkWatcher.addSymlink(entry.path, entry.isDirectory)
+              }
+            }
+          }
         }
       }
     }
@@ -351,6 +415,16 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
     result
   }
 
+  private def cachedOrNull(path: Path, maxDepth: Int): Directory[T] = {
+    var res: Directory[T] = null
+    try res = Directory.cached(path, converter, maxDepth)
+    catch {
+      case e: IOException => {}
+
+    }
+    res
+  }
+
   private def handleOverflow(path: Path): Boolean = directories.synchronized {
     val directoryIterator: Iterator[Directory[T]] =
       directories.values.iterator()
@@ -365,11 +439,10 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       val currentDir: Directory[T] = directoryIterator.next()
       if (path.startsWith(currentDir.path)) {
         var oldDir: Directory[T] = currentDir
-        var newDir: Directory[T] =
-          Directory.cached(oldDir.path, converter, oldDir.recursive())
-        while (diff(oldDir, newDir)) {
-          oldDir = newDir
-          newDir = Directory.cached(oldDir.path, converter, oldDir.recursive())
+        var newDir: Directory[T] = cachedOrNull(oldDir.path, oldDir.getDepth)
+        while (newDir == null || diff(oldDir, newDir)) {
+          if (newDir != null) oldDir = newDir
+          newDir = cachedOrNull(oldDir.path, oldDir.getDepth)
         }
         val oldEntries: Map[Path, Directory.Entry[T]] =
           new HashMap[Path, Directory.Entry[T]]()
@@ -403,9 +476,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
             creations.add(mapEntry.getValue)
           } else {
             val oldEntry: Directory.Entry[T] = oldEntries.get(mapEntry.getKey)
-            if (oldEntry != mapEntry.getValue) {
-              updates.add(Array(oldEntry, mapEntry.getValue))
-            }
+            if (oldEntry != mapEntry.getValue) {}
           }
         }
         toReplace.add(newDir)
@@ -429,21 +500,30 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
     creations.isEmpty && deletions.isEmpty && updates.isEmpty
   }
 
-  private def handleEvent(path: Path, eventPath: Path): Unit = {
-    if (Files.exists(path)) {
+  private def handleEvent(path: Path): Unit = {
+    var attrs: BasicFileAttributes = null
+    try attrs = Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS)
+    catch {
+      case e: IOException => {}
+
+    }
+    if (attrs != null) {
       val pair: Pair[Directory[T], List[Directory.Entry[T]]] =
         listImpl(path, 0, new Directory.EntryFilter[T]() {
-          override def accept(path: Directory.Entry[_ <: T]): Boolean =
-            eventPath == path.path
+          override def accept(entry: Directory.Entry[_ <: T]): Boolean =
+            path == entry.path
         })
       if (pair != null) {
         val dir: Directory[T] = pair.first
         val paths: List[Directory.Entry[T]] = pair.second
         if (!paths.isEmpty || path != dir.path) {
           val toUpdate: Path = if (paths.isEmpty) path else paths.get(0).path
+          if (attrs.isSymbolicLink && symlinkWatcher != null)
+            symlinkWatcher.addSymlink(path, Files.isDirectory(path))
           try {
-            val it: Iterator[Array[Directory.Entry[T]]] =
-              dir.addUpdate(toUpdate, !Files.isDirectory(path)).iterator()
+            val it: Iterator[Array[Directory.Entry[T]]] = dir
+              .addUpdate(toUpdate, Directory.Entry.getKind(toUpdate, attrs))
+              .iterator()
             while (it.hasNext) {
               val entry: Array[Directory.Entry[T]] = it.next()
               if (entry.length == 2) {
@@ -453,24 +533,32 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
               }
             }
           } catch {
-            case e: IOException =>
-              System.err.println(
-                "FileCache caught IOException handling event for " + path +
-                  ": " +
-                  e)
+            case e: IOException => observers.onError(path, e)
 
           }
         }
       }
     } else {
+      val removeIterators: List[Iterator[Directory.Entry[T]]] =
+        new ArrayList[Iterator[Directory.Entry[T]]]()
       directories.synchronized {
         val it: Iterator[Directory[T]] = directories.values.iterator()
         while (it.hasNext) {
           val dir: Directory[T] = it.next()
           if (path.startsWith(dir.path)) {
-            val removeIterator: Iterator[Directory.Entry[T]] =
-              dir.remove(path).iterator()
-            while (removeIterator.hasNext) observers.onDelete(removeIterator.next())
+            removeIterators.add(dir.remove(path).iterator())
+          }
+        }
+      }
+      val it: Iterator[Iterator[Directory.Entry[T]]] =
+        removeIterators.iterator()
+      while (it.hasNext) {
+        val removeIterator: Iterator[Directory.Entry[T]] = it.next()
+        while (removeIterator.hasNext) {
+          val entry: Directory.Entry[T] = removeIterator.next()
+          observers.onDelete(entry)
+          if (symlinkWatcher != null) {
+            symlinkWatcher.remove(entry.path)
           }
         }
       }

@@ -78,7 +78,7 @@ object DirectoryWatcherTest extends TestSuite {
           val callback: OnStreamRemoved = new OnStreamRemoved {
             override def apply(stream: String): Unit = events.add(stream)
           }
-          withTempDirectorySync(dir) { subdir =>
+          withTempDirectory(dir) { subdir =>
             val watcher = new AppleDirectoryWatcher(DEFAULT_LATENCY.toNanos / 1.0e9,
                                                     fileFlags,
                                                     Executor.make("apple-directory-watcher-test"),
@@ -92,6 +92,37 @@ object DirectoryWatcherTest extends TestSuite {
           }
         } else {
           Future.successful(())
+        }
+      }
+      'unregister - withTempDirectory { dir =>
+        val firstLatch = new CountDownLatch(1)
+        val secondLatch = new CountDownLatch(2)
+        val callback: Callback = (e: DirectoryWatcher.Event) => {
+          if (e.path.endsWith("file")) {
+            firstLatch.countDown()
+            secondLatch.countDown()
+          }
+        }
+        import Implicits.executionContext
+        usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { c =>
+          c.register(dir)
+          val file = JFiles.createFile(dir.resolve("file"))
+          firstLatch
+            .waitFor(DEFAULT_TIMEOUT) {
+              assert(JFiles.exists(file))
+            }
+            .flatMap { _ =>
+              c.unregister(dir)
+              JFiles.delete(file)
+              secondLatch
+                .waitFor(5.millis) {
+                  throw new IllegalStateException(
+                    "Watcher triggered for path no longer under monitoring")
+                }
+                .recover {
+                  case _: TimeoutException => ()
+                }
+            }
         }
       }
     }

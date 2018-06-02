@@ -40,15 +40,13 @@ package object test {
         case _ =>
           val p = Promise[T]
           promises.enqueue(platform.newTimedPromise(p, timeout))
-          p.future.transformWith({
-            case Success(r) => promises.clear(); Future.successful(f(r))
-            case Failure(e) => promises.clear(); Future.failed(e)
-          })(RunNow)
+          p.future.transform(r => { promises.clear; f(r) }, e => { promises.clear; e })(RunNow)
       })
     def add(t: T): Unit = lock.synchronized {
       promises.dequeueFirst(_ => true) match {
         case Some(promise) =>
           promise.tryComplete(Success(t))
+          promises.clear()
         case _ =>
           queue.enqueue(t)
       }

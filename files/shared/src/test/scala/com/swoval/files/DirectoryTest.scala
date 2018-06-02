@@ -101,7 +101,7 @@ object DirectoryTest extends TestSuite {
         val directory = Directory.of(dir)
         withTempFileSync(dir) { f =>
           directory.ls(f, recursive = false, AllPass) === Seq.empty
-          assert(directory.addUpdate(f, true).asScala.nonEmpty)
+          assert(directory.addUpdate(f, Entry.FILE).asScala.nonEmpty)
           directory.ls(f, recursive = false, AllPass) === Seq(f)
         }
       }
@@ -110,7 +110,7 @@ object DirectoryTest extends TestSuite {
         withTempDirectory(dir) { subdir =>
           withTempFileSync(subdir) { f =>
             directory.ls(f, recursive = true, AllPass) === Seq.empty
-            assert(directory.addUpdate(f, false).asScala.nonEmpty)
+            assert(directory.addUpdate(f, Entry.FILE).asScala.nonEmpty)
             directory.ls(dir, recursive = true, AllPass) === Seq(subdir, f)
           }
         }
@@ -118,9 +118,9 @@ object DirectoryTest extends TestSuite {
       'sequentially - withTempDirectory { dir =>
         val directory = Directory.of(dir)
         withTempDirectory(dir) { subdir =>
-          assert(directory.addUpdate(subdir, false).asScala.nonEmpty)
+          assert(directory.addUpdate(subdir, Entry.DIRECTORY).asScala.nonEmpty)
           withTempFileSync(subdir) { f =>
-            assert(directory.addUpdate(f, true).asScala.nonEmpty)
+            assert(directory.addUpdate(f, Entry.FILE).asScala.nonEmpty)
             directory.ls(recursive = true, AllPass) === Set(subdir, f)
           }
         }
@@ -129,7 +129,7 @@ object DirectoryTest extends TestSuite {
         val directory = Directory.of(dir)
         withTempDirectory(dir) { subdir =>
           withTempFileSync(subdir) { f =>
-            assert(directory.addUpdate(f, true).asScala.nonEmpty)
+            assert(directory.addUpdate(f, Entry.FILE).asScala.nonEmpty)
             directory.ls(recursive = true, AllPass) === Set(f, subdir)
           }
         }
@@ -186,7 +186,7 @@ object DirectoryTest extends TestSuite {
         val newBytes = "bar".getBytes
         cachedFile.value.bytes ==> initialBytes
         f.getBytes ==> newBytes
-        dir.addUpdate(f, true)
+        dir.addUpdate(f, Entry.FILE)
         val newCachedFile = dir.ls(f, recursive = true, filter(newBytes)).head
         assert(newCachedFile.value.bytes.sameElements(newBytes))
         dir.ls(f, recursive = true, filter(initialBytes)) === Seq.empty[JPath]

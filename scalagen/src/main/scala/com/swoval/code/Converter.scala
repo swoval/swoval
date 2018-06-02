@@ -63,6 +63,10 @@ object Converter {
     val newLines = sanitize(lines)
     (if (path.toString.contains("DirectoryWatcher.scala")) {
        newLines.filterNot(_.contains("import Event._"))
+     } else if (path.toString.contains("Directory.scala")) {
+       newLines.filterNot(_.contains("import Entry._"))
+     } else if (path.toString.contains("FileCache.scala")) {
+       newLines.map(_.replaceAll("(new FileCacheImpl.*)options", "$1options:_*"))
      } else {
        newLines
      }).mkString("\n")

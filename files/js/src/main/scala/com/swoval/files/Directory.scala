@@ -2,8 +2,11 @@ package com.swoval.files
 
 import com.swoval.files.EntryFilters.AllPass
 import java.io.IOException
+import java.nio.file.FileSystemLoopException
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
 import java.util.ArrayList
 import java.util.Collection
 import java.util.HashMap
@@ -54,7 +57,7 @@ object Directory {
    * @return A directory whose entries just contain the path itself
    */
   def of(path: Path, depth: Int): Directory[Path] =
-    new Directory(path, PATH_CONVERTER, depth).init()
+    new Directory(path, path, PATH_CONVERTER, depth).init()
 
   /**
    * Make a new Directory with no cache value associated with the path
@@ -64,7 +67,8 @@ object Directory {
    * @return A directory whose entries just contain the path itself
    */
   def of(path: Path, recursive: Boolean): Directory[Path] =
-    new Directory(path, PATH_CONVERTER, if (recursive) java.lang.Integer.MAX_VALUE else 0).init()
+    new Directory(path, path, PATH_CONVERTER, if (recursive) java.lang.Integer.MAX_VALUE else 0)
+      .init()
 
   /**
    * Make a new Directory with a cache entries created by {@code converter}
@@ -75,7 +79,7 @@ object Directory {
    * @return A directory with entries of type T
    */
   def cached[T](path: Path, converter: Converter[T]): Directory[T] =
-    new Directory(path, converter, java.lang.Integer.MAX_VALUE).init()
+    new Directory(path, path, converter, java.lang.Integer.MAX_VALUE).init()
 
   /**
    * Make a new Directory with a cache entries created by {@code converter}
@@ -87,7 +91,7 @@ object Directory {
    * @return A directory with entries of type T
    */
   def cached[T](path: Path, converter: Converter[T], recursive: Boolean): Directory[T] =
-    new Directory(path, converter, if (recursive) java.lang.Integer.MAX_VALUE else 0).init()
+    new Directory(path, path, converter, if (recursive) java.lang.Integer.MAX_VALUE else 0).init()
 
   /**
    * Make a new Directory with a cache entries created by {@code converter}
@@ -99,7 +103,41 @@ object Directory {
    * @return A directory with entries of type T
    */
   def cached[T](path: Path, converter: Converter[T], depth: Int): Directory[T] =
-    new Directory(path, converter, depth).init()
+    new Directory(path, path, converter, depth).init()
+
+  object Entry {
+
+    val DIRECTORY: Int = 1
+
+    val FILE: Int = 2
+
+    val LINK: Int = 4
+
+    val UNKNOWN: Int = 8
+
+    /**
+     * Compute the underlying file type for the path.
+     * @param path The path whose type is to be determined.
+     * @param attrs The attributes of the ile
+     * @return The file type of the path
+     */
+    def getKind(path: Path, attrs: BasicFileAttributes): Int =
+      if (attrs.isSymbolicLink)
+        Entry.LINK |
+          (if (Files.isDirectory(path)) Entry.DIRECTORY else Entry.FILE)
+      else if (attrs.isDirectory) Entry.DIRECTORY
+      else Entry.FILE
+
+    /**
+     * Compute the underlying file type for the path.
+     * @param path The path whose type is to be determined.
+     * @return The file type of the path
+     */
+    def getKind(path: Path): Int =
+      getKind(path,
+              Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS))
+
+  }
 
   /**
    * Container class for [[Directory]] entries. Contains both the path to which the path
@@ -107,7 +145,19 @@ object Directory {
    *
    * @tparam T The value wrapped in the Entry
    */
-  class Entry[T](val path: Path, val value: T, val isDirectory: Boolean) {
+  class Entry[T](val path: Path, val value: T, @BeanProperty val kind: Int) {
+
+    /**
+ @return true if the underlying path is a directory
+     */
+    def isDirectory(): Boolean =
+      is(Entry.DIRECTORY) || (is(Entry.UNKNOWN) && Files.isDirectory(path))
+
+    def isFile(): Boolean =
+      is(Entry.FILE) || (is(Entry.UNKNOWN) && Files.isRegularFile(path))
+
+    def isSymbolicLink(): Boolean =
+      is(Entry.LINK) || (is(Entry.UNKNOWN) && Files.isRegularFile(path))
 
     /**
      * Create a new Entry using the FileSystem to check if the Entry is for a directory
@@ -115,9 +165,7 @@ object Directory {
      * @param path The path to which this entry corresponds
      * @param value The {@code path} derived value for this entry
      */
-    def this(path: Path, value: T) = this(path, value, Files.isDirectory(path))
-
-    def exists(): Boolean = Files.exists(path)
+    def this(path: Path, value: T) = this(path, value, Entry.getKind(path))
 
     /**
      * Resolve a Entry for a relative {@code path}
@@ -126,18 +174,18 @@ object Directory {
      * @return A Entry where the {@code path</code> has been resolved against <code>other}
      */
     def resolvedFrom(other: Path): Entry[T] =
-      new Entry(other.resolve(path), this.value, this.isDirectory)
+      new Entry(other.resolve(path), this.value, this.kind)
 
     /**
      * Resolve a Entry for a relative {@code path</code> where <code>isDirectory} is known in
      * advance
      *
      * @param other The path to resolve {@code path} against
-     * @param isDirectory Indicates whether the path is a directory
+     * @param kind The known kind of the file
      * @return A Entry where the {@code path</code> has been resolved against <code>other}
      */
-    def resolvedFrom(other: Path, isDirectory: Boolean): Entry[T] =
-      new Entry(other.resolve(path), this.value, isDirectory)
+    def resolvedFrom(other: Path, kind: Int): Entry[T] =
+      new Entry(other.resolve(path), this.value, kind)
 
     override def equals(other: Any): Boolean = other match {
       case other: Directory.Entry[_] => {
@@ -151,6 +199,8 @@ object Directory {
     override def hashCode(): Int = path.hashCode ^ value.hashCode
 
     override def toString(): String = "Entry(" + path + ", " + value + ")"
+
+    private def is(kind: Int): Boolean = (kind & this.kind) != 0
 
   }
 
@@ -188,6 +238,20 @@ object Directory {
   }
 
   /**
+   * Callback to fire when an error is encountered. This will generally be a [[java.nio.file.FileSystemLoopException]].
+   */
+  trait OnError {
+
+    /**
+     * Apply callback for error
+     * @param path The path that induced the error
+     * @param exception The encountered error
+     */
+    def apply(path: Path, exception: IOException): Unit
+
+  }
+
+  /**
    * Provides callbacks to run when different types of file events are detected by the cache
    *
    * @tparam T The type for the [[Directory.Entry]] data
@@ -199,6 +263,8 @@ object Directory {
     def onDelete(oldEntry: Entry[T]): Unit
 
     def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit
+
+    def onError(path: Path, exception: IOException): Unit
 
   }
 
@@ -213,7 +279,10 @@ object Directory {
  *
  * @tparam T The cache value type
  */
-class Directory[T] private (val path: Path, private val converter: Converter[T], d: Int)
+class Directory[T] private (val path: Path,
+                            val realPath: Path,
+                            private val converter: Converter[T],
+                            d: Int)
     extends AutoCloseable {
 
   @BeanProperty
@@ -316,16 +385,18 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
    * Update the Directory entry for a particular path.
    *
    * @param path The path to addUpdate
-   * @param isFile Indicates whether {@code path} is a regular file
+   * @param kind Specifies the type of file. This can be DIRECTORY, FILE with an optional LINK bit
+   *     set if the file is a symbolic link.
    * @return A list of updates for the path. When the path is new, the updates have the
    *     oldCachedPath field set to null and will contain all of the children of the new path when
    *     it is a directory. For an existing path, the List contains a single Update that contains
    *     the previous and new [[Directory.Entry]]
+   * traversing the directory.
    */
-  def addUpdate(path: Path, isFile: Boolean): List[Array[Entry[T]]] =
-    if (!path.isAbsolute) updateImpl(FileOps.parts(path), isFile)
+  def addUpdate(path: Path, kind: Int): List[Array[Entry[T]]] =
+    if (!path.isAbsolute) updateImpl(FileOps.parts(path), kind)
     else if ((path.startsWith(this.path)))
-      updateImpl(FileOps.parts(this.path.relativize(path)), isFile)
+      updateImpl(FileOps.parts(this.path.relativize(path)), kind)
     else new ArrayList[Array[Entry[T]]]()
 
   /**
@@ -373,7 +444,7 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
     addUpdate(list, null, entry)
   }
 
-  private def updateImpl(parts: List[Path], isFile: Boolean): List[Array[Entry[T]]] = {
+  private def updateImpl(parts: List[Path], kind: Int): List[Array[Entry[T]]] = {
     val it: Iterator[Path] = parts.iterator()
     var currentDir: Directory[T] = this
     val result: List[Array[Entry[T]]] = new ArrayList[Array[Entry[T]]]()
@@ -384,10 +455,10 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
       if (!it.hasNext) {
 // We will always return from this block
         currentDir.lock.synchronized {
-          if (isFile || currentDir.depth == 0) {
+          if (((kind & Entry.FILE) != 0) || currentDir.depth == 0) {
             val oldEntry: Entry[T] = currentDir.files.getByName(p)
             val newEntry: Entry[T] =
-              new Entry[T](p, converter.apply(resolved), false)
+              new Entry[T](p, converter.apply(resolved), kind)
             currentDir.files.put(p.toString, newEntry)
             val oldResolvedEntry: Entry[T] =
               if (oldEntry == null) null
@@ -401,7 +472,7 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
               result
             } else {
               val oldEntry: Entry[T] = dir.entry()
-              dir._cacheEntry.set(new Entry(dir.path, converter.apply(dir.path), true))
+              dir._cacheEntry.set(new Entry(dir.path, converter.apply(dir.path), kind))
               addUpdate(result, oldEntry.resolvedFrom(currentDir.path), dir.entry())
               result
             }
@@ -434,7 +505,7 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
           } else {
             val file: Entry[T] = currentDir.files.getByName(p)
             if (file != null)
-              result = left(file.resolvedFrom(currentDir.path, false))
+              result = left(file.resolvedFrom(currentDir.path, file.getKind))
           }
         }
       } else {
@@ -466,14 +537,15 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
     }
     val filesIterator: Iterator[Entry[T]] = files.iterator()
     while (filesIterator.hasNext) {
-      val resolved: Entry[T] =
-        filesIterator.next().resolvedFrom(this.path, false)
+      val entry: Entry[T] = filesIterator.next()
+      val resolved: Entry[T] = entry.resolvedFrom(this.path, entry.getKind)
       if (filter.accept(resolved)) result.add(resolved)
     }
     val subdirIterator: Iterator[Directory[T]] = subdirectories.iterator()
     while (subdirIterator.hasNext) {
       val subdir: Directory[T] = subdirIterator.next()
-      val resolved: Entry[T] = subdir.entry().resolvedFrom(this.path, true)
+      val entry: Entry[T] = subdir.entry()
+      val resolved: Entry[T] = entry.resolvedFrom(this.path, entry.getKind)
       if (filter.accept(resolved)) result.add(resolved)
       if (maxDepth > 0) subdir.listImpl(maxDepth - 1, filter, result)
     }
@@ -489,7 +561,7 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
         currentDir.lock.synchronized {
           val file: Entry[T] = currentDir.files.removeByName(p)
           if (file != null) {
-            result.add(file.resolvedFrom(currentDir.path, true))
+            result.add(file.resolvedFrom(currentDir.path, file.getKind))
           } else {
             val dir: Directory[T] = currentDir.subdirectories.removeByName(p)
             if (dir != null) {
@@ -507,22 +579,39 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
     result
   }
 
-  private def init(): Directory[T] = {
+  private def init(): Directory[T] = init(new ArrayList[Path]())
+
+  private def init(parents: List[Path]): Directory[T] = {
+    parents.add(this.realPath)
     if (Files.exists(path)) {
       lock.synchronized {
         val it: Iterator[QuickFile] = QuickList.list(path, 0, true).iterator()
         while (it.hasNext) {
           val file: QuickFile = it.next()
+          val kind: Int = (if (file.isSymbolicLink) Entry.LINK else 0) |
+            (if (file.isDirectory) Entry.DIRECTORY else Entry.FILE)
           val p: Path = file.toPath()
           val key: Path = path.relativize(p).getFileName
           if (file.isDirectory) {
             if (depth > 0) {
-              subdirectories.put(key.toString, cached(p, converter, subdirectoryDepth()))
+              var realPath: Path = p
+              if (file.isSymbolicLink) {
+                val parentIt: Iterator[Path] = parents.iterator()
+                realPath = p.toRealPath()
+                while (parentIt.hasNext) {
+                  val parent: Path = parentIt.next()
+                  if (parent == realPath)
+                    throw new FileSystemLoopException(p.toString)
+                }
+              }
+              subdirectories.put(key.toString,
+                                 new Directory(p, realPath, converter, subdirectoryDepth())
+                                   .init(parents))
             } else {
-              files.put(key.toString, new Entry(key, converter.apply(p), true))
+              files.put(key.toString, new Entry(key, converter.apply(p), kind))
             }
           } else {
-            files.put(key.toString, new Entry(key, converter.apply(p), false))
+            files.put(key.toString, new Entry(key, converter.apply(p), kind))
           }
         }
       }

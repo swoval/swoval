@@ -6,7 +6,7 @@ import scala.scalajs.js.annotation._
 @JSExportTopLevel("com.swoval.files.apple.FileEventsApi")
 @JSExportAll
 class FileEventsApi(handle: Double) extends AutoCloseable {
-  private[this] var closed = false;
+  private[this] var closed = false
   override def close(): Unit = {
     if (!closed) {
       FileEventsApiFacade.close(handle)
@@ -21,18 +21,20 @@ class FileEventsApi(handle: Double) extends AutoCloseable {
    * @param flags The flags for the stream [[Flags.Create]]
    * @return handle that can be used to stop the stream in the future
    */
-  def createStream(path: String, latency: Double, flags: Int) = {
-    if (!closed) FileEventsApiFacade.createStream(path, latency, flags, handle)
-    else
-      throw new IllegalStateException(
-        s"Tried to call create stream for $path on closed FileEventsApi")
+  def createStream(path: String, latency: Double, flags: Int): Int = {
+    val res =
+      if (!closed) FileEventsApiFacade.createStream(path, latency, flags, handle)
+      else
+        throw new IllegalStateException(
+          s"Tried to call create stream for $path on closed FileEventsApi")
+    res
   }
 
   /**
    * Stop monitoring the path that was previously created with [[createStream]]
    * @param streamHandle handle returned by [[createStream]]
    */
-  def stopStream(streamHandle: Int) = {
+  def stopStream(streamHandle: Int): Unit = {
     if (!closed) FileEventsApiFacade.stopStream(handle, streamHandle)
     else
       throw new IllegalStateException(

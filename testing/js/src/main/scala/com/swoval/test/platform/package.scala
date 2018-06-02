@@ -31,11 +31,13 @@ package object platform {
           try {
             val realPath = Fs.realpathSync(p)
             if (Fs.statSync(realPath).isDirectory) delete(p)
-          } catch { case e: Exception => } finally Fs.unlinkSync(p)
+          } catch { case e: Exception => } finally {
+            util.Try(Fs.unlinkSync(p))
+          }
         }
-        Fs.rmdirSync(dir)
+        util.Try(Fs.rmdirSync(dir))
       } else {
-        Fs.unlinkSync(dir)
+        util.Try(Fs.unlinkSync(dir))
       }
     }
   }

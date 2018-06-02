@@ -1,20 +1,23 @@
 package com.swoval.files
 
-import java.nio.file.{ Files, Paths, Path => JPath }
+import java.io.IOException
+import java.nio.file.attribute.FileTime
+import java.nio.file.{ FileSystemLoopException, Files, Path => JPath }
 
 import com.swoval.files.Directory._
+import com.swoval.files.EntryOps._
+import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.test._
 import com.swoval.test._
 import utest._
-import utest.framework.ExecutionContext.RunNow
+import Implicits.executionContext
+import com.swoval.files.SymlinkWatcher.OnLoop
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
+import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
-import FileCacheTest.FileCacheOps
-
 import scala.util.Failure
-
-import EntryOps._
 
 trait FileCacheTest extends TestSuite {
   def factory: DirectoryWatcher.Factory
@@ -23,13 +26,21 @@ trait FileCacheTest extends TestSuite {
     FileCache.apply(((p: JPath) => p): Converter[JPath],
                     factory,
                     Observers.apply(f: OnChange[JPath]))
+  class LoopObserver(val latch: CountDownLatch) extends Observer[JPath] {
+    override def onCreate(newEntry: Entry[JPath]): Unit = {}
+    override def onDelete(oldEntry: Entry[JPath]): Unit = {}
+    override def onUpdate(oldEntry: Entry[JPath], newEntry: Entry[JPath]): Unit = {}
+    override def onError(path: JPath, exception: IOException): Unit = latch.countDown()
+  }
 
   val testsImpl: Tests = Tests {
     'directory - {
       'subdirectories - {
         'callback - withTempDirectory { dir =>
           val events = new ArrayBlockingQueue[JPath](2)
-          usingAsync(simpleCache((cacheEntry: Entry[JPath]) => events.add(cacheEntry.path))) { c =>
+          val eventSet = mutable.Set.empty[JPath]
+          usingAsync(simpleCache((cacheEntry: Entry[JPath]) =>
+            if (eventSet.add(cacheEntry.path)) events.add(cacheEntry.path))) { c =>
             c.register(dir)
             withTempDirectory(dir) { subdir =>
               withTempFile(subdir) { f =>
@@ -87,7 +98,8 @@ trait FileCacheTest extends TestSuite {
           val moved = Path(s"${initial.toString}.moved")
           val onChange: OnChange[JPath] = (_: Entry[JPath]) => latch.countDown()
           val onUpdate: OnUpdate[JPath] = (_: Entry[JPath], _: Entry[JPath]) => {}
-          val observer = Observers.apply(onChange, onUpdate, onChange)
+          val onError: OnError = (_: JPath, _: IOException) => {}
+          val observer = Observers.apply(onChange, onUpdate, onChange, onError)
           usingAsync(FileCache.apply(identity, factory, observer)) { c =>
             c.reg(dir, recursive = false)
             c.ls(dir, recursive = false) === Seq(initial)
@@ -116,9 +128,12 @@ trait FileCacheTest extends TestSuite {
             }
           }
           var allFiles = (subdirs ++ files).toSet
-          val observer = Observers.apply[JPath]((_: Entry[JPath]) => creationLatch.countDown(),
-                                                (_: Entry[JPath], _: Entry[JPath]) => {},
-                                                (e: Entry[JPath]) => deletionLatch.countDown())
+          val observer = Observers.apply[JPath](
+            (_: Entry[JPath]) => creationLatch.countDown(),
+            (_: Entry[JPath], _: Entry[JPath]) => {},
+            (_: Entry[JPath]) => deletionLatch.countDown(),
+            (_: JPath, _: IOException) => {}
+          )
           usingAsync(FileCache.apply[JPath](identity, factory, observer)) { c =>
             c.reg(dir)
             executor.run(new Runnable {
@@ -301,6 +316,7 @@ trait FileCacheTest extends TestSuite {
               override def onUpdate(oldEntry: Entry[LastModified],
                                     newEntry: Entry[LastModified]): Unit =
                 if (oldEntry.value.lastModified != newEntry.value.lastModified) latch.countDown()
+              override def onError(path: JPath, iOException: IOException): Unit = {}
             }
           )) { c =>
           c.reg(file.getParent, recursive = false)
@@ -321,6 +337,280 @@ trait FileCacheTest extends TestSuite {
               }
             cachedFile.value.lastModified ==> lastModified
             newCachedFile.value.lastModified ==> updatedLastModified
+          }
+        }
+      }
+    }
+    'symlinks - {
+      'initial - withTempDirectory { dir =>
+        withTempFile { file =>
+          val latch = new CountDownLatch(1)
+          Files.createSymbolicLink(dir.resolve("link"), file)
+          usingAsync(simpleCache((_: Entry[JPath]) => latch.countDown())) { c =>
+            c.reg(dir)
+            Files.write(file, "foo".getBytes)
+            latch.waitFor(DEFAULT_TIMEOUT) {
+              new String(Files.readAllBytes(file)) ==> "foo"
+            }
+          }
+        }
+      }
+      'directory - {
+        'base - withTempDirectory { dir =>
+          withTempDirectory { otherDir =>
+            val file = Files.createFile(otherDir.resolve("file"))
+            val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
+            val latch = new CountDownLatch(1)
+            usingAsync(simpleCache((_: Entry[JPath]) => latch.countDown())) { c =>
+              c.reg(dir)
+              Files.write(file, "foo".getBytes)
+              latch.waitFor(DEFAULT_TIMEOUT) {
+                new String(Files.readAllBytes(file)) ==> "foo"
+              }
+            }
+          }
+        }
+        'nested - withTempDirectory { dir =>
+          withTempDirectory { otherDir =>
+            val subdir = Files.createDirectories(otherDir.resolve("subdir").resolve("nested"))
+            val file = Files.createFile(subdir.resolve("file"))
+            val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
+            val linkedFile = link.resolve(otherDir.relativize(file))
+            val latch = new CountDownLatch(1)
+            usingAsync(
+              simpleCache((e: Entry[JPath]) => if (e.path == linkedFile) latch.countDown())) { c =>
+              c.reg(dir)
+              Files.write(file, "foo".getBytes)
+              latch.waitFor(DEFAULT_TIMEOUT) {
+                new String(Files.readAllBytes(file)) ==> "foo"
+              }
+            }
+          }
+        }
+        'loop - {
+          'initial - withTempDirectory { dir =>
+            withTempDirectory { otherDir =>
+              Files.createSymbolicLink(dir.resolve("other"), otherDir)
+              Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+              using(simpleCache((_: Entry[JPath]) => {})) { c =>
+                intercept[FileSystemLoopException](c.reg(dir))
+              }
+            }
+          }
+          'added - {
+            'original - {
+              withTempDirectory { dir =>
+                withTempDirectory { otherDir =>
+                  Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+                  val latch = new CountDownLatch(1)
+                  val observer = new LoopObserver(latch)
+                  usingAsync(
+                    FileCache.apply(((p: JPath) => p): Converter[JPath], factory, observer)) { c =>
+                    c.reg(dir)
+                    Files.createSymbolicLink(dir.resolve("other"), otherDir)
+                    latch.waitFor(DEFAULT_TIMEOUT) {
+                      c.ls(dir) === Seq.empty[JPath]
+                    }
+                  }
+                }
+              }
+            }
+            'symlink - {
+              withTempDirectory { dir =>
+                withTempDirectory { otherDir =>
+                  val link = Files.createSymbolicLink(dir.resolve("other"), otherDir)
+                  val latch = new CountDownLatch(1)
+                  val observer = new LoopObserver(latch)
+                  usingAsync(
+                    FileCache.apply(((p: JPath) => p): Converter[JPath], factory, observer)) { c =>
+                    c.reg(dir)
+                    Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+                    latch.waitFor(DEFAULT_TIMEOUT) {
+                      c.ls(dir) === Seq(link)
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        'added - withTempDirectory { dir =>
+          withTempFile { file =>
+            val linkLatch = new CountDownLatch(1)
+            val fileLatch = new CountDownLatch(1)
+            val link = Files.createSymbolicLink(dir.resolve("link"), file)
+            usingAsync(simpleCache((e: Entry[JPath]) => {
+              if (e.path.endsWith("dir-link")) linkLatch.countDown()
+              if (e.path.endsWith("newfile")) fileLatch.countDown()
+            })) { c =>
+              c.reg(dir)
+              val otherDir = file.getParent
+              val foo = Files.createDirectories(otherDir.resolve("foo"))
+              val dirLink = Files.createSymbolicLink(dir.resolve("dir-link"), otherDir)
+              val fooLink = dirLink.resolve("foo")
+              val newFile = foo.resolve("newfile")
+              linkLatch
+                .waitFor(DEFAULT_TIMEOUT) {
+                  Files.write(newFile, "foo".getBytes)
+                }
+                .flatMap { _ =>
+                  fileLatch.waitFor(DEFAULT_TIMEOUT) {
+                    new String(Files.readAllBytes(newFile)) ==> "foo"
+                    c.ls(dir) === Set(link,
+                                      dirLink,
+                                      dirLink.resolve(file.getFileName),
+                                      fooLink,
+                                      fooLink.resolve("newfile"))
+                  }
+                }
+            }
+          }
+        }
+      }
+      'added - withTempDirectory { dir =>
+        withTempFile { file =>
+          val linkLatch = new CountDownLatch(1)
+          val contentLatch = new CountDownLatch(1)
+          usingAsync(simpleCache((_: Entry[JPath]) => {
+            if (linkLatch.getCount == 1) linkLatch.countDown() else contentLatch.countDown()
+          })) { c =>
+            c.reg(dir)
+            Files.createSymbolicLink(dir.resolve("link"), file)
+            linkLatch
+              .waitFor(DEFAULT_TIMEOUT) {
+                Files.write(file, "foo".getBytes)
+              }
+              .flatMap { _ =>
+                contentLatch.waitFor(DEFAULT_TIMEOUT) {
+                  new String(Files.readAllBytes(file)) ==> "foo"
+                }
+              }
+          }
+        }
+      }
+      'removed - withTempDirectory { dir =>
+        withTempFile { file =>
+          val linkLatch = new CountDownLatch(1)
+          val contentLatch = new CountDownLatch(1)
+          usingAsync(simpleCache((e: Entry[JPath]) => {
+            if (linkLatch.getCount == 1) linkLatch.countDown() else contentLatch.countDown()
+          })) { c =>
+            val link = Files.createSymbolicLink(dir.resolve("link"), file)
+            c.reg(dir)
+            c.ls(dir) === Seq(link)
+            assert(Files.isRegularFile(link))
+            Files.deleteIfExists(file)
+            linkLatch
+              .waitFor(DEFAULT_TIMEOUT) {
+                c.ls(dir) === Seq(link)
+                assert(!Files.isRegularFile(link))
+              }
+          }
+        }
+      }
+      'multiple - {
+        'static - withTempDirectory { dir =>
+          val latch = new CountDownLatch(2)
+          val paths: mutable.Set[JPath] = mutable.Set.empty[JPath]
+          withTempDirectory { otherDir =>
+            withTempFile { file =>
+              val link = Files.createSymbolicLink(dir.resolve("link"), file)
+              val otherLink = Files.createSymbolicLink(otherDir.resolve("link"), file)
+              usingAsync(FileCache.apply[JPath](
+                identity,
+                new Observer[JPath] {
+                  override def onCreate(newEntry: Entry[JPath]): Unit = {}
+                  override def onDelete(oldEntry: Entry[JPath]): Unit = {}
+                  override def onUpdate(oldEntry: Entry[JPath], newEntry: Entry[JPath]): Unit = {
+                    if (paths.add(newEntry.path)) latch.countDown()
+                  }
+                  override def onError(path: JPath, exception: IOException): Unit = {}
+                }
+              )) { c =>
+                c.register(dir)
+                c.register(otherDir)
+                Files.write(file, "foo".getBytes)
+                latch.waitFor(DEFAULT_TIMEOUT) {
+                  paths.toSet === Set(link, otherLink)
+                }
+              }
+            }
+          }
+        }
+        'removed - withTempDirectory { dir =>
+          val updateLatch = new CountDownLatch(1)
+          val deletionLatch = new CountDownLatch(1)
+          val secondDeletionLatch = new CountDownLatch(2)
+          val secondUpdateLatch = new CountDownLatch(1)
+          val paths: mutable.Set[JPath] = mutable.Set.empty[JPath]
+          var closed = false
+          withTempDirectory { otherDir =>
+            withTempFile { file =>
+              val link = Files.createSymbolicLink(dir.resolve("link"), file)
+              val otherLink = Files.createSymbolicLink(otherDir.resolve("link"), file)
+              usingAsync(FileCache.apply[JPath](
+                identity,
+                new Observer[JPath] {
+                  override def onCreate(newEntry: Entry[JPath]): Unit = {}
+
+                  override def onDelete(oldEntry: Entry[JPath]): Unit = {
+                    deletionLatch.countDown()
+                    secondDeletionLatch.countDown()
+                  }
+
+                  override def onUpdate(oldEntry: Entry[JPath], newEntry: Entry[JPath]): Unit = {
+                    if (newEntry.path.endsWith("link")) {
+                      paths.add(newEntry.path)
+                      updateLatch.countDown()
+                    } else if (closed) {
+                      secondUpdateLatch.countDown()
+                    }
+                  }
+                  override def onError(path: JPath, exception: IOException): Unit = {}
+                }
+              )) { c =>
+                c.register(dir)
+                c.register(otherDir)
+                Files.delete(otherLink)
+                deletionLatch
+                  .waitFor(DEFAULT_TIMEOUT) {
+                    c.ls(otherDir) === Seq.empty[JPath]
+                  }
+                  .flatMap { _ =>
+                    Files.write(file, "foo".getBytes)
+                    updateLatch
+                      .waitFor(DEFAULT_TIMEOUT) {
+                        paths.toSet === Set(link)
+                      }
+                      .flatMap { _ =>
+                        Files.delete(link)
+                        secondDeletionLatch
+                          .waitFor(DEFAULT_TIMEOUT) {
+                            closed = true
+                          }
+                          .flatMap { _ =>
+                            Files.write(file, "bar".getBytes)
+                            secondUpdateLatch.waitFor(5.millis) {
+                              // should be unreachable
+                              throw new IllegalStateException("Unmonitored file triggered callback")
+                              ()
+                            }
+                          }
+                          .recover {
+                            case _: TimeoutException => ()
+                          }
+                      }
+                  }
+                  .andThen {
+                    case Failure(_) =>
+                      println(
+                        s"Test failed:\ndeletionLatch = ${deletionLatch.getCount}\n" +
+                          s"secondDeletionLatch = ${secondDeletionLatch.getCount}\n"
+                          + s"updateLatch = ${updateLatch.getCount}\n"
+                          + s"secondUpdateLatch = ${secondUpdateLatch.getCount}")
+                  }
+              }
+            }
           }
         }
       }

@@ -1,6 +1,7 @@
 package com.swoval.files
 
 import java.nio.file.{ Files => JFiles, Path => JPath }
+import java.util.concurrent.TimeoutException
 
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.test._
@@ -10,6 +11,7 @@ import utest._
 
 import scala.collection.mutable
 import scala.concurrent.Future
+import scala.concurrent.duration._
 import scala.util.Failure
 
 object NioDirectoryWatcherTest extends TestSuite {
@@ -88,11 +90,11 @@ object NioDirectoryWatcherTest extends TestSuite {
         w.register(dir)
         subdirs.foreach(JFiles.createDirectory(_))
         overflowLatch
-          .waitFor(DEFAULT_TIMEOUT / 2)(())
+          .waitFor(DEFAULT_TIMEOUT * 2)(())
           .flatMap { _ =>
             subdirLatch.waitFor(DEFAULT_TIMEOUT) {
               subdirs.foreach(subdir => JFiles.write(subdir.resolve("foo.scala"), "foo".getBytes))
-              fileLatch.waitFor(DEFAULT_TIMEOUT / 2) {
+              fileLatch.waitFor(DEFAULT_TIMEOUT) {
                 new String(JFiles.readAllBytes(last.resolve("foo.scala"))) ==> "foo"
               }
             }
@@ -103,6 +105,38 @@ object NioDirectoryWatcherTest extends TestSuite {
             println(s"Overflow latch was not triggered ${overflowLatch.getCount}")
           if (subdirLatch.getCount > 0) println("Subdirectory latch was not triggered")
           if (fileLatch.getCount > 0) println("File latch was not triggered")
+      }
+    }
+    'unregister - withTempDirectory { base =>
+      val dir = JFiles.createDirectories(base.resolve("dir"))
+      val firstLatch = new CountDownLatch(1)
+      val secondLatch = new CountDownLatch(1)
+      val callback: Callback = (e: DirectoryWatcher.Event) => {
+        if (e.path.endsWith("file")) {
+          firstLatch.countDown()
+        } else if (e.path.endsWith("other-file")) {
+          secondLatch.countDown()
+        }
+      }
+      usingAsync(new NioDirectoryWatcher(callback)) { c =>
+        c.register(dir)
+        val file = JFiles.createFile(dir.resolve("file"))
+        firstLatch
+          .waitFor(DEFAULT_TIMEOUT) {
+            assert(JFiles.exists(file))
+          }
+          .flatMap { _ =>
+            c.unregister(dir)
+            JFiles.createFile(dir.resolve("other-file"))
+            secondLatch
+              .waitFor(20.millis) {
+                throw new IllegalStateException(
+                  "Watcher triggered for path no longer under monitoring")
+              }
+              .recover {
+                case _: TimeoutException => ()
+              }
+          }
       }
     }
   } else

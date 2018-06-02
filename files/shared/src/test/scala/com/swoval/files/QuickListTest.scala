@@ -2,6 +2,7 @@ package com.swoval.files
 
 import java.nio.file.{
   AccessDeniedException,
+  FileSystemLoopException,
   Files,
   NoSuchFileException,
   NotDirectoryException,
@@ -21,8 +22,9 @@ object QuickListTest {
       ql.list(path, if (recursive) java.lang.Integer.MAX_VALUE else 1, followLinks)
         .asScala
         .map(_.toPath().normalize())
-    def ls(path: JPath, depth: Int): Seq[JPath] =
-      ql.list(path, depth, false).asScala.map(_.toPath())
+    def ls(path: JPath, depth: Int): Seq[JPath] = ls(path, depth, followLinks = true)
+    def ls(path: JPath, depth: Int, followLinks: Boolean): Seq[JPath] =
+      ql.list(path, depth, followLinks).asScala.map(_.toPath())
   }
 }
 class QuickListTest(quickLister: QuickLister, run: Boolean) extends TestSuite {
@@ -123,6 +125,13 @@ class QuickListTest(quickLister: QuickLister, run: Boolean) extends TestSuite {
               finally subdir.toFile.setReadable(true)
             }
           }
+        }
+      }
+      'loop - withTempDirectory { dir =>
+        withTempDirectorySync { otherDir =>
+          val link1 = Files.createSymbolicLink(dir.resolve("link"), otherDir)
+          val link2 = Files.createSymbolicLink(otherDir.resolve("link"), dir)
+          intercept[FileSystemLoopException](quickLister.ls(dir, 3, followLinks = true))
         }
       }
     }
