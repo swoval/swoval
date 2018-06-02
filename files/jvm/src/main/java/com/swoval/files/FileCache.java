@@ -197,15 +197,15 @@ public abstract class FileCache<T> implements AutoCloseable {
    */
   public static <T> FileCache<T> apply(final Converter<T> converter, final Observer<T> observer)
       throws IOException, InterruptedException {
-    return apply(converter, observer, DEFAULT_FACTORY);
+    return apply(converter, DEFAULT_FACTORY, observer);
   }
 
   /**
    * Create a file cache with an Observer of events
    *
    * @param converter Converts a path to the cached value type T
-   * @param observer Observer of events for this cache
    * @param factory A factory to create a directory watcher
+   * @param observer Observer of events for this cache
    * @param <T> The value type of the cache entries
    * @return A file cache
    * @throws IOException if the {@link DirectoryWatcher} cannot be initialized
@@ -213,8 +213,8 @@ public abstract class FileCache<T> implements AutoCloseable {
    */
   public static <T> FileCache<T> apply(
       final Converter<T> converter,
-      final Observer<T> observer,
-      final DirectoryWatcher.Factory factory)
+      final DirectoryWatcher.Factory factory,
+      final Observer<T> observer)
       throws IOException, InterruptedException {
     FileCache<T> res = new FileCacheImpl<>(converter, factory);
     res.addObserver(observer);

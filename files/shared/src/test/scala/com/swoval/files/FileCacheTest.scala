@@ -21,8 +21,8 @@ trait FileCacheTest extends TestSuite {
   def identity: Converter[JPath] = (p: JPath) => p
   def simpleCache(f: Entry[JPath] => Unit): FileCache[JPath] =
     FileCache.apply(((p: JPath) => p): Converter[JPath],
-                    Observers.apply(f: OnChange[JPath]),
-                    factory)
+                    factory,
+                    Observers.apply(f: OnChange[JPath]))
 
   val testsImpl: Tests = Tests {
     'directory - {
@@ -88,7 +88,7 @@ trait FileCacheTest extends TestSuite {
           val onChange: OnChange[JPath] = (_: Entry[JPath]) => latch.countDown()
           val onUpdate: OnUpdate[JPath] = (_: Entry[JPath], _: Entry[JPath]) => {}
           val observer = Observers.apply(onChange, onUpdate, onChange)
-          usingAsync(FileCache.apply(identity, observer, factory)) { c =>
+          usingAsync(FileCache.apply(identity, factory, observer)) { c =>
             c.reg(dir, recursive = false)
             c.ls(dir, recursive = false) === Seq(initial)
             initial.renameTo(moved)
@@ -119,7 +119,7 @@ trait FileCacheTest extends TestSuite {
           val observer = Observers.apply[JPath]((_: Entry[JPath]) => creationLatch.countDown(),
                                                 (_: Entry[JPath], _: Entry[JPath]) => {},
                                                 (e: Entry[JPath]) => deletionLatch.countDown())
-          usingAsync(FileCache.apply[JPath](identity, observer, factory)) { c =>
+          usingAsync(FileCache.apply[JPath](identity, factory, observer)) { c =>
             c.reg(dir)
             executor.run(new Runnable {
               override def run(): Unit = {
@@ -233,14 +233,14 @@ trait FileCacheTest extends TestSuite {
         usingAsync(
           FileCache.apply[LastModified](
             LastModified(_),
+            factory,
             new Observer[LastModified] {
               override def onCreate(newEntry: Entry[LastModified]): Unit = {}
               override def onDelete(oldEntry: Entry[LastModified]): Unit = {}
               override def onUpdate(oldEntry: Entry[LastModified],
                                     newEntry: Entry[LastModified]): Unit =
                 if (oldEntry.value.lastModified != newEntry.value.lastModified) latch.countDown()
-            },
-            factory
+            }
           )) { c =>
           c.reg(file.getParent, recursive = false)
           val cachedFile: Entry[LastModified] =
