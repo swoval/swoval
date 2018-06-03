@@ -1,11 +1,13 @@
 package com.swoval.files
 
+import java.io.File
 import java.nio.file.{
   AccessDeniedException,
   FileSystemLoopException,
   Files,
   NoSuchFileException,
   NotDirectoryException,
+  Paths,
   Path => JPath
 }
 
@@ -133,6 +135,27 @@ class QuickListTest(quickLister: QuickLister, run: Boolean) extends TestSuite {
           val link2 = Files.createSymbolicLink(otherDir.resolve("link"), dir)
           intercept[FileSystemLoopException](quickLister.ls(dir, 3, followLinks = true))
         }
+      }
+    }
+    'filters - {
+      'QuickFile - withTempFileSync { file =>
+        val parent = file.getParent
+        check(
+          quickLister
+            .list(parent, 2, true, new Filter[QuickFile] {
+              override def accept(q: QuickFile): Boolean = q.toPath != file
+            })
+            .asScala
+            .map((_: QuickFile).toPath),
+          Seq.empty[JPath]
+        )
+        check(quickLister
+                .list(parent, 2, true, new Filter[QuickFile] {
+                  override def accept(q: QuickFile): Boolean = q.isFile
+                })
+                .asScala
+                .map((_: QuickFile).toPath),
+              Seq(file))
       }
     }
   } else Tests {}

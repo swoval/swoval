@@ -67,6 +67,8 @@ object Converter {
        newLines.filterNot(_.contains("import Entry._"))
      } else if (path.toString.contains("FileCache.scala")) {
        newLines.map(_.replaceAll("(new FileCacheImpl.*)options", "$1options:_*"))
+     } else if (path.toString.contains("QuickLister.scala")) {
+       newLines.map(_.replaceAll("\\[Any\\]", "[AnyRef]"))
      } else {
        newLines
      }).mkString("\n")

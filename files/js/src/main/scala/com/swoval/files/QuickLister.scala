@@ -22,6 +22,11 @@ trait QuickLister {
 
   def list(path: Path, maxDepth: Int, followLinks: Boolean): List[QuickFile]
 
+  def list(path: Path,
+           maxDepth: Int,
+           followLinks: Boolean,
+           filter: Filter[_ >: QuickFile]): List[QuickFile]
+
 }
 
 private[files] object QuickListerImpl {
@@ -47,6 +52,10 @@ private[files] object QuickListerImpl {
   val ENOTDIR: Int = -3
 
   val ESUCCESS: Int = -4
+
+  private val AllPass: Filter[AnyRef] = new Filter[AnyRef]() {
+    override def accept(o: AnyRef): Boolean = true
+  }
 
   class ListResults {
 
@@ -86,11 +95,17 @@ abstract private[files] class QuickListerImpl extends QuickLister {
 
   protected def listDir(dir: String, followLinks: Boolean): ListResults
 
-  def list(path: Path, maxDepth: Int, followLinks: Boolean): List[QuickFile] = {
+  override def list(path: Path, maxDepth: Int, followLinks: Boolean): List[QuickFile] =
+    list(path, maxDepth, followLinks, AllPass)
+
+  override def list(path: Path,
+                    maxDepth: Int,
+                    followLinks: Boolean,
+                    filter: Filter[_ >: QuickFile]): List[QuickFile] = {
     val result: List[QuickFile] = new ArrayList[QuickFile]()
     val visited: Set[String] =
       if ((followLinks && maxDepth > 0)) new HashSet[String]() else null
-    listDirImpl(path.toString, 1, maxDepth, followLinks, result, visited)
+    listDirImpl(path.toString, 1, maxDepth, followLinks, result, filter, visited)
     result
   }
 
@@ -99,6 +114,7 @@ abstract private[files] class QuickListerImpl extends QuickLister {
                           maxDepth: Int,
                           followLinks: Boolean,
                           result: List[QuickFile],
+                          filter: Filter[_ >: QuickFile],
                           visited: Set[String]): Unit = {
     if (visited != null) visited.add(dir)
     val listResults: QuickListerImpl.ListResults = listDir(dir, followLinks)
@@ -107,14 +123,23 @@ abstract private[files] class QuickListerImpl extends QuickLister {
       val part: String = it.next()
       if (part.!=(".") && part.!=("..")) {
         val name: String = dir + File.separator + part
-        result.add(new QuickFileImpl(name, DIRECTORY))
-        if (depth < maxDepth) {
-          listDirImpl(name, depth + 1, maxDepth, followLinks, result, visited)
+        val file: QuickFileImpl = new QuickFileImpl(name, DIRECTORY)
+        if (filter.accept(file)) {
+          result.add(file)
+          if (depth < maxDepth) {
+            listDirImpl(name, depth + 1, maxDepth, followLinks, result, filter, visited)
+          }
         }
       }
     }
     val fileIt: Iterator[String] = listResults.getFiles.iterator()
-    while (fileIt.hasNext) result.add(new QuickFileImpl(dir + File.separator + fileIt.next(), FILE))
+    while (fileIt.hasNext) {
+      val file: QuickFileImpl =
+        new QuickFileImpl(dir + File.separator + fileIt.next(), FILE)
+      if (filter.accept(file)) {
+        result.add(file)
+      }
+    }
     val symlinkIt: Iterator[String] = listResults.getSymlinks.iterator()
     while (symlinkIt.hasNext) {
       val fileName: String = dir + File.separator + symlinkIt.next()
@@ -126,12 +151,14 @@ abstract private[files] class QuickListerImpl extends QuickLister {
         if (attrs != null && attrs.isDirectory) DIRECTORY | LINK
         else FILE | LINK
       val file: QuickFileImpl = new QuickFileImpl(fileName, kind)
-      result.add(file)
-      if (((kind & DIRECTORY) != 0) && depth < maxDepth && visited != null) {
-        if (visited.add(file.toPath().toRealPath().toString)) {
-          listDirImpl(fileName, depth + 1, maxDepth, true, result, visited)
-        } else {
-          throw new FileSystemLoopException(fileName)
+      if (filter.accept(file)) {
+        result.add(file)
+        if (((kind & DIRECTORY) != 0) && depth < maxDepth && visited != null) {
+          if (visited.add(file.toPath().toRealPath().toString)) {
+            listDirImpl(fileName, depth + 1, maxDepth, true, result, filter, visited)
+          } else {
+            throw new FileSystemLoopException(fileName)
+          }
         }
       }
     }

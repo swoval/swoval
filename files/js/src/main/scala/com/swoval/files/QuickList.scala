@@ -13,4 +13,9 @@ object QuickList {
   def list(path: Path, maxDepth: Int, followLinks: Boolean): List[QuickFile] =
     INSTANCE.list(path, maxDepth, followLinks)
 
+  def list(path: Path,
+           maxDepth: Int,
+           followLinks: Boolean,
+           filter: Filter[_ >: QuickFile]): List[QuickFile] =
+    INSTANCE.list(path, maxDepth, followLinks, filter)
 }

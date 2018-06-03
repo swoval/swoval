@@ -377,6 +377,7 @@ object Build {
                 "EntryFilters",
                 "FileCache",
                 "FileType",
+                "Filter",
                 "NioQuickLister",
                 "Observers",
                 "QuickFile",
