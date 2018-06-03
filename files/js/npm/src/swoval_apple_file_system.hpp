@@ -26,16 +26,18 @@ template <typename T> class handle {
     CFRunLoopSourceRef sourceRef;
     CFRunLoopSourceContext *context = nullptr;
     std::mutex mutex;
+    std::mutex streams_mutex;
     std::condition_variable cond;
     std::map<int32_t, std::pair<std::string, FSEventStreamRef>> stream_handles;
+    std::vector<int32_t> streams_to_remove;
     bool started = false;
     bool stopped = false;
     bool closed  = false;
     void (*callback)(std::unique_ptr<Events>, handle<T> *, Lock);
-    void (*stop_stream_callback)(std::unique_ptr<Strings>, handle<T> *, Lock);
+    Lock (*stop_stream_callback)(std::unique_ptr<Strings>, handle<T> *, Lock);
 
     handle(T *t, void (*cb)(std::unique_ptr<Events>, handle<T> *, Lock),
-           void (*ss)(std::unique_ptr<Strings>, handle<T> *, Lock))
+           Lock (*ss)(std::unique_ptr<Strings>, handle<T> *, Lock))
         : data(t), callback(cb), stop_stream_callback(ss) {}
 
     void close() {
@@ -108,15 +110,19 @@ template <typename T> class handle {
     }
 
     void stopStream(int32_t stream_key) {
-        Lock lock(mutex);
+        Lock lock(streams_mutex);
         if (!started) {
             cond.wait(lock, [this] { return this->started; });
         }
-        stopStream(stream_key, std::move(lock));
+        if (!closed) {
+            streams_to_remove.push_back(stream_key);
+            CFRunLoopSourceSignal(sourceRef);
+            CFRunLoopWakeUp(runLoop);
+        }
     }
-    void stopStream(int32_t stream_key, Lock lock) {
+    Lock stopStream(int32_t stream_key, Lock lock) {
         if (stopped)
-            return;
+            return std::move(lock);
         auto strings = std::unique_ptr<Strings>(new Strings);
         auto pair    = stream_handles.find(stream_key);
         if (pair != stream_handles.end()) {
@@ -125,8 +131,9 @@ template <typename T> class handle {
             stream_handles.erase(stream_key);
         }
         if (!stopped && stop_stream_callback) {
-            stop_stream_callback(std::move(strings), this, std::move(lock));
+            lock = stop_stream_callback(std::move(strings), this, std::move(lock));
         }
+        return std::move(lock);
     }
 
     static void defaultCallback(ConstFSEventStreamRef stream, void *info, size_t count,
@@ -161,9 +168,11 @@ template <typename T> void loop(handle<T> *h) {
     h->sourceRef        = CFRunLoopSourceCreate(nullptr, 0, h->context);
     CFRunLoopAddSource(h->runLoop, h->sourceRef, mode);
     Lock lock(h->mutex);
+    Lock streamsLock(h->streams_mutex);
     h->started = true;
     h->cond.notify_all();
     lock.unlock();
+    streamsLock.unlock();
     CFRunLoopRun();
 }
 
@@ -171,6 +180,7 @@ template <typename T> static void cleanupFunc(handle<T> *h) {
     std::vector<std::pair<int32_t, std::string>> streams;
     std::vector<int32_t> redundant_ids;
     Lock lock(h->mutex);
+    Lock streamLock(h->streams_mutex);
     if (h->stopped) {
         h->cleanupRunLoop();
         h->cond.notify_all();
@@ -193,10 +203,15 @@ template <typename T> static void cleanupFunc(handle<T> *h) {
             }
         }
     }
+    redundant_ids.insert(redundant_ids.end(), h->streams_to_remove.begin(),
+                         h->streams_to_remove.end());
+    h->streams_to_remove.clear();
     for (auto id : redundant_ids) {
         auto it = h->stream_handles.find(id);
         if (it != h->stream_handles.end()) {
-            h->stopStream(it->first, std::move(lock));
+            lock = h->stopStream(it->first, std::move(lock));
         }
     }
+    h->cond.notify_all();
+    lock.unlock();
 }

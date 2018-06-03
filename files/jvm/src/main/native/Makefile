@@ -42,35 +42,35 @@ LINUX_LDFLAGS := -fPIC -shared
 
 NPMDIR := ../../../../js/npm/src/
 CCFLAGS := -I./include -I$(NPMDIR) $(JNI_INCLUDE) -Wno-unused-command-line-argument -std=c++11 -O3
-HEADERS := $(wildcard *.h)
 
 all: $(LIBS)
 
 .PHONY: clean all
 
-$(BUILD_DIR)/x86_64/linux/$(QUICKLIST_SOURCE).o: posix/$(QUICKLIST_SOURCE).cc $(HEADERS)
+$(BUILD_DIR)/x86_64/linux/$(QUICKLIST_SOURCE).o: posix/$(QUICKLIST_SOURCE).cc
 	echo $(JNI_INCLUDE)
 	mkdir -p $(BUILD_DIR)/x86_64/linux; \
 	$(CC) -c $< $(CCFLAGS) $(JNI_INCLUDE) -fPIC -o $@
 
-$(BUILD_DIR)/i686/linux/$(QUICKLIST_SOURCE).o: posix/$(QUICKLIST_SOURCE).cc $(HEADERS)
+$(BUILD_DIR)/i686/linux/$(QUICKLIST_SOURCE).o: posix/$(QUICKLIST_SOURCE).cc
 	echo $(JNI_INCLUDE)
 	mkdir -p $(BUILD_DIR)/i686/linux; \
 	$(CC) -c -m32 $< $(CCFLAGS) $(JNI_INCLUDE) -fPIC -o $@
 
-$(BUILD_DIR)/x86_64/windows/$(QUICKLIST_SOURCE).o: windows/$(QUICKLIST_SOURCE).cc $(HEADERS)
+$(BUILD_DIR)/x86_64/windows/$(QUICKLIST_SOURCE).o: windows/$(QUICKLIST_SOURCE).cc
 	mkdir -p $(BUILD_DIR)/x86_64/windows; \
 	$(WIN64CC) -c $< $(CCFLAGS) -o $@ -D__WIN__
 
-$(BUILD_DIR)/i686/windows/$(QUICKLIST_SOURCE).o: windows/$(QUICKLIST_SOURCE).cc $(HEADERS)
+$(BUILD_DIR)/i686/windows/$(QUICKLIST_SOURCE).o: windows/$(QUICKLIST_SOURCE).cc
 	mkdir -p $(BUILD_DIR)/i686/windows; \
 	$(WIN32CC) -c $< $(CCFLAGS) -o $@ -D__WIN__
 
-$(BUILD_DIR)/x86_64/darwin/$(QUICKLIST_SOURCE).o: posix/$(QUICKLIST_SOURCE).cc $(HEADERS)
+$(BUILD_DIR)/x86_64/darwin/$(QUICKLIST_SOURCE).o: posix/$(QUICKLIST_SOURCE).cc
 	mkdir -p $(BUILD_DIR)/x86_64/darwin; \
 	$(CC) -c $< $(CCFLAGS) -framework Carbon -o $@
 
-$(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventsApi.o: apple/com_swoval_files_apple_FileEventsApi.cc $(HEADERS)
+$(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventsApi.o: $(NPMDIR)/swoval_apple_file_system.hpp
+$(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventsApi.o: apple/com_swoval_files_apple_FileEventsApi.cc
 	mkdir -p $(BUILD_DIR)/x86_64/darwin; \
 	$(CC) -c $< $(CCFLAGS) -framework Carbon -o $@
 

@@ -31,7 +31,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
   private final Executor executor;
   private final Flags.Create flags;
   private final FileEventsApi fileEventsApi;
-  private final static DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
+  private static final DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
 
   /**
    * Registers a path
@@ -78,11 +78,18 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
   @Override
   public void unregister(Path path) {
     synchronized (lock) {
-      Integer id = streams.remove(path.toString());
-      if (id != null) {
-        fileEventsApi.stopStream(id);
+      if (!closed.get()) {
+        final Integer id = streams.remove(path.toString());
+        if (id != null && id != -1) {
+          executor.run(new Runnable() {
+                         @Override
+                         public void run() {
+                           fileEventsApi.stopStream(id);
+                         }
+                       });
+        }
+        registered.remove(path.toString());
       }
-      registered.remove(path.toString());
     }
   }
 
@@ -175,10 +182,12 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
                         boolean validKey = false;
                         while (it.hasNext() && !validKey) {
                           final Entry<String, Boolean> entry = it.next();
-                          String key = entry.getKey();
+                          Path key = Paths.get(entry.getKey());
                           validKey =
-                              fileName.equals(key)
-                                  || (fileName.startsWith(key) && entry.getValue());
+                              path.equals(key)
+                                  || (entry.getValue()
+                                      ? path.startsWith(key)
+                                      : path.getParent().equals(key));
                         }
                         if (validKey) {
                           DirectoryWatcher.Event event;
@@ -204,10 +213,15 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
             new Consumer<String>() {
               @Override
               public void accept(final String stream) {
-                onStreamRemoved.apply(stream);
-                synchronized (lock) {
-                  streams.remove(stream);
-                }
+                executor.run(new Runnable() {
+                  @Override
+                  public void run() {
+                    synchronized (lock) {
+                      streams.remove(stream);
+                    }
+                    onStreamRemoved.apply(stream);
+                  }
+                });
               }
             });
   }

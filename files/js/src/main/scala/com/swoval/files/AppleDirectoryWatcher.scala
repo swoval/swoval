@@ -70,9 +70,10 @@ class AppleDirectoryWatcher(private val latency: Double,
             var validKey: Boolean = false
             while (it.hasNext && !validKey) {
               val entry: Entry[String, Boolean] = it.next()
-              var key: String = entry.getKey
-              validKey = fileName == key || (fileName
-                .startsWith(key) && entry.getValue)
+              var key: Path = Paths.get(entry.getKey)
+              validKey = path == key ||
+                (if (entry.getValue) path.startsWith(key)
+                 else path.getParent == key)
             }
             if (validKey) {
               var event: DirectoryWatcher.Event = null
@@ -94,10 +95,14 @@ class AppleDirectoryWatcher(private val latency: Double,
     },
     new Consumer[String]() {
       override def accept(stream: String): Unit = {
-        onStreamRemoved.apply(stream)
-        lock.synchronized {
-          streams.remove(stream)
-        }
+        executor.run(new Runnable() {
+          override def run(): Unit = {
+            lock.synchronized {
+              streams.remove(stream)
+            }
+            onStreamRemoved.apply(stream)
+          }
+        })
       }
     }
   )
@@ -145,11 +150,17 @@ class AppleDirectoryWatcher(private val latency: Double,
    */
   override def unregister(path: Path): Unit = {
     lock.synchronized {
-      val id: java.lang.Integer = streams.remove(path.toString)
-      if (id != null) {
-        fileEventsApi.stopStream(id)
+      if (!closed.get) {
+        val id: java.lang.Integer = streams.remove(path.toString)
+        if (id != null && id != -1) {
+          executor.run(new Runnable() {
+            override def run(): Unit = {
+              fileEventsApi.stopStream(id)
+            }
+          })
+        }
+        registered.remove(path.toString)
       }
-      registered.remove(path.toString)
     }
   }
 
