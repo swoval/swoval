@@ -121,37 +121,47 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
 
   private class WatchedDir {
     final WatchKey key;
-    final boolean recursive;
+    final int maxDepth;
+    final int compMaxDepth;
 
-    WatchedDir(final WatchKey key, final boolean recursive) {
+    WatchedDir(final WatchKey key, final int maxDepth) {
       this.key = key;
-      this.recursive = recursive;
+      this.maxDepth = maxDepth;
+      compMaxDepth = maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth + 1;
+    }
+
+    public boolean accept(final Path path) {
+      return path.equals(key.watchable())
+          || ((Path) key.watchable()).relativize(path).getNameCount() <= compMaxDepth;
     }
   }
 
-  private boolean registerImpl(final Path realPath, final boolean recursive) {
+  private boolean registerImpl(final Path realPath, final int maxDepth) {
     synchronized (lock) {
       boolean result = true;
-      if (watchedDirs.containsKey(realPath)) {
-        result = false;
+      final WatchedDir watchedDir = watchedDirs.get(realPath);
+      boolean recursive = maxDepth > 0;
+      if (watchedDir != null) {
+        if (watchedDir.maxDepth >= maxDepth) result = false;
       } else {
         try {
           WatchKey key = watchService.register(realPath, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
-          watchedDirs.put(realPath, new WatchedDir(key, recursive));
+          watchedDirs.put(realPath, new WatchedDir(key, maxDepth));
         } catch (IOException e) {
           result = false;
         }
       }
-      return result && (!recursive || recursiveRegister(realPath));
+      return result && (!recursive || recursiveRegister(realPath, maxDepth - 1));
     }
   }
 
-  private boolean recursiveRegister(final Path path) {
+  private boolean recursiveRegister(final Path path, final int maxDepth) {
+    boolean result = true;
     try {
       final Iterator<File> it = FileOps.list(path, false).iterator();
       while (it.hasNext()) {
         final File toRegister = it.next();
-        if (toRegister.isDirectory()) register(toRegister.toPath(), true);
+        if (toRegister.isDirectory()) register(toRegister.toPath(), maxDepth - 1);
       }
     } catch (IOException e) {
       System.err.println("NioDirectoryWatcher caught IOException registering " + path + ": " + e);
@@ -164,7 +174,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     final Path keyPath = (Path) key.watchable();
     if (Files.isDirectory(path)) {
       WatchedDir watchedDir = watchedDirs.get(keyPath);
-      if (watchedDir != null && watchedDir.recursive) {
+      if (watchedDir != null && watchedDir.accept(path)) {
         if (register(path, true)) {
           try {
             final Iterator<File> it = FileOps.list(path, false).iterator();
@@ -195,13 +205,14 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
       }
       final WatchedDir watchedDir = watchedDirs.get(key.watchable());
       boolean stop = false;
-      while ((watchedDir != null && watchedDir.recursive) && !stop) {
+      while ((watchedDir != null && watchedDir.maxDepth > 0) && !stop) {
         try {
           final Iterator<File> fileIterator = FileOps.list((Path) key.watchable(), true).iterator();
           boolean registered = false;
           while (fileIterator.hasNext()) {
             final File file = fileIterator.next();
-            if (file.isDirectory() && register(file.toPath(), true)) registered = true;
+            if (file.isDirectory() && register(file.toPath(), watchedDir.maxDepth - 1))
+              registered = true;
           }
           stop = !registered;
         } catch (IOException e) {
@@ -232,13 +243,15 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    * Register a path to monitor for file events
    *
    * @param path The directory to watch for file events
-   * @param recursive Toggles whether or not to monitor subdirectories
+   * @param maxDepth The maximum maxDepth of subdirectories to watch
    * @return true if the registration is successful
    */
   @Override
-  public boolean register(final Path path, final boolean recursive) {
+  public boolean register(final Path path, final int maxDepth) {
     try {
-      return registerImpl(path.toRealPath(), recursive);
+      if (Files.exists(path)) {
+        return registerImpl(path.toRealPath(), maxDepth);
+      } else return false;
     } catch (IOException e) {
       return false;
     }

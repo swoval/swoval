@@ -42,10 +42,24 @@ class FileOps {
    * @param filter Include only paths accepted by the filter
    * @return Array of Paths
    */
-  public static List<File> list(final Path path, final boolean recursive, final FileFilter filter) throws IOException {
+  public static List<File> list(final Path path, final boolean recursive, final FileFilter filter)
+      throws IOException {
+    return list(path, recursive ? Integer.MAX_VALUE : 0, filter);
+  }
+
+  /**
+   * Returns the files in a directory.
+   *
+   * @param path The directory to list
+   * @param maxDepth The maximum depth of directories to traverse
+   * @param filter Include only paths accepted by the filter
+   * @return Array of Paths
+   */
+  public static List<File> list(final Path path, final int maxDepth, final FileFilter filter)
+      throws IOException {
     final List<File> result = new ArrayList<>();
     final Iterator<QuickFile> it =
-        QuickList.list(path, recursive ? Integer.MAX_VALUE : 1, true).iterator();
+        QuickList.list(path, maxDepth, true).iterator();
     while (it.hasNext()) {
       final QuickFile quickFile = it.next();
       if (filter.accept(quickFile.asFile())) {

@@ -15,6 +15,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -135,11 +137,20 @@ public abstract class FileCache<T> implements AutoCloseable {
    * Register the directory for monitoring.
    *
    * @param path The path to monitor
+   * @param maxDepth The maximum depth of subdirectories to include
+   * @return The registered directory if it hasn't previously been registered, null otherwise
+   */
+  public abstract Directory<T> register(final Path path, final int maxDepth) throws IOException;
+  /**
+   * Register the directory for monitoring.
+   *
+   * @param path The path to monitor
    * @param recursive Recursively monitor the path if true
    * @return The registered directory if it hasn't previously been registered, null otherwise
    */
-  public abstract Directory<T> register(final Path path, final boolean recursive)
-      throws IOException;
+  public Directory<T> register(final Path path, final boolean recursive) throws IOException {
+    return register(path, recursive ? Integer.MAX_VALUE : 0);
+  }
 
   /**
    * Register the directory for monitoring recursively.
@@ -148,7 +159,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @return The registered directory if it hasn't previously been registered, null otherwise
    */
   public Directory<T> register(final Path path) throws IOException {
-    return register(path, true);
+    return register(path, Integer.MAX_VALUE);
   }
 
   /** Handle all exceptions in close. */
@@ -264,26 +275,42 @@ class FileCacheImpl<T> extends FileCache<T> {
   @Override
   public List<Directory.Entry<T>> list(
       final Path path, final boolean recursive, final Directory.EntryFilter<? super T> filter) {
-    Pair<Directory<T>, List<Directory.Entry<T>>> pair = listImpl(path, recursive, filter);
+    Pair<Directory<T>, List<Directory.Entry<T>>> pair =
+        listImpl(path, recursive ? Integer.MAX_VALUE : 0, filter);
     return pair == null ? new ArrayList<Directory.Entry<T>>() : pair.second;
   }
 
   @Override
-  public Directory<T> register(final Path path, final boolean recursive) throws IOException {
+  public Directory<T> register(final Path path, final int maxDepth) throws IOException {
     Directory<T> result = null;
     if (Files.exists(path)) {
-      watcher.register(path);
+      watcher.register(path, maxDepth);
       synchronized (directories) {
-        final Iterator<Directory<T>> it = directories.values().iterator();
+        final List<Directory<T>> dirs = new ArrayList<>(directories.values());
+        Collections.sort(new ArrayList<>(directories.values()),
+            new Comparator<Directory<T>>() {
+              @Override
+              public int compare(Directory<T> left, Directory<T> right) {
+                return left.path.compareTo(right.path);
+              }
+            });
+        final Iterator<Directory<T>> it = dirs.iterator();
         Directory<T> existing = null;
         while (it.hasNext() && existing == null) {
           final Directory<T> dir = it.next();
-          if (path.startsWith(dir.path) && dir.recursive()) {
-            existing = dir;
+          if (path.startsWith(dir.path)) {
+            int depth = (path.equals(dir.path) ? 0 : dir.path.relativize(path).getNameCount()) - 1;
+            if (maxDepth + depth < dir.getDepth()) {
+              existing = dir;
+            } else if (depth <= dir.getDepth()) {
+              dir.close();
+              existing = Directory.cached(dir.path, converter, maxDepth + depth + 1);
+              directories.put(dir.path, existing);
+            }
           }
         }
         if (existing == null) {
-          result = Directory.cached(path, converter, recursive);
+          result = Directory.cached(path, converter, maxDepth);
           directories.put(path, result);
         }
       }
@@ -292,23 +319,19 @@ class FileCacheImpl<T> extends FileCache<T> {
   }
 
   private Pair<Directory<T>, List<Directory.Entry<T>>> listImpl(
-      final Path path, final boolean recursive, final Directory.EntryFilter<? super T> filter) {
+      final Path path, final int maxDepth, final Directory.EntryFilter<? super T> filter) {
     synchronized (directories) {
-      if (Files.exists(path)) {
-        Directory<T> foundDir = null;
-        final Iterator<Directory<T>> it = directories.values().iterator();
-        while (it.hasNext()) {
-          final Directory<T> dir = it.next();
-          if (path.startsWith(dir.path)
-              && (foundDir == null || dir.path.startsWith(foundDir.path))) {
-            foundDir = dir;
-          }
+      Directory<T> foundDir = null;
+      final Iterator<Directory<T>> it = directories.values().iterator();
+      while (it.hasNext()) {
+        final Directory<T> dir = it.next();
+        if (path.startsWith(dir.path)
+            && (foundDir == null || dir.path.startsWith(foundDir.path))) {
+          foundDir = dir;
         }
-        if (foundDir != null) {
-          return new Pair<>(foundDir, foundDir.list(path, recursive, filter));
-        } else {
-          return null;
-        }
+      }
+      if (foundDir != null) {
+        return new Pair<>(foundDir, foundDir.list(path, maxDepth, filter));
       } else {
         return null;
       }
@@ -418,7 +441,7 @@ class FileCacheImpl<T> extends FileCache<T> {
       final Pair<Directory<T>, List<Directory.Entry<T>>> pair =
           listImpl(
               path,
-              false,
+              0,
               new Directory.EntryFilter<T>() {
                 @Override
                 public boolean accept(Directory.Entry<? extends T> path) {

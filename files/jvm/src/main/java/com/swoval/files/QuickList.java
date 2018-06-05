@@ -45,7 +45,7 @@ public abstract class QuickList {
    * version.
    *
    * @param path The path to list
-   * @param maxDepth The maximum depth of the file system tree to traverse
+   * @param maxDepth The maximum maxDepth of the file system tree to traverse
    * @return a List of {@link QuickFile} instances
    * @throws IOException when the path isn't listable because it isn't a directory, access is denied
    *     or the path doesn't exist. May also throw due to any io error.
@@ -60,7 +60,7 @@ public abstract class QuickList {
    * be /foo/../baz/buzz". This behavior may change in a future version.
    *
    * @param path The path to list
-   * @param maxDepth The maximum depth of the file system tree to traverse
+   * @param maxDepth The maximum maxDepth of the file system tree to traverse
    * @param followLinks Toggles whether or not to follow symbolic links in the path
    * @return a List of {@link QuickFile} instances
    * @throws IOException when the path isn't listable because it isn't a directory, access is denied

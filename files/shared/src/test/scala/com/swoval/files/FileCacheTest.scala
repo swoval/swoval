@@ -190,6 +190,67 @@ trait FileCacheTest extends TestSuite {
           }
         }
       }
+      'depth - {
+        'initial - {
+          withTempDirectory { dir =>
+            withTempDirectory(dir) { subdir =>
+              withTempDirectory(subdir) { nestedSubdir =>
+                withTempFileSync(nestedSubdir) { file =>
+                  using(simpleCache((_: Entry[JPath]) => {})) { c =>
+                    c.register(dir, 1)
+                    c.ls(dir) === Set(subdir, nestedSubdir)
+                    c.register(dir, 2)
+                    c.ls(dir) === Set(subdir, nestedSubdir, file)
+                  }
+                }
+              }
+            }
+          }
+        }
+        'overlap - withTempDirectory { dir =>
+          withTempDirectory(dir) { subdir =>
+            withTempDirectory(subdir) { nestedSubdir =>
+              withTempFile(nestedSubdir) { file =>
+                val latch = new CountDownLatch(1)
+                usingAsync(simpleCache((e: Entry[JPath]) =>
+                  if (e.path.endsWith("deep")) latch.countDown())) { c =>
+                  c.register(dir, 1)
+                  c.ls(dir) === Set(subdir, nestedSubdir)
+                  c.register(nestedSubdir, 0)
+                  c.ls(dir) === Set(subdir, nestedSubdir, file)
+                  val deep = Files.createDirectory(nestedSubdir.resolve("deep"))
+                  val deepFile = Files.createFile(deep.resolve("file"))
+                  latch.waitFor(DEFAULT_TIMEOUT) {
+                    while (!Files.exists(deepFile)) {}
+                    val existing = FileOps.list(dir, true).asScala.map(_.toPath).toSet
+                    existing === Set(subdir, nestedSubdir, file, deep, deepFile)
+                    c.ls(dir) === Set(subdir, nestedSubdir, file, deep)
+                  }
+                }
+              }
+            }
+          }
+        }
+        'holes - withTempDirectory { dir =>
+          withTempDirectory(dir) { subdir =>
+            withTempDirectory(subdir) { nestedSubdir =>
+              withTempFile(nestedSubdir) { file =>
+                using(simpleCache((_: Entry[JPath]) => {})) { c =>
+                  c.register(dir, 0)
+                  c.ls(dir) === Set(subdir)
+                  c.register(nestedSubdir, 0)
+                  c.ls(dir) === Set(subdir)
+                  c.ls(nestedSubdir) === Set(file)
+                  val deep = Files.createDirectory(nestedSubdir.resolve("deep"))
+                  val deepFile = Files.createFile(deep.resolve("file"))
+                  c.register(nestedSubdir, 1)
+                  c.ls(nestedSubdir) === Set(file, deep, deepFile)
+                }
+              }
+            }
+          }
+        }
+      }
       'recursive - {
         'initially - withTempDirectory { dir =>
           withTempDirectory(dir) { subdir =>

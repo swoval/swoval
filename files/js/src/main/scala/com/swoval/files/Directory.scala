@@ -11,6 +11,7 @@ import java.util.Iterator
 import java.util.List
 import java.util.concurrent.atomic.AtomicReference
 import Directory._
+import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
 object Directory {
 
@@ -215,7 +216,8 @@ object Directory {
 class Directory[T] private (val path: Path, private val converter: Converter[T], d: Int)
     extends AutoCloseable {
 
-  private val depth: Int = if (d > 0) d else 0
+  @BeanProperty
+  val depth: Int = if (d > 0) d else 0
 
   private val _cacheEntry: AtomicReference[Entry[T]] = new AtomicReference(
     new Entry(path, converter.apply(path)))
@@ -245,14 +247,55 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
   /**
    * List all of the files for the {@code path}
    *
-   * @param recursive Toggles whether or not to include children of subdirectories in the results
+   * @param maxDepth The maximum depth of subdirectories to query
+   * @param filter Include only entries accepted by the filter
+   * @return a List of Entry instances accepted by the filter
+   */
+  def list(maxDepth: Int, filter: EntryFilter[_ >: T]): List[Entry[T]] = {
+    val result: List[Entry[T]] = new ArrayList[Entry[T]]()
+    listImpl(maxDepth, filter, result)
+    result
+  }
+
+  /**
+   * List all of the files for the {@code path}
+   *
+   * @param recursive Toggles whether to include the children of subdirectories
    * @param filter Include only entries accepted by the filter
    * @return a List of Entry instances accepted by the filter
    */
   def list(recursive: Boolean, filter: EntryFilter[_ >: T]): List[Entry[T]] = {
     val result: List[Entry[T]] = new ArrayList[Entry[T]]()
-    listImpl(recursive, filter, result)
+    listImpl(if (recursive) java.lang.Integer.MAX_VALUE else 0, filter, result)
     result
+  }
+
+  /**
+   * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
+   *
+   * @param path The path to list. If this is a file, returns a list containing the Entry for the
+   *     file or an empty list if the file is not monitored by the path.
+   * @param maxDepth The maximum depth of subdirectories to return
+   * @param filter Include only paths accepted by this
+   * @return a List of Entry instances accepted by the filter. The list will be empty if the path is
+   *     not a subdirectory of this Directory or if it is a subdirectory, but the Directory was
+   *     created without the recursive flag.
+   */
+  def list(path: Path, maxDepth: Int, filter: EntryFilter[_ >: T]): List[Entry[T]] = {
+    val findResult: FindResult = find(path)
+    if (findResult != null) {
+      val dir: Directory[T] = findResult.directory
+      if (dir != null) {
+        dir.list(maxDepth, filter)
+      } else {
+        val entry: Entry[T] = findResult.entry
+        val result: List[Entry[T]] = new ArrayList[Entry[T]]()
+        if (entry != null && filter.accept(entry)) result.add(entry)
+        result
+      }
+    } else {
+      new ArrayList()
+    }
   }
 
   /**
@@ -266,22 +309,8 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
    *     not a subdirectory of this Directory or if it is a subdirectory, but the Directory was
    *     created without the recursive flag.
    */
-  def list(path: Path, recursive: Boolean, filter: EntryFilter[_ >: T]): List[Entry[T]] = {
-    val findResult: FindResult = find(path)
-    if (findResult != null) {
-      val dir: Directory[T] = findResult.directory
-      if (dir != null) {
-        dir.list(recursive, filter)
-      } else {
-        val entry: Entry[T] = findResult.entry
-        val result: List[Entry[T]] = new ArrayList[Entry[T]]()
-        if (entry != null && filter.accept(entry)) result.add(entry)
-        result
-      }
-    } else {
-      new ArrayList()
-    }
-  }
+  def list(path: Path, recursive: Boolean, filter: EntryFilter[_ >: T]): List[Entry[T]] =
+    list(path, if (recursive) java.lang.Integer.MAX_VALUE else 0, filter)
 
   /**
    * Update the Directory entry for a particular path.
@@ -316,7 +345,7 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
   def recursive(): Boolean = depth == java.lang.Integer.MAX_VALUE
 
   override def toString(): String =
-    "Directory(" + path + ", depth = " + depth + ")"
+    "Directory(" + path + ", maxDepth = " + depth + ")"
 
   private def subdirectoryDepth(): Int =
     if (depth == java.lang.Integer.MAX_VALUE) depth
@@ -329,7 +358,8 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
     val dir: Directory[T] = cached(path, converter, subdirectoryDepth())
     currentDir.subdirectories.put(path.getFileName.toString, dir)
     addUpdate(updates, dir.entry())
-    val it: Iterator[Entry[T]] = dir.list(true, AllPass).iterator()
+    val it: Iterator[Entry[T]] =
+      dir.list(java.lang.Integer.MAX_VALUE, AllPass).iterator()
     while (it.hasNext) addUpdate(updates, it.next())
   }
 
@@ -427,9 +457,7 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
       null
     }
 
-  private def listImpl(recursive: Boolean,
-                       filter: EntryFilter[_ >: T],
-                       result: List[Entry[T]]): Unit = {
+  private def listImpl(maxDepth: Int, filter: EntryFilter[_ >: T], result: List[Entry[T]]): Unit = {
     var files: Collection[Entry[T]] = null
     var subdirectories: Collection[Directory[T]] = null
     this.lock.synchronized {
@@ -447,7 +475,7 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
       val subdir: Directory[T] = subdirIterator.next()
       val resolved: Entry[T] = subdir.entry().resolvedFrom(this.path, true)
       if (filter.accept(resolved)) result.add(resolved)
-      if (recursive) subdir.listImpl(true, filter, result)
+      if (maxDepth > 0) subdir.listImpl(maxDepth - 1, filter, result)
     }
   }
 
@@ -465,7 +493,7 @@ class Directory[T] private (val path: Path, private val converter: Converter[T],
           } else {
             val dir: Directory[T] = currentDir.subdirectories.removeByName(p)
             if (dir != null) {
-              result.addAll(dir.list(true, AllPass))
+              result.addAll(dir.list(java.lang.Integer.MAX_VALUE, AllPass))
               result.add(dir.entry())
             }
           }

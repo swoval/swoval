@@ -14,6 +14,8 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.ArrayList
+import java.util.Collections
+import java.util.Comparator
 import java.util.HashMap
 import java.util.HashSet
 import java.util.Iterator
@@ -179,10 +181,20 @@ abstract class FileCache[T] extends AutoCloseable {
    * Register the directory for monitoring.
    *
    * @param path The path to monitor
+   * @param maxDepth The maximum depth of subdirectories to include
+   * @return The registered directory if it hasn't previously been registered, null otherwise
+   */
+  def register(path: Path, maxDepth: Int): Directory[T]
+
+  /**
+   * Register the directory for monitoring.
+   *
+   * @param path The path to monitor
    * @param recursive Recursively monitor the path if true
    * @return The registered directory if it hasn't previously been registered, null otherwise
    */
-  def register(path: Path, recursive: Boolean): Directory[T]
+  def register(path: Path, recursive: Boolean): Directory[T] =
+    register(path, if (recursive) java.lang.Integer.MAX_VALUE else 0)
 
   /**
    * Register the directory for monitoring recursively.
@@ -190,7 +202,8 @@ abstract class FileCache[T] extends AutoCloseable {
    * @param path The path to monitor
    * @return The registered directory if it hasn't previously been registered, null otherwise
    */
-  def register(path: Path): Directory[T] = register(path, true)
+  def register(path: Path): Directory[T] =
+    register(path, java.lang.Integer.MAX_VALUE)
 
   /**
  Handle all exceptions in close.
@@ -252,25 +265,43 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
                     recursive: Boolean,
                     filter: Directory.EntryFilter[_ >: T]): List[Directory.Entry[T]] = {
     val pair: Pair[Directory[T], List[Directory.Entry[T]]] =
-      listImpl(path, recursive, filter)
+      listImpl(path, if (recursive) java.lang.Integer.MAX_VALUE else 0, filter)
     if (pair == null) new ArrayList[Directory.Entry[T]]() else pair.second
   }
 
-  override def register(path: Path, recursive: Boolean): Directory[T] = {
+  override def register(path: Path, maxDepth: Int): Directory[T] = {
     var result: Directory[T] = null
     if (Files.exists(path)) {
-      watcher.register(path)
+      watcher.register(path, maxDepth)
       directories.synchronized {
-        val it: Iterator[Directory[T]] = directories.values.iterator()
+        val dirs: List[Directory[T]] =
+          new ArrayList[Directory[T]](directories.values)
+        Collections.sort(
+          new ArrayList(directories.values),
+          new Comparator[Directory[T]]() {
+            override def compare(left: Directory[T], right: Directory[T]): Int =
+              left.path.compareTo(right.path)
+          }
+        )
+        val it: Iterator[Directory[T]] = dirs.iterator()
         var existing: Directory[T] = null
         while (it.hasNext && existing == null) {
           val dir: Directory[T] = it.next()
-          if (path.startsWith(dir.path) && dir.recursive()) {
-            existing = dir
+          if (path.startsWith(dir.path)) {
+            val depth: Int = (if (path == dir.path) 0
+                              else dir.path.relativize(path).getNameCount) -
+              1
+            if (maxDepth + depth < dir.getDepth) {
+              existing = dir
+            } else if (depth <= dir.getDepth) {
+              dir.close()
+              existing = Directory.cached(dir.path, converter, maxDepth + depth + 1)
+              directories.put(dir.path, existing)
+            }
           }
         }
         if (existing == null) {
-          result = Directory.cached(path, converter, recursive)
+          result = Directory.cached(path, converter, maxDepth)
           directories.put(path, result)
         }
       }
@@ -280,24 +311,20 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
 
   private def listImpl(
       path: Path,
-      recursive: Boolean,
+      maxDepth: Int,
       filter: Directory.EntryFilter[_ >: T]): Pair[Directory[T], List[Directory.Entry[T]]] =
     directories.synchronized {
-      if (Files.exists(path)) {
-        var foundDir: Directory[T] = null
-        val it: Iterator[Directory[T]] = directories.values.iterator()
-        while (it.hasNext) {
-          val dir: Directory[T] = it.next()
-          if (path.startsWith(dir.path) &&
-              (foundDir == null || dir.path.startsWith(foundDir.path))) {
-            foundDir = dir
-          }
+      var foundDir: Directory[T] = null
+      val it: Iterator[Directory[T]] = directories.values.iterator()
+      while (it.hasNext) {
+        val dir: Directory[T] = it.next()
+        if (path.startsWith(dir.path) &&
+            (foundDir == null || dir.path.startsWith(foundDir.path))) {
+          foundDir = dir
         }
-        if (foundDir != null) {
-          new Pair(foundDir, foundDir.list(path, recursive, filter))
-        } else {
-          null
-        }
+      }
+      if (foundDir != null) {
+        new Pair(foundDir, foundDir.list(path, maxDepth, filter))
       } else {
         null
       }
@@ -405,7 +432,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
   private def handleEvent(path: Path, eventPath: Path): Unit = {
     if (Files.exists(path)) {
       val pair: Pair[Directory[T], List[Directory.Entry[T]]] =
-        listImpl(path, false, new Directory.EntryFilter[T]() {
+        listImpl(path, 0, new Directory.EntryFilter[T]() {
           override def accept(path: Directory.Entry[_ <: T]): Boolean =
             eventPath == path.path
         })

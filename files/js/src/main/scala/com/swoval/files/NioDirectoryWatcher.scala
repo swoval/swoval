@@ -23,8 +23,8 @@ class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
   private object DirectoryFilter extends FileFilter {
     override def accept(pathname: File): Boolean = pathname.isDirectory
   }
-  override def register(path: Path, recursive: Boolean): Boolean = {
-    def impl(p: File): Boolean = watchedDirs get p.toString match {
+  override def register(path: Path, maxDepth: Int): Boolean = {
+    def impl(p: File, depth: Int): Boolean = watchedDirs get p.toString match {
       case None if p.isDirectory =>
         val options = new FSWatcherOptions(recursive = false)
         val callback: js.Function2[nodejs.EventType, String, Unit] =
@@ -35,11 +35,11 @@ class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
               case "rename" if !exists => Delete
               case _                   => Modify
             }
-            if (recursive && Files.isDirectory(watchPath)) {
-              impl(watchPath.toFile)
+            if (depth > 0 && Files.isDirectory(watchPath)) {
+              impl(watchPath.toFile, depth - 1)
               FileOps.list(watchPath, recursive = true).asScala foreach { newPath =>
                 if (newPath.isDirectory) {
-                  impl(newPath)
+                  impl(newPath, depth - 1)
                 } else {
                   onFileEvent(new Event(watchPath, Create))
                 }
@@ -47,13 +47,14 @@ class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
             }
             onFileEvent(new Event(watchPath, kind))
           }
-        watchedDirs += p.toString -> WatchedDir(Fs.watch(p.toString, options, callback), recursive)
+        watchedDirs += p.toString -> WatchedDir(Fs.watch(p.toString, options, callback), depth)
         true
       case _ =>
         false
     }
-    Files.exists(path) && impl(path.toFile) && {
-      if (recursive) FileOps.list(path, recursive, DirectoryFilter).asScala.foreach(impl)
+    Files.exists(path) && impl(path.toFile, maxDepth) && {
+      if (maxDepth > 0) FileOps.list(path, maxDepth, DirectoryFilter).asScala.foreach { p =>
+        }
       true
     }
   }
@@ -66,6 +67,11 @@ class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
     watchedDirs.clear()
   }
 
-  private[this] case class WatchedDir(watcher: FSWatcher, recursive: Boolean)
+  private[this] case class WatchedDir(watcher: FSWatcher, maxDepth: Int) {
+    private[this] val compDepth = if (maxDepth == Integer.MAX_VALUE) maxDepth else maxDepth + 1
+    def accept(base: Path, child: Path): Boolean = {
+      base.equals(child) || base.relativize(child).getNameCount <= compDepth
+    }
+  }
   private[this] val watchedDirs = mutable.Map.empty[String, WatchedDir]
 }

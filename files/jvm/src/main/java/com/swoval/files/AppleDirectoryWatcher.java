@@ -23,8 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * target="_blank">Apple File System Events Api</a>
  */
 public class AppleDirectoryWatcher extends DirectoryWatcher {
-  private final Map<String, Boolean> registered = new HashMap<>();
-  private final Map<String, Integer> streams = new HashMap<>();
+  private final Map<Path, Stream> streams = new HashMap<>();
   private final Object lock = new Object();
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final double latency;
@@ -32,17 +31,31 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
   private final Flags.Create flags;
   private final FileEventsApi fileEventsApi;
   private static final DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
+  private static class Stream {
+    public final int id;
+    public final int maxDepth;
+    private final int compDepth;
+    Stream(final Path path, final int id, final int maxDepth) {
+      this.id = id;
+      this.maxDepth = maxDepth;
+      compDepth = maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth + 1;
+    }
+    public boolean accept(final Path base, final Path child) {
+      final int depth = base.relativize(child).getNameCount();
+      return depth <= compDepth;
+    }
+  }
 
   /**
    * Registers a path
    *
    * @param path The directory to watch for file events
-   * @param recursive Toggles whether or not to monitor subdirectories
+   * @param maxDepth The maximum number of subdirectory levels to visit
    * @return true if the path is a directory and has not previously been registered
    */
   @Override
-  public boolean register(final Path path, final boolean recursive) {
-    return register(path, flags, recursive);
+  public boolean register(final Path path, final int maxDepth) {
+    return register(path, flags, maxDepth);
   }
 
   /**
@@ -50,24 +63,41 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    *
    * @param path The directory to watch for file events
    * @param flags The flags {@link com.swoval.files.apple.Flags.Create} to set for the directory
-   * @param recursive Toggles whether the children of subdirectories should be monitored
+   * @param maxDepth The maximum number of subdirectory levels to visit
    * @return true if the path is a directory and has not previously been registered
    */
-  public boolean register(final Path path, final Flags.Create flags, final boolean recursive) {
+  public boolean register(final Path path, final Flags.Create flags, final int maxDepth) {
+    boolean result = true;
     if (Files.isDirectory(path) && !path.equals(path.getRoot())) {
-      if (!alreadyWatching(path)) {
+      final Entry<Path, Stream> entry = find(path);
+      if (entry == null) {
         int id = fileEventsApi.createStream(path.toString(), latency, flags.getValue());
-        if (id == -1) System.err.println("Error watching " + path + ".");
+        if (id == -1) {
+          result = false;
+          System.err.println("Error watching " + path + ".");
+        }
         else {
           synchronized (lock) {
-            streams.put(path.toString(), id);
+            streams.put(path, new Stream(path, id, maxDepth));
           }
         }
+      } else {
+        final Path key = entry.getKey();
+        final Stream stream = entry.getValue();
+        final int depth = key.equals(path) ? 0 : key.relativize(path).getNameCount();
+        final int newMaxDepth;
+        if (maxDepth == Integer.MAX_VALUE || stream.maxDepth == Integer.MAX_VALUE) {
+          newMaxDepth = Integer.MAX_VALUE;
+        } else {
+          int diff = maxDepth + depth - stream.maxDepth;
+          newMaxDepth = diff > 0 ? stream.maxDepth + diff : stream.maxDepth;
+        }
+        if (newMaxDepth != stream.maxDepth) {
+          streams.put(key, new Stream(path, stream.id, newMaxDepth));
+        }
       }
-      Boolean rec = registered.get(path.toString());
-      if (rec == null || !rec) registered.put(path.toString(), recursive);
     }
-    return true;
+    return result;
   }
 
   /**
@@ -79,16 +109,15 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
   public void unregister(Path path) {
     synchronized (lock) {
       if (!closed.get()) {
-        final Integer id = streams.remove(path.toString());
-        if (id != null && id != -1) {
+        final Stream stream = streams.remove(path);
+        if (stream != null && stream.id != -1) {
           executor.run(new Runnable() {
                          @Override
                          public void run() {
-                           fileEventsApi.stopStream(id);
+                           fileEventsApi.stopStream(stream.id);
                          }
                        });
         }
-        registered.remove(path.toString());
       }
     }
   }
@@ -177,17 +206,13 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
                       public void run() {
                         final String fileName = fileEvent.fileName;
                         final Path path = Paths.get(fileName);
-                        final Iterator<Entry<String, Boolean>> it =
-                            registered.entrySet().iterator();
+                        final Iterator<Entry<Path, Stream>> it = streams.entrySet().iterator();
                         boolean validKey = false;
                         while (it.hasNext() && !validKey) {
-                          final Entry<String, Boolean> entry = it.next();
-                          Path key = Paths.get(entry.getKey());
-                          validKey =
-                              path.equals(key)
-                                  || (entry.getValue()
-                                      ? path.startsWith(key)
-                                      : path.getParent().equals(key));
+                          final Entry<Path, Stream> entry = it.next();
+                          final Path key = entry.getKey();
+                          final Stream stream = entry.getValue();
+                          validKey = path.equals(key) || stream.accept(key, path);
                         }
                         if (validKey) {
                           DirectoryWatcher.Event event;
@@ -226,8 +251,15 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
             });
   }
 
-  private boolean alreadyWatching(Path path) {
-    return !path.equals(path.getRoot())
-        && (streams.containsKey(path.toString()) || alreadyWatching(path.getParent()));
+  private Entry<Path, Stream> find(final Path path) {
+    final Iterator<Entry<Path, Stream>> it = streams.entrySet().iterator();
+    Entry<Path, Stream> result = null;
+    while (result == null && it.hasNext()) {
+      final Entry<Path, Stream> entry = it.next();
+      if (path.startsWith(entry.getKey())) {
+        result = entry;
+      }
+    }
+    return result;
   }
 }

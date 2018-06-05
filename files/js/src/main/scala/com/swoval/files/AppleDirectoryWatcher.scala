@@ -22,6 +22,18 @@ object AppleDirectoryWatcher {
   private val DefaultOnStreamRemoved: DefaultOnStreamRemoved =
     new DefaultOnStreamRemoved()
 
+  private class Stream(path: Path, val id: Int, val maxDepth: Int) {
+
+    private val compDepth: Int =
+      if (maxDepth == java.lang.Integer.MAX_VALUE) maxDepth else maxDepth + 1
+
+    def accept(base: Path, child: Path): Boolean = {
+      val depth: Int = base.relativize(child).getNameCount
+      depth <= compDepth
+    }
+
+  }
+
   /**
    * Callback to run when the native file events api removes a redundant stream. This can occur when
    * a child directory is registered with the watcher before the parent.
@@ -50,9 +62,7 @@ class AppleDirectoryWatcher(private val latency: Double,
                             onStreamRemoved: OnStreamRemoved)
     extends DirectoryWatcher {
 
-  private val registered: Map[String, Boolean] = new HashMap()
-
-  private val streams: Map[String, Integer] = new HashMap()
+  private val streams: Map[Path, Stream] = new HashMap()
 
   private val lock: AnyRef = new AnyRef()
 
@@ -65,15 +75,14 @@ class AppleDirectoryWatcher(private val latency: Double,
           override def run(): Unit = {
             val fileName: String = fileEvent.fileName
             val path: Path = Paths.get(fileName)
-            val it: Iterator[Entry[String, Boolean]] =
-              registered.entrySet().iterator()
+            val it: Iterator[Entry[Path, Stream]] =
+              streams.entrySet().iterator()
             var validKey: Boolean = false
             while (it.hasNext && !validKey) {
-              val entry: Entry[String, Boolean] = it.next()
-              var key: Path = Paths.get(entry.getKey)
-              validKey = path == key ||
-                (if (entry.getValue) path.startsWith(key)
-                 else path.getParent == key)
+              val entry: Entry[Path, Stream] = it.next()
+              val key: Path = entry.getKey
+              val stream: Stream = entry.getValue
+              validKey = path == key || stream.accept(key, path)
             }
             if (validKey) {
               var event: DirectoryWatcher.Event = null
@@ -111,36 +120,53 @@ class AppleDirectoryWatcher(private val latency: Double,
    * Registers a path
    *
    * @param path The directory to watch for file events
-   * @param recursive Toggles whether or not to monitor subdirectories
+   * @param maxDepth The maximum number of subdirectory levels to visit
    * @return true if the path is a directory and has not previously been registered
    */
-  override def register(path: Path, recursive: Boolean): Boolean =
-    register(path, flags, recursive)
+  override def register(path: Path, maxDepth: Int): Boolean =
+    register(path, flags, maxDepth)
 
   /**
    * Registers with additional flags
    *
    * @param path The directory to watch for file events
    * @param flags The flags [[com.swoval.files.apple.Flags.Create]] to set for the directory
-   * @param recursive Toggles whether the children of subdirectories should be monitored
+   * @param maxDepth The maximum number of subdirectory levels to visit
    * @return true if the path is a directory and has not previously been registered
    */
-  def register(path: Path, flags: Flags.Create, recursive: Boolean): Boolean = {
+  def register(path: Path, flags: Flags.Create, maxDepth: Int): Boolean = {
+    var result: Boolean = true
     if (Files.isDirectory(path) && path != path.getRoot) {
-      if (!alreadyWatching(path)) {
+      val entry: Entry[Path, Stream] = find(path)
+      if (entry == null) {
         val id: Int =
           fileEventsApi.createStream(path.toString, latency, flags.getValue)
-        if (id == -1) System.err.println("Error watching " + path + ".")
-        else {
+        if (id == -1) {
+          result = false
+          System.err.println("Error watching " + path + ".")
+        } else {
           lock.synchronized {
-            streams.put(path.toString, id)
+            streams.put(path, new Stream(path, id, maxDepth))
           }
         }
+      } else {
+        val key: Path = entry.getKey
+        val stream: Stream = entry.getValue
+        val depth: Int =
+          if (key == path) 0 else key.relativize(path).getNameCount
+        var newMaxDepth: Int = 0
+        if (maxDepth == java.lang.Integer.MAX_VALUE || stream.maxDepth == java.lang.Integer.MAX_VALUE) {
+          newMaxDepth = java.lang.Integer.MAX_VALUE
+        } else {
+          val diff: Int = maxDepth + depth - stream.maxDepth
+          newMaxDepth = if (diff > 0) stream.maxDepth + diff else stream.maxDepth
+        }
+        if (newMaxDepth != stream.maxDepth) {
+          streams.put(key, new Stream(path, stream.id, newMaxDepth))
+        }
       }
-      val rec: java.lang.Boolean = registered.get(path.toString)
-      if (rec == null || !rec) registered.put(path.toString, recursive)
     }
-    true
+    result
   }
 
   /**
@@ -151,15 +177,14 @@ class AppleDirectoryWatcher(private val latency: Double,
   override def unregister(path: Path): Unit = {
     lock.synchronized {
       if (!closed.get) {
-        val id: java.lang.Integer = streams.remove(path.toString)
-        if (id != null && id != -1) {
+        val stream: Stream = streams.remove(path)
+        if (stream != null && stream.id != -1) {
           executor.run(new Runnable() {
             override def run(): Unit = {
-              fileEventsApi.stopStream(id)
+              fileEventsApi.stopStream(stream.id)
             }
           })
         }
-        registered.remove(path.toString)
       }
     }
   }
@@ -191,8 +216,16 @@ class AppleDirectoryWatcher(private val latency: Double,
            onFileEvent: DirectoryWatcher.Callback) =
     this(latency, flags, executor, onFileEvent, DefaultOnStreamRemoved)
 
-  private def alreadyWatching(path: Path): Boolean =
-    path != path.getRoot &&
-      (streams.containsKey(path.toString) || alreadyWatching(path.getParent))
+  private def find(path: Path): Entry[Path, Stream] = {
+    val it: Iterator[Entry[Path, Stream]] = streams.entrySet().iterator()
+    var result: Entry[Path, Stream] = null
+    while (result == null && it.hasNext) {
+      val entry: Entry[Path, Stream] = it.next()
+      if (path.startsWith(entry.getKey)) {
+        result = entry
+      }
+    }
+    result
+  }
 
 }

@@ -1,6 +1,8 @@
 package com.swoval.files
 
-import java.util.concurrent.TimeUnit
+import java.nio.file.attribute.FileTime
+import java.util.concurrent.{ TimeUnit, TimeoutException }
+import java.nio.file.{ Files => JFiles }
 
 import com.swoval.files.AppleDirectoryWatcher.OnStreamRemoved
 import com.swoval.files.DirectoryWatcher.Callback
@@ -9,6 +11,7 @@ import com.swoval.files.apple.Flags
 import com.swoval.files.test.{ ArrayBlockingQueue, _ }
 import com.swoval.test._
 import utest._
+import Implicits.executionContext
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -89,6 +92,36 @@ object DirectoryWatcherTest extends TestSuite {
           }
         } else {
           Future.successful(())
+        }
+      }
+    }
+    'depth - {
+      'limit - withTempDirectory { dir =>
+        withTempDirectory(dir) { subdir =>
+          val callback: Callback =
+            (e: DirectoryWatcher.Event) => if (e.path.endsWith("foo")) events.add(e)
+          usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
+            w.register(dir, 0)
+            val file = subdir.resolve(Path("foo")).createFile()
+            val expected =
+              if (System.getProperty("java.vm.name") == "Scala.js" && !Platform.isMac) Modify
+              else Create
+            events
+              .poll(10.milliseconds) { _ =>
+                throw new IllegalStateException(
+                  "Event triggered for file that shouldn't be monitored")
+              }
+              .recoverWith {
+                case _: TimeoutException =>
+                  w.register(dir, 1)
+                  JFiles.setLastModifiedTime(file, FileTime.fromMillis(3000))
+                  events.poll(DEFAULT_TIMEOUT) { e =>
+                    e.path ==> file
+                    e.path.lastModified ==> 3000
+                  }
+
+              }
+          }
         }
       }
     }

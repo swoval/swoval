@@ -24,6 +24,11 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class Directory<T> implements AutoCloseable {
   public final Path path;
+
+  public int getDepth() {
+    return depth;
+  }
+
   private final int depth;
   private final Converter<T> converter;
   private final AtomicReference<Entry<T>> _cacheEntry;
@@ -76,14 +81,56 @@ public class Directory<T> implements AutoCloseable {
   /**
    * List all of the files for the {@code path}
    *
-   * @param recursive Toggles whether or not to include children of subdirectories in the results
+   * @param maxDepth The maximum depth of subdirectories to query
+   * @param filter Include only entries accepted by the filter
+   * @return a List of Entry instances accepted by the filter
+   */
+  public List<Entry<T>> list(final int maxDepth, final EntryFilter<? super T> filter) {
+    final List<Entry<T>> result = new ArrayList<>();
+    listImpl(maxDepth, filter, result);
+    return result;
+  }
+
+  /**
+   * List all of the files for the {@code path}
+   *
+   * @param recursive Toggles whether to include the children of subdirectories
    * @param filter Include only entries accepted by the filter
    * @return a List of Entry instances accepted by the filter
    */
   public List<Entry<T>> list(final boolean recursive, final EntryFilter<? super T> filter) {
     final List<Entry<T>> result = new ArrayList<>();
-    listImpl(recursive, filter, result);
+    listImpl(recursive ? Integer.MAX_VALUE : 0, filter, result);
     return result;
+  }
+
+  /**
+   * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
+   *
+   * @param path The path to list. If this is a file, returns a list containing the Entry for the
+   *     file or an empty list if the file is not monitored by the path.
+   * @param maxDepth The maximum depth of subdirectories to return
+   * @param filter Include only paths accepted by this
+   * @return a List of Entry instances accepted by the filter. The list will be empty if the path is
+   *     not a subdirectory of this Directory or if it is a subdirectory, but the Directory was
+   *     created without the recursive flag.
+   */
+  public List<Entry<T>> list(
+      final Path path, final int maxDepth, final EntryFilter<? super T> filter) {
+    final FindResult findResult = find(path);
+    if (findResult != null) {
+      final Directory<T> dir = findResult.directory;
+      if (dir != null) {
+        return dir.list(maxDepth, filter);
+      } else {
+        final Entry<T> entry = findResult.entry;
+        final List<Entry<T>> result = new ArrayList<>();
+        if (entry != null && filter.accept(entry)) result.add(entry);
+        return result;
+      }
+    } else {
+      return new ArrayList<>();
+    }
   }
 
   /**
@@ -99,20 +146,7 @@ public class Directory<T> implements AutoCloseable {
    */
   public List<Entry<T>> list(
       final Path path, final boolean recursive, final EntryFilter<? super T> filter) {
-    final FindResult findResult = find(path);
-    if (findResult != null) {
-      final Directory<T> dir = findResult.directory;
-      if (dir != null) {
-        return dir.list(recursive, filter);
-      } else {
-        final Entry<T> entry = findResult.entry;
-        final List<Entry<T>> result = new ArrayList<>();
-        if (entry != null && filter.accept(entry)) result.add(entry);
-        return result;
-      }
-    } else {
-      return new ArrayList<>();
-    }
+    return list(path, recursive ? Integer.MAX_VALUE : 0, filter);
   }
 
   /**
@@ -154,7 +188,7 @@ public class Directory<T> implements AutoCloseable {
 
   @Override
   public String toString() {
-    return "Directory(" + path + ", depth = " + depth + ")";
+    return "Directory(" + path + ", maxDepth = " + depth + ")";
   }
 
   private int subdirectoryDepth() {
@@ -167,7 +201,7 @@ public class Directory<T> implements AutoCloseable {
     final Directory<T> dir = cached(path, converter, subdirectoryDepth());
     currentDir.subdirectories.put(path.getFileName().toString(), dir);
     addUpdate(updates, dir.entry());
-    final Iterator<Entry<T>> it = dir.list(true, AllPass).iterator();
+    final Iterator<Entry<T>> it = dir.list(Integer.MAX_VALUE, AllPass).iterator();
     while (it.hasNext()) {
       addUpdate(updates, it.next());
     }
@@ -267,7 +301,7 @@ public class Directory<T> implements AutoCloseable {
   }
 
   private void listImpl(
-      final boolean recursive, final EntryFilter<? super T> filter, final List<Entry<T>> result) {
+      final int maxDepth, final EntryFilter<? super T> filter, final List<Entry<T>> result) {
     final Collection<Entry<T>> files;
     final Collection<Directory<T>> subdirectories;
     synchronized (this.lock) {
@@ -284,7 +318,7 @@ public class Directory<T> implements AutoCloseable {
       final Directory<T> subdir = subdirIterator.next();
       final Entry<T> resolved = subdir.entry().resolvedFrom(this.path, true);
       if (filter.accept(resolved)) result.add(resolved);
-      if (recursive) subdir.listImpl(true, filter, result);
+      if (maxDepth > 0) subdir.listImpl(maxDepth - 1, filter, result);
     }
   }
 
@@ -302,7 +336,7 @@ public class Directory<T> implements AutoCloseable {
           } else {
             final Directory<T> dir = currentDir.subdirectories.removeByName(p);
             if (dir != null) {
-              result.addAll(dir.list(true, AllPass));
+              result.addAll(dir.list(Integer.MAX_VALUE, AllPass));
               result.add(dir.entry());
             }
           }
