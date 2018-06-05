@@ -79,13 +79,11 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
                           : k.equals(ENTRY_CREATE)
                               ? Create
                               : k.equals(OVERFLOW) ? Overflow : Modify;
-                  synchronized (lock) {
-                    if (!kind.equals(Overflow)) {
-                      final Path path = ((Path) key.watchable()).resolve((Path) e.context());
-                      handleEvent(callback, path, key, kind);
-                    } else {
-                      handleOverflow(callback, key);
-                    }
+                  if (!kind.equals(Overflow)) {
+                    final Path path = ((Path) key.watchable()).resolve((Path) e.context());
+                    handleEvent(callback, path, key, kind);
+                  } else {
+                    handleOverflow(callback, key);
                   }
                 }
               } catch (ClosedWatchServiceException | InterruptedException e) {
@@ -204,8 +202,8 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
       while (toRemoveIterator.hasNext()) {
         unregister((Path) toRemoveIterator.next());
       }
-      callback.apply(new DirectoryWatcher.Event((Path) key.watchable(), Overflow));
     }
+    callback.apply(new DirectoryWatcher.Event((Path) key.watchable(), Overflow));
   }
 
   private <T> boolean differentElements(final Set<T> left, final Set right) {
