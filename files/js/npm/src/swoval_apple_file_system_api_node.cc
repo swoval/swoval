@@ -73,7 +73,7 @@ static void process_callback(uv_async_t *async) {
     auto *h = reinterpret_cast<NodeHandle *>(async->data);
     if (h->stopped)
         return;   // should be unreachable
-    Lock lock(h->mutex);
+    Lock lock(h->runloop_mutex);
     napi_handle_scope scope;
     NAPI(napi_open_handle_scope(h->data->env, &scope));
     if (h->data->events.size()) {

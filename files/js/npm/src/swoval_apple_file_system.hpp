@@ -26,7 +26,7 @@ template <typename T> class handle {
     CFRunLoopSourceRef sourceRef;
     CFRunLoopSourceContext *context = nullptr;
     std::mutex mutex;
-    std::mutex streams_mutex;
+    std::mutex runloop_mutex;
     std::condition_variable cond;
     std::map<int32_t, std::pair<std::string, FSEventStreamRef>> stream_handles;
     std::vector<int32_t> streams_to_remove;
@@ -45,18 +45,20 @@ template <typename T> class handle {
         if (!started) {
             cond.wait(lock, [this] { return this->started; });
         }
+        Lock runloopLock(runloop_mutex);
         if (!closed) {
             stopped = true;
             CFRunLoopSourceSignal(sourceRef);
             CFRunLoopWakeUp(runLoop);
         }
+        runloopLock.unlock();
         if (!closed) {
             cond.wait(lock, [this] { return this->closed; });
         }
         lock.unlock();
     }
 
-    void cleanupRunLoop() {
+    void cleanupRunLoop(Lock runloopMutex) {
         CFRunLoopStop(runLoop);
         CFRunLoopSourceInvalidate(sourceRef);
         CFRunLoopRemoveSource(runLoop, sourceRef, mode);
@@ -110,7 +112,7 @@ template <typename T> class handle {
     }
 
     void stopStream(int32_t stream_key) {
-        Lock lock(streams_mutex);
+        Lock lock(mutex);
         if (!started) {
             cond.wait(lock, [this] { return this->started; });
         }
@@ -140,7 +142,7 @@ template <typename T> class handle {
                                 void *eventPaths, const FSEventStreamEventFlags flags[],
                                 const FSEventStreamEventId ids[]) {
         handle<T> *h = reinterpret_cast<handle<T> *>(info);
-        Lock lock(h->mutex);
+        Lock lock(h->runloop_mutex);
         if (h->stopped)
             return;
         const char **paths = reinterpret_cast<const char **>(eventPaths);
@@ -168,11 +170,11 @@ template <typename T> void loop(handle<T> *h) {
     h->sourceRef        = CFRunLoopSourceCreate(nullptr, 0, h->context);
     CFRunLoopAddSource(h->runLoop, h->sourceRef, mode);
     Lock lock(h->mutex);
-    Lock streamsLock(h->streams_mutex);
+    Lock runloopLock(h->runloop_mutex);
     h->started = true;
     h->cond.notify_all();
     lock.unlock();
-    streamsLock.unlock();
+    runloopLock.unlock();
     CFRunLoopRun();
 }
 
@@ -180,9 +182,9 @@ template <typename T> static void cleanupFunc(handle<T> *h) {
     std::vector<std::pair<int32_t, std::string>> streams;
     std::vector<int32_t> redundant_ids;
     Lock lock(h->mutex);
-    Lock streamLock(h->streams_mutex);
+    Lock runloopLock(h->runloop_mutex);
     if (h->stopped) {
-        h->cleanupRunLoop();
+        h->cleanupRunLoop(std::move(runloopLock));
         h->cond.notify_all();
         lock.unlock();
         return;
