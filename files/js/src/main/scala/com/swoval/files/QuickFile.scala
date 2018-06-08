@@ -56,12 +56,11 @@ trait QuickFile {
   def isSymbolicLink(): Boolean
 
   /**
-   * Returns an instance of [[File]]. Typically the implementation of [[QuickFile]] while
-   * extend [[File]]. This method will then just cast the instance to [[File]]. Because the
-   * [[QuickFile.isDirectory]] and [[QuickFile.isFile]] methods will generally cache the
-   * value of the native file result returned by readdir (posix) or FindNextFile (windows) and use
-   * this value to compute [[QuickFile.isDirectory]] and [[QuickFile.isFile]], the returned
-   * [[File]] is generally unsuitable to be used as a persistent value. Instead, use [[QuickFile.toFile]].
+   * Returns an instance of [[FileWithFileType]]. Typically the implementation of [[QuickFile]] while extend [[FileWithFileType]]. This method will then just cast the instance
+   * to [[java.io.File]]. Because the [[QuickFile.isDirectory]] and [[QuickFile.isFile]] methods
+   * will generally cache the value of the native file result returned by readdir (posix) or
+   * FindNextFile (windows) and use this value to compute [[QuickFile.isDirectory]] and [[QuickFile.isFile]], the returned [[FileWithFileType]] is generally unsuitable to be used as
+   * a persistent value. Instead, use [[QuickFile.toFile]].
    */
   def asFile(): FileWithFileType
 
@@ -73,17 +72,16 @@ trait QuickFile {
   def asPath(): PathWithFileType
 
   /**
-   * Returns an instance of [[File]]. The instance should not override [[File.isDirectory]]
-   * or [[File.isFile]] which makes it safe to persist.
+   * Returns an instance of [[java.io.File]]. The instance should not override [[java.io.File.isDirectory]] or [[java.io.File.isFile]] which makes it safe to persist.
    *
-   * @return an instance of [[File]]
+   * @return an instance of [[java.io.File]]
    */
   def toFile(): File
 
   /**
-   * Returns an instance of [[Path]].
+   * Returns an instance of [[java.nio.file.Path]].
    *
-   * @return an instance of [[Path]]
+   * @return an instance of [[java.nio.file.Path]]
    */
   def toPath(): Path
 

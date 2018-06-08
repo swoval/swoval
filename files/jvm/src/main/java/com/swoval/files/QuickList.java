@@ -43,7 +43,7 @@ public abstract class QuickList {
    * to a directory, the results will contain the children of the symbolic link target relative to
    * the symbolic link base. For example, if /foo contains a symbolic link called dir-link that
    * links to /bar where /bar contains a file named baz, then the results will include a {@link
-   * QuickFile} for /foo/dir-link/baz (provided that the maxDepth >= 1).
+   * QuickFile} for /foo/dir-link/baz (provided that the {@code maxDepth >= 1}).
    *
    * @param path The path to list
    * @param maxDepth The maximum maxDepth of the file system tree to traverse
@@ -61,8 +61,8 @@ public abstract class QuickList {
    * followLinks} is true, for a symbolic link to a directory, the results will contain the children
    * of the symbolic link target relative to the symbolic link base. For example, if /foo contains a
    * symbolic link called dir-link that links to /bar where /bar contains a file named baz, then the
-   * results will include a {@link QuickFile} for /foo/dir-link/baz (provided that the maxDepth >=
-   * 1).
+   * results will include a {@link QuickFile} for /foo/dir-link/baz (provided that the {@code
+   * maxDepth >= 1}).
    *
    * @param path The path to list
    * @param maxDepth The maximum depth of the file system tree to traverse
@@ -81,8 +81,8 @@ public abstract class QuickList {
    * symbolic link to a directory, the results will contain the children of the symbolic link target
    * relative to the symbolic link base. For example, if /foo contains a symbolic link called
    * dir-link that links to /bar where /bar contains a file named baz, then the results will include
-   * a {@link QuickFile} for /foo/dir-link/baz (provided that the maxDepth >= 1). Files and directories
-   * that do not pass the {@code filter} are discarded.
+   * a {@link QuickFile} for /foo/dir-link/baz (provided that the {@code maxDepth >= 1}). Files and
+   * directories that do not pass the {@code filter} are discarded.
    *
    * @param path The path to list
    * @param maxDepth The maximum depth of the file system tree to traverse

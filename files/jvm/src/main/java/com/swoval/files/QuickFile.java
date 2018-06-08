@@ -58,13 +58,13 @@ public interface QuickFile {
   boolean isSymbolicLink();
 
   /**
-   * Returns an instance of {@link File}. Typically the implementation of {@link QuickFile} while
-   * extend {@link File}. This method will then just cast the instance to {@link File}. Because the
-   * {@link QuickFile#isDirectory} and {@link QuickFile#isFile} methods will generally cache the
-   * value of the native file result returned by readdir (posix) or FindNextFile (windows) and use
-   * this value to compute {@link QuickFile#isDirectory} and {@link QuickFile#isFile}, the returned
-   * {@link File} is generally unsuitable to be used as a persistent value. Instead, use {@link
-   * QuickFile#toFile}.
+   * Returns an instance of {@link FileWithFileType}. Typically the implementation of {@link
+   * QuickFile} while extend {@link FileWithFileType}. This method will then just cast the instance
+   * to {@link java.io.File}. Because the {@link QuickFile#isDirectory} and {@link QuickFile#isFile} methods
+   * will generally cache the value of the native file result returned by readdir (posix) or
+   * FindNextFile (windows) and use this value to compute {@link QuickFile#isDirectory} and {@link
+   * QuickFile#isFile}, the returned {@link FileWithFileType} is generally unsuitable to be used as
+   * a persistent value. Instead, use {@link QuickFile#toFile}.
    */
   FileWithFileType asFile();
 
@@ -77,17 +77,17 @@ public interface QuickFile {
   PathWithFileType asPath();
 
   /**
-   * Returns an instance of {@link File}. The instance should not override {@link File#isDirectory}
-   * or {@link File#isFile} which makes it safe to persist.
+   * Returns an instance of {@link java.io.File}. The instance should not override {@link
+   * java.io.File#isDirectory} or {@link java.io.File#isFile} which makes it safe to persist.
    *
-   * @return an instance of {@link File}
+   * @return an instance of {@link java.io.File}
    */
   File toFile();
 
   /**
-   * Returns an instance of {@link Path}.
+   * Returns an instance of {@link java.nio.file.Path}.
    *
-   * @return an instance of {@link Path}
+   * @return an instance of {@link java.nio.file.Path}
    */
   Path toPath();
 }
