@@ -158,8 +158,13 @@ class AppleDirectoryWatcher(private val latency: Double,
         if (maxDepth == java.lang.Integer.MAX_VALUE || stream.maxDepth == java.lang.Integer.MAX_VALUE) {
           newMaxDepth = java.lang.Integer.MAX_VALUE
         } else {
-          val diff: Int = maxDepth + depth - stream.maxDepth
-          newMaxDepth = if (diff > 0) stream.maxDepth + diff else stream.maxDepth
+          val diff: Int = maxDepth - stream.maxDepth + depth
+          newMaxDepth =
+            if (diff > 0)
+              (if (stream.maxDepth < java.lang.Integer.MAX_VALUE - diff)
+                 stream.maxDepth + diff
+               else java.lang.Integer.MAX_VALUE)
+            else stream.maxDepth
         }
         if (newMaxDepth != stream.maxDepth) {
           streams.put(key, new Stream(path, stream.id, newMaxDepth))

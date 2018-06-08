@@ -113,9 +113,9 @@ object FileCache {
  * Directory.EntryFilter)]] method. The cache stores the path information in [[Directory.Entry]]
  * instances.
  *
- * <p>A default implementation is provided by [[FileCache.apply]]
- * . The user may cache arbitrary information in the cache by customizing the
- * [[Directory.Converter]] that is passed into the factory [[FileCache.apply]]
+ * <p>A default implementation is provided by [[FileCache#apply(Converter, Observer,
+ * Option...)]] . The user may cache arbitrary information in the cache by customizing the [[Directory.Converter]] that is passed into the factory [[FileCache#apply(Converter, Observer,
+ * Option...)]]
  *
  * @tparam T The type of data stored in the [[Directory.Entry]] instances for the cache
  */
@@ -342,14 +342,18 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
         while (it.hasNext && existing == null) {
           val dir: Directory[T] = it.next()
           if (path.startsWith(dir.path)) {
-            val depth: Int = (if (path == dir.path) 0
-                              else dir.path.relativize(path).getNameCount) -
-              1
-            if (maxDepth + depth < dir.getDepth) {
+            val depth: Int =
+              if (path == dir.path) 0
+              else (dir.path.relativize(path).getNameCount - 1)
+            if (dir.getDepth == java.lang.Integer.MAX_VALUE || maxDepth < dir.getDepth - depth) {
               existing = dir
             } else if (depth <= dir.getDepth) {
               dir.close()
-              existing = Directory.cached(dir.path, converter, maxDepth + depth + 1)
+              existing = Directory.cached(dir.path,
+                                          converter,
+                                          if (maxDepth < java.lang.Integer.MAX_VALUE - depth - 1)
+                                            maxDepth + depth + 1
+                                          else java.lang.Integer.MAX_VALUE)
               directories.put(dir.path, existing)
             }
           }

@@ -9,6 +9,15 @@ import scala.util.{ Failure, Success, Try }
 import java.nio.file.{ Path => JPath }
 
 package object test {
+
+  /** Taken from shapeless */
+  sealed trait <:!<[T, R]
+  object <:!< {
+    import scala.language.implicitConversions
+    implicit def default[T, R]: <:!<[T, R] = new <:!<[T, R] {}
+    implicit def alternative[T, R](implicit ev: T <:< R): <:!<[T, R] = new <:!<[T, R] {}
+  }
+  type NotFuture[T] = <:!<[T, Future[_]]
   class CountDownLatch(private[this] var i: Int) {
     private[this] val promise = Promise.apply[Boolean]
     private[this] val lock = new Object
@@ -72,17 +81,18 @@ package object test {
     p.tryComplete(util.Try { f(path); () })
     p.future
   }
-  def withTempFileSync[R](dir: JPath)(f: JPath => R): Future[Unit] =
+  def withTempFileSync[R: NotFuture](dir: JPath)(f: JPath => R): Future[Unit] =
     withTempFile(dir)(wrap(f))
 
-  def withTempFileSync[R](f: JPath => R): Future[Unit] = withTempFile(wrap(f))
+  def withTempFileSync[R: NotFuture](f: JPath => R): Future[Unit] =
+    withTempFile(wrap(f))
 
-  def withTempDirectorySync[R](f: JPath => R): Future[Unit] = withTempDirectory(wrap(f))
+  def withTempDirectorySync[R: NotFuture](f: JPath => R): Future[Unit] = withTempDirectory(wrap(f))
 
-  def withTempDirectorySync[R](dir: JPath)(f: JPath => R): Future[Unit] =
+  def withTempDirectorySync[R: NotFuture](dir: JPath)(f: JPath => R): Future[Unit] =
     withTempDirectory(dir)(wrap(f))
 
-  def withDirectorySync[R](dir: JPath)(f: => R): Future[Unit] =
+  def withDirectorySync[R: NotFuture](dir: JPath)(f: => R): Future[Unit] =
     com.swoval.test.Files.withDirectory(dir.toString) {
       val p = Promise[Unit]
       p.tryComplete(util.Try { f; () })

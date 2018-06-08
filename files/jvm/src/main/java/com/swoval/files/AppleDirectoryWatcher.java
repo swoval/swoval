@@ -31,15 +31,18 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
   private final Flags.Create flags;
   private final FileEventsApi fileEventsApi;
   private static final DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
+
   private static class Stream {
     public final int id;
     public final int maxDepth;
     private final int compDepth;
+
     Stream(final Path path, final int id, final int maxDepth) {
       this.id = id;
       this.maxDepth = maxDepth;
       compDepth = maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth + 1;
     }
+
     public boolean accept(final Path base, final Path child) {
       final int depth = base.relativize(child).getNameCount();
       return depth <= compDepth;
@@ -75,8 +78,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
         if (id == -1) {
           result = false;
           System.err.println("Error watching " + path + ".");
-        }
-        else {
+        } else {
           synchronized (lock) {
             streams.put(path, new Stream(path, id, maxDepth));
           }
@@ -89,8 +91,13 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
         if (maxDepth == Integer.MAX_VALUE || stream.maxDepth == Integer.MAX_VALUE) {
           newMaxDepth = Integer.MAX_VALUE;
         } else {
-          int diff = maxDepth + depth - stream.maxDepth;
-          newMaxDepth = diff > 0 ? stream.maxDepth + diff : stream.maxDepth;
+          int diff = maxDepth - stream.maxDepth + depth;
+          newMaxDepth =
+              diff > 0
+                  ? (stream.maxDepth < Integer.MAX_VALUE - diff
+                      ? stream.maxDepth + diff
+                      : Integer.MAX_VALUE)
+                  : stream.maxDepth;
         }
         if (newMaxDepth != stream.maxDepth) {
           streams.put(key, new Stream(path, stream.id, newMaxDepth));
@@ -111,12 +118,13 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
       if (!closed.get()) {
         final Stream stream = streams.remove(path);
         if (stream != null && stream.id != -1) {
-          executor.run(new Runnable() {
-                         @Override
-                         public void run() {
-                           fileEventsApi.stopStream(stream.id);
-                         }
-                       });
+          executor.run(
+              new Runnable() {
+                @Override
+                public void run() {
+                  fileEventsApi.stopStream(stream.id);
+                }
+              });
         }
       }
     }
@@ -238,15 +246,16 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
             new Consumer<String>() {
               @Override
               public void accept(final String stream) {
-                executor.run(new Runnable() {
-                  @Override
-                  public void run() {
-                    synchronized (lock) {
-                      streams.remove(stream);
-                    }
-                    onStreamRemoved.apply(stream);
-                  }
-                });
+                executor.run(
+                    new Runnable() {
+                      @Override
+                      public void run() {
+                        synchronized (lock) {
+                          streams.remove(stream);
+                        }
+                        onStreamRemoved.apply(stream);
+                      }
+                    });
               }
             });
   }

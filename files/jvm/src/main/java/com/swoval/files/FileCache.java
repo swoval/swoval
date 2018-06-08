@@ -32,10 +32,10 @@ import java.util.concurrent.locks.ReentrantLock;
  * Directory.EntryFilter)} method. The cache stores the path information in {@link Directory.Entry}
  * instances.
  *
- * <p>A default implementation is provided by {@link FileCache#apply(Converter, Observer, Option...)}
- * . The user may cache arbitrary information in the cache by customizing the
- * {@link Directory.Converter} that is passed into the factory {@link
- * FileCache#apply(Converter, Observer, Option...)}
+ * <p>A default implementation is provided by {@link FileCache#apply(Converter, Observer,
+ * Option...)} . The user may cache arbitrary information in the cache by customizing the {@link
+ * Directory.Converter} that is passed into the factory {@link FileCache#apply(Converter, Observer,
+ * Option...)}
  *
  * @param <T> The type of data stored in the {@link Directory.Entry} instances for the cache
  */
@@ -295,19 +295,19 @@ class FileCacheImpl<T> extends FileCache<T> {
     symlinkWatcher =
         !ArrayOps.contains(options, FileCache.Option.NOFOLLOW_LINKS)
             ? new SymlinkWatcher(
-            new SymlinkWatcher.EventConsumer() {
-              @Override
-              public void accept(Path path) {
-                handleEvent(path);
-              }
-            },
-            factory,
-            new OnLoop() {
-              @Override
-              public void accept(final Path symlink, final IOException exception) {
-                observers.onError(symlink, exception);
-              }
-            })
+                new SymlinkWatcher.EventConsumer() {
+                  @Override
+                  public void accept(Path path) {
+                    handleEvent(path);
+                  }
+                },
+                factory,
+                new OnLoop() {
+                  @Override
+                  public void accept(final Path symlink, final IOException exception) {
+                    observers.onError(symlink, exception);
+                  }
+                })
             : null;
   }
 
@@ -351,12 +351,19 @@ class FileCacheImpl<T> extends FileCache<T> {
         while (it.hasNext() && existing == null) {
           final Directory<T> dir = it.next();
           if (path.startsWith(dir.path)) {
-            int depth = (path.equals(dir.path) ? 0 : dir.path.relativize(path).getNameCount()) - 1;
-            if (maxDepth + depth < dir.getDepth()) {
+            final int depth =
+                path.equals(dir.path) ? 0 : (dir.path.relativize(path).getNameCount() - 1);
+            if (dir.getDepth() == Integer.MAX_VALUE || maxDepth < dir.getDepth() - depth) {
               existing = dir;
             } else if (depth <= dir.getDepth()) {
               dir.close();
-              existing = Directory.cached(dir.path, converter, maxDepth + depth + 1);
+              existing =
+                  Directory.cached(
+                      dir.path,
+                      converter,
+                      maxDepth < Integer.MAX_VALUE - depth - 1
+                          ? maxDepth + depth + 1
+                          : Integer.MAX_VALUE);
               directories.put(dir.path, existing);
             }
           }
@@ -387,8 +394,7 @@ class FileCacheImpl<T> extends FileCache<T> {
       final Iterator<Directory<T>> it = directories.values().iterator();
       while (it.hasNext()) {
         final Directory<T> dir = it.next();
-        if (path.startsWith(dir.path)
-            && (foundDir == null || dir.path.startsWith(foundDir.path))) {
+        if (path.startsWith(dir.path) && (foundDir == null || dir.path.startsWith(foundDir.path))) {
           foundDir = dir;
         }
       }
@@ -529,7 +535,8 @@ class FileCacheImpl<T> extends FileCache<T> {
         final List<Directory.Entry<T>> paths = pair.second;
         if (!paths.isEmpty() || !path.equals(dir.path)) {
           final Path toUpdate = paths.isEmpty() ? path : paths.get(0).path;
-          if (attrs.isSymbolicLink() && symlinkWatcher != null) symlinkWatcher.addSymlink(path, Files.isDirectory(path));
+          if (attrs.isSymbolicLink() && symlinkWatcher != null)
+            symlinkWatcher.addSymlink(path, Files.isDirectory(path));
           try {
             final Iterator<Directory.Entry<T>[]> it =
                 dir.addUpdate(toUpdate, Directory.Entry.getKind(toUpdate, attrs)).iterator();
