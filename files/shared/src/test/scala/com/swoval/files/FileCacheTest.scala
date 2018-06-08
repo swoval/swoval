@@ -197,7 +197,7 @@ trait FileCacheTest extends TestSuite {
             c.reg(dir, recursive = false)
             withTempFile(subdir) { f =>
               assert(f.exists)
-              subdir.setLastModifiedTime(2000)
+              subdir.setLastModifiedTime(3000)
               latch.waitFor(DEFAULT_TIMEOUT) {
                 c.ls(dir) === Seq(subdir)
               }
@@ -344,7 +344,7 @@ trait FileCacheTest extends TestSuite {
             }
           val lastModified = cachedFile.value.lastModified
           lastModified ==> file.lastModified
-          val updatedLastModified = 2000
+          val updatedLastModified = 3000
           file.setLastModifiedTime(updatedLastModified)
           latch.waitFor(DEFAULT_TIMEOUT) {
             val newCachedFile: Entry[LastModified] =
