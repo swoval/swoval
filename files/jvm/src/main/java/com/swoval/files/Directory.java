@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * Provides a mutable in-memory cache of files and subdirectories with basic CRUD functionality. The
  * Directory can be fully recursive as the subdirectories are themselves stored as recursive (when
  * the Directory is initialized without the recursive toggle, the subdirectories are stored as
- * {@link Directory.Entry} instances.The primary use case is the implementation of {@link
+ * {@link Directory.Entry} instances. The primary use case is the implementation of {@link
  * FileCache}. Directly handling Directory instances is discouraged because it is inherently mutable
  * so it's better to let the FileCache manage it and query the cache rather than Directory directly.
  *
@@ -63,7 +63,14 @@ public class Directory<T> implements AutoCloseable {
    * @param <R> The generic type generated from the path
    */
   public interface Converter<R> {
-    R apply(Path path);
+
+    /**
+     * Convert the path to a value
+     * @param path The path to convert
+     * @return The value
+     * @throws IOException when the value can't be computed
+     */
+    R apply(Path path) throws IOException;
   }
 
   /**

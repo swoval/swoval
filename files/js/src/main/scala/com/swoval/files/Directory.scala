@@ -29,6 +29,11 @@ object Directory {
    */
   trait Converter[R] {
 
+    /**
+     * Convert the path to a value
+     * @param path The path to convert
+     * @return The value
+     */
     def apply(path: Path): R
 
   }
@@ -274,7 +279,7 @@ object Directory {
  * Provides a mutable in-memory cache of files and subdirectories with basic CRUD functionality. The
  * Directory can be fully recursive as the subdirectories are themselves stored as recursive (when
  * the Directory is initialized without the recursive toggle, the subdirectories are stored as
- * [[Directory.Entry]] instances.The primary use case is the implementation of [[FileCache]]. Directly handling Directory instances is discouraged because it is inherently mutable
+ * [[Directory.Entry]] instances. The primary use case is the implementation of [[FileCache]]. Directly handling Directory instances is discouraged because it is inherently mutable
  * so it's better to let the FileCache manage it and query the cache rather than Directory directly.
  *
  * @tparam T The cache value type
