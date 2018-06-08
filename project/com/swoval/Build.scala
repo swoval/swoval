@@ -430,6 +430,7 @@ object Build {
         }
         (unmanagedResources in Compile).value
       },
+      fork in Test := System.getProperty("swoval.fork.tests", "false") == "true",
       travisQuickListReflectionTest := {
         quickListReflectionTest
           .toTask(" com.swoval.files.NioQuickLister com.swoval.files.NativeQuickLister")
