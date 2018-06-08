@@ -22,6 +22,7 @@ import java.util.List
 import java.util.Map
 import java.util.Map.Entry
 import java.util.Set
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import Option._
 import FileCache._
@@ -276,24 +277,15 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       )
     else null
 
+  private val closed: AtomicBoolean = new AtomicBoolean(false)
+
   private val callback: DirectoryWatcher.Callback =
     new DirectoryWatcher.Callback() {
       override def apply(event: DirectoryWatcher.Event): Unit = {
         lock.synchronized {
           val path: Path = event.path
           if (event.kind == Overflow) {
-            try handleOverflow(path)
-            catch {
-              case e: IOException => {
-                System.err.println(
-                  "FileCache caught IOException while processing overflow: " +
-                    e)
-                for (el <- e.getStackTrace) {
-                  println(el)
-                }
-              }
-
-            }
+            handleOverflow(path)
           } else {
             handleEvent(path)
           }
@@ -307,12 +299,14 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
  Cleans up the directory watcher and clears the directory cache.
    */
   override def close(): Unit = {
-    watcher.close()
-    if (symlinkWatcher != null) symlinkWatcher.close()
-    val directoryIterator: Iterator[Directory[T]] =
-      directories.values.iterator()
-    while (directoryIterator.hasNext) directoryIterator.next().close()
-    directories.clear()
+    if (closed.compareAndSet(false, true)) {
+      if (symlinkWatcher != null) symlinkWatcher.close()
+      watcher.close()
+      val directoryIterator: Iterator[Directory[T]] =
+        directories.values.iterator()
+      while (directoryIterator.hasNext) directoryIterator.next().close()
+      directories.clear()
+    }
   }
 
   override def list(path: Path,
@@ -430,139 +424,147 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
   }
 
   private def handleOverflow(path: Path): Boolean = directories.synchronized {
-    val directoryIterator: Iterator[Directory[T]] =
-      directories.values.iterator()
-    val toReplace: List[Directory[T]] = new ArrayList[Directory[T]]()
-    val creations: List[Directory.Entry[T]] =
-      new ArrayList[Directory.Entry[T]]()
-    val updates: List[Array[Directory.Entry[T]]] =
-      new ArrayList[Array[Directory.Entry[T]]]()
-    val deletions: List[Directory.Entry[T]] =
-      new ArrayList[Directory.Entry[T]]()
-    while (directoryIterator.hasNext) {
-      val currentDir: Directory[T] = directoryIterator.next()
-      if (path.startsWith(currentDir.path)) {
-        var oldDir: Directory[T] = currentDir
-        var newDir: Directory[T] = cachedOrNull(oldDir.path, oldDir.getDepth)
-        while (newDir == null || diff(oldDir, newDir)) {
-          if (newDir != null) oldDir = newDir
-          newDir = cachedOrNull(oldDir.path, oldDir.getDepth)
-        }
-        val oldEntries: Map[Path, Directory.Entry[T]] =
-          new HashMap[Path, Directory.Entry[T]]()
-        val newEntries: Map[Path, Directory.Entry[T]] =
-          new HashMap[Path, Directory.Entry[T]]()
-        val oldEntryIterator: Iterator[Directory.Entry[T]] =
-          currentDir.list(currentDir.recursive(), AllPass).iterator()
-        while (oldEntryIterator.hasNext) {
-          val entry: Directory.Entry[T] = oldEntryIterator.next()
-          oldEntries.put(entry.path, entry)
-        }
-        val newEntryIterator: Iterator[Directory.Entry[T]] =
-          newDir.list(currentDir.recursive(), AllPass).iterator()
-        while (newEntryIterator.hasNext) {
-          val entry: Directory.Entry[T] = newEntryIterator.next()
-          newEntries.put(entry.path, entry)
-        }
-        val oldIterator: Iterator[Entry[Path, Directory.Entry[T]]] =
-          oldEntries.entrySet().iterator()
-        while (oldIterator.hasNext) {
-          val mapEntry: Entry[Path, Directory.Entry[T]] = oldIterator.next()
-          if (!newEntries.containsKey(mapEntry.getKey)) {
-            deletions.add(mapEntry.getValue)
+    if (!closed.get) {
+      val directoryIterator: Iterator[Directory[T]] =
+        directories.values.iterator()
+      val toReplace: List[Directory[T]] = new ArrayList[Directory[T]]()
+      val creations: List[Directory.Entry[T]] =
+        new ArrayList[Directory.Entry[T]]()
+      val updates: List[Array[Directory.Entry[T]]] =
+        new ArrayList[Array[Directory.Entry[T]]]()
+      val deletions: List[Directory.Entry[T]] =
+        new ArrayList[Directory.Entry[T]]()
+      while (directoryIterator.hasNext) {
+        val currentDir: Directory[T] = directoryIterator.next()
+        if (path.startsWith(currentDir.path)) {
+          var oldDir: Directory[T] = currentDir
+          var newDir: Directory[T] = cachedOrNull(oldDir.path, oldDir.getDepth)
+          while (newDir == null || diff(oldDir, newDir)) {
+            if (newDir != null) oldDir = newDir
+            newDir = cachedOrNull(oldDir.path, oldDir.getDepth)
           }
-        }
-        val newIterator: Iterator[Entry[Path, Directory.Entry[T]]] =
-          newEntries.entrySet().iterator()
-        while (newIterator.hasNext) {
-          val mapEntry: Entry[Path, Directory.Entry[T]] = newIterator.next()
-          if (!oldEntries.containsKey(mapEntry.getKey)) {
-            creations.add(mapEntry.getValue)
-          } else {
-            val oldEntry: Directory.Entry[T] = oldEntries.get(mapEntry.getKey)
-            if (oldEntry != mapEntry.getValue) {}
+          val oldEntries: Map[Path, Directory.Entry[T]] =
+            new HashMap[Path, Directory.Entry[T]]()
+          val newEntries: Map[Path, Directory.Entry[T]] =
+            new HashMap[Path, Directory.Entry[T]]()
+          val oldEntryIterator: Iterator[Directory.Entry[T]] =
+            currentDir.list(currentDir.recursive(), AllPass).iterator()
+          while (oldEntryIterator.hasNext) {
+            val entry: Directory.Entry[T] = oldEntryIterator.next()
+            oldEntries.put(entry.path, entry)
           }
+          val newEntryIterator: Iterator[Directory.Entry[T]] =
+            newDir.list(currentDir.recursive(), AllPass).iterator()
+          while (newEntryIterator.hasNext) {
+            val entry: Directory.Entry[T] = newEntryIterator.next()
+            newEntries.put(entry.path, entry)
+          }
+          val oldIterator: Iterator[Entry[Path, Directory.Entry[T]]] =
+            oldEntries.entrySet().iterator()
+          while (oldIterator.hasNext) {
+            val mapEntry: Entry[Path, Directory.Entry[T]] = oldIterator.next()
+            if (!newEntries.containsKey(mapEntry.getKey)) {
+              deletions.add(mapEntry.getValue)
+            }
+          }
+          val newIterator: Iterator[Entry[Path, Directory.Entry[T]]] =
+            newEntries.entrySet().iterator()
+          while (newIterator.hasNext) {
+            val mapEntry: Entry[Path, Directory.Entry[T]] = newIterator.next()
+            if (!oldEntries.containsKey(mapEntry.getKey)) {
+              creations.add(mapEntry.getValue)
+            } else {
+              val oldEntry: Directory.Entry[T] =
+                oldEntries.get(mapEntry.getKey)
+              if (oldEntry != mapEntry.getValue) {}
+            }
+          }
+          toReplace.add(newDir)
         }
-        toReplace.add(newDir)
       }
+      val replacements: Iterator[Directory[T]] = toReplace.iterator()
+      while (replacements.hasNext) {
+        val replacement: Directory[T] = replacements.next()
+        directories.put(replacement.path, replacement)
+      }
+      val creationIterator: Iterator[Directory.Entry[T]] = creations.iterator()
+      while (creationIterator.hasNext) observers.onCreate(creationIterator.next())
+      val deletionIterator: Iterator[Directory.Entry[T]] = deletions.iterator()
+      while (deletionIterator.hasNext) observers.onDelete(deletionIterator.next())
+      val updateIterator: Iterator[Array[Directory.Entry[T]]] =
+        updates.iterator()
+      while (updateIterator.hasNext) {
+        val update: Array[Directory.Entry[T]] = updateIterator.next()
+        observers.onUpdate(update(0), update(1))
+      }
+      creations.isEmpty && deletions.isEmpty && updates.isEmpty
+    } else {
+      false
     }
-    val replacements: Iterator[Directory[T]] = toReplace.iterator()
-    while (replacements.hasNext) {
-      val replacement: Directory[T] = replacements.next()
-      directories.put(replacement.path, replacement)
-    }
-    val creationIterator: Iterator[Directory.Entry[T]] = creations.iterator()
-    while (creationIterator.hasNext) observers.onCreate(creationIterator.next())
-    val deletionIterator: Iterator[Directory.Entry[T]] = deletions.iterator()
-    while (deletionIterator.hasNext) observers.onDelete(deletionIterator.next())
-    val updateIterator: Iterator[Array[Directory.Entry[T]]] =
-      updates.iterator()
-    while (updateIterator.hasNext) {
-      val update: Array[Directory.Entry[T]] = updateIterator.next()
-      observers.onUpdate(update(0), update(1))
-    }
-    creations.isEmpty && deletions.isEmpty && updates.isEmpty
   }
 
   private def handleEvent(path: Path): Unit = {
-    var attrs: BasicFileAttributes = null
-    try attrs = Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS)
-    catch {
-      case e: IOException => {}
+    if (!closed.get) {
+      var attrs: BasicFileAttributes = null
+      try attrs =
+        Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS)
+      catch {
+        case e: IOException => {}
 
-    }
-    if (attrs != null) {
-      val pair: Pair[Directory[T], List[Directory.Entry[T]]] =
-        listImpl(path, 0, new Directory.EntryFilter[T]() {
-          override def accept(entry: Directory.Entry[_ <: T]): Boolean =
-            path == entry.path
-        })
-      if (pair != null) {
-        val dir: Directory[T] = pair.first
-        val paths: List[Directory.Entry[T]] = pair.second
-        if (!paths.isEmpty || path != dir.path) {
-          val toUpdate: Path = if (paths.isEmpty) path else paths.get(0).path
-          if (attrs.isSymbolicLink && symlinkWatcher != null)
-            symlinkWatcher.addSymlink(path, Files.isDirectory(path))
-          try {
-            val it: Iterator[Array[Directory.Entry[T]]] = dir
-              .addUpdate(toUpdate, Directory.Entry.getKind(toUpdate, attrs))
-              .iterator()
-            while (it.hasNext) {
-              val entry: Array[Directory.Entry[T]] = it.next()
-              if (entry.length == 2) {
-                observers.onUpdate(entry(0), entry(1))
-              } else {
-                observers.onCreate(entry(0))
+      }
+      if (attrs != null) {
+        val pair: Pair[Directory[T], List[Directory.Entry[T]]] =
+          listImpl(path, 0, new Directory.EntryFilter[T]() {
+            override def accept(entry: Directory.Entry[_ <: T]): Boolean =
+              path == entry.path
+          })
+        if (pair != null) {
+          val dir: Directory[T] = pair.first
+          val paths: List[Directory.Entry[T]] = pair.second
+          if (!paths.isEmpty || path != dir.path) {
+            val toUpdate: Path = if (paths.isEmpty) path else paths.get(0).path
+            if (attrs.isSymbolicLink && symlinkWatcher != null)
+              symlinkWatcher.addSymlink(path, Files.isDirectory(path))
+            try {
+              val it: Iterator[Array[Directory.Entry[T]]] = dir
+                .addUpdate(toUpdate, Directory.Entry.getKind(toUpdate, attrs))
+                .iterator()
+              while (it.hasNext) {
+                val entry: Array[Directory.Entry[T]] = it.next()
+                if (entry.length == 2) {
+                  observers.onUpdate(entry(0), entry(1))
+                } else {
+                  observers.onCreate(entry(0))
+                }
               }
-            }
-          } catch {
-            case e: IOException => observers.onError(path, e)
+            } catch {
+              case e: IOException => observers.onError(path, e)
 
+            }
           }
         }
-      }
-    } else {
-      val removeIterators: List[Iterator[Directory.Entry[T]]] =
-        new ArrayList[Iterator[Directory.Entry[T]]]()
-      directories.synchronized {
-        val it: Iterator[Directory[T]] = directories.values.iterator()
+      } else {
+        val removeIterators: List[Iterator[Directory.Entry[T]]] =
+          new ArrayList[Iterator[Directory.Entry[T]]]()
+        directories.synchronized {
+          val it: Iterator[Directory[T]] = directories.values.iterator()
+          while (it.hasNext) {
+            val dir: Directory[T] = it.next()
+            if (path.startsWith(dir.path)) {
+              removeIterators.add(dir.remove(path).iterator())
+            }
+          }
+        }
+        val it: Iterator[Iterator[Directory.Entry[T]]] =
+          removeIterators.iterator()
         while (it.hasNext) {
-          val dir: Directory[T] = it.next()
-          if (path.startsWith(dir.path)) {
-            removeIterators.add(dir.remove(path).iterator())
-          }
-        }
-      }
-      val it: Iterator[Iterator[Directory.Entry[T]]] =
-        removeIterators.iterator()
-      while (it.hasNext) {
-        val removeIterator: Iterator[Directory.Entry[T]] = it.next()
-        while (removeIterator.hasNext) {
-          val entry: Directory.Entry[T] = removeIterator.next()
-          observers.onDelete(entry)
-          if (symlinkWatcher != null) {
-            symlinkWatcher.remove(entry.path)
+          val removeIterator: Iterator[Directory.Entry[T]] = it.next()
+          while (removeIterator.hasNext) {
+            val entry: Directory.Entry[T] = removeIterator.next()
+            observers.onDelete(entry)
+            if (symlinkWatcher != null) {
+              symlinkWatcher.remove(entry.path)
+            }
           }
         }
       }
