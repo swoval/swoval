@@ -134,9 +134,6 @@ object DirectoryWatcherTest extends TestSuite {
           usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
             w.register(dir, 0)
             val file = subdir.resolve(Path("foo")).createFile()
-            val expected =
-              if (System.getProperty("java.vm.name") == "Scala.js" && !Platform.isMac) Modify
-              else Create
             events
               .poll(10.milliseconds) { _ =>
                 throw new IllegalStateException(
