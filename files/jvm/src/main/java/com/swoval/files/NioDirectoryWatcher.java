@@ -9,6 +9,7 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
+import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;

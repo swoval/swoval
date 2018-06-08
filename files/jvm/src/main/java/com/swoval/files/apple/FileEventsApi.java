@@ -20,9 +20,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *     target="_blank"></a>
  */
 public class FileEventsApi implements AutoCloseable {
+  public class ClosedFileEventsApiException extends IOException {
+    public ClosedFileEventsApiException(final String msg) {
+      super(msg);
+    }
+  }
 
   /**
    * Represents an operation that takes an input and returns no result
+   *
    * @param <T> The input type
    */
   public interface Consumer<T> {
@@ -70,21 +76,24 @@ public class FileEventsApi implements AutoCloseable {
 
   /**
    * Creates an event stream
+   *
    * @param path The directory to monitor for events
    * @param latency The minimum time in seconds between events for the path
    * @param flags The flags for the stream @see {@link Flags.Create}
    * @return handle that can be used to stop the stream in the future
    */
-  public int createStream(String path, double latency, int flags) {
+  public int createStream(String path, double latency, int flags)
+      throws ClosedFileEventsApiException {
     if (closed.get()) {
       String err = "Tried to create watch stream for path " + path + " on closed watch service";
-      throw new IllegalStateException(err);
+      throw new ClosedFileEventsApiException(err);
     }
     return createStream(path, latency, flags, handle);
   }
 
   /**
    * Stop monitoring the path that was previously created with {@link #createStream}
+   *
    * @param streamHandle handle returned by {@link #createStream}
    */
   public void stopStream(int streamHandle) {
@@ -95,6 +104,7 @@ public class FileEventsApi implements AutoCloseable {
 
   /**
    * Creates a new {@link FileEventsApi} instance
+   *
    * @param consumer The callback to run on file events
    * @param pathConsumer The callback to run when a redundant stream is removed
    * @return {@link FileEventsApi}
@@ -116,6 +126,7 @@ public class FileEventsApi implements AutoCloseable {
   private static native void stopLoop(long handle);
 
   private static native void stopStream(long handle, int streamHandle);
+
   static {
     try {
       NativeLoader.loadPackaged();
@@ -125,4 +136,3 @@ public class FileEventsApi implements AutoCloseable {
     }
   }
 }
-
