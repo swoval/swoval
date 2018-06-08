@@ -2,7 +2,14 @@ package com.swoval.test
 
 import java.io.IOException
 import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.{ FileVisitResult, FileVisitor, Path, Paths, Files => JFiles }
+import java.nio.file.{
+  DirectoryNotEmptyException,
+  FileVisitResult,
+  FileVisitor,
+  Path,
+  Paths,
+  Files => JFiles
+}
 
 import scala.concurrent.ExecutionContext
 
@@ -31,7 +38,11 @@ package object platform {
           FileVisitResult.CONTINUE
         }
         override def postVisitDirectory(dir: Path, exc: IOException): FileVisitResult = {
-          JFiles.deleteIfExists(dir)
+          try {
+            JFiles.deleteIfExists(dir)
+          } catch {
+            case _: DirectoryNotEmptyException => delete(dir.toString)
+          }
           FileVisitResult.CONTINUE
         }
       }
