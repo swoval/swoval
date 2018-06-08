@@ -13,7 +13,7 @@ import QuickListerImpl._
 import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
 /**
- * Implementation class for [[QuickList.lis]]
+ * Implementation class for [[QuickList.list]]
  */
 trait QuickLister {
 

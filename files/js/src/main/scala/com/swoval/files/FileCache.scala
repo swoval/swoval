@@ -57,20 +57,20 @@ object FileCache {
    * @return A file cache
    */
   def apply[T](converter: Converter[T], observer: Observer[T]): FileCache[T] =
-    apply(converter, observer, DEFAULT_FACTORY)
+    apply(converter, DEFAULT_FACTORY, observer)
 
   /**
    * Create a file cache with an Observer of events
    *
    * @param converter Converts a path to the cached value type T
-   * @param observer Observer of events for this cache
    * @param factory A factory to create a directory watcher
+   * @param observer Observer of events for this cache
    * @tparam T The value type of the cache entries
    * @return A file cache
    */
   def apply[T](converter: Converter[T],
-               observer: Observer[T],
-               factory: DirectoryWatcher.Factory): FileCache[T] = {
+               factory: DirectoryWatcher.Factory,
+               observer: Observer[T]): FileCache[T] = {
     val res: FileCache[T] = new FileCacheImpl[T](converter, factory)
     res.addObserver(observer)
     res

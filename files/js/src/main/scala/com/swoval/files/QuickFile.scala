@@ -4,9 +4,9 @@ import java.io.File
 import java.nio.file.Path
 
 /**
- * Represents a file that will be returned by [[QuickList.lis]]. Provides fast [[QuickFile#isDirectory]] and [[QuickFile#isFile]] methods that should not call stat (or the
+ * Represents a file that will be returned by [[QuickList.list]]. Provides fast [[QuickFile.isDirectory]] and [[QuickFile.isFile]] methods that should not call stat (or the
  * non-POSIX equivalent) on the * underlying file. Can be converted to a [[java.io.File]] or
- * [[java.nio.file.Path]] with [[QuickFile.toFil]] and [[QuickFile#toPath]].
+ * [[java.nio.file.Path]] with [[QuickFile.toFile]] and [[QuickFile.toPath]].
  */
 trait QuickFile {
 
@@ -36,16 +36,16 @@ trait QuickFile {
   /**
    * Returns an instance of [[File]]. Typically the implementation of [[QuickFile]] while
    * extend [[File]]. This method will then just cast the instance to [[File]]. Because the
-   * [[QuickFile.isDirector]] and [[QuickFile#isFile]] methods will generally cache the
+   * [[QuickFile.isDirectory]] and [[QuickFile.isFile]] methods will generally cache the
    * value of the native file result returned by readdir (posix) or FindNextFile (windows) and use
-   * this value to compute [[QuickFile.isDirector]] and [[QuickFile#isFile]], the returned
-   * [[File]] is generally unsuitable to be used as a persistent value. Instead, use [[QuickFile.toFil]].
+   * this value to compute [[QuickFile.isDirectory]] and [[QuickFile.isFile]], the returned
+   * [[File]] is generally unsuitable to be used as a persistent value. Instead, use [[QuickFile.toFile]].
    */
   def asFile(): File
 
   /**
-   * Returns an instance of [[File]]. The instance should not override [[File.isDirector]]
-   * or [[File.isFil]] which makes it safe to persist.
+   * Returns an instance of [[File]]. The instance should not override [[File.isDirectory]]
+   * or [[File.isFile]] which makes it safe to persist.
    *
    * @return an instance of [[File]]
    */
