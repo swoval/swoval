@@ -102,7 +102,9 @@ object NioDirectoryWatcherTest extends TestSuite {
       }.andThen {
         case Failure(_) =>
           if (overflowLatch.getCount > 0)
-            println(s"Overflow latch was not triggered ${overflowLatch.getCount}")
+            println(
+              s"Overflow latch was not triggered\noverflowLatch count: ${overflowLatch.getCount}" +
+                s"\nfileLatch count: ${fileLatch.getCount}")
           if (subdirLatch.getCount > 0) println("Subdirectory latch was not triggered")
           if (fileLatch.getCount > 0) println("File latch was not triggered")
       }
