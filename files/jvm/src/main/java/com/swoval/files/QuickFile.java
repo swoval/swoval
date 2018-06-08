@@ -142,6 +142,17 @@ class QuickFileImpl extends FileWithFileType implements QuickFile {
     return "QuickFile(" + getFileName() + ")";
   }
 
+  @Override
+  public boolean equals(Object other) {
+    return other instanceof QuickFile
+        && this.getFileName().equals(((QuickFile) other).getFileName());
+  }
+
+  @Override
+  public int hashCode() {
+    return toString().hashCode();
+  }
+
   private boolean is(final int kind) {
     return (this.kind & kind) != 0;
   }

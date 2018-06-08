@@ -210,6 +210,14 @@ private[files] class QuickFileImpl(name: String, private val kind: Int)
 
   override def toString(): String = "QuickFile(" + getFileName + ")"
 
+  override def equals(other: Any): Boolean = other match {
+    case other: QuickFile => this.getFileName == other.getFileName
+    case _                => false
+
+  }
+
+  override def hashCode(): Int = toString.hashCode
+
   private def is(kind: Int): Boolean = (this.kind & kind) != 0
 
 }
