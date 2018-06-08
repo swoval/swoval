@@ -114,7 +114,7 @@ trait FileCacheTest extends TestSuite {
           val subdirsToAdd = if (System.getProperty("java.vm.name", "") == "Scala.js") {
             if (Platform.isWin) 5 else 50
           } else 2000
-          val timeout = if (Platform.isWin) DEFAULT_TIMEOUT * 60 else DEFAULT_TIMEOUT * 20
+          val timeout = DEFAULT_TIMEOUT * 60
           val filesPerSubdir = 4
           val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
           val creationLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
@@ -155,36 +155,38 @@ trait FileCacheTest extends TestSuite {
                     subdirs.foreach(Files.deleteIfExists(_))
                   }
                 })
-                deletionLatch.waitFor(timeout) {
-                  c.ls(dir) === Seq.empty
-                }
+                deletionLatch
+                  .waitFor(timeout) {
+                    c.ls(dir) === Seq.empty
+                  }
               }
-          }.andThen {
-            case Failure(e) =>
-              println(s"Task failed $e")
-              executor.close()
-              if (creationLatch.getCount > 0) {
-                val count = creationLatch.getCount
-                10.milliseconds.sleep
-                val newCount = creationLatch.getCount
-                if (newCount == count)
-                  println(s"$this Creation latch not triggered ($count)")
-                else
-                  println(
-                    s"$this Creation latch not triggered, but still being decremented $newCount")
+              .andThen {
+                case Failure(e) =>
+                  println(s"Task failed $e")
+                  if (creationLatch.getCount > 0) {
+                    val count = creationLatch.getCount
+                    10.milliseconds.sleep
+                    val newCount = creationLatch.getCount
+                    if (newCount == count)
+                      println(s"$this Creation latch not triggered ($count)")
+                    else
+                      println(
+                        s"$this Creation latch not triggered, but still being decremented $newCount")
+                  }
+                  if (deletionLatch.getCount > 0) {
+                    val count = deletionLatch.getCount
+                    10.milliseconds.sleep
+                    val newCount = deletionLatch.getCount
+                    if (newCount == count)
+                      println(s"$this Deletion latch not triggered ($count)")
+                    else
+                      println(
+                        s"$this Deletion latch not triggered, but still being decremented $newCount")
+                  }
+                  executor.close()
+                case _ =>
+                  executor.close()
               }
-              if (deletionLatch.getCount > 0) {
-                val count = deletionLatch.getCount
-                10.milliseconds.sleep
-                val newCount = deletionLatch.getCount
-                if (newCount == count)
-                  println(s"$this Deletion latch not triggered ($count)")
-                else
-                  println(
-                    s"$this Deletion latch not triggered, but still being decremented $newCount")
-              }
-            case _ =>
-              executor.close()
           }
         }
       }

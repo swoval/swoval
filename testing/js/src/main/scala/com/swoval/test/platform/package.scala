@@ -3,13 +3,18 @@ package com.swoval.test
 import io.scalajs.nodejs.fs.Fs
 import io.scalajs.nodejs.path.Path.sep
 
+import scala.collection.mutable
 import scala.concurrent.ExecutionContext
 import scala.scalajs.js.timers._
 
 package object platform {
   object executionContext extends ExecutionContext {
-    override def execute(runnable: Runnable): Unit = setTimeout(0) {
-      runnable.run()
+    val callbacks: mutable.Queue[Runnable] = mutable.Queue.empty
+    override def execute(runnable: Runnable): Unit = {
+      callbacks.enqueue(runnable)
+      setTimeout(0) {
+        callbacks.dequeueAll(_ => true).foreach(_.run())
+      }
     }
     override def reportFailure(cause: Throwable): Unit =
       Console.err.println(s"Caught error running runnable $cause")
