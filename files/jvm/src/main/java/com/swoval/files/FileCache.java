@@ -351,12 +351,19 @@ class FileCacheImpl<T> extends FileCache<T> {
         while (it.hasNext() && existing == null) {
           final Directory<T> dir = it.next();
           if (path.startsWith(dir.path)) {
-            int depth = (path.equals(dir.path) ? 0 : dir.path.relativize(path).getNameCount()) - 1;
-            if (maxDepth + depth < dir.getDepth()) {
+            final int depth =
+                path.equals(dir.path) ? 0 : (dir.path.relativize(path).getNameCount() - 1);
+            if (dir.getDepth() == Integer.MAX_VALUE || maxDepth < dir.getDepth() - depth) {
               existing = dir;
             } else if (depth <= dir.getDepth()) {
               dir.close();
-              existing = Directory.cached(dir.path, converter, maxDepth + depth + 1);
+              existing =
+                  Directory.cached(
+                      dir.path,
+                      converter,
+                      maxDepth < Integer.MAX_VALUE - depth - 1
+                          ? maxDepth + depth + 1
+                          : Integer.MAX_VALUE);
               directories.put(dir.path, existing);
             }
           }

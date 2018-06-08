@@ -246,20 +246,37 @@ trait FileCacheTest extends TestSuite {
             }
           }
         }
-        'holes - withTempDirectory { dir =>
-          withTempDirectory(dir) { subdir =>
-            withTempDirectory(subdir) { nestedSubdir =>
-              withTempFile(nestedSubdir) { file =>
-                using(simpleCache((_: Entry[JPath]) => {})) { c =>
-                  c.register(dir, 0)
-                  c.ls(dir) === Set(subdir)
-                  c.register(nestedSubdir, 0)
-                  c.ls(dir) === Set(subdir)
-                  c.ls(nestedSubdir) === Set(file)
-                  val deep = Files.createDirectory(nestedSubdir.resolve("deep"))
-                  val deepFile = Files.createFile(deep.resolve("file"))
-                  c.register(nestedSubdir, 1)
-                  c.ls(nestedSubdir) === Set(file, deep, deepFile)
+        'holes - {
+          'limit - withTempDirectory { dir =>
+            withTempDirectory(dir) { subdir =>
+              withTempDirectory(subdir) { nestedSubdir =>
+                withTempFile(nestedSubdir) { file =>
+                  using(simpleCache((_: Entry[JPath]) => {})) { c =>
+                    c.register(dir, 0)
+                    c.ls(dir) === Set(subdir)
+                    c.register(nestedSubdir, 0)
+                    c.ls(dir) === Set(subdir)
+                    c.ls(nestedSubdir) === Set(file)
+                    val deep = Files.createDirectory(nestedSubdir.resolve("deep"))
+                    val deepFile = Files.createFile(deep.resolve("file"))
+                    c.register(nestedSubdir, 1)
+                    c.ls(nestedSubdir) === Set(file, deep, deepFile)
+                  }
+                }
+              }
+            }
+          }
+          'unlimited - withTempDirectory { dir =>
+            withTempDirectory(dir) { subdir =>
+              withTempDirectory(subdir) { nestedSubdir =>
+                withTempFile(nestedSubdir) { file =>
+                  using(simpleCache((_: Entry[JPath]) => {})) { c =>
+                    c.register(dir, 0)
+                    c.ls(dir) === Set(subdir)
+                    c.register(nestedSubdir, Integer.MAX_VALUE)
+                    c.ls(dir) === Set(subdir)
+                    c.ls(nestedSubdir) === Set(file)
+                  }
                 }
               }
             }
