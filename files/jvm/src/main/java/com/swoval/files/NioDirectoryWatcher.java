@@ -84,12 +84,6 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
                 }
               } catch (ClosedWatchServiceException | InterruptedException e) {
                 isStopped.set(true);
-              } catch (Exception e) {
-                StackTraceElement[] elements = e.getStackTrace();
-                int i = 0;
-                while (i < elements.length) {
-                  i += 1;
-                }
               }
             }
             shutdownLatch.countDown();
