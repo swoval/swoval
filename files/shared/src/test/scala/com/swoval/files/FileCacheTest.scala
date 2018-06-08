@@ -615,6 +615,55 @@ trait FileCacheTest extends TestSuite {
         }
       }
     }
+    'addCallback - withTempDirectory { dir =>
+      usingAsync(simpleCache((_: Entry[JPath]) => {})) { c =>
+        val creationLatch = new CountDownLatch(1)
+        val updateLatch = new CountDownLatch(1)
+        val deletionLatch = new CountDownLatch(1)
+        c.addCallback(new OnChange[JPath] {
+          override def apply(entry: Entry[JPath]): Unit = {
+            creationLatch.countDown()
+            if (entry.path.endsWith("file") && !Files.exists(entry.path)) deletionLatch.countDown()
+            else if (Files.getLastModifiedTime(entry.path).toMillis == 3000)
+              updateLatch.countDown()
+          }
+        })
+        c.reg(dir)
+        val file = Files.createFile(dir.resolve("file"))
+        creationLatch
+          .waitFor(DEFAULT_TIMEOUT) {
+            c.ls(dir) === Seq(file)
+            Files.setLastModifiedTime(file, FileTime.fromMillis(3000))
+          }
+          .flatMap { _ =>
+            updateLatch
+              .waitFor(DEFAULT_TIMEOUT) {
+                Files.delete(file)
+              }
+              .flatMap { _ =>
+                deletionLatch.waitFor(DEFAULT_TIMEOUT) {
+                  c.ls(dir) === Seq.empty[JPath]
+                }
+              }
+          }
+      }
+    }
+    'removeObserver - withTempDirectory { dir =>
+      val latch = new CountDownLatch(1)
+      var secondObserverFired = false
+      usingAsync(simpleCache((_: Entry[JPath]) => latch.countDown())) { c =>
+        val handle = c.addCallback(new Directory.OnChange[JPath] {
+          override def apply(entry: Entry[JPath]): Unit = secondObserverFired = true
+        })
+        c.reg(dir)
+        c.removeObserver(handle)
+        val file = Files.createFile(dir.resolve("file"))
+        latch.waitFor(DEFAULT_TIMEOUT) {
+          assert(!secondObserverFired)
+          c.ls(dir) === Seq(file)
+        }
+      }
+    }
   }
 }
 
