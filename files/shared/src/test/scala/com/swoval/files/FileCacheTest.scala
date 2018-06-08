@@ -210,7 +210,7 @@ trait FileCacheTest extends TestSuite {
           withTempDirectory { dir =>
             withTempDirectory(dir) { subdir =>
               withTempDirectory(subdir) { nestedSubdir =>
-                withTempFileSync(nestedSubdir) { file =>
+                withTempFile(nestedSubdir) { file =>
                   using(simpleCache((_: Entry[JPath]) => {})) { c =>
                     c.register(dir, 1)
                     c.ls(dir) === Set(subdir, nestedSubdir)
@@ -227,7 +227,7 @@ trait FileCacheTest extends TestSuite {
             withTempDirectory(subdir) { nestedSubdir =>
               withTempFile(nestedSubdir) { file =>
                 val latch = new CountDownLatch(1)
-                usingAsync(simpleCache((e: Entry[JPath]) =>
+                using(simpleCache((e: Entry[JPath]) =>
                   if (e.path.endsWith("deep")) latch.countDown())) { c =>
                   c.register(dir, 1)
                   c.ls(dir) === Set(subdir, nestedSubdir)
@@ -296,7 +296,7 @@ trait FileCacheTest extends TestSuite {
         }
         'added - withTempDirectory { dir =>
           withTempDirectory(dir) { subdir =>
-            withTempFileSync(subdir) { f =>
+            withTempFile(subdir) { f =>
               using(simpleCache((_: Entry[JPath]) => {})) { c =>
                 c.reg(dir, recursive = false)
                 c.ls(dir) === Set(subdir)
@@ -308,7 +308,7 @@ trait FileCacheTest extends TestSuite {
         }
         'removed - withTempDirectory { dir =>
           withTempDirectory(dir) { subdir =>
-            withTempFileSync(subdir) { f =>
+            withTempFile(subdir) { f =>
               using(simpleCache((_: Entry[JPath]) => {})) { c =>
                 c.reg(dir)
                 c.ls(dir) === Set(subdir, f)
