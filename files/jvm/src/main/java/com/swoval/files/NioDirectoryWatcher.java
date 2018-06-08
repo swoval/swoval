@@ -66,7 +66,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
         new Thread("NioDirectoryWatcher-loop-thread-" + threadId.incrementAndGet()) {
           @Override
           public void run() {
-            while (!isStopped.get()) {
+            while (!isStopped.get() && !Thread.currentThread().isInterrupted()) {
               try {
                 final WatchKey key = watchService.take();
                 final Iterator<WatchEvent<?>> it = key.pollEvents().iterator();
