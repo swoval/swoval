@@ -82,18 +82,20 @@ class NativeQuickLister extends QuickListerImpl {
           case FILE:
             results.addFile(getName(fileHandle));
             break;
+          case LINK:
+            results.addSymlink(getName(fileHandle));
+            break;
           default:
-            final Path path = Paths.get(dir);
-            final String name = getName(fileHandle);
-            final Path file = path.resolve(name);
-            final BasicFileAttributes attrs =
-                Files.readAttributes(file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-            if (attrs.isDirectory()) results.addDir(name);
-            else if (attrs.isSymbolicLink() && followLinks) {
-              if (Files.isDirectory(file)) results.addDir(name);
-              else if (!Files.exists(file)) throw new NoSuchFileException(file.toString());
+            {
+              final Path path = Paths.get(dir);
+              final String name = getName(fileHandle);
+              final Path file = path.resolve(name);
+              final BasicFileAttributes attrs =
+                  Files.readAttributes(file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+              if (attrs.isDirectory()) results.addDir(name);
+              else if (attrs.isSymbolicLink()) results.addSymlink(name);
               else results.addFile(name);
-            } else results.addFile(name);
+            }
             break;
         }
         fileHandle = nextFile(handle);

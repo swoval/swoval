@@ -1,6 +1,6 @@
 package com.swoval
 
-import java.io.{ File, FileFilter }
+import java.io.{ File, FileFilter, IOException }
 import java.nio.charset.Charset
 import java.nio.file.attribute.FileTime
 import java.nio.file.{ Files, NoSuchFileException, Path }
@@ -32,10 +32,13 @@ package object files extends PlatformFiles {
   }
   implicit class EntryFilterFunctionOps[T](val f: Entry[T] => Boolean) extends EntryFilter[T] {
     override def accept(cacheEntry: Entry[_ <: T]): Boolean =
-      f(new Entry[T](cacheEntry.path, cacheEntry.value, cacheEntry.isDirectory))
+      f(new Entry[T](cacheEntry.path, cacheEntry.value, cacheEntry.getKind))
   }
   implicit class OnChangeFunctionOps[T](val f: Entry[T] => Unit) extends OnChange[T] {
     override def apply(cacheEntry: Entry[T]): Unit = f(cacheEntry)
+  }
+  implicit class OnErrorFunctionOps(val f: (Path, IOException) => Unit) extends OnError {
+    override def apply(path: Path, exception: IOException): Unit = f(path, exception)
   }
   implicit class OnUpdateFunctionOps[T](val f: (Entry[T], Entry[T]) => Unit) extends OnUpdate[T] {
     override def apply(oldCachedPath: Entry[T], newCachedPath: Entry[T]): Unit =
@@ -46,6 +49,7 @@ package object files extends PlatformFiles {
     override def onDelete(oldCachedPath: Entry[T]): Unit = f(oldCachedPath)
     override def onUpdate(oldCachedPath: Entry[T], newCachedPath: Entry[T]): Unit =
       f(newCachedPath)
+    override def onError(path: Path, exception: IOException): Unit = {}
   }
   implicit class CallbackFunctionOps(val f: DirectoryWatcher.Event => Unit) extends Callback {
     override def apply(fileWatchEvent: DirectoryWatcher.Event): Unit = f(fileWatchEvent)

@@ -11,7 +11,8 @@ object Converter {
   import scala.language.implicitConversions
   val link = "(?s)(.+?)\\{@link(?:\n[^*]+?\\*)?[ ]+?([^}]+?)}"
   private val Link = link.r
-  private val StripArgs = "(.+?)\\[\\[([^#(\\]]+)?(?=[#(])[#(\\]]([^(\\]]+)?[^\\]]+?\\]\\](.*)".r
+  private val StripArgs =
+    "(.+?)\\[\\[([^#(\\]]+)?(?=[#(])[#(\\]]((?:[^(]+)?(?=[(])|(?:[^\\]]+)(?=[\\]]))[^\\]]*\\]\\](.*)".r
   implicit class LineOps(val line: String) extends AnyVal {
     def include: Boolean = {
       line != "//remove if not needed" &&
@@ -27,31 +28,47 @@ object Converter {
     }
     def fixTypeParams: String = line.replaceAll("@param [<]([^>]+)[>]", "@tparam $1")
   }
-  def sanitize(path: Path): String = {
-    val lines = Files.readAllLines(path).asScala.flatMap { l =>
-      if (l.include) Some(l.fixSynchronization.fixTypeParams) else None
-    }
-    val newLines = Link
+  def sanitize(lines: Seq[String]): Seq[String] = {
+    var original = Link
       .replaceAllIn(lines.mkString("\n"), "$1[[$2]]")
       .replaceAll("(?s)^(.*class[^\n]+(?= \\/\\*\\*))(.+?)(?=\\*\\/)\\*\\/", "$1")
       .replaceAll("\\[\\[\\.", "[[")
       .replaceAll("(?s)([ ]*\\/\\*\\*.+?\\*\\/)(.*)\\1", "$1")
       .replaceAll("(?s)(.+?import[^\n]+?)\n\nimport", "$1\nimport")
       .replaceAll("(?s)(.+?import[^\n]+?)\n\nimport", "$1\nimport")
-      .replaceAll("(?s)([ ]*)([*].*)<a(?:.+?)href=\"([^\"]+?)\"[^>]+?>", "$1$2[[$3 ")
+      .replaceAll("""(?s)(.+?)<a.+?href=["]([^"]+)["][^>]*>""", "$1[[$2 ")
       .replaceAll("</a>", "]]")
       .lines
-      .map {
+      .toIndexedSeq
+
+    var next = original
+    do {
+      original = next
+      next = next.map {
         case StripArgs(prefix, null, method, rest)      => s"$prefix[[$method]]$rest"
         case StripArgs(prefix, qualifier, null, rest)   => s"$prefix[[$qualifier]]$rest"
         case StripArgs(prefix, qualifier, method, rest) => s"$prefix[[$qualifier.$method]]$rest"
         case l                                          => l
       }
-      .map(l =>
+    } while (original != next)
+    next.map(
+      l =>
         l.replaceAll("(class|object) (\\w+Impl|Observers|FileOps|EntryFilters)",
                      "private[files] $1 $2"))
+  }
+  def sanitize(path: Path): String = {
+    val lines = Files.readAllLines(path).asScala.flatMap { l =>
+      if (l.include) Some(l.fixSynchronization.fixTypeParams) else None
+    }
+    val newLines = sanitize(lines)
     (if (path.toString.contains("DirectoryWatcher.scala")) {
        newLines.filterNot(_.contains("import Event._"))
+     } else if (path.toString.contains("Directory.scala")) {
+       newLines.filterNot(_.contains("import Entry._"))
+     } else if (path.toString.contains("FileCache.scala")) {
+       newLines.map(_.replaceAll("(new FileCacheImpl.*)options", "$1options:_*"))
+     } else if (path.toString.contains("QuickLister.scala")) {
+       newLines.map(_.replaceAll("\\[Any\\]", "[AnyRef]"))
      } else {
        newLines
      }).mkString("\n")

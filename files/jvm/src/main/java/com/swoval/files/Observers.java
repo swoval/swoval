@@ -3,7 +3,10 @@ package com.swoval.files;
 import com.swoval.files.Directory.Entry;
 import com.swoval.files.Directory.Observer;
 import com.swoval.files.Directory.OnChange;
+import com.swoval.files.Directory.OnError;
 import com.swoval.files.Directory.OnUpdate;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -50,6 +53,16 @@ class Observers<T> implements Observer<T>, AutoCloseable {
     while (it.hasNext()) it.next().onUpdate(oldEntry, newEntry);
   }
 
+  @Override
+  public void onError(Path path, IOException exception) {
+    final Collection<Observer<T>> cbs;
+    synchronized (lock) {
+      cbs = observers.values();
+    }
+    final Iterator<Observer<T>> it = cbs.iterator();
+    while (it.hasNext()) it.next().onError(path, exception);
+  }
+
   public int addObserver(Observer<T> observer) {
     final int key = counter.getAndIncrement();
     synchronized (lock) {
@@ -69,41 +82,56 @@ class Observers<T> implements Observer<T>, AutoCloseable {
     observers.clear();
   }
 
+  /**
+   * Simple observer that fires the same callback for all regular events and ignores any errors.
+   * @param onchange The callback to fire when a file is created/updated/deleted
+   * @param <T> The generic type of the {@link Directory.Entry}
+   * @return An {@link Observer} instance
+   */
   public static <T> Observer<T> apply(final OnChange<T> onchange) {
     return new Observer<T>() {
       @Override
-      public void onCreate(Entry<T> newEntry) {
+      public void onCreate(final Entry<T> newEntry) {
         onchange.apply(newEntry);
       }
 
       @Override
-      public void onDelete(Entry<T> oldEntry) {
+      public void onDelete(final Entry<T> oldEntry) {
         onchange.apply(oldEntry);
       }
 
       @Override
-      public void onUpdate(Entry<T> oldEntry, Entry<T> newEntry) {
+      public void onUpdate(final Entry<T> oldEntry, Entry<T> newEntry) {
         onchange.apply(newEntry);
+      }
+
+      @Override
+      public void onError(final Path path, final IOException e) {
       }
     };
   }
 
   public static <T> Observer<T> apply(
-      final OnChange<T> oncreate, final OnUpdate<T> onupdate, final OnChange<T> ondelete) {
+      final OnChange<T> oncreate, final OnUpdate<T> onupdate, final OnChange<T> ondelete, final OnError onerror) {
     return new Observer<T>() {
       @Override
-      public void onCreate(Entry<T> newEntry) {
+      public void onCreate(final Entry<T> newEntry) {
         oncreate.apply(newEntry);
       }
 
       @Override
-      public void onDelete(Entry<T> oldEntry) {
+      public void onDelete(final Entry<T> oldEntry) {
         ondelete.apply(oldEntry);
       }
 
       @Override
-      public void onUpdate(Entry<T> oldEntry, Entry<T> newEntry) {
+      public void onUpdate(final Entry<T> oldEntry, final Entry<T> newEntry) {
         onupdate.apply(oldEntry, newEntry);
+      }
+
+      @Override
+      public void onError(final Path path, final IOException ex) {
+        onerror.apply(path, ex);
       }
     };
   }

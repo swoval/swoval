@@ -26,10 +26,20 @@ public abstract class DirectoryWatcher implements AutoCloseable {
    * Register a path to monitor for file events
    *
    * @param path The directory to watch for file events
+   * @param maxDepth The maximum maxDepth of subdirectories to watch
+   * @return true if the registration is successful
+   */
+  public abstract boolean register(Path path, int maxDepth);
+  /**
+   * Register a path to monitor for file events
+   *
+   * @param path The directory to watch for file events
    * @param recursive Toggles whether or not to monitor subdirectories
    * @return true if the registration is successful
    */
-  public abstract boolean register(Path path, boolean recursive);
+  public boolean register(Path path, boolean recursive) {
+    return register(path, recursive ? Integer.MAX_VALUE : 0);
+  }
 
   /**
    * Register a path to monitor for file events

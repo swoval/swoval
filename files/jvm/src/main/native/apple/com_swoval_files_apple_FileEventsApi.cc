@@ -24,7 +24,6 @@ struct service_handle {
     jclass fileEvent;
     jmethodID fileEventCons;
     JNIEnv *env;
-    JavaVM *jvm;
 };
 
 typedef handle<service_handle> JNIHandle;
@@ -37,18 +36,26 @@ static void jni_callback(std::unique_ptr<Events> events, JNIHandle *h, Lock lock
             jobject event =
                 env->NewObject(h->data->fileEvent, h->data->fileEventCons, string, e.second);
             env->CallVoidMethod(h->data->callback, h->data->callbackApply, event);
+            jboolean flag = env->ExceptionCheck();
+            env->DeleteLocalRef(string);
+            env->DeleteLocalRef(event);
+            if (flag) return;
         }
     }
 }
 
-static void jni_stop_stream(std::unique_ptr<Strings> strings, JNIHandle *h, Lock lock) {
+static Lock jni_stop_stream(std::unique_ptr<Strings> strings, JNIHandle *h, Lock lock) {
     JNIEnv *env = h->data->env;
     if (!h->stopped) {
         for (auto stream : *strings) {
             jstring string = env->NewStringUTF(stream.c_str());
             env->CallVoidMethod(h->data->pathCallback, h->data->pathCallbackApply, string);
-        }
+            jboolean flag = env->ExceptionCheck();
+            env->DeleteLocalRef(string);
+            if (flag) return std::move(lock);
+       }
     }
+    return std::move(lock);
 }
 
 JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventsApi_stopLoop(JNIEnv *env, jclass clazz,
@@ -74,6 +81,7 @@ JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventsApi_loop(JNIEnv *en
                                                                       jlong handle) {
     auto *h = reinterpret_cast<JNIHandle *>(handle);
     loop(h);
+    if (env->ExceptionCheck()) return;
 }
 
 JNIEXPORT jlong JNICALL Java_com_swoval_files_apple_FileEventsApi_init(JNIEnv *env, jclass thread,
@@ -84,7 +92,6 @@ JNIEXPORT jlong JNICALL Java_com_swoval_files_apple_FileEventsApi_init(JNIEnv *e
     jclass pathCallbackClass = env->GetObjectClass(pathCallback);
     jclass eventClass        = env->FindClass(EVENT_SIG);
 
-    env->GetJavaVM(&handle->jvm);
     handle->callback          = env->NewGlobalRef(callback);
     handle->callbackApply     = env->GetMethodID(callbackClass, "accept", CALLBACK_SIG);
     handle->pathCallback      = env->NewGlobalRef(pathCallback);

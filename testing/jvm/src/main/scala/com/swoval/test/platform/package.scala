@@ -1,11 +1,17 @@
 package com.swoval.test
 
-import java.nio.file.{ AccessDeniedException, NoSuchFileException, Path, Paths, Files => JFiles }
+import java.io.IOException
+import java.nio.file.attribute.BasicFileAttributes
+import java.nio.file.{
+  DirectoryNotEmptyException,
+  FileVisitResult,
+  FileVisitor,
+  Path,
+  Paths,
+  Files => JFiles
+}
 
-import scala.annotation.tailrec
-import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
-import scala.util.Try
 
 package object platform {
   def executionContext: ExecutionContext = ExecutionContext.global
@@ -19,26 +25,28 @@ package object platform {
     deleteOnExit(JFiles.createTempDirectory(Paths.get(dir), "subdir").toRealPath())
 
   def delete(dir: String): Unit = {
-    def list(p: Path): Seq[Path] =
-      try {
-        val stream = JFiles.list(p.toRealPath())
-        try stream.iterator.asScala.toIndexedSeq
-        finally stream.close()
-      } catch {
-        case _: NoSuchFileException | _: AccessDeniedException => Nil
+    JFiles.walkFileTree(
+      Paths.get(dir),
+      new FileVisitor[Path] {
+        override def preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult =
+          FileVisitResult.CONTINUE
+        override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult = {
+          JFiles.deleteIfExists(file)
+          FileVisitResult.CONTINUE
+        }
+        override def visitFileFailed(file: Path, exc: IOException): FileVisitResult = {
+          FileVisitResult.CONTINUE
+        }
+        override def postVisitDirectory(dir: Path, exc: IOException): FileVisitResult = {
+          try {
+            JFiles.deleteIfExists(dir)
+          } catch {
+            case _: DirectoryNotEmptyException => delete(dir.toString)
+          }
+          FileVisitResult.CONTINUE
+        }
       }
-
-    @tailrec
-    def impl(allFiles: Seq[Path], directoriesToDelete: Seq[Path]): Unit = {
-      val (files, dirs) = allFiles.partition(JFiles.isRegularFile(_))
-      files.foreach(f => Try(JFiles.deleteIfExists(f)))
-      dirs match {
-        case l if l.isEmpty => directoriesToDelete.foreach(f => Try(JFiles.deleteIfExists(f)))
-        case l: Seq[Path]   => impl(l.flatMap(list), l ++ directoriesToDelete)
-      }
-    }
-    val path = Paths.get(dir)
-    if (JFiles.isDirectory(path)) impl(list(path), Seq(path)) else Try(JFiles.deleteIfExists(path))
+    )
   }
   def mkdir(path: String): String = JFiles.createDirectories(Paths.get(path)).toRealPath().toString
   private def deleteOnExit(path: Path): String = {

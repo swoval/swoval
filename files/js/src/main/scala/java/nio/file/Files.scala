@@ -9,10 +9,9 @@ import java.nio.file.attribute.{
 }
 import java.util
 
+import com.swoval.files.Platform
 import io.scalajs.nodejs.fs.Fs
 
-import scala.scalajs.js
-import scala.scalajs.js.JavaScriptException
 import scala.util.Try
 
 object Files {
@@ -31,7 +30,8 @@ object Files {
   def createSymbolicLink(path: Path,
                          target: Path,
                          attrs: Array[FileAttribute[_]] = Array.empty): Path = {
-    Fs.symlinkSync(target.toString, path.toString)
+    val tpe = if (Platform.isWin && Files.isDirectory(target)) "dir" else "file"
+    Fs.symlinkSync(target.toString, path.toString, tpe)
     path
   }
   def createTempDirectory(path: Path,
@@ -49,12 +49,18 @@ object Files {
   }
   def delete(path: Path): Unit = path.toFile.delete()
   def deleteIfExists(path: Path): Boolean = path.toFile.exists && path.toFile.delete
+  def exists(path: Path, options: LinkOption*): Boolean = exists(path, options.toArray)
   def exists(path: Path, options: Array[LinkOption] = Array.empty): Boolean = path.toFile.exists
   def isDirectory(path: Path, linkOptions: Array[LinkOption] = Array.empty): Boolean = {
     Try(path.toFile.isDirectory).getOrElse(false)
   }
   def isRegularFile(path: Path, linkOptions: Array[LinkOption] = Array.empty): Boolean = {
     Try(path.toFile.isFile).getOrElse(false)
+  }
+  def isSymbolicLink(path: Path): Boolean = {
+    Try(
+      readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS).isSymbolicLink)
+      .getOrElse(false)
   }
 
   def move(src: Path, target: Path, options: Array[CopyOption] = Array.empty): Path = {
@@ -92,10 +98,7 @@ object Files {
                    options: java.util.Set[FileVisitOption],
                    depth: Int,
                    fileVisitor: FileVisitor[_ >: Path]): Path = {
-    val linkOptions =
-      if (options.contains(FileVisitOption.FOLLOW_LINKS))
-        Array.empty[LinkOption]
-      else Array(LinkOption.NOFOLLOW_LINKS)
+    val linkOptions = Array[LinkOption](LinkOption.NOFOLLOW_LINKS)
     val files = try {
       Fs.readdirSync(path.toAbsolutePath.toString())
     } catch { case ex: Exception => Errors.rethrow(path, ex) }

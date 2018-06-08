@@ -12,6 +12,7 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 class NioQuickLister extends QuickListerImpl {
@@ -23,8 +24,8 @@ class NioQuickLister extends QuickListerImpl {
     final Path basePath = Paths.get(dir);
     final QuickListerImpl.ListResults results = new QuickListerImpl.ListResults();
     final Set<FileVisitOption> linkOptions = new HashSet<>();
-    if (followLinks) linkOptions.add(FileVisitOption.FOLLOW_LINKS);
     final AtomicReference<IOException> exception = new AtomicReference<>();
+    final AtomicBoolean isSymlink = new AtomicBoolean(false);
     Files.walkFileTree(
         basePath,
         linkOptions,
@@ -38,18 +39,20 @@ class NioQuickLister extends QuickListerImpl {
           @Override
           public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
               throws IOException {
-            if (attrs.isDirectory()) {
-              results.addDir(file.getFileName().toString());
-            } else if (attrs.isSymbolicLink()
-                && followLinks
-                && Files.isDirectory(file.toRealPath())) {
+            if (attrs.isSymbolicLink()) {
+              if (file.equals(basePath)) {
+                isSymlink.set(true);
+              } else {
+                results.addSymlink(file.getFileName().toString());
+              }
+            } else if (attrs.isDirectory()) {
               results.addDir(file.getFileName().toString());
             } else if (file.equals(basePath)) {
               throw new NotDirectoryException(dir);
             } else {
               results.addFile(file.getFileName().toString());
             }
-            return FileVisitResult.CONTINUE;
+            return isSymlink.get() ? FileVisitResult.TERMINATE : FileVisitResult.CONTINUE;
           }
 
           @Override
@@ -70,6 +73,9 @@ class NioQuickLister extends QuickListerImpl {
         throw new NotDirectoryException(fse.getFile());
       else throw fse;
     } else if (ex != null) throw ex;
+    if (isSymlink.get()) {
+      return listDir(basePath.toRealPath().toString(), followLinks);
+    }
     return results;
   }
 }

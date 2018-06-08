@@ -39,13 +39,14 @@ public abstract class QuickList {
   }
 
   /**
-   * Lists the files and directories in {@code path} following symbolic links. The returned paths
-   * may not be normalized. For example, if /foo/bar links to /baz/buzz, when listing /foo, the
-   * {@link QuickFile} for buzz may be /foo/../baz/buzz". This behavior may change in a future
-   * version.
+   * Lists the files and directories in {@code path} following symbolic links. For a symbolic link
+   * to a directory, the results will contain the children of the symbolic link target relative to
+   * the symbolic link base. For example, if /foo contains a symbolic link called dir-link that
+   * links to /bar where /bar contains a file named baz, then the results will include a {@link
+   * QuickFile} for /foo/dir-link/baz (provided that the {@code maxDepth >= 1}).
    *
    * @param path The path to list
-   * @param maxDepth The maximum depth of the file system tree to traverse
+   * @param maxDepth The maximum maxDepth of the file system tree to traverse
    * @return a List of {@link QuickFile} instances
    * @throws IOException when the path isn't listable because it isn't a directory, access is denied
    *     or the path doesn't exist. May also throw due to any io error.
@@ -54,10 +55,14 @@ public abstract class QuickList {
     return INSTANCE.list(path, maxDepth, true);
   }
 
+
   /**
-   * Lists the files and directories in {@code path}. The returned paths may not be normalized. For
-   * example, if /foo/bar links to /baz/buzz, when listing /foo, the {@link QuickFile} for buzz may
-   * be /foo/../baz/buzz". This behavior may change in a future version.
+   * Lists the files and directories in {@code path} following symbolic links. When {@code
+   * followLinks} is true, for a symbolic link to a directory, the results will contain the children
+   * of the symbolic link target relative to the symbolic link base. For example, if /foo contains a
+   * symbolic link called dir-link that links to /bar where /bar contains a file named baz, then the
+   * results will include a {@link QuickFile} for /foo/dir-link/baz (provided that the {@code
+   * maxDepth >= 1}).
    *
    * @param path The path to list
    * @param maxDepth The maximum depth of the file system tree to traverse
@@ -69,5 +74,30 @@ public abstract class QuickList {
   public static List<QuickFile> list(final Path path, final int maxDepth, final boolean followLinks)
       throws IOException {
     return INSTANCE.list(path, maxDepth, followLinks);
+  }
+
+  /**
+   * Lists the files and directories in {@code path}. When {@code followLinks} is true, for a
+   * symbolic link to a directory, the results will contain the children of the symbolic link target
+   * relative to the symbolic link base. For example, if /foo contains a symbolic link called
+   * dir-link that links to /bar where /bar contains a file named baz, then the results will include
+   * a {@link QuickFile} for /foo/dir-link/baz (provided that the {@code maxDepth >= 1}). Files and
+   * directories that do not pass the {@code filter} are discarded.
+   *
+   * @param path The path to list
+   * @param maxDepth The maximum depth of the file system tree to traverse
+   * @param followLinks Toggles whether or not to follow symbolic links in the path
+   * @param filter Files passing this function are returned
+   * @return a List of {@link QuickFile} instances
+   * @throws IOException when the path isn't listable because it isn't a directory, access is denied
+   *     or the path doesn't exist. May also throw due to any io error.
+   */
+  public static List<QuickFile> list(
+      final Path path,
+      final int maxDepth,
+      final boolean followLinks,
+      final Filter<? super QuickFile> filter)
+      throws IOException {
+    return INSTANCE.list(path, maxDepth, followLinks, filter);
   }
 }

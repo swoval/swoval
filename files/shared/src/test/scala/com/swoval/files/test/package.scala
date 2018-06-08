@@ -5,7 +5,7 @@ import utest.framework.ExecutionContext.RunNow
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ Future, Promise }
-import scala.util.{ Success, Try }
+import scala.util.{ Failure, Success, Try }
 import java.nio.file.{ Path => JPath }
 
 package object test {
@@ -40,12 +40,13 @@ package object test {
         case _ =>
           val p = Promise[T]
           promises.enqueue(platform.newTimedPromise(p, timeout))
-          p.future.map(f)(RunNow)
+          p.future.transform(r => { promises.clear; f(r) }, e => { promises.clear; e })(RunNow)
       })
     def add(t: T): Unit = lock.synchronized {
       promises.dequeueFirst(_ => true) match {
         case Some(promise) =>
           promise.tryComplete(Success(t))
+          promises.clear()
         case _ =>
           queue.enqueue(t)
       }

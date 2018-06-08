@@ -12,6 +12,7 @@ import java.nio.file.Paths
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.HashSet
 import java.util.Set
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 class NioQuickLister extends QuickListerImpl {
@@ -21,9 +22,9 @@ class NioQuickLister extends QuickListerImpl {
     val results: QuickListerImpl.ListResults =
       new QuickListerImpl.ListResults()
     val linkOptions: Set[FileVisitOption] = new HashSet[FileVisitOption]()
-    if (followLinks) linkOptions.add(FileVisitOption.FOLLOW_LINKS)
     val exception: AtomicReference[IOException] =
       new AtomicReference[IOException]()
+    val isSymlink: AtomicBoolean = new AtomicBoolean(false)
     Files.walkFileTree(
       basePath,
       linkOptions,
@@ -33,16 +34,21 @@ class NioQuickLister extends QuickListerImpl {
           FileVisitResult.CONTINUE
 
         override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult = {
-          if (attrs.isDirectory) {
-            results.addDir(file.getFileName.toString)
-          } else if (attrs.isSymbolicLink && followLinks && Files.isDirectory(file.toRealPath())) {
+          if (attrs.isSymbolicLink) {
+            if (file == basePath) {
+              isSymlink.set(true)
+            } else {
+              results.addSymlink(file.getFileName.toString)
+            }
+          } else if (attrs.isDirectory) {
             results.addDir(file.getFileName.toString)
           } else if (file == basePath) {
             throw new NotDirectoryException(dir)
           } else {
             results.addFile(file.getFileName.toString)
           }
-          FileVisitResult.CONTINUE
+          if (isSymlink.get) FileVisitResult.TERMINATE
+          else FileVisitResult.CONTINUE
         }
 
         override def visitFileFailed(file: Path, exc: IOException): FileVisitResult = {
@@ -61,6 +67,9 @@ class NioQuickLister extends QuickListerImpl {
         throw new NotDirectoryException(fse.getFile)
       else throw fse
     } else if (ex != null) throw ex
+    if (isSymlink.get) {
+      listDir(basePath.toRealPath().toString, followLinks)
+    }
     results
   }
 

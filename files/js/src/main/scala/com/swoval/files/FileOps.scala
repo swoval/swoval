@@ -30,14 +30,14 @@ private[files] object FileOps {
    * Returns the files in a directory.
    *
    * @param path The directory to list
-   * @param recursive Include paths in subdirectories when set to true
+   * @param maxDepth The maximum depth to traverse subdirectories
    * @param filter Include only paths accepted by the filter
    * @return Array of Paths
    */
-  def list(path: Path, recursive: Boolean, filter: FileFilter): List[File] = {
+  def list(path: Path, maxDepth: Int, filter: FileFilter): List[File] = {
     val result: List[File] = new ArrayList[File]()
     val it: Iterator[QuickFile] = QuickList
-      .list(path, if (recursive) java.lang.Integer.MAX_VALUE else 1, true)
+      .list(path, maxDepth, true)
       .iterator()
     while (it.hasNext) {
       val quickFile: QuickFile = it.next()
@@ -46,6 +46,18 @@ private[files] object FileOps {
       }
     }
     result
+  }
+
+  /**
+   * Returns the files in a directory.
+   *
+   * @param path The directory to list
+   * @param recursive Include paths in subdirectories when set to true
+   * @param filter Include only paths accepted by the filter
+   * @return Array of Paths
+   */
+  def list(path: Path, recursive: Boolean, filter: FileFilter): List[File] = {
+    list(path, if (recursive) Integer.MAX_VALUE else 0, filter)
   }
 
   /**

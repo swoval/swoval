@@ -132,10 +132,20 @@ abstract class DirectoryWatcher extends AutoCloseable {
    * Register a path to monitor for file events
    *
    * @param path The directory to watch for file events
+   * @param maxDepth The maximum maxDepth of subdirectories to watch
+   * @return true if the registration is successful
+   */
+  def register(path: Path, maxDepth: Int): Boolean
+
+  /**
+   * Register a path to monitor for file events
+   *
+   * @param path The directory to watch for file events
    * @param recursive Toggles whether or not to monitor subdirectories
    * @return true if the registration is successful
    */
-  def register(path: Path, recursive: Boolean): Boolean
+  def register(path: Path, recursive: Boolean): Boolean =
+    register(path, if (recursive) java.lang.Integer.MAX_VALUE else 0)
 
   /**
    * Register a path to monitor for file events

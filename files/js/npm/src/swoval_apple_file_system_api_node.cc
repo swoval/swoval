@@ -73,7 +73,7 @@ static void process_callback(uv_async_t *async) {
     auto *h = reinterpret_cast<NodeHandle *>(async->data);
     if (h->stopped)
         return;   // should be unreachable
-    Lock lock(h->mutex);
+    Lock lock(h->runloop_mutex);
     napi_handle_scope scope;
     NAPI(napi_open_handle_scope(h->data->env, &scope));
     if (h->data->events.size()) {
@@ -109,11 +109,12 @@ static void enqueue_callback(std::unique_ptr<Events> events, NodeHandle *h, Lock
     uv_async_send(h->data->async_work);
 }
 
-static void enqueue_stop_stream(std::unique_ptr<Strings> strings, NodeHandle *h, Lock lock) {
+static Lock enqueue_stop_stream(std::unique_ptr<Strings> strings, NodeHandle *h, Lock lock) {
     for (auto stream : *strings) {
         h->data->streams.push_back(stream);
     }
     uv_async_send(h->data->async_work);
+    return std::move(lock);
 }
 
 napi_value close(napi_env env, napi_callback_info info) {

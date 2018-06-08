@@ -1,10 +1,13 @@
 package com.swoval.files
 
+import java.io.File
 import java.nio.file.{
   AccessDeniedException,
+  FileSystemLoopException,
   Files,
   NoSuchFileException,
   NotDirectoryException,
+  Paths,
   Path => JPath
 }
 
@@ -21,8 +24,9 @@ object QuickListTest {
       ql.list(path, if (recursive) java.lang.Integer.MAX_VALUE else 1, followLinks)
         .asScala
         .map(_.toPath().normalize())
-    def ls(path: JPath, depth: Int): Seq[JPath] =
-      ql.list(path, depth, false).asScala.map(_.toPath())
+    def ls(path: JPath, depth: Int): Seq[JPath] = ls(path, depth, followLinks = true)
+    def ls(path: JPath, depth: Int, followLinks: Boolean): Seq[JPath] =
+      ql.list(path, depth, followLinks).asScala.map(_.toPath())
   }
 }
 class QuickListTest(quickLister: QuickLister, run: Boolean) extends TestSuite {
@@ -124,6 +128,34 @@ class QuickListTest(quickLister: QuickLister, run: Boolean) extends TestSuite {
             }
           }
         }
+      }
+      'loop - withTempDirectory { dir =>
+        withTempDirectorySync { otherDir =>
+          val link1 = Files.createSymbolicLink(dir.resolve("link"), otherDir)
+          val link2 = Files.createSymbolicLink(otherDir.resolve("link"), dir)
+          intercept[FileSystemLoopException](quickLister.ls(dir, 3, followLinks = true))
+        }
+      }
+    }
+    'filters - {
+      'QuickFile - withTempFileSync { file =>
+        val parent = file.getParent
+        check(
+          quickLister
+            .list(parent, 2, true, new Filter[QuickFile] {
+              override def accept(q: QuickFile): Boolean = q.toPath != file
+            })
+            .asScala
+            .map((_: QuickFile).toPath),
+          Seq.empty[JPath]
+        )
+        check(quickLister
+                .list(parent, 2, true, new Filter[QuickFile] {
+                  override def accept(q: QuickFile): Boolean = q.isFile
+                })
+                .asScala
+                .map((_: QuickFile).toPath),
+              Seq(file))
       }
     }
   } else Tests {}

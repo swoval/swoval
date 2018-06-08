@@ -7,14 +7,15 @@ import static com.swoval.files.EntryFilters.AllPass;
 import com.swoval.files.Directory.Converter;
 import com.swoval.files.Directory.Observer;
 import com.swoval.files.Directory.OnChange;
-import com.swoval.files.DirectoryWatcher.Callback;
-import com.swoval.files.DirectoryWatcher.Factory;
-import java.io.File;
-import java.io.FileFilter;
+import com.swoval.files.SymlinkWatcher.OnLoop;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -31,10 +32,10 @@ import java.util.concurrent.locks.ReentrantLock;
  * Directory.EntryFilter)} method. The cache stores the path information in {@link Directory.Entry}
  * instances.
  *
- * <p>A default implementation is provided by {@link FileCache#apply(Directory.Converter,
- * Directory.Observer)}. The user may cache arbitrary information in the cache by customizing the
+ * <p>A default implementation is provided by {@link FileCache#apply(Converter, Observer, Option...)}
+ * . The user may cache arbitrary information in the cache by customizing the
  * {@link Directory.Converter} that is passed into the factory {@link
- * FileCache#apply(Directory.Converter, Directory.Observer)}.
+ * FileCache#apply(Converter, Observer, Option...)}
  *
  * @param <T> The type of data stored in the {@link Directory.Entry} instances for the cache
  */
@@ -60,19 +61,23 @@ public abstract class FileCache<T> implements AutoCloseable {
     return addObserver(
         new Observer<T>() {
           @Override
-          public void onCreate(Directory.Entry<T> newEntry) {
+          public void onCreate(final Directory.Entry<T> newEntry) {
             onChange.apply(newEntry);
           }
 
           @Override
-          public void onDelete(Directory.Entry<T> oldEntry) {
+          public void onDelete(final Directory.Entry<T> oldEntry) {
             onChange.apply(oldEntry);
           }
 
           @Override
-          public void onUpdate(Directory.Entry<T> oldEntry, Directory.Entry<T> newEntry) {
+          public void onUpdate(
+              final Directory.Entry<T> oldEntry, final Directory.Entry<T> newEntry) {
             onChange.apply(newEntry);
           }
+
+          @Override
+          public void onError(final Path path, final IOException exception) {}
         });
   }
 
@@ -135,11 +140,20 @@ public abstract class FileCache<T> implements AutoCloseable {
    * Register the directory for monitoring.
    *
    * @param path The path to monitor
+   * @param maxDepth The maximum depth of subdirectories to include
+   * @return The registered directory if it hasn't previously been registered, null otherwise
+   */
+  public abstract Directory<T> register(final Path path, final int maxDepth) throws IOException;
+  /**
+   * Register the directory for monitoring.
+   *
+   * @param path The path to monitor
    * @param recursive Recursively monitor the path if true
    * @return The registered directory if it hasn't previously been registered, null otherwise
    */
-  public abstract Directory<T> register(final Path path, final boolean recursive)
-      throws IOException;
+  public Directory<T> register(final Path path, final boolean recursive) throws IOException {
+    return register(path, recursive ? Integer.MAX_VALUE : 0);
+  }
 
   /**
    * Register the directory for monitoring recursively.
@@ -148,7 +162,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @return The registered directory if it hasn't previously been registered, null otherwise
    */
   public Directory<T> register(final Path path) throws IOException {
-    return register(path, true);
+    return register(path, Integer.MAX_VALUE);
   }
 
   /** Handle all exceptions in close. */
@@ -164,9 +178,10 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @throws IOException if the {@link DirectoryWatcher} cannot be initialized
    * @throws InterruptedException if the {@link DirectoryWatcher} cannot be initialized
    */
-  public static <T> FileCache<T> apply(final Converter<T> converter)
+  public static <T> FileCache<T> apply(
+      final Converter<T> converter, final FileCache.Option... options)
       throws IOException, InterruptedException {
-    return apply(converter, DEFAULT_FACTORY);
+    return new FileCacheImpl<>(converter, DEFAULT_FACTORY, options);
   }
 
   /**
@@ -180,9 +195,11 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @throws InterruptedException if the {@link DirectoryWatcher} cannot be initialized
    */
   public static <T> FileCache<T> apply(
-      final Converter<T> converter, final DirectoryWatcher.Factory factory)
+      final Converter<T> converter,
+      final DirectoryWatcher.Factory factory,
+      final FileCache.Option... options)
       throws IOException, InterruptedException {
-    return new FileCacheImpl<>(converter, factory);
+    return new FileCacheImpl<>(converter, factory, options);
   }
 
   /**
@@ -195,17 +212,20 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @throws IOException if the {@link DirectoryWatcher} cannot be initialized
    * @throws InterruptedException if the {@link DirectoryWatcher} cannot be initialized
    */
-  public static <T> FileCache<T> apply(final Converter<T> converter, final Observer<T> observer)
+  public static <T> FileCache<T> apply(
+      final Converter<T> converter, final Observer<T> observer, final FileCache.Option... options)
       throws IOException, InterruptedException {
-    return apply(converter, observer, DEFAULT_FACTORY);
+    FileCache<T> res = new FileCacheImpl<>(converter, DEFAULT_FACTORY, options);
+    res.addObserver(observer);
+    return res;
   }
 
   /**
    * Create a file cache with an Observer of events
    *
    * @param converter Converts a path to the cached value type T
-   * @param observer Observer of events for this cache
    * @param factory A factory to create a directory watcher
+   * @param observer Observer of events for this cache
    * @param <T> The value type of the cache entries
    * @return A file cache
    * @throws IOException if the {@link DirectoryWatcher} cannot be initialized
@@ -213,12 +233,27 @@ public abstract class FileCache<T> implements AutoCloseable {
    */
   public static <T> FileCache<T> apply(
       final Converter<T> converter,
+      final DirectoryWatcher.Factory factory,
       final Observer<T> observer,
-      final DirectoryWatcher.Factory factory)
+      final FileCache.Option... options)
       throws IOException, InterruptedException {
-    FileCache<T> res = new FileCacheImpl<>(converter, factory);
+    FileCache<T> res = new FileCacheImpl<>(converter, factory, options);
     res.addObserver(observer);
     return res;
+  }
+
+  /** Options for the implementation of a {@link FileCache} */
+  public static class Option {
+    /** This constructor is needed for code gen. Otherwise only the companion is generated */
+    Option() {}
+    /**
+     * When the FileCache encounters a symbolic link with a directory as target, treat the symbolic
+     * link like a directory. Note that it is possible to create a loop if two directories mutually
+     * link to each other symbolically. When this happens, the FileCache will throw a {@link
+     * java.nio.file.FileSystemLoopException} when attempting to register one of these directories
+     * or if the link that completes the loop is added to a registered directory.
+     */
+    public static final FileCache.Option NOFOLLOW_LINKS = new Option();
   }
 }
 
@@ -226,6 +261,7 @@ class FileCacheImpl<T> extends FileCache<T> {
   private final Map<Path, Directory<T>> directories = new HashMap<>();
   private final Converter<T> converter;
   private final ReentrantLock lock = new ReentrantLock();
+  private final SymlinkWatcher symlinkWatcher;
 
   private final DirectoryWatcher.Callback callback =
       new DirectoryWatcher.Callback() {
@@ -239,52 +275,105 @@ class FileCacheImpl<T> extends FileCache<T> {
                 handleOverflow(path);
               } catch (IOException e) {
                 System.err.println("FileCache caught IOException while processing overflow: " + e);
+                for (StackTraceElement el : e.getStackTrace()) {
+                  System.out.println(el);
+                }
               }
             } else {
-              handleEvent(path, event.path);
+              handleEvent(path);
             }
           }
         }
       };
   private final DirectoryWatcher watcher;
 
-  FileCacheImpl(final Converter<T> converter, DirectoryWatcher.Factory factory)
+  FileCacheImpl(
+      final Converter<T> converter, DirectoryWatcher.Factory factory, FileCache.Option... options)
       throws InterruptedException, IOException {
     this.watcher = factory.create(callback);
     this.converter = converter;
+    symlinkWatcher =
+        !ArrayOps.contains(options, FileCache.Option.NOFOLLOW_LINKS)
+            ? new SymlinkWatcher(
+            new SymlinkWatcher.EventConsumer() {
+              @Override
+              public void accept(Path path) {
+                handleEvent(path);
+              }
+            },
+            factory,
+            new OnLoop() {
+              @Override
+              public void accept(final Path symlink, final IOException exception) {
+                observers.onError(symlink, exception);
+              }
+            })
+            : null;
   }
 
   /** Cleans up the directory watcher and clears the directory cache. */
   @Override
   public void close() {
     watcher.close();
+    if (symlinkWatcher != null) symlinkWatcher.close();
+    final Iterator<Directory<T>> directoryIterator = directories.values().iterator();
+    while (directoryIterator.hasNext()) {
+      directoryIterator.next().close();
+    }
     directories.clear();
   }
 
   @Override
   public List<Directory.Entry<T>> list(
       final Path path, final boolean recursive, final Directory.EntryFilter<? super T> filter) {
-    Pair<Directory<T>, List<Directory.Entry<T>>> pair = listImpl(path, recursive, filter);
+    Pair<Directory<T>, List<Directory.Entry<T>>> pair =
+        listImpl(path, recursive ? Integer.MAX_VALUE : 0, filter);
     return pair == null ? new ArrayList<Directory.Entry<T>>() : pair.second;
   }
 
   @Override
-  public Directory<T> register(final Path path, final boolean recursive) throws IOException {
+  public Directory<T> register(final Path path, final int maxDepth) throws IOException {
     Directory<T> result = null;
     if (Files.exists(path)) {
-      watcher.register(path);
+      watcher.register(path, maxDepth);
       synchronized (directories) {
-        final Iterator<Directory<T>> it = directories.values().iterator();
+        final List<Directory<T>> dirs = new ArrayList<>(directories.values());
+        Collections.sort(
+            new ArrayList<>(directories.values()),
+            new Comparator<Directory<T>>() {
+              @Override
+              public int compare(Directory<T> left, Directory<T> right) {
+                return left.path.compareTo(right.path);
+              }
+            });
+        final Iterator<Directory<T>> it = dirs.iterator();
         Directory<T> existing = null;
         while (it.hasNext() && existing == null) {
           final Directory<T> dir = it.next();
-          if (path.startsWith(dir.path) && dir.recursive()) {
-            existing = dir;
+          if (path.startsWith(dir.path)) {
+            int depth = (path.equals(dir.path) ? 0 : dir.path.relativize(path).getNameCount()) - 1;
+            if (maxDepth + depth < dir.getDepth()) {
+              existing = dir;
+            } else if (depth <= dir.getDepth()) {
+              dir.close();
+              existing = Directory.cached(dir.path, converter, maxDepth + depth + 1);
+              directories.put(dir.path, existing);
+            }
           }
         }
         if (existing == null) {
-          result = Directory.cached(path, converter, recursive);
+          result = Directory.cached(path, converter, maxDepth);
           directories.put(path, result);
+          final Iterator<Directory.Entry<T>> entryIterator =
+              result.list(true, EntryFilters.AllPass).iterator();
+          if (symlinkWatcher != null) {
+            while (entryIterator.hasNext()) {
+              final Directory.Entry<T> entry = entryIterator.next();
+              if (entry.isSymbolicLink()) {
+                symlinkWatcher.addSymlink(entry.path, entry.isDirectory());
+              }
+            }
+          }
         }
       }
     }
@@ -292,23 +381,19 @@ class FileCacheImpl<T> extends FileCache<T> {
   }
 
   private Pair<Directory<T>, List<Directory.Entry<T>>> listImpl(
-      final Path path, final boolean recursive, final Directory.EntryFilter<? super T> filter) {
+      final Path path, final int maxDepth, final Directory.EntryFilter<? super T> filter) {
     synchronized (directories) {
-      if (Files.exists(path)) {
-        Directory<T> foundDir = null;
-        final Iterator<Directory<T>> it = directories.values().iterator();
-        while (it.hasNext()) {
-          final Directory<T> dir = it.next();
-          if (path.startsWith(dir.path)
-              && (foundDir == null || dir.path.startsWith(foundDir.path))) {
-            foundDir = dir;
-          }
+      Directory<T> foundDir = null;
+      final Iterator<Directory<T>> it = directories.values().iterator();
+      while (it.hasNext()) {
+        final Directory<T> dir = it.next();
+        if (path.startsWith(dir.path)
+            && (foundDir == null || dir.path.startsWith(foundDir.path))) {
+          foundDir = dir;
         }
-        if (foundDir != null) {
-          return new Pair<>(foundDir, foundDir.list(path, recursive, filter));
-        } else {
-          return null;
-        }
+      }
+      if (foundDir != null) {
+        return new Pair<>(foundDir, foundDir.list(path, maxDepth, filter));
       } else {
         return null;
       }
@@ -340,6 +425,16 @@ class FileCacheImpl<T> extends FileCache<T> {
     return result;
   }
 
+  @SuppressWarnings("EmptyCatchBlock")
+  private Directory<T> cachedOrNull(final Path path, final int maxDepth) {
+    Directory<T> res = null;
+    try {
+      res = Directory.cached(path, converter, maxDepth);
+    } catch (IOException e) {
+    }
+    return res;
+  }
+
   @SuppressWarnings("unchecked")
   private boolean handleOverflow(final Path path) throws IOException {
     synchronized (directories) {
@@ -352,10 +447,10 @@ class FileCacheImpl<T> extends FileCache<T> {
         final Directory<T> currentDir = directoryIterator.next();
         if (path.startsWith(currentDir.path)) {
           Directory<T> oldDir = currentDir;
-          Directory<T> newDir = Directory.cached(oldDir.path, converter, oldDir.recursive());
-          while (diff(oldDir, newDir)) {
-            oldDir = newDir;
-            newDir = Directory.cached(oldDir.path, converter, oldDir.recursive());
+          Directory<T> newDir = cachedOrNull(oldDir.path, oldDir.getDepth());
+          while (newDir == null || diff(oldDir, newDir)) {
+            if (newDir != null) oldDir = newDir;
+            newDir = cachedOrNull(oldDir.path, oldDir.getDepth());
           }
           final Map<Path, Directory.Entry<T>> oldEntries = new HashMap<>();
           final Map<Path, Directory.Entry<T>> newEntries = new HashMap<>();
@@ -387,9 +482,7 @@ class FileCacheImpl<T> extends FileCache<T> {
               creations.add(mapEntry.getValue());
             } else {
               final Directory.Entry<T> oldEntry = oldEntries.get(mapEntry.getKey());
-              if (!oldEntry.equals(mapEntry.getValue())) {
-                updates.add(new Directory.Entry[] {oldEntry, mapEntry.getValue()});
-              }
+              if (!oldEntry.equals(mapEntry.getValue())) {}
             }
           }
           toReplace.add(newDir);
@@ -413,16 +506,22 @@ class FileCacheImpl<T> extends FileCache<T> {
     }
   }
 
-  private void handleEvent(final Path path, final Path eventPath) {
-    if (Files.exists(path)) {
+  @SuppressWarnings("EmptyCatchBlock")
+  private void handleEvent(final Path path) {
+    BasicFileAttributes attrs = null;
+    try {
+      attrs = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+    } catch (IOException e) {
+    }
+    if (attrs != null) {
       final Pair<Directory<T>, List<Directory.Entry<T>>> pair =
           listImpl(
               path,
-              false,
+              0,
               new Directory.EntryFilter<T>() {
                 @Override
-                public boolean accept(Directory.Entry<? extends T> path) {
-                  return eventPath.equals(path.path);
+                public boolean accept(Directory.Entry<? extends T> entry) {
+                  return path.equals(entry.path);
                 }
               });
       if (pair != null) {
@@ -430,9 +529,10 @@ class FileCacheImpl<T> extends FileCache<T> {
         final List<Directory.Entry<T>> paths = pair.second;
         if (!paths.isEmpty() || !path.equals(dir.path)) {
           final Path toUpdate = paths.isEmpty() ? path : paths.get(0).path;
+          if (attrs.isSymbolicLink() && symlinkWatcher != null) symlinkWatcher.addSymlink(path, Files.isDirectory(path));
           try {
             final Iterator<Directory.Entry<T>[]> it =
-                dir.addUpdate(toUpdate, !Files.isDirectory(path)).iterator();
+                dir.addUpdate(toUpdate, Directory.Entry.getKind(toUpdate, attrs)).iterator();
             while (it.hasNext()) {
               final Directory.Entry<T>[] entry = it.next();
               if (entry.length == 2) {
@@ -442,21 +542,29 @@ class FileCacheImpl<T> extends FileCache<T> {
               }
             }
           } catch (IOException e) {
-            System.err.println(
-                "FileCache caught IOException handling event for " + path + ": " + e);
+            observers.onError(path, e);
           }
         }
       }
     } else {
+      final List<Iterator<Directory.Entry<T>>> removeIterators = new ArrayList<>();
       synchronized (directories) {
         final Iterator<Directory<T>> it = directories.values().iterator();
         while (it.hasNext()) {
           final Directory<T> dir = it.next();
           if (path.startsWith(dir.path)) {
-            final Iterator<Directory.Entry<T>> removeIterator = dir.remove(path).iterator();
-            while (removeIterator.hasNext()) {
-              observers.onDelete(removeIterator.next());
-            }
+            removeIterators.add(dir.remove(path).iterator());
+          }
+        }
+      }
+      final Iterator<Iterator<Directory.Entry<T>>> it = removeIterators.iterator();
+      while (it.hasNext()) {
+        final Iterator<Directory.Entry<T>> removeIterator = it.next();
+        while (removeIterator.hasNext()) {
+          final Directory.Entry<T> entry = removeIterator.next();
+          observers.onDelete(entry);
+          if (symlinkWatcher != null) {
+            symlinkWatcher.remove(entry.path);
           }
         }
       }

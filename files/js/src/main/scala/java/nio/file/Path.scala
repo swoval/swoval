@@ -33,7 +33,7 @@ trait Path {
   def resolveSibling(other: String): Path
   def relativize(other: Path): Path
   def toUri(): URI
-  def toAbsolutePath: Path
+  def toAbsolutePath(): Path
   def toRealPath(options: Array[LinkOption] = Array.empty): Path
   def toFile(): File
   def iterator(): util.Iterator[Path]
