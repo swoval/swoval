@@ -1,12 +1,12 @@
 package com.swoval.files
 
-import utest.framework.ExecutionContext.RunNow
+import java.nio.file.{ Path => JPath }
 
+import com.swoval.test.Implicits.executionContext
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ Future, Promise }
-import scala.util.{ Failure, Success, Try }
-import java.nio.file.{ Path => JPath }
+import scala.util.{ Success, Try }
 
 package object test {
 
@@ -51,7 +51,8 @@ package object test {
           val tp = platform.newTimedPromise(p, timeout)
           promises.enqueue(tp)
           def dequeue(): Unit = { promises.dequeueAll(_ == tp); () }
-          p.future.transform(r => { dequeue(); f(r) }, e => { dequeue(); e })(RunNow)
+          p.future.transform(r => { dequeue(); f(r) }, e => { dequeue(); e })(
+            utest.framework.ExecutionContext.RunNow)
       })
     def add(t: T): Unit = lock.synchronized {
       promises.dequeueFirst(_ => true) match {
