@@ -270,14 +270,15 @@ class FileCacheImpl<T> extends FileCache<T> {
         @SuppressWarnings("unchecked")
         @Override
         public void apply(final DirectoryWatcher.Event event) {
-          synchronized (lock) {
+          lock.lock();
+          try {
             final Path path = event.path;
             if (event.kind.equals(Overflow)) {
               handleOverflow(path);
             } else {
               handleEvent(path);
             }
-          }
+          } finally { lock.unlock(); }
         }
       };
   private final DirectoryWatcher watcher;

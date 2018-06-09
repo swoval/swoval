@@ -282,14 +282,15 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
   private val callback: DirectoryWatcher.Callback =
     new DirectoryWatcher.Callback() {
       override def apply(event: DirectoryWatcher.Event): Unit = {
-        lock.synchronized {
+        lock.lock()
+        try {
           val path: Path = event.path
           if (event.kind == Overflow) {
             handleOverflow(path)
           } else {
             handleEvent(path)
           }
-        }
+        } finally lock.unlock()
       }
     }
 

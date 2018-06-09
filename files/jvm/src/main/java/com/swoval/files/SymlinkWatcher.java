@@ -60,7 +60,8 @@ class SymlinkWatcher implements AutoCloseable {
           @SuppressWarnings("unchecked")
           @Override
           public void apply(final DirectoryWatcher.Event event) {
-            synchronized (lock) {
+            lock.lock();
+            try {
               final Path path = event.path;
               {
                 final RegisteredPath registeredPath = find(path, watchedSymlinksByTarget);
@@ -86,6 +87,8 @@ class SymlinkWatcher implements AutoCloseable {
                   }
                 }
               }
+            } finally {
+              lock.unlock();
             }
           }
         };
@@ -113,47 +116,46 @@ class SymlinkWatcher implements AutoCloseable {
    */
   @SuppressWarnings("EmptyCatchBlock")
   void addSymlink(final Path path, final boolean isDirectory) {
-    synchronized (lock) {
-      try {
-        final Path realPath = path.toRealPath();
-        final RegisteredPath targetRegistrationPath = watchedSymlinksByTarget.get(realPath);
-        if (targetRegistrationPath == null) {
-          final Path registrationPath = isDirectory ? realPath : realPath.getParent();
-          final RegisteredPath registeredPath = watchedSymlinksByDirectory.get(registrationPath);
-          if (registeredPath != null) {
-            if (!isDirectory || registeredPath.isDirectory) {
-              registeredPath.paths.add(realPath);
-              final RegisteredPath symlinkChildren = watchedSymlinksByTarget.get(realPath);
-              if (symlinkChildren != null) {
-                symlinkChildren.paths.add(path);
-              }
-            } else if (watcher.register(registrationPath, true)) {
-              final RegisteredPath parentPath =
-                  new RegisteredPath(registrationPath, true, realPath);
-              parentPath.paths.addAll(registeredPath.paths);
-              watchedSymlinksByDirectory.put(registrationPath, parentPath);
-              final RegisteredPath symlinkPaths = new RegisteredPath(realPath, true, path);
-              final RegisteredPath existingSymlinkPaths = watchedSymlinksByTarget.get(realPath);
-              if (existingSymlinkPaths != null) {
-                symlinkPaths.paths.addAll(existingSymlinkPaths.paths);
-              }
-              watchedSymlinksByTarget.put(realPath, symlinkPaths);
+    lock.lock();
+    try {
+      final Path realPath = path.toRealPath();
+      final RegisteredPath targetRegistrationPath = watchedSymlinksByTarget.get(realPath);
+      if (targetRegistrationPath == null) {
+        final Path registrationPath = isDirectory ? realPath : realPath.getParent();
+        final RegisteredPath registeredPath = watchedSymlinksByDirectory.get(registrationPath);
+        if (registeredPath != null) {
+          if (!isDirectory || registeredPath.isDirectory) {
+            registeredPath.paths.add(realPath);
+            final RegisteredPath symlinkChildren = watchedSymlinksByTarget.get(realPath);
+            if (symlinkChildren != null) {
+              symlinkChildren.paths.add(path);
             }
-          } else {
-            if (watcher.register(registrationPath, isDirectory)) {
-              watchedSymlinksByDirectory.put(
-                  registrationPath, new RegisteredPath(registrationPath, isDirectory, realPath));
-              watchedSymlinksByTarget.put(
-                  realPath, new RegisteredPath(realPath, isDirectory, path));
+          } else if (watcher.register(registrationPath, true)) {
+            final RegisteredPath parentPath = new RegisteredPath(registrationPath, true, realPath);
+            parentPath.paths.addAll(registeredPath.paths);
+            watchedSymlinksByDirectory.put(registrationPath, parentPath);
+            final RegisteredPath symlinkPaths = new RegisteredPath(realPath, true, path);
+            final RegisteredPath existingSymlinkPaths = watchedSymlinksByTarget.get(realPath);
+            if (existingSymlinkPaths != null) {
+              symlinkPaths.paths.addAll(existingSymlinkPaths.paths);
             }
+            watchedSymlinksByTarget.put(realPath, symlinkPaths);
           }
-        } else if (Files.isDirectory(realPath)) {
-          onLoop.accept(path, new FileSystemLoopException(path.toString()));
         } else {
-          targetRegistrationPath.paths.add(path);
+          if (watcher.register(registrationPath, isDirectory)) {
+            watchedSymlinksByDirectory.put(
+                registrationPath, new RegisteredPath(registrationPath, isDirectory, realPath));
+            watchedSymlinksByTarget.put(realPath, new RegisteredPath(realPath, isDirectory, path));
+          }
         }
-      } catch (IOException e) {
+      } else if (Files.isDirectory(realPath)) {
+        onLoop.accept(path, new FileSystemLoopException(path.toString()));
+      } else {
+        targetRegistrationPath.paths.add(path);
       }
+    } catch (IOException e) {
+    } finally {
+      lock.unlock();
     }
   }
 
@@ -164,7 +166,8 @@ class SymlinkWatcher implements AutoCloseable {
    * @param path The symlink base to stop monitoring
    */
   void remove(final Path path) {
-    synchronized (lock) {
+    lock.lock();
+    try {
       Path target = null;
       {
         final Iterator<Entry<Path, RegisteredPath>> it =
@@ -194,8 +197,11 @@ class SymlinkWatcher implements AutoCloseable {
           }
         }
       }
+    } finally {
+      lock.unlock();
     }
   }
+
   interface OnLoop {
     void accept(final Path symlink, final IOException exception);
   }

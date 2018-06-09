@@ -8,10 +8,9 @@ import com.swoval.files.Directory._
 import com.swoval.files.EntryOps._
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.test._
+import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
 import utest._
-import Implicits.executionContext
-import com.swoval.files.SymlinkWatcher.OnLoop
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
