@@ -229,7 +229,7 @@ trait FileCacheTest extends TestSuite {
             withTempDirectory(subdir) { nestedSubdir =>
               withTempFile(nestedSubdir) { file =>
                 val latch = new CountDownLatch(1)
-                using(simpleCache((e: Entry[JPath]) =>
+                usingAsync(simpleCache((e: Entry[JPath]) =>
                   if (e.path.endsWith("deep")) latch.countDown())) { c =>
                   c.register(dir, 1)
                   c.ls(dir) === Set(subdir, nestedSubdir)

@@ -13,6 +13,15 @@ import scala.util.Try
 
 package object test {
   final val DEFAULT_TIMEOUT = 1.second
+
+  /** Taken from shapeless */
+  sealed trait <:!<[T, R]
+  object <:!< {
+    import scala.language.implicitConversions
+    implicit def default[T, R]: <:!<[T, R] = new <:!<[T, R] {}
+    implicit def alternative[T, R](implicit ev: T <:< R): <:!<[T, R] = new <:!<[T, R] {}
+  }
+  type NotFuture[T] = <:!<[T, Future[_]]
   object Implicits {
     implicit def executionContext: ExecutionContext = platform.executionContext
   }
@@ -54,7 +63,7 @@ package object test {
     }
   }
 
-  def using[C <: AutoCloseable, R](closeable: => C)(f: C => R): Future[R] = {
+  def using[C <: AutoCloseable, R: NotFuture](closeable: => C)(f: C => R): Future[R] = {
     val c = closeable
     val p = Promise[R]
     p.tryComplete(Try(f(c)))
