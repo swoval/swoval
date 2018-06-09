@@ -6,9 +6,11 @@ import java.io.IOException;
 import java.nio.file.FileSystemLoopException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
@@ -61,6 +63,7 @@ class SymlinkWatcher implements AutoCloseable {
           @Override
           public void apply(final DirectoryWatcher.Event event) {
             lock.lock();
+            final List<Runnable> callbacks = new ArrayList<>();
             try {
               final Path path = event.path;
               {
@@ -70,8 +73,15 @@ class SymlinkWatcher implements AutoCloseable {
                   final Iterator<Path> it = registeredPath.paths.iterator();
                   while (it.hasNext()) {
                     final Path p = it.next();
-                    if (registeredPath.isDirectory) handleEvent.accept(p.resolve(relativized));
-                    else handleEvent.accept(p);
+                    callbacks.add(
+                        new Runnable() {
+                          @Override
+                          public void run() {
+                            if (registeredPath.isDirectory)
+                              handleEvent.accept(p.resolve(relativized));
+                            else handleEvent.accept(p);
+                          }
+                        });
                   }
                 }
               }
@@ -89,6 +99,10 @@ class SymlinkWatcher implements AutoCloseable {
               }
             } finally {
               lock.unlock();
+            }
+            final Iterator<Runnable> it = callbacks.iterator();
+            while (it.hasNext()) {
+              it.next().run();
             }
           }
         };

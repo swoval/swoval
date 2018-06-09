@@ -5,9 +5,11 @@ import java.io.IOException
 import java.nio.file.FileSystemLoopException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.ArrayList
 import java.util.HashMap
 import java.util.HashSet
 import java.util.Iterator
+import java.util.List
 import java.util.Map
 import java.util.Set
 import java.util.concurrent.locks.ReentrantLock
@@ -69,6 +71,7 @@ class SymlinkWatcher(handleEvent: EventConsumer,
   val callback: DirectoryWatcher.Callback = new DirectoryWatcher.Callback() {
     override def apply(event: DirectoryWatcher.Event): Unit = {
       lock.lock()
+      val callbacks: List[Runnable] = new ArrayList[Runnable]()
       try {
         val path: Path = event.path
         val registeredPath: RegisteredPath =
@@ -78,9 +81,13 @@ class SymlinkWatcher(handleEvent: EventConsumer,
           val it: Iterator[Path] = registeredPath.paths.iterator()
           while (it.hasNext) {
             val p: Path = it.next()
-            if (registeredPath.isDirectory)
-              handleEvent.accept(p.resolve(relativized))
-            else handleEvent.accept(p)
+            callbacks.add(new Runnable() {
+              override def run(): Unit = {
+                if (registeredPath.isDirectory)
+                  handleEvent.accept(p.resolve(relativized))
+                else handleEvent.accept(p)
+              }
+            })
           }
         }
         if (!Files.exists(event.path)) {
@@ -97,6 +104,8 @@ class SymlinkWatcher(handleEvent: EventConsumer,
           }
         }
       } finally lock.unlock()
+      val it: Iterator[Runnable] = callbacks.iterator()
+      while (it.hasNext) it.next().run()
     }
   }
 
