@@ -6,6 +6,7 @@ import static com.swoval.files.DirectoryWatcher.Event.Modify;
 
 import com.swoval.files.apple.FileEvent;
 import com.swoval.files.apple.FileEventsApi;
+import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
 import com.swoval.files.apple.FileEventsApi.Consumer;
 import com.swoval.files.apple.Flags;
 import java.nio.file.Files;
@@ -74,14 +75,19 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     if (Files.isDirectory(path) && !path.equals(path.getRoot())) {
       final Entry<Path, Stream> entry = find(path);
       if (entry == null) {
-        int id = fileEventsApi.createStream(path.toString(), latency, flags.getValue());
-        if (id == -1) {
-          result = false;
-          System.err.println("Error watching " + path + ".");
-        } else {
-          synchronized (lock) {
-            streams.put(path, new Stream(path, id, maxDepth));
+        try {
+          int id = fileEventsApi.createStream(path.toString(), latency, flags.getValue());
+          if (id == -1) {
+            result = false;
+            System.err.println("Error watching " + path + ".");
+          } else {
+            synchronized (lock) {
+              streams.put(path, new Stream(path, id, maxDepth));
+            }
           }
+        } catch (ClosedFileEventsApiException e) {
+          close();
+          result = false;
         }
       } else {
         final Path key = entry.getKey();

@@ -42,7 +42,7 @@ matrix:
        CMD="filesJVM/test plugin/compile"
        TRAVIS_SCALA_VERSION=2.10.7
 
-script: ./sbt/bin/sbt -Dsbt.version=$SBT_VER -Dswoval.skip.native=true ++$TRAVIS_SCALA_VERSION $CMD
+script: ./sbt/bin/sbt -Dsbt.version=$SBT_VER -Dswoval.skip.native=true -Dswoval.fork.tests=true ++$TRAVIS_SCALA_VERSION $CMD
 
 before_install:
   # https://github.com/travis-ci/travis-ci/issues/8408

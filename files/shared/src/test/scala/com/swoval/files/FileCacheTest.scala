@@ -8,10 +8,9 @@ import com.swoval.files.Directory._
 import com.swoval.files.EntryOps._
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.test._
+import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
 import utest._
-import Implicits.executionContext
-import com.swoval.files.SymlinkWatcher.OnLoop
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -114,7 +113,7 @@ trait FileCacheTest extends TestSuite {
           val subdirsToAdd = if (System.getProperty("java.vm.name", "") == "Scala.js") {
             if (Platform.isWin) 5 else 50
           } else 2000
-          val timeout = if (Platform.isWin) DEFAULT_TIMEOUT * 60 else DEFAULT_TIMEOUT * 20
+          val timeout = DEFAULT_TIMEOUT * 60
           val filesPerSubdir = 4
           val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
           val creationLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
@@ -155,36 +154,38 @@ trait FileCacheTest extends TestSuite {
                     subdirs.foreach(Files.deleteIfExists(_))
                   }
                 })
-                deletionLatch.waitFor(timeout) {
-                  c.ls(dir) === Seq.empty
-                }
+                deletionLatch
+                  .waitFor(timeout) {
+                    c.ls(dir) === Seq.empty
+                  }
               }
-          }.andThen {
-            case Failure(e) =>
-              println(s"Task failed $e")
-              executor.close()
-              if (creationLatch.getCount > 0) {
-                val count = creationLatch.getCount
-                10.milliseconds.sleep
-                val newCount = creationLatch.getCount
-                if (newCount == count)
-                  println(s"$this Creation latch not triggered ($count)")
-                else
-                  println(
-                    s"$this Creation latch not triggered, but still being decremented $newCount")
+              .andThen {
+                case Failure(e) =>
+                  println(s"Task failed $e")
+                  if (creationLatch.getCount > 0) {
+                    val count = creationLatch.getCount
+                    10.milliseconds.sleep
+                    val newCount = creationLatch.getCount
+                    if (newCount == count)
+                      println(s"$this Creation latch not triggered ($count)")
+                    else
+                      println(
+                        s"$this Creation latch not triggered, but still being decremented $newCount")
+                  }
+                  if (deletionLatch.getCount > 0) {
+                    val count = deletionLatch.getCount
+                    10.milliseconds.sleep
+                    val newCount = deletionLatch.getCount
+                    if (newCount == count)
+                      println(s"$this Deletion latch not triggered ($count)")
+                    else
+                      println(
+                        s"$this Deletion latch not triggered, but still being decremented $newCount")
+                  }
+                  executor.close()
+                case _ =>
+                  executor.close()
               }
-              if (deletionLatch.getCount > 0) {
-                val count = deletionLatch.getCount
-                10.milliseconds.sleep
-                val newCount = deletionLatch.getCount
-                if (newCount == count)
-                  println(s"$this Deletion latch not triggered ($count)")
-                else
-                  println(
-                    s"$this Deletion latch not triggered, but still being decremented $newCount")
-              }
-            case _ =>
-              executor.close()
           }
         }
       }
@@ -197,7 +198,7 @@ trait FileCacheTest extends TestSuite {
             c.reg(dir, recursive = false)
             withTempFile(subdir) { f =>
               assert(f.exists)
-              subdir.setLastModifiedTime(2000)
+              subdir.setLastModifiedTime(3000)
               latch.waitFor(DEFAULT_TIMEOUT) {
                 c.ls(dir) === Seq(subdir)
               }
@@ -344,7 +345,7 @@ trait FileCacheTest extends TestSuite {
             }
           val lastModified = cachedFile.value.lastModified
           lastModified ==> file.lastModified
-          val updatedLastModified = 2000
+          val updatedLastModified = 3000
           file.setLastModifiedTime(updatedLastModified)
           latch.waitFor(DEFAULT_TIMEOUT) {
             val newCachedFile: Entry[LastModified] =

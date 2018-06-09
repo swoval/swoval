@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -262,27 +263,22 @@ class FileCacheImpl<T> extends FileCache<T> {
   private final Converter<T> converter;
   private final ReentrantLock lock = new ReentrantLock();
   private final SymlinkWatcher symlinkWatcher;
+  private final AtomicBoolean closed = new AtomicBoolean(false);
 
   private final DirectoryWatcher.Callback callback =
       new DirectoryWatcher.Callback() {
         @SuppressWarnings("unchecked")
         @Override
         public void apply(final DirectoryWatcher.Event event) {
-          synchronized (lock) {
+          lock.lock();
+          try {
             final Path path = event.path;
             if (event.kind.equals(Overflow)) {
-              try {
-                handleOverflow(path);
-              } catch (IOException e) {
-                System.err.println("FileCache caught IOException while processing overflow: " + e);
-                for (StackTraceElement el : e.getStackTrace()) {
-                  System.out.println(el);
-                }
-              }
+              handleOverflow(path);
             } else {
               handleEvent(path);
             }
-          }
+          } finally { lock.unlock(); }
         }
       };
   private final DirectoryWatcher watcher;
@@ -314,13 +310,15 @@ class FileCacheImpl<T> extends FileCache<T> {
   /** Cleans up the directory watcher and clears the directory cache. */
   @Override
   public void close() {
-    watcher.close();
-    if (symlinkWatcher != null) symlinkWatcher.close();
-    final Iterator<Directory<T>> directoryIterator = directories.values().iterator();
-    while (directoryIterator.hasNext()) {
-      directoryIterator.next().close();
+    if (closed.compareAndSet(false, true)) {
+      if (symlinkWatcher != null) symlinkWatcher.close();
+      watcher.close();
+      final Iterator<Directory<T>> directoryIterator = directories.values().iterator();
+      while (directoryIterator.hasNext()) {
+        directoryIterator.next().close();
+      }
+      directories.clear();
     }
-    directories.clear();
   }
 
   @Override
@@ -442,136 +440,142 @@ class FileCacheImpl<T> extends FileCache<T> {
   }
 
   @SuppressWarnings("unchecked")
-  private boolean handleOverflow(final Path path) throws IOException {
+  private boolean handleOverflow(final Path path) {
     synchronized (directories) {
-      final Iterator<Directory<T>> directoryIterator = directories.values().iterator();
-      final List<Directory<T>> toReplace = new ArrayList<>();
-      final List<Directory.Entry<T>> creations = new ArrayList<>();
-      final List<Directory.Entry<T>[]> updates = new ArrayList<>();
-      final List<Directory.Entry<T>> deletions = new ArrayList<>();
-      while (directoryIterator.hasNext()) {
-        final Directory<T> currentDir = directoryIterator.next();
-        if (path.startsWith(currentDir.path)) {
-          Directory<T> oldDir = currentDir;
-          Directory<T> newDir = cachedOrNull(oldDir.path, oldDir.getDepth());
-          while (newDir == null || diff(oldDir, newDir)) {
-            if (newDir != null) oldDir = newDir;
-            newDir = cachedOrNull(oldDir.path, oldDir.getDepth());
-          }
-          final Map<Path, Directory.Entry<T>> oldEntries = new HashMap<>();
-          final Map<Path, Directory.Entry<T>> newEntries = new HashMap<>();
-          final Iterator<Directory.Entry<T>> oldEntryIterator =
-              currentDir.list(currentDir.recursive(), AllPass).iterator();
-          while (oldEntryIterator.hasNext()) {
-            final Directory.Entry<T> entry = oldEntryIterator.next();
-            oldEntries.put(entry.path, entry);
-          }
-          final Iterator<Directory.Entry<T>> newEntryIterator =
-              newDir.list(currentDir.recursive(), AllPass).iterator();
-          while (newEntryIterator.hasNext()) {
-            final Directory.Entry<T> entry = newEntryIterator.next();
-            newEntries.put(entry.path, entry);
-          }
-          final Iterator<Entry<Path, Directory.Entry<T>>> oldIterator =
-              oldEntries.entrySet().iterator();
-          while (oldIterator.hasNext()) {
-            final Entry<Path, Directory.Entry<T>> mapEntry = oldIterator.next();
-            if (!newEntries.containsKey(mapEntry.getKey())) {
-              deletions.add(mapEntry.getValue());
+      if (!closed.get()) {
+        final Iterator<Directory<T>> directoryIterator = directories.values().iterator();
+        final List<Directory<T>> toReplace = new ArrayList<>();
+        final List<Directory.Entry<T>> creations = new ArrayList<>();
+        final List<Directory.Entry<T>[]> updates = new ArrayList<>();
+        final List<Directory.Entry<T>> deletions = new ArrayList<>();
+        while (directoryIterator.hasNext()) {
+          final Directory<T> currentDir = directoryIterator.next();
+          if (path.startsWith(currentDir.path)) {
+            Directory<T> oldDir = currentDir;
+            Directory<T> newDir = cachedOrNull(oldDir.path, oldDir.getDepth());
+            while (newDir == null || diff(oldDir, newDir)) {
+              if (newDir != null) oldDir = newDir;
+              newDir = cachedOrNull(oldDir.path, oldDir.getDepth());
             }
-          }
-          final Iterator<Entry<Path, Directory.Entry<T>>> newIterator =
-              newEntries.entrySet().iterator();
-          while (newIterator.hasNext()) {
-            final Entry<Path, Directory.Entry<T>> mapEntry = newIterator.next();
-            if (!oldEntries.containsKey(mapEntry.getKey())) {
-              creations.add(mapEntry.getValue());
-            } else {
-              final Directory.Entry<T> oldEntry = oldEntries.get(mapEntry.getKey());
-              if (!oldEntry.equals(mapEntry.getValue())) {}
+            final Map<Path, Directory.Entry<T>> oldEntries = new HashMap<>();
+            final Map<Path, Directory.Entry<T>> newEntries = new HashMap<>();
+            final Iterator<Directory.Entry<T>> oldEntryIterator =
+                currentDir.list(currentDir.recursive(), AllPass).iterator();
+            while (oldEntryIterator.hasNext()) {
+              final Directory.Entry<T> entry = oldEntryIterator.next();
+              oldEntries.put(entry.path, entry);
             }
+            final Iterator<Directory.Entry<T>> newEntryIterator =
+                newDir.list(currentDir.recursive(), AllPass).iterator();
+            while (newEntryIterator.hasNext()) {
+              final Directory.Entry<T> entry = newEntryIterator.next();
+              newEntries.put(entry.path, entry);
+            }
+            final Iterator<Entry<Path, Directory.Entry<T>>> oldIterator =
+                oldEntries.entrySet().iterator();
+            while (oldIterator.hasNext()) {
+              final Entry<Path, Directory.Entry<T>> mapEntry = oldIterator.next();
+              if (!newEntries.containsKey(mapEntry.getKey())) {
+                deletions.add(mapEntry.getValue());
+              }
+            }
+            final Iterator<Entry<Path, Directory.Entry<T>>> newIterator =
+                newEntries.entrySet().iterator();
+            while (newIterator.hasNext()) {
+              final Entry<Path, Directory.Entry<T>> mapEntry = newIterator.next();
+              if (!oldEntries.containsKey(mapEntry.getKey())) {
+                creations.add(mapEntry.getValue());
+              } else {
+                final Directory.Entry<T> oldEntry = oldEntries.get(mapEntry.getKey());
+                if (!oldEntry.equals(mapEntry.getValue())) {}
+              }
+            }
+            toReplace.add(newDir);
           }
-          toReplace.add(newDir);
         }
+        final Iterator<Directory<T>> replacements = toReplace.iterator();
+        while (replacements.hasNext()) {
+          final Directory<T> replacement = replacements.next();
+          directories.put(replacement.path, replacement);
+        }
+        final Iterator<Directory.Entry<T>> creationIterator = creations.iterator();
+        while (creationIterator.hasNext()) observers.onCreate(creationIterator.next());
+        final Iterator<Directory.Entry<T>> deletionIterator = deletions.iterator();
+        while (deletionIterator.hasNext()) observers.onDelete(deletionIterator.next());
+        final Iterator<Directory.Entry<T>[]> updateIterator = updates.iterator();
+        while (updateIterator.hasNext()) {
+          final Directory.Entry<T>[] update = updateIterator.next();
+          observers.onUpdate(update[0], update[1]);
+        }
+        return creations.isEmpty() && deletions.isEmpty() && updates.isEmpty();
+      } else {
+        return false;
       }
-      final Iterator<Directory<T>> replacements = toReplace.iterator();
-      while (replacements.hasNext()) {
-        final Directory<T> replacement = replacements.next();
-        directories.put(replacement.path, replacement);
-      }
-      final Iterator<Directory.Entry<T>> creationIterator = creations.iterator();
-      while (creationIterator.hasNext()) observers.onCreate(creationIterator.next());
-      final Iterator<Directory.Entry<T>> deletionIterator = deletions.iterator();
-      while (deletionIterator.hasNext()) observers.onDelete(deletionIterator.next());
-      final Iterator<Directory.Entry<T>[]> updateIterator = updates.iterator();
-      while (updateIterator.hasNext()) {
-        final Directory.Entry<T>[] update = updateIterator.next();
-        observers.onUpdate(update[0], update[1]);
-      }
-      return creations.isEmpty() && deletions.isEmpty() && updates.isEmpty();
     }
   }
 
   @SuppressWarnings("EmptyCatchBlock")
   private void handleEvent(final Path path) {
-    BasicFileAttributes attrs = null;
-    try {
-      attrs = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-    } catch (IOException e) {
-    }
-    if (attrs != null) {
-      final Pair<Directory<T>, List<Directory.Entry<T>>> pair =
-          listImpl(
-              path,
-              0,
-              new Directory.EntryFilter<T>() {
-                @Override
-                public boolean accept(Directory.Entry<? extends T> entry) {
-                  return path.equals(entry.path);
+    if (!closed.get()) {
+      BasicFileAttributes attrs = null;
+      try {
+        attrs = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+      } catch (IOException e) {
+      }
+      if (attrs != null) {
+        final Pair<Directory<T>, List<Directory.Entry<T>>> pair =
+            listImpl(
+                path,
+                0,
+                new Directory.EntryFilter<T>() {
+                  @Override
+                  public boolean accept(Directory.Entry<? extends T> entry) {
+                    return path.equals(entry.path);
+                  }
+                });
+        if (pair != null) {
+          final Directory<T> dir = pair.first;
+          final List<Directory.Entry<T>> paths = pair.second;
+          if (!paths.isEmpty() || !path.equals(dir.path)) {
+            final Path toUpdate = paths.isEmpty() ? path : paths.get(0).path;
+            if (attrs.isSymbolicLink() && symlinkWatcher != null)
+              symlinkWatcher.addSymlink(path, Files.isDirectory(path));
+            try {
+              final Iterator<Directory.Entry<T>[]> it =
+                  dir.addUpdate(toUpdate, Directory.Entry.getKind(toUpdate, attrs)).iterator();
+              while (it.hasNext()) {
+                final Directory.Entry<T>[] entry = it.next();
+                if (entry.length == 2) {
+                  observers.onUpdate(entry[0], entry[1]);
+                } else {
+                  observers.onCreate(entry[0]);
                 }
-              });
-      if (pair != null) {
-        final Directory<T> dir = pair.first;
-        final List<Directory.Entry<T>> paths = pair.second;
-        if (!paths.isEmpty() || !path.equals(dir.path)) {
-          final Path toUpdate = paths.isEmpty() ? path : paths.get(0).path;
-          if (attrs.isSymbolicLink() && symlinkWatcher != null)
-            symlinkWatcher.addSymlink(path, Files.isDirectory(path));
-          try {
-            final Iterator<Directory.Entry<T>[]> it =
-                dir.addUpdate(toUpdate, Directory.Entry.getKind(toUpdate, attrs)).iterator();
-            while (it.hasNext()) {
-              final Directory.Entry<T>[] entry = it.next();
-              if (entry.length == 2) {
-                observers.onUpdate(entry[0], entry[1]);
-              } else {
-                observers.onCreate(entry[0]);
               }
+            } catch (IOException e) {
+              observers.onError(path, e);
             }
-          } catch (IOException e) {
-            observers.onError(path, e);
           }
         }
-      }
-    } else {
-      final List<Iterator<Directory.Entry<T>>> removeIterators = new ArrayList<>();
-      synchronized (directories) {
-        final Iterator<Directory<T>> it = directories.values().iterator();
+      } else {
+        final List<Iterator<Directory.Entry<T>>> removeIterators = new ArrayList<>();
+        synchronized (directories) {
+          final Iterator<Directory<T>> it = directories.values().iterator();
+          while (it.hasNext()) {
+            final Directory<T> dir = it.next();
+            if (path.startsWith(dir.path)) {
+              removeIterators.add(dir.remove(path).iterator());
+            }
+          }
+        }
+        final Iterator<Iterator<Directory.Entry<T>>> it = removeIterators.iterator();
         while (it.hasNext()) {
-          final Directory<T> dir = it.next();
-          if (path.startsWith(dir.path)) {
-            removeIterators.add(dir.remove(path).iterator());
-          }
-        }
-      }
-      final Iterator<Iterator<Directory.Entry<T>>> it = removeIterators.iterator();
-      while (it.hasNext()) {
-        final Iterator<Directory.Entry<T>> removeIterator = it.next();
-        while (removeIterator.hasNext()) {
-          final Directory.Entry<T> entry = removeIterator.next();
-          observers.onDelete(entry);
-          if (symlinkWatcher != null) {
-            symlinkWatcher.remove(entry.path);
+          final Iterator<Directory.Entry<T>> removeIterator = it.next();
+          while (removeIterator.hasNext()) {
+            final Directory.Entry<T> entry = removeIterator.next();
+            observers.onDelete(entry);
+            if (symlinkWatcher != null) {
+              symlinkWatcher.remove(entry.path);
+            }
           }
         }
       }

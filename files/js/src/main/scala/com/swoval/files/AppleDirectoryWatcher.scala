@@ -5,6 +5,7 @@ import com.swoval.files.DirectoryWatcher.Event.Delete
 import com.swoval.files.DirectoryWatcher.Event.Modify
 import com.swoval.files.apple.FileEvent
 import com.swoval.files.apple.FileEventsApi
+import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException
 import com.swoval.files.apple.FileEventsApi.Consumer
 import com.swoval.files.apple.Flags
 import java.nio.file.Files
@@ -139,15 +140,23 @@ class AppleDirectoryWatcher(private val latency: Double,
     if (Files.isDirectory(path) && path != path.getRoot) {
       val entry: Entry[Path, Stream] = find(path)
       if (entry == null) {
-        val id: Int =
-          fileEventsApi.createStream(path.toString, latency, flags.getValue)
-        if (id == -1) {
-          result = false
-          System.err.println("Error watching " + path + ".")
-        } else {
-          lock.synchronized {
-            streams.put(path, new Stream(path, id, maxDepth))
+        try {
+          val id: Int =
+            fileEventsApi.createStream(path.toString, latency, flags.getValue)
+          if (id == -1) {
+            result = false
+            System.err.println("Error watching " + path + ".")
+          } else {
+            lock.synchronized {
+              streams.put(path, new Stream(path, id, maxDepth))
+            }
           }
+        } catch {
+          case e: ClosedFileEventsApiException => {
+            close()
+            result = false
+          }
+
         }
       } else {
         val key: Path = entry.getKey

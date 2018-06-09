@@ -8,6 +8,7 @@ import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 import com.swoval.concurrent.ThreadFactory;
 import com.swoval.files.apple.FileEvent;
 import com.swoval.files.apple.FileEventsApi;
+import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
 import com.swoval.files.apple.FileEventsApi.Consumer;
 import com.swoval.files.apple.Flags;
 import java.io.IOException;
@@ -155,31 +156,38 @@ class MacOSXWatchService implements WatchService, AutoCloseable, Registerable {
   }
 
   public WatchKey register(final Path path, final WatchEvent.Kind<?>... kinds) throws IOException {
-    if (isOpen()) {
-      synchronized (registered) {
-        final Path realPath = path.toRealPath();
-        final MacOSXWatchKey key = registered.get(realPath);
-        final MacOSXWatchKey result;
-        if (key == null) {
-          final int flags = new Flags.Create().setNoDefer().setFileEvents().getValue();
-          int id = -2;
-          final Iterator<Path> it = streams.iterator();
-          while (it.hasNext() && id != -1) {
-            if (realPath.startsWith(it.next())) id = -1;
+    synchronized (watcher) {
+      if (isOpen()) {
+        synchronized (registered) {
+          final Path realPath = path.toRealPath();
+          final MacOSXWatchKey key = registered.get(realPath);
+          final MacOSXWatchKey result;
+          if (key == null) {
+            final int flags = new Flags.Create().setNoDefer().setFileEvents().getValue();
+            int id = -2;
+            final Iterator<Path> it = streams.iterator();
+            while (it.hasNext() && id != -1) {
+              if (realPath.startsWith(it.next())) id = -1;
+            }
+            if (id != -1) {
+              streams.add(realPath);
+              try {
+                id = watcher.createStream(realPath.toString(), watchLatency, flags);
+              } catch (ClosedFileEventsApiException e) {
+                close();
+                throw e;
+              }
+            }
+            result = new MacOSXWatchKey(this, realPath, queueSize, id, kinds);
+            registered.put(realPath, result);
+          } else {
+            result = key;
           }
-          if (id != -1) {
-            streams.add(realPath);
-            id = watcher.createStream(realPath.toString(), watchLatency, flags);
-          }
-          result = new MacOSXWatchKey(this, realPath, queueSize, id, kinds);
-          registered.put(realPath, result);
-        } else {
-          result = key;
+          return result;
         }
-        return result;
+      } else {
+        throw new ClosedWatchServiceException();
       }
-    } else {
-      throw new ClosedWatchServiceException();
     }
   }
 

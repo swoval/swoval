@@ -9,10 +9,8 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
-import java.nio.file.FileSystems;
 import java.nio.file.FileSystemLoopException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -20,7 +18,6 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
-import java.nio.file.WatchService;
 import java.nio.file.Watchable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -66,7 +63,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
         new Thread("NioDirectoryWatcher-loop-thread-" + threadId.incrementAndGet()) {
           @Override
           public void run() {
-            while (!isStopped.get()) {
+            while (!isStopped.get() && !Thread.currentThread().isInterrupted()) {
               try {
                 final WatchKey key = watchService.take();
                 final Iterator<WatchEvent<?>> it = key.pollEvents().iterator();
@@ -112,13 +109,16 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
         loopThread.join(5000);
       } catch (InterruptedException e) {
       }
-      synchronized (lock) {
+      lock.lock();
+      try {
         final Iterator<WatchedDir> it = watchedDirs.values().iterator();
         while (it.hasNext()) {
           WatchKey key = it.next().key;
           key.cancel();
           key.reset();
         }
+      } finally {
+        lock.unlock();
       }
     }
   }
@@ -176,7 +176,8 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
       boolean stop = false;
       while ((watchedDir != null && watchedDir.maxDepth > 0) && !stop) {
         try {
-          final Iterator<QuickFile> fileIterator = QuickList.list((Path) key.watchable(), watchedDir.maxDepth).iterator();
+          final Iterator<QuickFile> fileIterator =
+              QuickList.list((Path) key.watchable(), watchedDir.maxDepth).iterator();
           boolean registered = false;
           while (fileIterator.hasNext()) {
             final QuickFile file = fileIterator.next();
@@ -221,9 +222,9 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
 
   /**
    * Similar to register, but tracks all of the new files found in the directory. It polls the
-   * directory until the contents stop changing to ensure that a callback is fired for each path
-   * in the newly created directory (up to the maxDepth). The assumption is that once the callback
-   * is fired for the path, it is safe to assume that no event for a new file in the directory is
+   * directory until the contents stop changing to ensure that a callback is fired for each path in
+   * the newly created directory (up to the maxDepth). The assumption is that once the callback is
+   * fired for the path, it is safe to assume that no event for a new file in the directory is
    * missed. Without the polling, it would be possible that a new file was created in the directory
    * before we registered it with the watch service. If this happened, then no callback would be
    * invoked for that file.
@@ -335,7 +336,8 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     Path realPath = null;
     try {
       realPath = path.toRealPath();
-    } catch (IOException e) {}
+    } catch (IOException e) {
+    }
     final WatchedDir watchedDir = watchedDirs.remove(realPath == null ? path : realPath);
     if (watchedDir != null) {
       WatchKey key = watchedDir.key;
