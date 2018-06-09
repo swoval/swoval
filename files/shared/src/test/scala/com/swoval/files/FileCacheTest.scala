@@ -237,7 +237,8 @@ trait FileCacheTest extends TestSuite {
                   val deep = Files.createDirectory(nestedSubdir.resolve("deep"))
                   val deepFile = Files.createFile(deep.resolve("file"))
                   latch.waitFor(DEFAULT_TIMEOUT) {
-                    while (!Files.exists(deepFile)) {}
+                    var i = 0
+                    while (!Files.exists(deepFile) && i < 1000) { i += 1 }
                     val existing = FileOps.list(dir, true).asScala.map(_.toPath).toSet
                     existing === Set(subdir, nestedSubdir, file, deep, deepFile)
                     c.ls(dir) === Set(subdir, nestedSubdir, file, deep)
