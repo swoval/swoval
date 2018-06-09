@@ -1,52 +1,45 @@
 package com.swoval.files.apple
 
+import java.nio.file.{ Files => JFiles }
+
 import com.swoval.files.apple.FileEventsApi.Consumer
-import com.swoval.test.Implicits.executionContext
+import com.swoval.files.test.{ CountDownLatch, _ }
 import com.swoval.test._
 import utest._
-
-import scala.concurrent.Promise
-import scala.util.Try
 
 object FileEventApiTest extends TestSuite {
 
   def getFileEventsApi(onFileEvent: FileEvent => Unit, onStreamClosed: String => Unit = _ => {}) =
     FileEventsApi.apply(new Consumer[FileEvent] {
       override def accept(fe: FileEvent): Unit = onFileEvent(fe)
-    }, new Consumer[String] { override def accept(s: String): Unit = onStreamClosed(s) })
-  val tests = testOn(MacOS) {
-    'register - {
-      val promise = Promise[Unit]
-      val dir = platform.createTempDirectory()
-      var file: String = null
-      val api = getFileEventsApi(fe => {
-        platform.delete(file)
-        promise.tryComplete(Try(assert(fe.fileName.startsWith(dir))))
-      })
-      api.createStream(dir, 0.05, new Flags.Create().setNoDefer.getValue)
-      file = platform.createTempFile(dir, "register-test")
+    }, new Consumer[String] {
+      override def accept(s: String): Unit = onStreamClosed(s)
+    })
 
-      promise.future.andThen {
-        case _ =>
-          platform.delete(dir)
-          api.close()
-      }
-    }
-    'removeStream - {
-      val promise = Promise[Unit]
-      val dir = platform.createTempDirectory()
-      var subdir: String = null
-      val api = getFileEventsApi(_ => {}, s => {
-        platform.delete(s)
-        promise.tryComplete(Try(assert(s == subdir)))
+  val tests = testOn(MacOS) {
+    'register - withTempDirectory { dir =>
+      val latch = new CountDownLatch(1)
+      val file = dir.resolve("file")
+      val api = getFileEventsApi(fe => {
+        assert(fe.fileName.startsWith(dir.toString))
+        JFiles.deleteIfExists(file)
+        latch.countDown()
       })
-      subdir = platform.createTempSubdirectory(dir)
-      api.createStream(subdir, 0.05, new Flags.Create().setNoDefer.getValue)
-      api.createStream(dir, 0.05, new Flags.Create().setNoDefer.getValue)
-      promise.future.andThen {
-        case _ =>
-          platform.delete(dir)
-          api.close()
+      api.createStream(dir.toString, 0.05, new Flags.Create().setNoDefer.getValue)
+      JFiles.createFile(file)
+
+      latch.waitFor(DEFAULT_TIMEOUT) {}
+    }
+    'removeStream - withTempDirectory { dir =>
+      withTempDirectory(dir) { subdir =>
+        val latch = new CountDownLatch(1)
+        val api = getFileEventsApi(_ => {}, s => {
+          assert(s == subdir.toString)
+          latch.countDown()
+        })
+        api.createStream(subdir.toString, 0.05, new Flags.Create().setNoDefer.getValue)
+        api.createStream(dir.toString, 0.05, new Flags.Create().setNoDefer.getValue)
+        latch.waitFor(DEFAULT_TIMEOUT) {}
       }
     }
     'close - {
