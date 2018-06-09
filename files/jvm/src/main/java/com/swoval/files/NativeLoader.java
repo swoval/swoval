@@ -143,8 +143,7 @@ public class NativeLoader {
     }
   }
 
-  public static void loadPackaged()
-      throws IOException, UnsatisfiedLinkError {
+  public static void loadPackaged() throws IOException, UnsatisfiedLinkError {
     try {
       System.loadLibrary(NATIVE_LIBRARY);
     } catch (UnsatisfiedLinkError e) {

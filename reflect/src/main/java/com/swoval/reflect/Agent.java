@@ -7,16 +7,10 @@ import java.lang.instrument.Instrumentation;
  * loader. The only method is getInitiatedClasses, which delegates to
  * Instrumentation#getInitiatedClasses. It will typically be used recursively, e.g.
  *
- * <p>{{{
- *  ClassLoader loader = Thread.currentThread().getContextClassLoader();
- *  List<Class<?>> result = new ArrayList<>();
- *  while (loader != null) {
- *    for (Class<?> clazz : com.swoval.reflect.Agent.getInitiatedClass(loader)) {
- *      result.add(clazz);
- *    }
- *    loader = loader.getParent();
- *  }
- *  }}}
+ * <p>{{{ ClassLoader loader = Thread.currentThread().getContextClassLoader(); List<Class<?>> result
+ * = new ArrayList<>(); while (loader != null) { for (Class<?> clazz :
+ * com.swoval.reflect.Agent.getInitiatedClass(loader)) { result.add(clazz); } loader =
+ * loader.getParent(); } }}}
  */
 public class Agent {
   private static Instrumentation instrumentation = null;

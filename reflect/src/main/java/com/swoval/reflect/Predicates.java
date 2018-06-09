@@ -20,21 +20,23 @@ public class Predicates {
    * Predicate is initialized as part of ChildFirstClassLoader, which can be used as a startup class
    * loader).
    */
-  private static final Predicate<String> defaultParent = new Predicate<String>() {
-    @Override
-    public boolean test(String name) {
-      return name.equals("com.swoval.reflect.ChildFirstClassLoader")
-          || name.equals("com.swoval.reflect.Agent")
-          || name.equals("com.swoval.reflect.HotSwapClassLoader")
-          || name.equals("com.swoval.reflect.Predicates");
-    }
-  };
-  private static final Predicate<String> defaultChild = new Predicate<String>() {
-    @Override
-    public boolean test(String name) {
-      return false;
-    }
-  };
+  private static final Predicate<String> defaultParent =
+      new Predicate<String>() {
+        @Override
+        public boolean test(String name) {
+          return name.equals("com.swoval.reflect.ChildFirstClassLoader")
+              || name.equals("com.swoval.reflect.Agent")
+              || name.equals("com.swoval.reflect.HotSwapClassLoader")
+              || name.equals("com.swoval.reflect.Predicates");
+        }
+      };
+  private static final Predicate<String> defaultChild =
+      new Predicate<String>() {
+        @Override
+        public boolean test(String name) {
+          return false;
+        }
+      };
 
   public static Predicates defaultPredicates() {
     return new Predicates(defaultParent, defaultChild);
@@ -45,16 +47,12 @@ public class Predicates {
     this.forceChild = forceChild;
   }
 
-  /**
-   * Getter for the forceParent Predicate.
-   */
+  /** Getter for the forceParent Predicate. */
   public Predicate<String> getForceParent() {
     return forceParent;
   }
 
-  /**
-   * Getter for the forceChild Predicate.
-   */
+  /** Getter for the forceChild Predicate. */
   public Predicate<String> getForceChild() {
     return forceChild;
   }

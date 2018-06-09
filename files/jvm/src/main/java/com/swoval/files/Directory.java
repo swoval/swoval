@@ -66,6 +66,7 @@ public class Directory<T> implements AutoCloseable {
 
     /**
      * Convert the path to a value
+     *
      * @param path The path to convert
      * @return The value
      * @throws IOException when the value can't be computed
@@ -173,7 +174,7 @@ public class Directory<T> implements AutoCloseable {
    *     it is a directory. For an existing path, the List contains a single Update that contains
    *     the previous and new {@link Directory.Entry}
    * @throws IOException when the updated Path is a directory and an IOException is encountered
-   * traversing the directory.
+   *     traversing the directory.
    */
   public List<Entry<T>[]> addUpdate(final Path path, final int kind) throws IOException {
     return !path.isAbsolute()
@@ -531,6 +532,7 @@ public class Directory<T> implements AutoCloseable {
 
     /**
      * Compute the underlying file type for the path.
+     *
      * @param path The path whose type is to be determined.
      * @param attrs The attributes of the ile
      * @return The file type of the path
@@ -543,6 +545,7 @@ public class Directory<T> implements AutoCloseable {
 
     /**
      * Compute the underlying file type for the path.
+     *
      * @param path The path whose type is to be determined.
      * @return The file type of the path
      * @throws IOException if the path can't be opened
@@ -670,12 +673,14 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * Callback to fire when an error is encountered. This will generally be a {@link java.nio.file.FileSystemLoopException}.
+   * Callback to fire when an error is encountered. This will generally be a {@link
+   * java.nio.file.FileSystemLoopException}.
    */
   public interface OnError {
 
     /**
      * Apply callback for error
+     *
      * @param path The path that induced the error
      * @param exception The encountered error
      */

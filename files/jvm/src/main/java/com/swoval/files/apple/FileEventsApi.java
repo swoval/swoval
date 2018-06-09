@@ -55,28 +55,32 @@ public class FileEventsApi implements AutoCloseable {
         new Runnable() {
           @Override
           public void run() {
-            final Consumer<FileEvent> eventConsumer = new Consumer<FileEvent>() {
-              @Override
-              public void accept(final FileEvent fileEvent) {
-                executor.submit(new Runnable() {
+            final Consumer<FileEvent> eventConsumer =
+                new Consumer<FileEvent>() {
                   @Override
-                  public void run() {
-                    c.accept(fileEvent);
+                  public void accept(final FileEvent fileEvent) {
+                    executor.submit(
+                        new Runnable() {
+                          @Override
+                          public void run() {
+                            c.accept(fileEvent);
+                          }
+                        });
                   }
-                });
-              }
-            };
-            final Consumer<String> streamConsumer = new Consumer<String>() {
-              @Override
-              public void accept(final String s) {
-                executor.submit(new Runnable() {
+                };
+            final Consumer<String> streamConsumer =
+                new Consumer<String>() {
                   @Override
-                  public void run() {
-                    pc.accept(s);
+                  public void accept(final String s) {
+                    executor.submit(
+                        new Runnable() {
+                          @Override
+                          public void run() {
+                            pc.accept(s);
+                          }
+                        });
                   }
-                });
-              }
-            };
+                };
             FileEventsApi.this.handle = FileEventsApi.init(eventConsumer, streamConsumer);
             latch.countDown();
             loop();

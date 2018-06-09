@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Container class that wraps multiple {@link Observer} and runs the callbacks for each whenever the
  * {@link FileCache} detects an event.
+ *
  * @param <T> The data type for the {@link FileCache} to which the observers correspond
  */
 class Observers<T> implements Observer<T>, AutoCloseable {
@@ -84,6 +85,7 @@ class Observers<T> implements Observer<T>, AutoCloseable {
 
   /**
    * Simple observer that fires the same callback for all regular events and ignores any errors.
+   *
    * @param onchange The callback to fire when a file is created/updated/deleted
    * @param <T> The generic type of the {@link Directory.Entry}
    * @return An {@link Observer} instance
@@ -106,13 +108,15 @@ class Observers<T> implements Observer<T>, AutoCloseable {
       }
 
       @Override
-      public void onError(final Path path, final IOException e) {
-      }
+      public void onError(final Path path, final IOException e) {}
     };
   }
 
   public static <T> Observer<T> apply(
-      final OnChange<T> oncreate, final OnUpdate<T> onupdate, final OnChange<T> ondelete, final OnError onerror) {
+      final OnChange<T> oncreate,
+      final OnUpdate<T> onupdate,
+      final OnChange<T> ondelete,
+      final OnError onerror) {
     return new Observer<T>() {
       @Override
       public void onCreate(final Entry<T> newEntry) {

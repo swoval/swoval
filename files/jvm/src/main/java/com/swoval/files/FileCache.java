@@ -278,7 +278,9 @@ class FileCacheImpl<T> extends FileCache<T> {
             } else {
               handleEvent(path);
             }
-          } finally { lock.unlock(); }
+          } finally {
+            lock.unlock();
+          }
         }
       };
   private final DirectoryWatcher watcher;
