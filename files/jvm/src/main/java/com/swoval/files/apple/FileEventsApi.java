@@ -3,9 +3,12 @@ package com.swoval.files.apple;
 import com.swoval.concurrent.ThreadFactory;
 import com.swoval.files.NativeLoader;
 import java.io.IOException;
+import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -37,7 +40,12 @@ public class FileEventsApi implements AutoCloseable {
 
   private long handle;
   private final ExecutorService executor =
-      Executors.newSingleThreadExecutor(
+      new ThreadPoolExecutor(
+          2,
+          10,
+          5,
+          TimeUnit.SECONDS,
+          new LinkedBlockingDeque<Runnable>(8192),
           new ThreadFactory("com.swoval.files.apple.FileEventsApi.run-loop-thread"));
 
   private FileEventsApi(final Consumer<FileEvent> c, final Consumer<String> pc)
@@ -47,7 +55,29 @@ public class FileEventsApi implements AutoCloseable {
         new Runnable() {
           @Override
           public void run() {
-            FileEventsApi.this.handle = FileEventsApi.init(c, pc);
+            final Consumer<FileEvent> eventConsumer = new Consumer<FileEvent>() {
+              @Override
+              public void accept(final FileEvent fileEvent) {
+                executor.submit(new Runnable() {
+                  @Override
+                  public void run() {
+                    c.accept(fileEvent);
+                  }
+                });
+              }
+            };
+            final Consumer<String> streamConsumer = new Consumer<String>() {
+              @Override
+              public void accept(final String s) {
+                executor.submit(new Runnable() {
+                  @Override
+                  public void run() {
+                    pc.accept(s);
+                  }
+                });
+              }
+            };
+            FileEventsApi.this.handle = FileEventsApi.init(eventConsumer, streamConsumer);
             latch.countDown();
             loop();
           }
