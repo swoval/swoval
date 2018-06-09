@@ -2,7 +2,7 @@ package com.swoval.files
 
 import java.io.IOException
 import java.nio.file.attribute.FileTime
-import java.nio.file.{ FileSystemLoopException, Files, Path => JPath }
+import java.nio.file.{ FileSystem, FileSystemLoopException, Files, Path => JPath }
 
 import com.swoval.files.Directory._
 import com.swoval.files.EntryOps._
@@ -20,6 +20,7 @@ import scala.util.Failure
 
 trait FileCacheTest extends TestSuite {
   def factory: DirectoryWatcher.Factory
+  def boundedFactory: DirectoryWatcher.Factory
   def identity: Converter[JPath] = (p: JPath) => p
   def simpleCache(f: Entry[JPath] => Unit): FileCache[JPath] =
     FileCache.apply(((p: JPath) => p): Converter[JPath],
@@ -133,7 +134,7 @@ trait FileCacheTest extends TestSuite {
             (_: Entry[JPath]) => deletionLatch.countDown(),
             (_: JPath, _: IOException) => {}
           )
-          usingAsync(FileCache.apply[JPath](identity, factory, observer)) { c =>
+          usingAsync(FileCache.apply[JPath](identity, boundedFactory, observer)) { c =>
             c.reg(dir)
             executor.run(new Runnable {
               override def run(): Unit = {
@@ -699,6 +700,7 @@ object FileCacheTest {
 
 object DefaultFileCacheTest extends FileCacheTest {
   val factory = DirectoryWatcher.DEFAULT_FACTORY
+  val boundedFactory = factory
   val tests = testsImpl
 }
 
@@ -706,6 +708,12 @@ object NioFileCacheTest extends FileCacheTest {
   val factory = new DirectoryWatcher.Factory {
     override def create(callback: DirectoryWatcher.Callback): DirectoryWatcher =
       new NioDirectoryWatcher(callback)
+  }
+  val boundedFactory = new DirectoryWatcher.Factory {
+    override def create(callback: DirectoryWatcher.Callback): DirectoryWatcher =
+      new NioDirectoryWatcher(callback,
+                              new BoundedWatchService(16, WatchService.newWatchService()),
+                              8096 * 10)
   }
   val tests =
     if (Platform.isJVM && Platform.isMac) testsImpl

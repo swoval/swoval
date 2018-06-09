@@ -9,6 +9,7 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
+import com.swoval.concurrent.ThreadFactory;
 import com.swoval.files.apple.MacOSXWatchService;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
@@ -28,6 +29,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -42,6 +46,8 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
   private final AtomicBoolean isStopped = new AtomicBoolean(false);
   private final CountDownLatch shutdownLatch = new CountDownLatch(1);
   private static final AtomicInteger threadId = new AtomicInteger(0);
+  private static final int DEFAULT_QUEUE_SIZE = 8096;
+  private final java.util.concurrent.ExecutorService callbackExecutor;
 
   /**
    * Instantiate a NioDirectoryWatch using the default {@link Registerable}.
@@ -49,7 +55,10 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    * @param callback The callback to invoke on a created/deleted/modified path
    */
   public NioDirectoryWatcher(final Callback callback) throws IOException, InterruptedException {
-    this(callback, Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchService());
+    this(
+        callback,
+        Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchService(),
+        DEFAULT_QUEUE_SIZE);
   }
 
   /**
@@ -59,7 +68,27 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    * @param watchService The underlying watchservice that is used to monitor directories for events
    */
   public NioDirectoryWatcher(final Callback callback, final Registerable watchService) {
+    this(callback, watchService, DEFAULT_QUEUE_SIZE);
+  }
+
+  /**
+   * Instantiate a NioDirectoryWatch with provided {@link Registerable} and a queue size limit.
+   *
+   * @param callback The callback to invoke on a created/deleted/modified path
+   * @param watchService The underlying watchservice that is used to monitor directories for events
+   * @param queueSize The size of the callback executor. This should be used primarily in testing
+   */
+  NioDirectoryWatcher(
+      final Callback callback, final Registerable watchService, final int queueSize) {
     this.watchService = watchService;
+    this.callbackExecutor =
+        new ThreadPoolExecutor(
+            1,
+            1,
+            5,
+            TimeUnit.SECONDS,
+            new LinkedBlockingDeque<Runnable>(queueSize),
+            new ThreadFactory("NioDirectoryWatcher-callback-thread"));
     loopThread =
         new Thread("NioDirectoryWatcher-loop-thread-" + threadId.incrementAndGet()) {
           @Override
@@ -77,13 +106,21 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
                           : k.equals(ENTRY_CREATE)
                               ? Create
                               : k.equals(OVERFLOW) ? Overflow : Modify;
-                  if (!kind.equals(Overflow)) {
-                    final Path path = ((Path) key.watchable()).resolve((Path) e.context());
-                    handleEvent(callback, path, key, kind);
-                  } else {
-                    handleOverflow(callback, key);
-                  }
+                  callbackExecutor.execute(
+                      new Runnable() {
+                        @Override
+                        public void run() {
+                          if (!kind.equals(Overflow)) {
+                            final Path path = ((Path) key.watchable()).resolve((Path) e.context());
+                            handleEvent(callback, path, key, kind);
+                          } else {
+                            handleOverflow(callback, key);
+                          }
+                        }
+                      });
                 }
+              } catch (RejectedExecutionException e) {
+                if (!isStopped.get()) throw e;
               } catch (ClosedWatchServiceException | InterruptedException e) {
                 isStopped.set(true);
               }
@@ -101,6 +138,8 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     if (isStopped.compareAndSet(false, true)) {
       super.close();
       try {
+        callbackExecutor.shutdownNow();
+        callbackExecutor.awaitTermination(5, TimeUnit.SECONDS);
         loopThread.interrupt();
         try {
           watchService.close();
