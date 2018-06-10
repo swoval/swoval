@@ -146,7 +146,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     final Set<Path> newFiles = new HashSet<>();
     if (Files.isDirectory(path)) {
       WatchedDir watchedDir = watchedDirs.get(keyPath);
-      if (watchedDir != null && watchedDir.accept(path)) {
+      if (watchedDir != null && watchedDir.accept(path) && !watchedDirs.containsKey(path)) {
         add(
             path,
             watchedDir.maxDepth - (watchedDir.maxDepth == Integer.MAX_VALUE ? 0 : 1),
