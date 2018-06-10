@@ -1,13 +1,12 @@
-package com.swoval.files
+package com.swoval.files.apple
 
 import com.swoval.files.DirectoryWatcher.Event.Create
 import com.swoval.files.DirectoryWatcher.Event.Delete
 import com.swoval.files.DirectoryWatcher.Event.Modify
-import com.swoval.files.apple.FileEvent
-import com.swoval.files.apple.FileEventsApi
+import com.swoval.files.DirectoryWatcher
+import com.swoval.files.Executor
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException
 import com.swoval.files.apple.FileEventsApi.Consumer
-import com.swoval.files.apple.Flags
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -220,7 +219,7 @@ class AppleDirectoryWatcher(private val latency: Double,
   def this(latency: Double, flags: Flags.Create, onFileEvent: DirectoryWatcher.Callback) =
     this(latency,
          flags,
-         Executor.make("com.swoval.files.AppleDirectoryWatcher.executorThread"),
+         Executor.make("com.swoval.files.apple.AppleDirectoryWatcher.executorThread"),
          onFileEvent,
          DefaultOnStreamRemoved)
 

@@ -18,6 +18,7 @@ private[files] object Observers {
 
   /**
    * Simple observer that fires the same callback for all regular events and ignores any errors.
+   *
    * @param onchange The callback to fire when a file is created/updated/deleted
    * @tparam T The generic type of the [[Directory.Entry]]
    * @return An [[Observer]] instance
@@ -64,6 +65,7 @@ private[files] object Observers {
 /**
  * Container class that wraps multiple [[Observer]] and runs the callbacks for each whenever the
  * [[FileCache]] detects an event.
+ *
  * @tparam T The data type for the [[FileCache]] to which the observers correspond
  */
 private[files] class Observers[T] extends Observer[T] with AutoCloseable {

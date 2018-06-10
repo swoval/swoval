@@ -5,7 +5,7 @@ import java.nio.charset.Charset
 import java.nio.file.attribute.FileTime
 import java.nio.file.{ Files, NoSuchFileException, Path }
 
-import com.swoval.files.AppleDirectoryWatcher.OnStreamRemoved
+import com.swoval.files.apple.AppleDirectoryWatcher.OnStreamRemoved
 import com.swoval.files.Directory._
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.test._

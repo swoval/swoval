@@ -4,10 +4,10 @@ import java.nio.file.attribute.FileTime
 import java.util.concurrent.{ TimeUnit, TimeoutException }
 import java.nio.file.{ Files => JFiles }
 
-import com.swoval.files.AppleDirectoryWatcher.OnStreamRemoved
+import com.swoval.files.apple.AppleDirectoryWatcher.OnStreamRemoved
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.DirectoryWatcher.Event.{ Create, Delete, Modify }
-import com.swoval.files.apple.Flags
+import com.swoval.files.apple.{ AppleDirectoryWatcher, Flags }
 import com.swoval.files.test.{ ArrayBlockingQueue, _ }
 import com.swoval.test._
 import utest._

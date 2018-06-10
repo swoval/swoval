@@ -3,10 +3,8 @@ package com.swoval.files.apple;
 import com.swoval.concurrent.ThreadFactory;
 import com.swoval.files.NativeLoader;
 import java.io.IOException;
-import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -17,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * when a file event is created and the other to run when the underlying native implementation
  * removes a redundant stream from monitoring. This class is low level and users should generally
  * prefer {@link com.swoval.files.DirectoryWatcher} or {@link
- * com.swoval.files.AppleDirectoryWatcher} if the code is only ever run on OSX.
+ * AppleDirectoryWatcher} if the code is only ever run on OSX.
  *
  * @see <a href="https://developer.apple.com/documentation/coreservices/file_system_events"
  *     target="_blank"></a>

@@ -380,7 +380,6 @@ object Build {
             Def.task {
               convertSources(
                 "com/swoval/files",
-                "AppleDirectoryWatcher",
                 "Directory",
                 "DirectoryWatcher",
                 "EntryFilters",
@@ -394,7 +393,11 @@ object Build {
                 "Registerable",
                 "SymlinkWatcher"
               ).value
-              convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
+              convertSources("com/swoval/files/apple",
+                             "AppleDirectoryWatcher",
+                             "Event",
+                             "FileEvent",
+                             "Flags").value
             }
           },
           scalafmt in Compile,
@@ -420,7 +423,7 @@ object Build {
         "com.swoval.files.apple.Event*",
         "com.swoval.files.apple.Flag*",
         "com.swoval.files.apple.Native*"
-      ),
+      ) ++ (if (!Properties.isMac) Some("com.swoval.files.apple.*") else None),
       javacOptions in (Compile, doc) := Nil,
       crossScalaVersions := scalaCrossVersions,
       crossPaths := false,
