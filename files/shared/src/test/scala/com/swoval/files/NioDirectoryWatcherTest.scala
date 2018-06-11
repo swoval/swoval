@@ -226,21 +226,16 @@ object NioDirectoryWatcherTest extends TestSuite {
     'executorOverflow - withTempDirectory { dir =>
       val latch = new CountDownLatch(1)
       val secondLatch = new CountDownLatch(1)
-      var continue = true
+      val executor = new TestExecutor("backedup-test-executor-thread")
       val callback: DirectoryWatcher.Callback = (e: DirectoryWatcher.Event) => {
         if (latch.getCount > 0) {
+          executor.overflow()
           latch.countDown()
-          if (Platform.isJVM) {
-            while (continue) 1.millisecond.sleep
-          }
         } else {
           secondLatch.countDown()
         }
       }
-      usingAsync(
-        new NioDirectoryWatcher(callback,
-                                WatchService.newWatchService(),
-                                new TestExecutor("backedup-test-executor-thread"))) { w =>
+      usingAsync(new NioDirectoryWatcher(callback, WatchService.newWatchService(), executor)) { w =>
         w.register(dir, 0)
         val otherFile = dir.resolve("other-file")
         val file = dir.resolve("file").createFile()
@@ -248,7 +243,7 @@ object NioDirectoryWatcherTest extends TestSuite {
           .waitFor(DEFAULT_TIMEOUT) {
             otherFile.createFile()
             100.milliseconds.sleep
-            continue = false
+            executor.clear()
           }
           .flatMap { _ =>
             secondLatch.waitFor(DEFAULT_TIMEOUT * 2) {}

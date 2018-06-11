@@ -114,7 +114,7 @@ trait FileCacheTest extends TestSuite {
           val subdirsToAdd = if (System.getProperty("java.vm.name", "") == "Scala.js") {
             if (Platform.isWin) 5 else 50
           } else 200
-          val timeout = DEFAULT_TIMEOUT * 60
+          val timeout = DEFAULT_TIMEOUT * 5
           val filesPerSubdir = 4
           val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
           val creationLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
