@@ -1,18 +1,21 @@
-package com.swoval.files
+package com.swoval.files.apple
 
 import com.swoval.files.DirectoryWatcher.Event.Create
 import com.swoval.files.DirectoryWatcher.Event.Delete
 import com.swoval.files.DirectoryWatcher.Event.Modify
-import com.swoval.files.apple.FileEvent
-import com.swoval.files.apple.FileEventsApi
+import com.swoval.concurrent.Lock
+import com.swoval.files.DirectoryWatcher
+import com.swoval.files.Executor
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException
 import com.swoval.files.apple.FileEventsApi.Consumer
-import com.swoval.files.apple.Flags
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.ArrayList
 import java.util.HashMap
 import java.util.Iterator
+import java.util.List
 import java.util.Map
 import java.util.Map.Entry
 import java.util.concurrent.atomic.AtomicBoolean
@@ -23,15 +26,19 @@ object AppleDirectoryWatcher {
   private val DefaultOnStreamRemoved: DefaultOnStreamRemoved =
     new DefaultOnStreamRemoved()
 
-  private class Stream(path: Path, val id: Int, val maxDepth: Int) {
+  private class Stream(val path: Path, val id: Int, val maxDepth: Int) {
 
     private val compDepth: Int =
       if (maxDepth == java.lang.Integer.MAX_VALUE) maxDepth else maxDepth + 1
 
-    def accept(base: Path, child: Path): Boolean = {
-      val depth: Int = base.relativize(child).getNameCount
+    def accept(child: Path): Boolean = {
+      val depth: Int =
+        if (child.startsWith(path)) path.relativize(child).getNameCount
+        else java.lang.Integer.MAX_VALUE
       depth <= compDepth
     }
+
+    override def toString(): String = "Stream(" + path + ", " + maxDepth + ")"
 
   }
 
@@ -65,9 +72,9 @@ class AppleDirectoryWatcher(private val latency: Double,
 
   private val streams: Map[Path, Stream] = new HashMap()
 
-  private val lock: AnyRef = new AnyRef()
-
   private val closed: AtomicBoolean = new AtomicBoolean(false)
+
+  private val lock: Lock = new Lock()
 
   private val fileEventsApi: FileEventsApi = FileEventsApi.apply(
     new Consumer[FileEvent]() {
@@ -83,7 +90,7 @@ class AppleDirectoryWatcher(private val latency: Double,
               val entry: Entry[Path, Stream] = it.next()
               val key: Path = entry.getKey
               val stream: Stream = entry.getValue
-              validKey = path == key || stream.accept(key, path)
+              validKey = path == key || stream.accept(path)
             }
             if (validKey) {
               var event: DirectoryWatcher.Event = null
@@ -107,10 +114,11 @@ class AppleDirectoryWatcher(private val latency: Double,
       override def accept(stream: String): Unit = {
         executor.run(new Runnable() {
           override def run(): Unit = {
-            lock.synchronized {
-              streams.remove(stream)
+            if (lock.lock()) {
+              try streams.remove(Paths.get(stream))
+              finally lock.unlock()
+              onStreamRemoved.apply(stream)
             }
-            onStreamRemoved.apply(stream)
           }
         })
       }
@@ -137,50 +145,77 @@ class AppleDirectoryWatcher(private val latency: Double,
    */
   def register(path: Path, flags: Flags.Create, maxDepth: Int): Boolean = {
     var result: Boolean = true
-    if (Files.isDirectory(path) && path != path.getRoot) {
-      val entry: Entry[Path, Stream] = find(path)
-      if (entry == null) {
-        try {
-          val id: Int =
-            fileEventsApi.createStream(path.toString, latency, flags.getValue)
-          if (id == -1) {
-            result = false
-            System.err.println("Error watching " + path + ".")
-          } else {
-            lock.synchronized {
-              streams.put(path, new Stream(path, id, maxDepth))
-            }
-          }
-        } catch {
-          case e: ClosedFileEventsApiException => {
-            close()
-            result = false
-          }
+    var realPath: Path = null
+    try realPath = path.toRealPath()
+    catch {
+      case e: IOException => result = false
 
+    }
+    if (lock.lock()) {
+      try if (result && Files.isDirectory(realPath) && realPath != realPath.getRoot) {
+        val entry: Entry[Path, Stream] = find(realPath)
+        if (entry == null) {
+          try {
+            val id: Int = fileEventsApi.createStream(realPath.toString, latency, flags.getValue)
+            if (id == -1) {
+              result = false
+              System.err.println("Error watching " + realPath + ".")
+            } else {
+              val newMaxDepth: Int = removeRedundantStreams(realPath, maxDepth)
+              streams.put(realPath, new Stream(realPath, id, newMaxDepth))
+            }
+          } catch {
+            case e: ClosedFileEventsApiException => {
+              close()
+              result = false
+            }
+
+          }
+        } else {
+          val key: Path = entry.getKey
+          val stream: Stream = entry.getValue
+          val depth: Int =
+            if (key == realPath) 0 else key.relativize(realPath).getNameCount
+          val newMaxDepth: Int = removeRedundantStreams(key, maxDepth)
+          if (newMaxDepth != stream.maxDepth && stream.maxDepth >= depth) {
+            streams.put(key, new Stream(key, stream.id, newMaxDepth))
+          } else {
+            streams.put(realPath, new Stream(realPath, -1, maxDepth))
+          }
         }
-      } else {
-        val key: Path = entry.getKey
-        val stream: Stream = entry.getValue
+      } finally lock.unlock()
+    } else {
+      result = false
+    }
+    result
+  }
+
+  private def removeRedundantStreams(path: Path, maxDepth: Int): Int = {
+    val toRemove: List[Path] = new ArrayList[Path]()
+    val it: Iterator[Entry[Path, Stream]] = streams.entrySet().iterator()
+    var newMaxDepth: Int = maxDepth
+    while (it.hasNext) {
+      val e: Entry[Path, Stream] = it.next()
+      val key: Path = e.getKey
+      if (key.startsWith(path) && key != path) {
+        val stream: Stream = e.getValue
         val depth: Int =
           if (key == path) 0 else key.relativize(path).getNameCount
-        var newMaxDepth: Int = 0
-        if (maxDepth == java.lang.Integer.MAX_VALUE || stream.maxDepth == java.lang.Integer.MAX_VALUE) {
-          newMaxDepth = java.lang.Integer.MAX_VALUE
-        } else {
-          val diff: Int = maxDepth - stream.maxDepth + depth
-          newMaxDepth =
-            if (diff > 0)
-              (if (stream.maxDepth < java.lang.Integer.MAX_VALUE - diff)
-                 stream.maxDepth + diff
-               else java.lang.Integer.MAX_VALUE)
-            else stream.maxDepth
-        }
-        if (newMaxDepth != stream.maxDepth) {
-          streams.put(key, new Stream(path, stream.id, newMaxDepth))
+        if (depth <= newMaxDepth) {
+          toRemove.add(stream.path)
+          if (stream.maxDepth > newMaxDepth - depth) {
+            val diff: Int = stream.maxDepth - newMaxDepth + depth
+            newMaxDepth =
+              if (newMaxDepth < java.lang.Integer.MAX_VALUE - diff)
+                newMaxDepth + diff
+              else java.lang.Integer.MAX_VALUE
+          }
         }
       }
     }
-    result
+    val pathIterator: Iterator[Path] = toRemove.iterator()
+    while (pathIterator.hasNext) unregister(pathIterator.next())
+    newMaxDepth
   }
 
   /**
@@ -189,8 +224,8 @@ class AppleDirectoryWatcher(private val latency: Double,
    * @param path The directory to remove from monitoring
    */
   override def unregister(path: Path): Unit = {
-    lock.synchronized {
-      if (!closed.get) {
+    if (lock.lock()) {
+      try if (!closed.get) {
         val stream: Stream = streams.remove(path)
         if (stream != null && stream.id != -1) {
           executor.run(new Runnable() {
@@ -199,7 +234,7 @@ class AppleDirectoryWatcher(private val latency: Double,
             }
           })
         }
-      }
+      } finally lock.unlock()
     }
   }
 
@@ -209,18 +244,19 @@ class AppleDirectoryWatcher(private val latency: Double,
   override def close(): Unit = {
     if (closed.compareAndSet(false, true)) {
       super.close()
-      lock.synchronized {
-        streams.clear()
+      if (lock.lock()) {
+        try streams.clear()
+        finally lock.unlock()
+        fileEventsApi.close()
+        executor.close()
       }
-      fileEventsApi.close()
-      executor.close()
     }
   }
 
   def this(latency: Double, flags: Flags.Create, onFileEvent: DirectoryWatcher.Callback) =
     this(latency,
          flags,
-         Executor.make("com.swoval.files.AppleDirectoryWatcher.executorThread"),
+         Executor.make("com.swoval.files.apple.AppleDirectoryWatcher.executorThread"),
          onFileEvent,
          DefaultOnStreamRemoved)
 

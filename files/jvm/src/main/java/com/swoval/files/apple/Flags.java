@@ -2,7 +2,10 @@ package com.swoval.files.apple;
 
 /**
  * The flags for creating a file event stream
- * @see <a href="https://developer.apple.com/documentation/coreservices/1455376-fseventstreamcreateflags" target="_blank">FSEventStreamCreateFlags</a>
+ *
+ * @see <a
+ *     href="https://developer.apple.com/documentation/coreservices/1455376-fseventstreamcreateflags"
+ *     target="_blank">FSEventStreamCreateFlags</a>
  */
 public class Flags {
 

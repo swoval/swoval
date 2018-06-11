@@ -55,7 +55,6 @@ public abstract class QuickList {
     return INSTANCE.list(path, maxDepth, true);
   }
 
-
   /**
    * Lists the files and directories in {@code path} following symbolic links. When {@code
    * followLinks} is true, for a symbolic link to a directory, the results will contain the children

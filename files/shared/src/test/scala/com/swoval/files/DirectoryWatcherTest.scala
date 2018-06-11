@@ -1,17 +1,17 @@
 package com.swoval.files
 
 import java.nio.file.attribute.FileTime
-import java.util.concurrent.{ TimeUnit, TimeoutException }
 import java.nio.file.{ Files => JFiles }
+import java.util.concurrent.{ TimeUnit, TimeoutException }
 
-import com.swoval.files.AppleDirectoryWatcher.OnStreamRemoved
 import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.DirectoryWatcher.Event.{ Create, Delete, Modify }
-import com.swoval.files.apple.Flags
+import com.swoval.files.apple.AppleDirectoryWatcher.OnStreamRemoved
+import com.swoval.files.apple.{ AppleDirectoryWatcher, Flags }
 import com.swoval.files.test.{ ArrayBlockingQueue, _ }
+import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
 import utest._
-import Implicits.executionContext
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -135,20 +135,100 @@ object DirectoryWatcherTest extends TestSuite {
             w.register(dir, 0)
             val file = subdir.resolve(Path("foo")).createFile()
             events
-              .poll(10.milliseconds) { _ =>
+              .poll(100.milliseconds) { _ =>
                 throw new IllegalStateException(
                   "Event triggered for file that shouldn't be monitored")
               }
               .recoverWith {
                 case _: TimeoutException =>
                   w.register(dir, 1)
-                  JFiles.setLastModifiedTime(file, FileTime.fromMillis(3000))
+                  file.setLastModifiedTime(3000)
                   events.poll(DEFAULT_TIMEOUT) { e =>
                     e.path ==> file
                     e.path.lastModified ==> 3000
                   }
 
               }
+          }
+        }
+      }
+      'holes - {
+        'connect - withTempDirectory { dir =>
+          withTempDirectory(dir) { subdir =>
+            withTempDirectory(subdir) { secondSubdir =>
+              withTempDirectory(secondSubdir) { thirdSubdir =>
+                val subdirEvents = new ArrayBlockingQueue[DirectoryWatcher.Event](1)
+                val callback: Callback = (e: DirectoryWatcher.Event) => {
+                  if (e.path.endsWith("foo")) events.add(e)
+                  if (e.path.endsWith("bar")) subdirEvents.add(e)
+                }
+                usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
+                  w.register(dir, 0)
+                  w.register(secondSubdir, 0)
+                  val file = thirdSubdir.resolve("foo").createFile()
+                  events
+                    .poll(100.milliseconds) { _ =>
+                      throw new IllegalStateException(
+                        "Event triggered for file that shouldn't be monitored")
+                    }
+                    .recoverWith {
+                      case _: TimeoutException =>
+                        w.register(dir, 3)
+                        file.setLastModifiedTime(3000)
+                        events
+                          .poll(DEFAULT_TIMEOUT) { e =>
+                            e.path ==> file
+                            e.path.lastModified ==> 3000
+                          }
+                          .flatMap { _ =>
+                            val subdirFile = subdir.resolve("bar").createFile()
+                            subdirEvents.poll(DEFAULT_TIMEOUT) { e =>
+                              e.path ==> subdirFile
+                            }
+                          }
+                    }
+                }
+              }
+            }
+          }
+        }
+        'extend - withTempDirectory { dir =>
+          withTempDirectory(dir) { subdir =>
+            withTempDirectory(subdir) { secondSubdir =>
+              withTempDirectory(secondSubdir) { thirdSubdir =>
+                val subdirEvents = new ArrayBlockingQueue[DirectoryWatcher.Event](1)
+                val callback: Callback = (e: DirectoryWatcher.Event) => {
+                  if (e.path.endsWith("foo")) events.add(e)
+                  if (e.path.endsWith("bar")) subdirEvents.add(e)
+                }
+                usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
+                  w.register(dir, 0)
+                  w.register(secondSubdir, 1)
+                  val file = subdir.resolve("foo").createFile()
+                  events
+                    .poll(100.milliseconds) { _ =>
+                      throw new IllegalStateException(
+                        "Event triggered for file that shouldn't be monitored")
+                    }
+                    .recoverWith {
+                      case _: TimeoutException =>
+                        w.register(dir, 2)
+                        JFiles.setLastModifiedTime(file, FileTime.fromMillis(3000))
+                        events
+                          .poll(DEFAULT_TIMEOUT) { e =>
+                            e.path ==> file
+                            e.path.lastModified ==> 3000
+                          }
+                          .flatMap { _ =>
+                            val subdirFile = subdir.resolve("bar").createFile()
+                            subdirEvents.poll(DEFAULT_TIMEOUT) { e =>
+                              e.path ==> subdirFile
+                            }
+                          }
+                    }
+                }
+              }
+            }
           }
         }
       }

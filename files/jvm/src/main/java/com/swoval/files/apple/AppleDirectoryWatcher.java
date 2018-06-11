@@ -1,19 +1,22 @@
-package com.swoval.files;
+package com.swoval.files.apple;
 
 import static com.swoval.files.DirectoryWatcher.Event.Create;
 import static com.swoval.files.DirectoryWatcher.Event.Delete;
 import static com.swoval.files.DirectoryWatcher.Event.Modify;
 
-import com.swoval.files.apple.FileEvent;
-import com.swoval.files.apple.FileEventsApi;
+import com.swoval.concurrent.Lock;
+import com.swoval.files.DirectoryWatcher;
+import com.swoval.files.Executor;
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
 import com.swoval.files.apple.FileEventsApi.Consumer;
-import com.swoval.files.apple.Flags;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -25,8 +28,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class AppleDirectoryWatcher extends DirectoryWatcher {
   private final Map<Path, Stream> streams = new HashMap<>();
-  private final Object lock = new Object();
   private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final Lock lock = new Lock();
   private final double latency;
   private final Executor executor;
   private final Flags.Create flags;
@@ -36,17 +39,25 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
   private static class Stream {
     public final int id;
     public final int maxDepth;
+    public final Path path;
     private final int compDepth;
 
     Stream(final Path path, final int id, final int maxDepth) {
+      this.path = path;
       this.id = id;
       this.maxDepth = maxDepth;
       compDepth = maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth + 1;
     }
 
-    public boolean accept(final Path base, final Path child) {
-      final int depth = base.relativize(child).getNameCount();
+    public boolean accept(final Path child) {
+      final int depth =
+          child.startsWith(path) ? path.relativize(child).getNameCount() : Integer.MAX_VALUE;
       return depth <= compDepth;
+    }
+
+    @Override
+    public String toString() {
+      return "Stream(" + path + ", " + maxDepth + ")";
     }
   }
 
@@ -72,45 +83,76 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    */
   public boolean register(final Path path, final Flags.Create flags, final int maxDepth) {
     boolean result = true;
-    if (Files.isDirectory(path) && !path.equals(path.getRoot())) {
-      final Entry<Path, Stream> entry = find(path);
-      if (entry == null) {
-        try {
-          int id = fileEventsApi.createStream(path.toString(), latency, flags.getValue());
-          if (id == -1) {
-            result = false;
-            System.err.println("Error watching " + path + ".");
+    Path realPath = null;
+    try {
+      realPath = path.toRealPath();
+    } catch (IOException e) {
+      result = false;
+    }
+    if (lock.lock()) {
+      try {
+        if (result && Files.isDirectory(realPath) && !realPath.equals(realPath.getRoot())) {
+          final Entry<Path, Stream> entry = find(realPath);
+          if (entry == null) {
+            try {
+              int id = fileEventsApi.createStream(realPath.toString(), latency, flags.getValue());
+              if (id == -1) {
+                result = false;
+                System.err.println("Error watching " + realPath + ".");
+              } else {
+                final int newMaxDepth = removeRedundantStreams(realPath, maxDepth);
+                streams.put(realPath, new Stream(realPath, id, newMaxDepth));
+              }
+            } catch (ClosedFileEventsApiException e) {
+              close();
+              result = false;
+            }
           } else {
-            synchronized (lock) {
-              streams.put(path, new Stream(path, id, maxDepth));
+            final Path key = entry.getKey();
+            final Stream stream = entry.getValue();
+            final int depth = key.equals(realPath) ? 0 : key.relativize(realPath).getNameCount();
+            final int newMaxDepth = removeRedundantStreams(key, maxDepth);
+            if (newMaxDepth != stream.maxDepth && stream.maxDepth >= depth) {
+              streams.put(key, new Stream(key, stream.id, newMaxDepth));
+            } else {
+              streams.put(realPath, new Stream(realPath, -1, maxDepth));
             }
           }
-        } catch (ClosedFileEventsApiException e) {
-          close();
-          result = false;
         }
-      } else {
-        final Path key = entry.getKey();
-        final Stream stream = entry.getValue();
+      } finally {
+        lock.unlock();
+      }
+    } else {
+      result = false;
+    }
+    return result;
+  }
+
+  private int removeRedundantStreams(final Path path, final int maxDepth) {
+    final List<Path> toRemove = new ArrayList<>();
+    final Iterator<Entry<Path, Stream>> it = streams.entrySet().iterator();
+    int newMaxDepth = maxDepth;
+    while (it.hasNext()) {
+      final Entry<Path, Stream> e = it.next();
+      final Path key = e.getKey();
+      if (key.startsWith(path) && !key.equals(path)) {
+        final Stream stream = e.getValue();
         final int depth = key.equals(path) ? 0 : key.relativize(path).getNameCount();
-        final int newMaxDepth;
-        if (maxDepth == Integer.MAX_VALUE || stream.maxDepth == Integer.MAX_VALUE) {
-          newMaxDepth = Integer.MAX_VALUE;
-        } else {
-          int diff = maxDepth - stream.maxDepth + depth;
-          newMaxDepth =
-              diff > 0
-                  ? (stream.maxDepth < Integer.MAX_VALUE - diff
-                      ? stream.maxDepth + diff
-                      : Integer.MAX_VALUE)
-                  : stream.maxDepth;
-        }
-        if (newMaxDepth != stream.maxDepth) {
-          streams.put(key, new Stream(path, stream.id, newMaxDepth));
+        if (depth <= newMaxDepth) {
+          toRemove.add(stream.path);
+          if (stream.maxDepth > newMaxDepth - depth) {
+            int diff = stream.maxDepth - newMaxDepth + depth;
+            newMaxDepth =
+                newMaxDepth < Integer.MAX_VALUE - diff ? newMaxDepth + diff : Integer.MAX_VALUE;
+          }
         }
       }
     }
-    return result;
+    final Iterator<Path> pathIterator = toRemove.iterator();
+    while (pathIterator.hasNext()) {
+      unregister(pathIterator.next());
+    }
+    return newMaxDepth;
   }
 
   /**
@@ -120,18 +162,22 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    */
   @Override
   public void unregister(Path path) {
-    synchronized (lock) {
-      if (!closed.get()) {
-        final Stream stream = streams.remove(path);
-        if (stream != null && stream.id != -1) {
-          executor.run(
-              new Runnable() {
-                @Override
-                public void run() {
-                  fileEventsApi.stopStream(stream.id);
-                }
-              });
+    if (lock.lock()) {
+      try {
+        if (!closed.get()) {
+          final Stream stream = streams.remove(path);
+          if (stream != null && stream.id != -1) {
+            executor.run(
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    fileEventsApi.stopStream(stream.id);
+                  }
+                });
+          }
         }
+      } finally {
+        lock.unlock();
       }
     }
   }
@@ -141,11 +187,15 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
   public void close() {
     if (closed.compareAndSet(false, true)) {
       super.close();
-      synchronized (lock) {
-        streams.clear();
+      if (lock.lock()) {
+        try {
+          streams.clear();
+        } finally {
+          lock.unlock();
+        }
+        fileEventsApi.close();
+        executor.close();
       }
-      fileEventsApi.close();
-      executor.close();
     }
   }
 
@@ -170,7 +220,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     this(
         latency,
         flags,
-        Executor.make("com.swoval.files.AppleDirectoryWatcher.executorThread"),
+        Executor.make("com.swoval.files.apple.AppleDirectoryWatcher.executorThread"),
         onFileEvent,
         DefaultOnStreamRemoved);
   }
@@ -226,7 +276,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
                           final Entry<Path, Stream> entry = it.next();
                           final Path key = entry.getKey();
                           final Stream stream = entry.getValue();
-                          validKey = path.equals(key) || stream.accept(key, path);
+                          validKey = path.equals(key) || stream.accept(path);
                         }
                         if (validKey) {
                           DirectoryWatcher.Event event;
@@ -256,10 +306,14 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
                     new Runnable() {
                       @Override
                       public void run() {
-                        synchronized (lock) {
-                          streams.remove(stream);
+                        if (lock.lock()) {
+                          try {
+                            streams.remove(Paths.get(stream));
+                          } finally {
+                            lock.unlock();
+                          }
+                          onStreamRemoved.apply(stream);
                         }
-                        onStreamRemoved.apply(stream);
                       }
                     });
               }

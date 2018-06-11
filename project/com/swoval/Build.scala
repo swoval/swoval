@@ -8,8 +8,8 @@ import java.util.jar.JarFile
 
 import _root_.bintray.BintrayPlugin
 import bintray.BintrayKeys._
-import com.swoval.Dependencies.{ logback => SLogback, _ }
 import com.github.sbt.jacoco.JacocoKeys.jacocoExcludes
+import com.swoval.Dependencies.{ logback => SLogback, _ }
 import com.typesafe.sbt.GitVersioning
 import com.typesafe.sbt.SbtGit.git
 import com.typesafe.sbt.pgp.PgpKeys.publishSigned
@@ -104,7 +104,8 @@ object Build {
   lazy val releaseLocal = taskKey[Unit]("Release local project")
   lazy val releaseSigned = taskKey[Unit]("Release signed project")
   lazy val generateJSSources = taskKey[Unit]("Generate scala sources from java")
-  lazy val clangFmt = taskKey[Unit]("Run clang format")
+  lazy val clangfmt = taskKey[Unit]("Run clang format")
+  lazy val javafmt = taskKey[Unit]("Run java format")
   lazy val travisQuickListReflectionTest =
     taskKey[Unit]("Check that reflection works for quick list")
   lazy val quickListReflectionTest = inputKey[Unit]("Check that reflection works for quick list")
@@ -121,7 +122,8 @@ object Build {
 
   def releaseTask(key: TaskKey[Unit]) = Def.taskDyn {
     import sys.process._
-    clangFmt.value
+    javafmt.value
+    clangfmt.value
     if (!Seq("git", "status").!!.contains("working tree clean"))
       throw new IllegalStateException("There are local diffs")
     else {
@@ -145,6 +147,12 @@ object Build {
       }
     }
   }
+  lazy val javafmtProj = project
+    .in(file("javafmt"))
+    .settings(
+      libraryDependencies += "com.google.googlejavaformat" % "google-java-format" % "1.6"
+    )
+
   lazy val swoval = project
     .in(file("."))
     .enablePlugins(CrossPerProjectPlugin)
@@ -159,7 +167,8 @@ object Build {
       releaseLocal := releaseTask(publishLocal).value,
       releaseSigned := releaseTask(publishSigned).value,
       releaseSnapshot := releaseTask(publish).value,
-      clangFmt := {
+      javafmt := (run in (javafmtProj, Compile)).toTask(" .").value,
+      clangfmt := {
         val npm = files.js.base.toPath.toAbsolutePath.resolve("npm/src")
         val jvm = files.jvm.base.toPath.toAbsolutePath.resolve("src/main/native")
         val args = Seq(npm, jvm).flatMap { p =>
@@ -371,7 +380,6 @@ object Build {
             Def.task {
               convertSources(
                 "com/swoval/files",
-                "AppleDirectoryWatcher",
                 "Directory",
                 "DirectoryWatcher",
                 "EntryFilters",
@@ -385,7 +393,11 @@ object Build {
                 "Registerable",
                 "SymlinkWatcher"
               ).value
-              convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
+              convertSources("com/swoval/files/apple",
+                             "AppleDirectoryWatcher",
+                             "Event",
+                             "FileEvent",
+                             "Flags").value
             }
           },
           scalafmt in Compile,
@@ -406,12 +418,15 @@ object Build {
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty) ++
         Seq("-Xlint:unchecked"),
       jacocoExcludes in Test := Seq(
-        "com.swoval.files.NativeLoader*",
-        "com.swoval.files.QuickFileImpl$PathWithFileTypeImpl*",
-        "com.swoval.files.apple.Event*",
-        "com.swoval.files.apple.Flag*",
-        "com.swoval.files.apple.Native*"
-      ),
+        "*NativeLoader*",
+        "*QuickFileImpl$PathWithFileTypeImpl*"
+      ) ++ (if (!Properties.isMac) Seq("*apple*")
+            else
+              Seq(
+                "com.swoval.files.apple.Event*",
+                "com.swoval.files.apple.Flag*",
+                "com.swoval.files.apple.Native*"
+              )),
       javacOptions in (Compile, doc) := Nil,
       crossScalaVersions := scalaCrossVersions,
       crossPaths := false,

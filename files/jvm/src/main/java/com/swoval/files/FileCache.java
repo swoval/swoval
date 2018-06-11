@@ -4,6 +4,7 @@ import static com.swoval.files.DirectoryWatcher.DEFAULT_FACTORY;
 import static com.swoval.files.DirectoryWatcher.Event.Overflow;
 import static com.swoval.files.EntryFilters.AllPass;
 
+import com.swoval.concurrent.Lock;
 import com.swoval.files.Directory.Converter;
 import com.swoval.files.Directory.Observer;
 import com.swoval.files.Directory.OnChange;
@@ -24,7 +25,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Provides an in memory cache of portions of the file system. Directories are added to the cache
@@ -261,24 +261,27 @@ public abstract class FileCache<T> implements AutoCloseable {
 class FileCacheImpl<T> extends FileCache<T> {
   private final Map<Path, Directory<T>> directories = new HashMap<>();
   private final Converter<T> converter;
-  private final ReentrantLock lock = new ReentrantLock();
-  private final SymlinkWatcher symlinkWatcher;
   private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final Lock lock = new Lock();
+  private final SymlinkWatcher symlinkWatcher;
 
   private final DirectoryWatcher.Callback callback =
       new DirectoryWatcher.Callback() {
         @SuppressWarnings("unchecked")
         @Override
         public void apply(final DirectoryWatcher.Event event) {
-          lock.lock();
-          try {
-            final Path path = event.path;
-            if (event.kind.equals(Overflow)) {
-              handleOverflow(path);
-            } else {
-              handleEvent(path);
+          if (lock.lock()) {
+            try {
+              final Path path = event.path;
+              if (event.kind.equals(Overflow)) {
+                handleOverflow(path);
+              } else {
+                handleEvent(path);
+              }
+            } finally {
+              lock.unlock();
             }
-          } finally { lock.unlock(); }
+          }
         }
       };
   private final DirectoryWatcher watcher;
@@ -334,51 +337,55 @@ class FileCacheImpl<T> extends FileCache<T> {
     Directory<T> result = null;
     if (Files.exists(path)) {
       watcher.register(path, maxDepth);
-      synchronized (directories) {
-        final List<Directory<T>> dirs = new ArrayList<>(directories.values());
-        Collections.sort(
-            new ArrayList<>(directories.values()),
-            new Comparator<Directory<T>>() {
-              @Override
-              public int compare(Directory<T> left, Directory<T> right) {
-                return left.path.compareTo(right.path);
-              }
-            });
-        final Iterator<Directory<T>> it = dirs.iterator();
-        Directory<T> existing = null;
-        while (it.hasNext() && existing == null) {
-          final Directory<T> dir = it.next();
-          if (path.startsWith(dir.path)) {
-            final int depth =
-                path.equals(dir.path) ? 0 : (dir.path.relativize(path).getNameCount() - 1);
-            if (dir.getDepth() == Integer.MAX_VALUE || maxDepth < dir.getDepth() - depth) {
-              existing = dir;
-            } else if (depth <= dir.getDepth()) {
-              dir.close();
-              existing =
-                  Directory.cached(
-                      dir.path,
-                      converter,
-                      maxDepth < Integer.MAX_VALUE - depth - 1
-                          ? maxDepth + depth + 1
-                          : Integer.MAX_VALUE);
-              directories.put(dir.path, existing);
-            }
-          }
-        }
-        if (existing == null) {
-          result = Directory.cached(path, converter, maxDepth);
-          directories.put(path, result);
-          final Iterator<Directory.Entry<T>> entryIterator =
-              result.list(true, EntryFilters.AllPass).iterator();
-          if (symlinkWatcher != null) {
-            while (entryIterator.hasNext()) {
-              final Directory.Entry<T> entry = entryIterator.next();
-              if (entry.isSymbolicLink()) {
-                symlinkWatcher.addSymlink(entry.path, entry.isDirectory());
+      if (lock.lock()) {
+        try {
+          final List<Directory<T>> dirs = new ArrayList<>(directories.values());
+          Collections.sort(
+              new ArrayList<>(directories.values()),
+              new Comparator<Directory<T>>() {
+                @Override
+                public int compare(Directory<T> left, Directory<T> right) {
+                  return left.path.compareTo(right.path);
+                }
+              });
+          final Iterator<Directory<T>> it = dirs.iterator();
+          Directory<T> existing = null;
+          while (it.hasNext() && existing == null) {
+            final Directory<T> dir = it.next();
+            if (path.startsWith(dir.path)) {
+              final int depth =
+                  path.equals(dir.path) ? 0 : (dir.path.relativize(path).getNameCount() - 1);
+              if (dir.getDepth() == Integer.MAX_VALUE || maxDepth < dir.getDepth() - depth) {
+                existing = dir;
+              } else if (depth <= dir.getDepth()) {
+                dir.close();
+                existing =
+                    Directory.cached(
+                        dir.path,
+                        converter,
+                        maxDepth < Integer.MAX_VALUE - depth - 1
+                            ? maxDepth + depth + 1
+                            : Integer.MAX_VALUE);
+                directories.put(dir.path, existing);
               }
             }
           }
+          if (existing == null) {
+            result = Directory.cached(path, converter, maxDepth);
+            directories.put(path, result);
+            final Iterator<Directory.Entry<T>> entryIterator =
+                result.list(true, EntryFilters.AllPass).iterator();
+            if (symlinkWatcher != null) {
+              while (entryIterator.hasNext()) {
+                final Directory.Entry<T> entry = entryIterator.next();
+                if (entry.isSymbolicLink()) {
+                  symlinkWatcher.addSymlink(entry.path, entry.isDirectory());
+                }
+              }
+            }
+          }
+        } finally {
+          lock.unlock();
         }
       }
     }
@@ -387,7 +394,8 @@ class FileCacheImpl<T> extends FileCache<T> {
 
   private Pair<Directory<T>, List<Directory.Entry<T>>> listImpl(
       final Path path, final int maxDepth, final Directory.EntryFilter<? super T> filter) {
-    synchronized (directories) {
+    lock.lock();
+    try {
       Directory<T> foundDir = null;
       final Iterator<Directory<T>> it = directories.values().iterator();
       while (it.hasNext()) {
@@ -401,6 +409,8 @@ class FileCacheImpl<T> extends FileCache<T> {
       } else {
         return null;
       }
+    } finally {
+      lock.unlock();
     }
   }
 
@@ -435,13 +445,16 @@ class FileCacheImpl<T> extends FileCache<T> {
     try {
       res = Directory.cached(path, converter, maxDepth);
     } catch (IOException e) {
+    } finally {
+      lock.unlock();
     }
     return res;
   }
 
   @SuppressWarnings("unchecked")
   private boolean handleOverflow(final Path path) {
-    synchronized (directories) {
+    lock.lock();
+    try {
       if (!closed.get()) {
         final Iterator<Directory<T>> directoryIterator = directories.values().iterator();
         final List<Directory<T>> toReplace = new ArrayList<>();
@@ -511,6 +524,8 @@ class FileCacheImpl<T> extends FileCache<T> {
       } else {
         return false;
       }
+    } finally {
+      lock.unlock();
     }
   }
 
@@ -558,7 +573,8 @@ class FileCacheImpl<T> extends FileCache<T> {
         }
       } else {
         final List<Iterator<Directory.Entry<T>>> removeIterators = new ArrayList<>();
-        synchronized (directories) {
+        lock.lock();
+        try {
           final Iterator<Directory<T>> it = directories.values().iterator();
           while (it.hasNext()) {
             final Directory<T> dir = it.next();
@@ -566,6 +582,8 @@ class FileCacheImpl<T> extends FileCache<T> {
               removeIterators.add(dir.remove(path).iterator());
             }
           }
+        } finally {
+          lock.unlock();
         }
         final Iterator<Iterator<Directory.Entry<T>>> it = removeIterators.iterator();
         while (it.hasNext()) {

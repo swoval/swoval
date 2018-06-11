@@ -1,23 +1,15 @@
 package com.swoval.files
 
-import utest.framework.ExecutionContext.RunNow
+import java.nio.file.{ Path => JPath }
 
+import com.swoval.test.Implicits.executionContext
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ Future, Promise }
-import scala.util.{ Failure, Success, Try }
-import java.nio.file.{ Path => JPath }
+import scala.util.{ Success, Try }
+import com.swoval.test.NotFuture
 
 package object test {
-
-  /** Taken from shapeless */
-  sealed trait <:!<[T, R]
-  object <:!< {
-    import scala.language.implicitConversions
-    implicit def default[T, R]: <:!<[T, R] = new <:!<[T, R] {}
-    implicit def alternative[T, R](implicit ev: T <:< R): <:!<[T, R] = new <:!<[T, R] {}
-  }
-  type NotFuture[T] = <:!<[T, Future[_]]
   class CountDownLatch(private[this] var i: Int) {
     private[this] val promise = Promise.apply[Boolean]
     private[this] val lock = new Object
@@ -51,7 +43,8 @@ package object test {
           val tp = platform.newTimedPromise(p, timeout)
           promises.enqueue(tp)
           def dequeue(): Unit = { promises.dequeueAll(_ == tp); () }
-          p.future.transform(r => { dequeue(); f(r) }, e => { dequeue(); e })(RunNow)
+          p.future.transform(r => { dequeue(); f(r) }, e => { dequeue(); e })(
+            utest.framework.ExecutionContext.RunNow)
       })
     def add(t: T): Unit = lock.synchronized {
       promises.dequeueFirst(_ => true) match {

@@ -2,7 +2,7 @@ package com.swoval.files
 
 import java.io.IOException
 import java.nio.file.attribute.FileTime
-import java.nio.file.{ FileSystemLoopException, Files, Path => JPath }
+import java.nio.file.{ FileSystem, FileSystemLoopException, Files, Path => JPath }
 
 import com.swoval.files.Directory._
 import com.swoval.files.EntryOps._
@@ -20,6 +20,7 @@ import scala.util.Failure
 
 trait FileCacheTest extends TestSuite {
   def factory: DirectoryWatcher.Factory
+  def boundedFactory: DirectoryWatcher.Factory
   def identity: Converter[JPath] = (p: JPath) => p
   def simpleCache(f: Entry[JPath] => Unit): FileCache[JPath] =
     FileCache.apply(((p: JPath) => p): Converter[JPath],
@@ -112,7 +113,7 @@ trait FileCacheTest extends TestSuite {
           // Windows is slow (at least on my vm)
           val subdirsToAdd = if (System.getProperty("java.vm.name", "") == "Scala.js") {
             if (Platform.isWin) 5 else 50
-          } else 2000
+          } else 200
           val timeout = DEFAULT_TIMEOUT * 60
           val filesPerSubdir = 4
           val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
@@ -133,7 +134,7 @@ trait FileCacheTest extends TestSuite {
             (_: Entry[JPath]) => deletionLatch.countDown(),
             (_: JPath, _: IOException) => {}
           )
-          usingAsync(FileCache.apply[JPath](identity, factory, observer)) { c =>
+          usingAsync(FileCache.apply[JPath](identity, boundedFactory, observer)) { c =>
             c.reg(dir)
             executor.run(new Runnable {
               override def run(): Unit = {
@@ -228,7 +229,7 @@ trait FileCacheTest extends TestSuite {
             withTempDirectory(subdir) { nestedSubdir =>
               withTempFile(nestedSubdir) { file =>
                 val latch = new CountDownLatch(1)
-                using(simpleCache((e: Entry[JPath]) =>
+                usingAsync(simpleCache((e: Entry[JPath]) =>
                   if (e.path.endsWith("deep")) latch.countDown())) { c =>
                   c.register(dir, 1)
                   c.ls(dir) === Set(subdir, nestedSubdir)
@@ -237,7 +238,8 @@ trait FileCacheTest extends TestSuite {
                   val deep = Files.createDirectory(nestedSubdir.resolve("deep"))
                   val deepFile = Files.createFile(deep.resolve("file"))
                   latch.waitFor(DEFAULT_TIMEOUT) {
-                    while (!Files.exists(deepFile)) {}
+                    var i = 0
+                    while (!Files.exists(deepFile) && i < 1000) { i += 1 }
                     val existing = FileOps.list(dir, true).asScala.map(_.toPath).toSet
                     existing === Set(subdir, nestedSubdir, file, deep, deepFile)
                     c.ls(dir) === Set(subdir, nestedSubdir, file, deep)
@@ -577,7 +579,7 @@ trait FileCacheTest extends TestSuite {
                   }
 
                   override def onUpdate(oldEntry: Entry[JPath], newEntry: Entry[JPath]): Unit = {
-                    if (newEntry.path.endsWith("link")) {
+                    if (newEntry.path == link) {
                       paths.add(newEntry.path)
                       updateLatch.countDown()
                     } else if (closed) {
@@ -698,6 +700,7 @@ object FileCacheTest {
 
 object DefaultFileCacheTest extends FileCacheTest {
   val factory = DirectoryWatcher.DEFAULT_FACTORY
+  val boundedFactory = if (Platform.isMac) factory else NioFileCacheTest.boundedFactory
   val tests = testsImpl
 }
 
@@ -705,6 +708,10 @@ object NioFileCacheTest extends FileCacheTest {
   val factory = new DirectoryWatcher.Factory {
     override def create(callback: DirectoryWatcher.Callback): DirectoryWatcher =
       new NioDirectoryWatcher(callback)
+  }
+  val boundedFactory = new DirectoryWatcher.Factory {
+    override def create(callback: DirectoryWatcher.Callback): DirectoryWatcher =
+      new NioDirectoryWatcher(callback, new BoundedWatchService(4, WatchService.newWatchService()))
   }
   val tests =
     if (Platform.isJVM && Platform.isMac) testsImpl

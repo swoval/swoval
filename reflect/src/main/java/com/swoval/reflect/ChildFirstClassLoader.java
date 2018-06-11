@@ -13,8 +13,8 @@ import java.util.function.Function;
 /**
  * Provides a class loader that will find classes in the provided urls before delegating to the
  * parent class loader. System classes in the java.* and sun.* packages will always be loaded by the
- * parent. The user may force the parent or child to load non system classes using
- * {@link Predicates}.
+ * parent. The user may force the parent or child to load non system classes using {@link
+ * Predicates}.
  */
 public class ChildFirstClassLoader extends URLClassLoader {
   /*

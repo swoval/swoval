@@ -3,10 +3,8 @@ package com.swoval.files.apple;
 import com.swoval.concurrent.ThreadFactory;
 import com.swoval.files.NativeLoader;
 import java.io.IOException;
-import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -16,8 +14,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Provides access to apple file system events. The class is created with two callbacks, one to run
  * when a file event is created and the other to run when the underlying native implementation
  * removes a redundant stream from monitoring. This class is low level and users should generally
- * prefer {@link com.swoval.files.DirectoryWatcher} or {@link
- * com.swoval.files.AppleDirectoryWatcher} if the code is only ever run on OSX.
+ * prefer {@link com.swoval.files.DirectoryWatcher} or {@link AppleDirectoryWatcher} if the code is
+ * only ever run on OSX.
  *
  * @see <a href="https://developer.apple.com/documentation/coreservices/file_system_events"
  *     target="_blank"></a>
@@ -55,28 +53,32 @@ public class FileEventsApi implements AutoCloseable {
         new Runnable() {
           @Override
           public void run() {
-            final Consumer<FileEvent> eventConsumer = new Consumer<FileEvent>() {
-              @Override
-              public void accept(final FileEvent fileEvent) {
-                executor.submit(new Runnable() {
+            final Consumer<FileEvent> eventConsumer =
+                new Consumer<FileEvent>() {
                   @Override
-                  public void run() {
-                    c.accept(fileEvent);
+                  public void accept(final FileEvent fileEvent) {
+                    executor.submit(
+                        new Runnable() {
+                          @Override
+                          public void run() {
+                            c.accept(fileEvent);
+                          }
+                        });
                   }
-                });
-              }
-            };
-            final Consumer<String> streamConsumer = new Consumer<String>() {
-              @Override
-              public void accept(final String s) {
-                executor.submit(new Runnable() {
+                };
+            final Consumer<String> streamConsumer =
+                new Consumer<String>() {
                   @Override
-                  public void run() {
-                    pc.accept(s);
+                  public void accept(final String s) {
+                    executor.submit(
+                        new Runnable() {
+                          @Override
+                          public void run() {
+                            pc.accept(s);
+                          }
+                        });
                   }
-                });
-              }
-            };
+                };
             FileEventsApi.this.handle = FileEventsApi.init(eventConsumer, streamConsumer);
             latch.countDown();
             loop();

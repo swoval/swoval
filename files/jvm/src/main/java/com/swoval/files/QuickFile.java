@@ -60,8 +60,8 @@ public interface QuickFile {
   /**
    * Returns an instance of {@link FileWithFileType}. Typically the implementation of {@link
    * QuickFile} while extend {@link FileWithFileType}. This method will then just cast the instance
-   * to {@link java.io.File}. Because the {@link QuickFile#isDirectory} and {@link QuickFile#isFile} methods
-   * will generally cache the value of the native file result returned by readdir (posix) or
+   * to {@link java.io.File}. Because the {@link QuickFile#isDirectory} and {@link QuickFile#isFile}
+   * methods will generally cache the value of the native file result returned by readdir (posix) or
    * FindNextFile (windows) and use this value to compute {@link QuickFile#isDirectory} and {@link
    * QuickFile#isFile}, the returned {@link FileWithFileType} is generally unsuitable to be used as
    * a persistent value. Instead, use {@link QuickFile#toFile}.

@@ -4,12 +4,15 @@ import com.swoval.concurrent.ThreadFactory;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Provides an execution context to run tasks. Exists to allow source interoperability with scala.js
  */
 public abstract class Executor implements AutoCloseable {
-  private Executor() {}
+  protected final AtomicBoolean closed = new AtomicBoolean(false);
+
+  Executor() {}
 
   /**
    * Runs the task on a thread
@@ -20,6 +23,10 @@ public abstract class Executor implements AutoCloseable {
 
   @Override
   public void close() {}
+
+  public boolean isClosed() {
+    return closed.get();
+  }
 
   /**
    * Make a new instance of an Executor
@@ -34,11 +41,15 @@ public abstract class Executor implements AutoCloseable {
       @SuppressWarnings("EmptyCatchBlock")
       @Override
       public void close() {
-        super.close();
-        service.shutdownNow();
-        try {
-          service.awaitTermination(5, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
+        if (closed.compareAndSet(false, true)) {
+          super.close();
+          service.shutdownNow();
+          try {
+            if (!service.awaitTermination(5, TimeUnit.SECONDS)) {
+              System.err.println("Couldn't close executor");
+            }
+          } catch (InterruptedException e) {
+          }
         }
       }
 

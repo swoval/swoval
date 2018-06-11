@@ -5,6 +5,7 @@ package com.swoval.files
  * interoperability.
  */
 abstract class Executor extends AutoCloseable {
+  private[this] var _closed = false
 
   /**
    * Runs the task on a thread
@@ -12,8 +13,17 @@ abstract class Executor extends AutoCloseable {
    * @param runnable task to run
    */
   def run(runnable: Runnable): Unit
-  override def close(): Unit = {}
+
+  /**
+   * Is this executor available to invoke callbacks?
+   *
+   * @return true if the executor is not closed
+   */
+  def isClosed(): Boolean = _closed
+
+  override def close(): Unit = _closed = true
 }
+
 object Executor {
 
   /**

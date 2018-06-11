@@ -57,8 +57,8 @@ trait QuickFile {
 
   /**
    * Returns an instance of [[FileWithFileType]]. Typically the implementation of [[QuickFile]] while extend [[FileWithFileType]]. This method will then just cast the instance
-   * to [[java.io.File]]. Because the [[QuickFile.isDirectory]] and [[QuickFile.isFile]] methods
-   * will generally cache the value of the native file result returned by readdir (posix) or
+   * to [[java.io.File]]. Because the [[QuickFile.isDirectory]] and [[QuickFile.isFile]]
+   * methods will generally cache the value of the native file result returned by readdir (posix) or
    * FindNextFile (windows) and use this value to compute [[QuickFile.isDirectory]] and [[QuickFile.isFile]], the returned [[FileWithFileType]] is generally unsuitable to be used as
    * a persistent value. Instead, use [[QuickFile.toFile]].
    */

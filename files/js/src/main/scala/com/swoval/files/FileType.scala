@@ -8,18 +8,21 @@ trait FileType {
 
   /**
    * Returns true when the file represents a directory. This directory may be a symbolic link.
+   *
    * @return true when the file represents a directory
    */
   def isDirectory(): Boolean
 
   /**
    * Returns true when the file represents a file. This file may be a symbolic link.
+   *
    * @return true when the file represents a file
    */
   def isFile(): Boolean
 
   /**
    * Returns true when the file represents a symbolic link
+   *
    * @return true when the file represents a symbolic link
    */
   def isSymbolicLink(): Boolean

@@ -1,17 +1,15 @@
 package com.swoval.files
 
 import java.io.{ File, FileFilter }
+import java.nio.file.{ FileSystemLoopException, Files, Path, Paths }
 
-import java.nio.file.{ Files, FileSystemLoopException, Path, Paths }
-
-import com.swoval.files.DirectoryWatcher.Callback
-import com.swoval.files.DirectoryWatcher.Event
-import com.swoval.files.DirectoryWatcher.Event.{ Create, Modify, Delete }
+import com.swoval.files.DirectoryWatcher.{ Callback, Event }
+import com.swoval.files.DirectoryWatcher.Event.{ Create, Delete, Modify }
 import io.scalajs.nodejs
 import io.scalajs.nodejs.fs.{ FSWatcher, FSWatcherOptions, Fs }
 
-import scala.collection.mutable
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.scalajs.js
 
 /**
@@ -20,6 +18,8 @@ import scala.scalajs.js
  */
 class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
   def this(onFileEvent: Callback, registerable: Registerable) = this(onFileEvent)
+  private[files] def this(onFileEvent: Callback, registerable: Registerable, executor: Executor) =
+    this(onFileEvent)
   private object DirectoryFilter extends FileFilter {
     override def accept(pathname: File): Boolean = pathname.isDirectory
   }

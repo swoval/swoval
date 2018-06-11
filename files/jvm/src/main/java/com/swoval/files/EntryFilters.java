@@ -18,7 +18,8 @@ class EntryFilters {
         }
       };
 
-  public static <T> EntryFilter<T> AND(final EntryFilter<T> left, final EntryFilter<? super T> right) {
+  public static <T> EntryFilter<T> AND(
+      final EntryFilter<T> left, final EntryFilter<? super T> right) {
     return new CombinedFilter<>(left, right);
   }
 

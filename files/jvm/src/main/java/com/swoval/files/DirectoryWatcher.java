@@ -1,5 +1,6 @@
 package com.swoval.files;
 
+import com.swoval.files.apple.AppleDirectoryWatcher;
 import com.swoval.files.apple.Flags;
 import java.io.IOException;
 import java.nio.file.Path;

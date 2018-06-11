@@ -58,8 +58,7 @@ class FileOps {
   public static List<File> list(final Path path, final int maxDepth, final FileFilter filter)
       throws IOException {
     final List<File> result = new ArrayList<>();
-    final Iterator<QuickFile> it =
-        QuickList.list(path, maxDepth, true).iterator();
+    final Iterator<QuickFile> it = QuickList.list(path, maxDepth, true).iterator();
     while (it.hasNext()) {
       final QuickFile quickFile = it.next();
       if (filter.accept(quickFile.asFile())) {

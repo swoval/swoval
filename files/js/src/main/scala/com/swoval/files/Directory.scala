@@ -31,6 +31,7 @@ object Directory {
 
     /**
      * Convert the path to a value
+     *
      * @param path The path to convert
      * @return The value
      */
@@ -122,6 +123,7 @@ object Directory {
 
     /**
      * Compute the underlying file type for the path.
+     *
      * @param path The path whose type is to be determined.
      * @param attrs The attributes of the ile
      * @return The file type of the path
@@ -135,6 +137,7 @@ object Directory {
 
     /**
      * Compute the underlying file type for the path.
+     *
      * @param path The path whose type is to be determined.
      * @return The file type of the path
      */
@@ -249,6 +252,7 @@ object Directory {
 
     /**
      * Apply callback for error
+     *
      * @param path The path that induced the error
      * @param exception The encountered error
      */
@@ -396,7 +400,7 @@ class Directory[T] private (val path: Path,
    *     oldCachedPath field set to null and will contain all of the children of the new path when
    *     it is a directory. For an existing path, the List contains a single Update that contains
    *     the previous and new [[Directory.Entry]]
-   * traversing the directory.
+   *     traversing the directory.
    */
   def addUpdate(path: Path, kind: Int): List[Array[Entry[T]]] =
     if (!path.isAbsolute) updateImpl(FileOps.parts(path), kind)
