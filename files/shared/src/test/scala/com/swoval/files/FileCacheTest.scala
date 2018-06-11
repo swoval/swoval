@@ -113,7 +113,7 @@ trait FileCacheTest extends TestSuite {
           // Windows is slow (at least on my vm)
           val subdirsToAdd = if (System.getProperty("java.vm.name", "") == "Scala.js") {
             if (Platform.isWin) 5 else 50
-          } else 2000
+          } else 200
           val timeout = DEFAULT_TIMEOUT * 60
           val filesPerSubdir = 4
           val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
@@ -579,7 +579,7 @@ trait FileCacheTest extends TestSuite {
                   }
 
                   override def onUpdate(oldEntry: Entry[JPath], newEntry: Entry[JPath]): Unit = {
-                    if (newEntry.path.endsWith("link")) {
+                    if (newEntry.path == link) {
                       paths.add(newEntry.path)
                       updateLatch.countDown()
                     } else if (closed) {
@@ -700,7 +700,7 @@ object FileCacheTest {
 
 object DefaultFileCacheTest extends FileCacheTest {
   val factory = DirectoryWatcher.DEFAULT_FACTORY
-  val boundedFactory = factory
+  val boundedFactory = if (Platform.isMac) factory else NioFileCacheTest.boundedFactory
   val tests = testsImpl
 }
 
@@ -711,9 +711,7 @@ object NioFileCacheTest extends FileCacheTest {
   }
   val boundedFactory = new DirectoryWatcher.Factory {
     override def create(callback: DirectoryWatcher.Callback): DirectoryWatcher =
-      new NioDirectoryWatcher(callback,
-                              new BoundedWatchService(16, WatchService.newWatchService()),
-                              8096 * 10)
+      new NioDirectoryWatcher(callback, new BoundedWatchService(4, WatchService.newWatchService()))
   }
   val tests =
     if (Platform.isJVM && Platform.isMac) testsImpl

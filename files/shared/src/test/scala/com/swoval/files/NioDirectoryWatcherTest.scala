@@ -20,10 +20,12 @@ object NioDirectoryWatcherTest extends TestSuite {
   val tests = if (!((System.getProperty("java.vm.name") == "Scala.js") && Platform.isMac)) Tests {
     val events = new ArrayBlockingQueue[DirectoryWatcher.Event](1)
     implicit val latch: com.swoval.files.test.CountDownLatch = new CountDownLatch(1)
+
     def check(file: JPath)(f: JPath => Unit): Future[Unit] = events.poll(DEFAULT_TIMEOUT) { e =>
       e.path ==> file
       f(e.path)
     }
+
     'onCreate - withTempDirectory { dir =>
       val f = dir.resolve(Path("create"))
       val callback: Callback = (e: DirectoryWatcher.Event) => if (e.path == f) events.add(e)
@@ -78,14 +80,14 @@ object NioDirectoryWatcherTest extends TestSuite {
       val callback: Callback = (_: DirectoryWatcher.Event) match {
         case e if e.kind == DirectoryWatcher.Event.Overflow => overflowLatch.countDown()
         case e if e.path == last =>
-          if (System.getProperty("java.vm.name", "") == "Scala.js") overflowLatch.countDown()
+          overflowLatch.countDown()
           subdirLatch.countDown()
         case e if JFiles.isRegularFile(e.path) && !files.contains(e.path) =>
           files += e.path
           fileLatch.countDown()
         case _ =>
       }
-      val service = new BoundedWatchService(queueSize, WatchService.newWatchService())
+      val service = new BoundedWatchService(1, WatchService.newWatchService())
       usingAsync(new NioDirectoryWatcher(callback, service)) { w =>
         w.register(dir)
         subdirs.foreach(JFiles.createDirectory(_))
@@ -141,8 +143,127 @@ object NioDirectoryWatcherTest extends TestSuite {
           }
       }
     }
+    'depth - {
+      'holes - withTempDirectory { dir =>
+        withTempDirectory(dir) { subdir =>
+          withTempDirectory(subdir) { secondSubdir =>
+            withTempDirectory(secondSubdir) { thirdSubdir =>
+              val subdirEvents = new ArrayBlockingQueue[DirectoryWatcher.Event](1)
+              val callback: Callback = (e: DirectoryWatcher.Event) => {
+                if (e.path.endsWith("foo")) events.add(e)
+                if (e.path.endsWith("bar")) subdirEvents.add(e)
+              }
+              usingAsync(new NioDirectoryWatcher(callback)) { w =>
+                w.register(dir, 0)
+                w.register(secondSubdir, 0)
+                val file = thirdSubdir.resolve("foo").createFile()
+                events
+                  .poll(100.milliseconds) { _ =>
+                    throw new IllegalStateException(
+                      "Event triggered for file that shouldn't be monitored")
+                  }
+                  .recoverWith {
+                    case _: TimeoutException =>
+                      w.register(dir, 4)
+                      file.setLastModifiedTime(3000)
+                      events
+                        .poll(DEFAULT_TIMEOUT) { e =>
+                          e.path ==> file
+                          e.path.lastModified ==> 3000
+                        }
+                        .flatMap { _ =>
+                          val subdirFile = subdir.resolve("bar").createFile()
+                          subdirEvents.poll(DEFAULT_TIMEOUT) { e =>
+                            e.path ==> subdirFile
+                          }
+                        }
+                  }
+              }
+            }
+          }
+        }
+      }
+      'extend - withTempDirectory { dir =>
+        withTempDirectory(dir) { subdir =>
+          withTempDirectory(subdir) { secondSubdir =>
+            withTempDirectory(secondSubdir) { thirdSubdir =>
+              val subdirEvents = new ArrayBlockingQueue[DirectoryWatcher.Event](1)
+              val callback: Callback = (e: DirectoryWatcher.Event) => {
+                if (e.path.endsWith("baz")) events.add(e)
+                if (e.path.endsWith("buzz")) subdirEvents.add(e)
+              }
+              usingAsync(new NioDirectoryWatcher(callback)) { w =>
+                w.register(dir, 0)
+                w.register(secondSubdir, 1)
+                val file = subdir.resolve("baz").createFile()
+                events
+                  .poll(100.milliseconds) { _ =>
+                    throw new IllegalStateException(
+                      "Event triggered for file that shouldn't be monitored")
+                  }
+                  .recoverWith {
+                    case _: TimeoutException =>
+                      w.register(dir, 2)
+                      file.setLastModifiedTime(3000)
+                      events
+                        .poll(DEFAULT_TIMEOUT) { e =>
+                          e.path ==> file
+                          e.path.lastModified ==> 3000
+                        }
+                        .flatMap { _ =>
+                          val subdirFile = subdir.resolve("buzz").createFile()
+                          subdirEvents.poll(DEFAULT_TIMEOUT) { e =>
+                            e.path ==> subdirFile
+                          }
+                        }
+                  }
+              }
+            }
+          }
+        }
+      }
+    }
+    'executorOverflow - withTempDirectory { dir =>
+      val latch = new CountDownLatch(1)
+      val secondLatch = new CountDownLatch(1)
+      var continue = true
+      val callback: DirectoryWatcher.Callback = (e: DirectoryWatcher.Event) => {
+        if (latch.getCount > 0) {
+          latch.countDown()
+          if (Platform.isJVM) {
+            while (continue) 1.millisecond.sleep
+          }
+        } else {
+          secondLatch.countDown()
+        }
+      }
+      usingAsync(
+        new NioDirectoryWatcher(callback,
+                                WatchService.newWatchService(),
+                                new TestExecutor("backedup-test-executor-thread"))) { w =>
+        w.register(dir, 0)
+        val otherFile = dir.resolve("other-file")
+        val file = dir.resolve("file").createFile()
+        latch
+          .waitFor(DEFAULT_TIMEOUT) {
+            otherFile.createFile()
+            100.milliseconds.sleep
+            continue = false
+          }
+          .flatMap { _ =>
+            secondLatch.waitFor(DEFAULT_TIMEOUT * 2) {}
+          }
+          .andThen {
+            case Failure(_: TimeoutException) =>
+              println(
+                s"Test timed out -- latch ${latch.getCount}, secondLatch ${secondLatch.getCount}")
+          }
+      }
+    }
   } else
     Tests {
-      'ignore - { println("Not running NioDirectoryWatcherTest on scala.js for Mac OS") }
+      'ignore - {
+        println("Not running NioDirectoryWatcherTest on scala.js for Mac OS")
+      }
     }
 }

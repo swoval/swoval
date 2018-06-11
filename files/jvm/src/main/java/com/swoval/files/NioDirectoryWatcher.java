@@ -10,7 +10,6 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
 import com.swoval.concurrent.Lock;
-import com.swoval.concurrent.ThreadFactory;
 import com.swoval.files.apple.MacOSXWatchService;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
@@ -30,9 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,8 +43,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
   private final Lock lock = new Lock();
   private final CountDownLatch shutdownLatch = new CountDownLatch(1);
   private static final AtomicInteger threadId = new AtomicInteger(0);
-  private static final int DEFAULT_QUEUE_SIZE = 8096;
-  private final java.util.concurrent.ExecutorService callbackExecutor;
+  private final Executor callbackExecutor;
 
   /**
    * Instantiate a NioDirectoryWatch using the default {@link Registerable}.
@@ -55,10 +51,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    * @param callback The callback to invoke on a created/deleted/modified path
    */
   public NioDirectoryWatcher(final Callback callback) throws IOException, InterruptedException {
-    this(
-        callback,
-        Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchService(),
-        DEFAULT_QUEUE_SIZE);
+    this(callback, Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchService());
   }
 
   /**
@@ -68,7 +61,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    * @param watchService The underlying watchservice that is used to monitor directories for events
    */
   public NioDirectoryWatcher(final Callback callback, final Registerable watchService) {
-    this(callback, watchService, DEFAULT_QUEUE_SIZE);
+    this(callback, watchService, Executor.make("NioDirectoryWatcher-callback-thread"));
   }
 
   /**
@@ -76,19 +69,12 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    *
    * @param callback The callback to invoke on a created/deleted/modified path
    * @param watchService The underlying watchservice that is used to monitor directories for events
-   * @param queueSize The size of the callback executor. This should be used primarily in testing
+   * @param executor The Executor to invoke callbacks on
    */
   NioDirectoryWatcher(
-      final Callback callback, final Registerable watchService, final int queueSize) {
+      final Callback callback, final Registerable watchService, final Executor executor) {
     this.watchService = watchService;
-    this.callbackExecutor =
-        new ThreadPoolExecutor(
-            1,
-            1,
-            5,
-            TimeUnit.SECONDS,
-            new LinkedBlockingDeque<Runnable>(queueSize),
-            new ThreadFactory("NioDirectoryWatcher-callback-thread"));
+    this.callbackExecutor = executor;
     loopThread =
         new Thread("NioDirectoryWatcher-loop-thread-" + threadId.incrementAndGet()) {
           @Override
@@ -106,7 +92,19 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
                           : k.equals(ENTRY_CREATE)
                               ? Create
                               : k.equals(OVERFLOW) ? Overflow : Modify;
-                  callbackExecutor.execute(
+                  if (!key.reset()) {
+                    key.cancel();
+                    if (lock.lock()) {
+                      try {
+                        watchedDirs.remove(key.watchable());
+                      } finally {
+                        lock.unlock();
+                      }
+                    } else if (!isStopped.get()) {
+                      throw new IllegalMonitorStateException("Couldn't acquire lock");
+                    }
+                  }
+                  callbackExecutor.run(
                       new Runnable() {
                         @Override
                         public void run() {
@@ -120,7 +118,43 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
                       });
                 }
               } catch (RejectedExecutionException e) {
-                if (!isStopped.get()) throw e;
+                boolean result = false;
+                if (lock.lock()) {
+                  try {
+                    while (!result && !executor.isClosed()) {
+                      final Iterator<WatchedDir> it = watchedDirs.values().iterator();
+                      final List<Runnable> runnables = new ArrayList<>();
+                      while (it.hasNext()) {
+                        final WatchedDir watchedDir = it.next();
+                        runnables.add(
+                            new Runnable() {
+                              @Override
+                              public void run() {
+                                handleOverflow(callback, watchedDir.key);
+                              }
+                            });
+                      }
+                      while (!result) {
+                        try {
+                          callbackExecutor.run(
+                              new Runnable() {
+                                @Override
+                                public void run() {
+                                  final Iterator<Runnable> it = runnables.iterator();
+                                  while (it.hasNext()) {
+                                    it.next().run();
+                                  }
+                                }
+                              });
+                          result = true;
+                        } catch (RejectedExecutionException ex) {
+                        }
+                      }
+                    }
+                  } finally {
+                    lock.unlock();
+                  }
+                }
               } catch (ClosedWatchServiceException | InterruptedException e) {
                 isStopped.set(true);
               }
@@ -138,8 +172,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     if (isStopped.compareAndSet(false, true)) {
       super.close();
       try {
-        callbackExecutor.shutdownNow();
-        callbackExecutor.awaitTermination(5, TimeUnit.SECONDS);
+        callbackExecutor.close();
         loopThread.interrupt();
         try {
           watchService.close();
@@ -176,7 +209,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     }
 
     public boolean accept(final Path path) {
-      return path.equals(key.watchable())
+      return path.startsWith((Path) key.watchable()) && path.equals(key.watchable())
           || ((Path) key.watchable()).relativize(path).getNameCount() <= compMaxDepth;
     }
   }
@@ -187,7 +220,10 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     final Set<Path> newFiles = new HashSet<>();
     if (Files.isDirectory(path)) {
       WatchedDir watchedDir = watchedDirs.get(keyPath);
-      if (watchedDir != null && watchedDir.accept(path) && !watchedDirs.containsKey(path)) {
+      if (watchedDir != null
+          && watchedDir.accept(path)
+          && !watchedDirs.containsKey(path)
+          && watchedDir.maxDepth > 0) {
         add(
             path,
             watchedDir.maxDepth - (watchedDir.maxDepth == Integer.MAX_VALUE ? 0 : 1),
@@ -198,16 +234,6 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     final Iterator<Path> it = newFiles.iterator();
     while (it.hasNext()) {
       callback.apply(new DirectoryWatcher.Event(it.next(), Event.Create));
-    }
-    if (!key.reset()) {
-      key.cancel();
-      if (lock.lock()) {
-        try {
-          watchedDirs.remove(keyPath);
-        } finally {
-          lock.unlock();
-        }
-      }
     }
   }
 
@@ -319,32 +345,40 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     return result;
   }
 
-  private boolean registerImpl(final Path path, final int maxDepth) {
+  private boolean registerImpl(final Path path, final int maxDepth, final boolean doReg) {
     boolean result = true;
     if (lock.lock()) {
       try {
-        final WatchKey key = watchService.register(path, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE);
-        final WatchedDir watchedDir = new WatchedDir(key, maxDepth);
-        final WatchedDir previous = watchedDirs.put(path, watchedDir);
-        if (previous != null && !Platform.isMac()) previous.key.cancel();
-        final Set<QuickFile> files = new HashSet<>();
-        final Set<QuickFile> newFiles = new HashSet<>();
-        do {
-          files.addAll(newFiles);
-          final Iterator<QuickFile> it = QuickList.list(path, 0, false).iterator();
-          while (result && it.hasNext()) {
-            final QuickFile quickFile = it.next();
-            if (quickFile.isDirectory() && maxDepth > 0 && newFiles.add(quickFile)) {
-              result =
-                  register(
-                      quickFile.toPath(), maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - 1);
-            } else {
-              newFiles.add(quickFile);
-            }
+        try {
+          if (doReg) {
+            final WatchKey key =
+                watchService.register(path, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE);
+            final WatchedDir watchedDir = new WatchedDir(key, maxDepth);
+            final WatchedDir previous = watchedDirs.put(path, watchedDir);
+            if (previous != null && !Platform.isMac()) previous.key.cancel();
           }
-        } while (result && different(files, newFiles));
-      } catch (IOException e) {
-        result = false;
+          final Set<QuickFile> files = new HashSet<>();
+          final Set<QuickFile> newFiles = new HashSet<>();
+          do {
+            files.addAll(newFiles);
+            final Iterator<QuickFile> it = QuickList.list(path, 0, false).iterator();
+            while (result && it.hasNext()) {
+              final QuickFile quickFile = it.next();
+              if (quickFile.isDirectory() && maxDepth > 0 && newFiles.add(quickFile)) {
+                result =
+                    register(
+                        quickFile.toPath(),
+                        maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - 1);
+              } else {
+                newFiles.add(quickFile);
+              }
+            }
+          } while (result && different(files, newFiles));
+        } catch (IOException e) {
+          result = false;
+        }
+      } finally {
+        lock.unlock();
       }
     }
     return result;
@@ -366,13 +400,13 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
             final Path realPath = path.toRealPath();
             final WatchedDir watchedDir = watchedDirs.get(realPath);
             if (watchedDir == null) {
-              result = registerImpl(realPath, maxDepth);
+              result = registerImpl(realPath, maxDepth, true);
             } else if (!path.equals(realPath)) {
               // Note that watchedDir is not null, which means that this path has been registered
               // with a different alias.
               throw new FileSystemLoopException(path.toString());
             } else if (watchedDir.maxDepth < maxDepth) {
-              result = registerImpl(realPath, maxDepth);
+              result = registerImpl(realPath, maxDepth, false);
             } else {
               result = false;
             }
