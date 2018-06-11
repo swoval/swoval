@@ -47,7 +47,8 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
   private final Map<Path, MacOSXWatchKey> registered = new HashMap<>();
 
   private final ExecutorService executor =
-      Executors.newSingleThreadExecutor(new ThreadFactory("sbt.io.MacOSXWatchService"));
+      Executors.newSingleThreadExecutor(
+          new ThreadFactory("com.swoval.files.apple.MacOSXWatchService-executor-thread"));
   private final Set<Path> streams = new HashSet<>();
   private final Consumer<String> dropEvent =
       new Consumer<String>() {
