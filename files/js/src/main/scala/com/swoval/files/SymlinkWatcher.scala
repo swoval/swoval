@@ -13,6 +13,7 @@ import java.util.Iterator
 import java.util.List
 import java.util.Map
 import java.util.Set
+import java.util.concurrent.atomic.AtomicBoolean
 import SymlinkWatcher._
 
 object SymlinkWatcher {
@@ -48,6 +49,8 @@ class SymlinkWatcher(handleEvent: EventConsumer,
                      factory: DirectoryWatcher.Factory,
                      private val onLoop: OnLoop)
     extends AutoCloseable {
+
+  private val isClosed: AtomicBoolean = new AtomicBoolean(false)
 
   private val lock: Lock = new Lock()
 
@@ -117,7 +120,9 @@ class SymlinkWatcher(handleEvent: EventConsumer,
   private val watcher: DirectoryWatcher = factory.create(callback)
 
   override def close(): Unit = {
-    watcher.close()
+    if (isClosed.compareAndSet(false, true)) {
+      watcher.close()
+    }
   }
 
   /**

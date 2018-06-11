@@ -14,6 +14,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Monitors symlink targets. The {@link SymlinkWatcher} maintains a mapping of symlink targets to
@@ -21,6 +22,7 @@ import java.util.Set;
  * provided {@link SymlinkWatcher.EventConsumer} for the symlink.
  */
 class SymlinkWatcher implements AutoCloseable {
+  private final AtomicBoolean isClosed = new AtomicBoolean(false);
   private final Lock lock = new Lock();
   private final Map<Path, RegisteredPath> watchedSymlinksByDirectory = new HashMap<>();
   private final Map<Path, RegisteredPath> watchedSymlinksByTarget = new HashMap<>();
@@ -117,7 +119,9 @@ class SymlinkWatcher implements AutoCloseable {
 
   @Override
   public void close() {
-    watcher.close();
+    if (isClosed.compareAndSet(false, true)) {
+      watcher.close();
+    }
   }
 
   /**
