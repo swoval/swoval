@@ -50,8 +50,11 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    * Instantiate a NioDirectoryWatch using the default {@link Registerable}.
    *
    * @param callback The callback to invoke on a created/deleted/modified path
+   * @param executor Internal executor to manage state
+   * @throws IOException when the WatchService can't be started
+   * @throws InterruptedException when the WatchService initialization is interrupted
    */
-  public NioDirectoryWatcher(final Callback callback, final Executor executor)
+  NioDirectoryWatcher(final Callback callback, final Executor executor)
       throws IOException, InterruptedException {
     this(
         callback,
@@ -63,6 +66,8 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    * Instantiate a NioDirectoryWatch using the default {@link Registerable}.
    *
    * @param callback The callback to invoke on a created/deleted/modified path
+   * @throws IOException when the WatchService can't be started
+   * @throws InterruptedException when the WatchService initialization is interrupted
    */
   public NioDirectoryWatcher(final Callback callback) throws IOException, InterruptedException {
     this(callback, Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchService());

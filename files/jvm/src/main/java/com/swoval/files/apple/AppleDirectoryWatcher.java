@@ -217,6 +217,9 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     void apply(String stream);
   }
 
+  /**
+   * A no-op callback to invoke when streams are removed.
+   */
   static class DefaultOnStreamRemoved implements OnStreamRemoved {
     DefaultOnStreamRemoved() {}
 
@@ -224,6 +227,19 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     public void apply(String stream) {}
   }
 
+  /**
+   * Creates a new AppleDirectoryWatcher which is a wrapper around {@link FileEventsApi}, which in
+   * turn is a native wrapper around <a
+   * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
+   * Apple File System Events</a>
+   *
+   * @param latency specified in fractional seconds
+   * @param flags Native flags
+   * @param onFileEvent Callback to run on file events
+   *
+   * @throws InterruptedException if the native file events implementation is interrupted during
+   *     initialization
+   */
   public AppleDirectoryWatcher(
       final double latency, final Flags.Create flags, final DirectoryWatcher.Callback onFileEvent)
       throws InterruptedException {
@@ -236,6 +252,20 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
         null);
   }
 
+  /**
+   * Creates a new AppleDirectoryWatcher which is a wrapper around {@link FileEventsApi}, which in
+   * turn is a native wrapper around <a
+   * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
+   * Apple File System Events</a>
+   *
+   * @param latency specified in fractional seconds
+   * @param flags Native flags
+   * @param callbackExecutor Executor to run callbacks on
+   * @param onFileEvent Callback to run on file events
+   *
+   * @throws InterruptedException if the native file events implementation is interrupted during
+   *     initialization
+   */
   public AppleDirectoryWatcher(
       final double latency,
       final Flags.Create flags,
@@ -245,6 +275,20 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     this(latency, flags, callbackExecutor, onFileEvent, DefaultOnStreamRemoved, null);
   }
 
+  /**
+   * Creates a new AppleDirectoryWatcher which is a wrapper around {@link FileEventsApi}, which in
+   * turn is a native wrapper around <a
+   * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
+   * Apple File System Events</a>
+   *
+   * @param latency specified in fractional seconds
+   * @param flags Native flags
+   * @param onFileEvent Callback to run on file events
+   * @param internalExecutor The internal executor to manage the directory watcher state
+   *
+   * @throws InterruptedException if the native file events implementation is interrupted during
+   *     initialization
+   */
   public AppleDirectoryWatcher(
       final double latency,
       final Flags.Create flags,
@@ -272,6 +316,8 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    * @param onFileEvent Callback to run on file events
    * @param onStreamRemoved Callback to run when a redundant stream is removed from the underlying
    *     native file events implementation
+   * @param executor The internal executor to manage the directory watcher state
+   *
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
    */

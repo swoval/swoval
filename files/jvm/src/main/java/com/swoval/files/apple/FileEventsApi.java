@@ -105,6 +105,8 @@ public class FileEventsApi implements AutoCloseable {
    * @param latency The minimum time in seconds between events for the path
    * @param flags The flags for the stream @see {@link Flags.Create}
    * @return handle that can be used to stop the stream in the future
+   * @throws ClosedFileEventsApiException when the {@link FileEventsApi} instance has previously
+   *     been closed.
    */
   public int createStream(String path, double latency, int flags)
       throws ClosedFileEventsApiException {

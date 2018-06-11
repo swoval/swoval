@@ -24,7 +24,11 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   }
 
   /**
-   * Register a path to monitor for file events
+   * Register a path to monitor for file events. The watcher will only watch child subdirectories
+   * up to maxDepth. For example, with a directory structure like /foo/bar/baz, if we register
+   * the path /foo/ with maxDepth 0, we will be notified for any files that are created, updated or
+   * deleted in foo, but not bar. If we increase maxDepth to 1, then the files in /foo/bar are
+   * monitored, but not the files in /foo/bar/baz.
    *
    * @param path The directory to watch for file events
    * @param maxDepth The maximum maxDepth of subdirectories to watch
@@ -32,7 +36,7 @@ public abstract class DirectoryWatcher implements AutoCloseable {
    */
   public abstract boolean register(Path path, int maxDepth);
   /**
-   * Register a path to monitor for file events
+   * Register a path to monitor for file events. The monitoring may be recursive.
    *
    * @param path The directory to watch for file events
    * @param recursive Toggles whether or not to monitor subdirectories
@@ -43,7 +47,7 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   }
 
   /**
-   * Register a path to monitor for file events
+   * Register a path to monitor for file events recursively.
    *
    * @param path The directory to watch for file events
    * @return true if the registration is successful
@@ -70,13 +74,14 @@ public abstract class DirectoryWatcher implements AutoCloseable {
    * @param timeUnit The TimeUnit or the latency parameter
    * @param flags Flags used by the apple directory watcher
    * @param callback {@link Callback} to run on file events
+   * @param executor provides a single threaded context to manage state
    * @return DirectoryWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
    * @throws InterruptedException when the {@link DirectoryWatcher} is interrupted during
    *     initialization
    */
-  public static DirectoryWatcher defaultWatcher(
+  static DirectoryWatcher defaultWatcher(
       final long latency,
       final TimeUnit timeUnit,
       final Flags.Create flags,
@@ -120,9 +125,9 @@ public abstract class DirectoryWatcher implements AutoCloseable {
      *
      * @param callback The callback to invoke on directory updates
      * @param executor The executor on which internal updates are invoked
-     * @return
-     * @throws InterruptedException
-     * @throws IOException
+     * @return A DirectoryWatcher instance
+     * @throws InterruptedException if the DirectoryWatcher is interrupted during initialization -- this can occur on mac
+     * @throws IOException if an IOException occurs during initialization -- this can occur on linux and windows
      */
     DirectoryWatcher create(final Callback callback, final Executor executor)
         throws InterruptedException, IOException;

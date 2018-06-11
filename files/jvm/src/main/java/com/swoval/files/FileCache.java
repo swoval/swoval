@@ -34,10 +34,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Directory.EntryFilter)} method. The cache stores the path information in {@link Directory.Entry}
  * instances.
  *
- * <p>A default implementation is provided by {@link FileCache#apply(Converter, Observer,
- * Option...)} . The user may cache arbitrary information in the cache by customizing the {@link
- * Directory.Converter} that is passed into the factory {@link FileCache#apply(Converter, Observer,
- * Option...)}
+ * <p>A default implementation is provided by {@link FileCache#apply}. The user may cache arbitrary information in the
+ * cache by customizing the {@link Directory.Converter} that is passed into the factory {@link FileCache#apply}.
  *
  * @param <T> The type of data stored in the {@link Directory.Entry} instances for the cache
  */
@@ -116,6 +114,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    *     this path or the empty list if the path is not monitored by the cache.
    *     <p>is recursively monitoring the input path, it will not return cache entries for children
    *     if this flag is false.
+   * @param recursive Toggles whether or not to traverse the children of the path
    * @return The list of cache elements. This will be empty if the path is not monitored in a
    *     monitored path. If the path is a file and the file is monitored by the cache, the returned
    *     list will contain just the cache entry for the path.
@@ -144,6 +143,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @param path The path to monitor
    * @param maxDepth The maximum depth of subdirectories to include
    * @return The registered directory if it hasn't previously been registered, null otherwise
+   * @throws IOException if the directory can't be listed
    */
   public abstract Directory<T> register(final Path path, final int maxDepth) throws IOException;
   /**
@@ -152,6 +152,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @param path The path to monitor
    * @param recursive Recursively monitor the path if true
    * @return The registered directory if it hasn't previously been registered, null otherwise
+   * @throws IOException if the directory can't be listed
    */
   public Directory<T> register(final Path path, final boolean recursive) throws IOException {
     return register(path, recursive ? Integer.MAX_VALUE : 0);
@@ -162,6 +163,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    *
    * @param path The path to monitor
    * @return The registered directory if it hasn't previously been registered, null otherwise
+   * @throws IOException if the directory can't be listed
    */
   public Directory<T> register(final Path path) throws IOException {
     return register(path, Integer.MAX_VALUE);
@@ -175,6 +177,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    * Create a file cache
    *
    * @param converter Converts a path to the cached value type T
+   * @param options Options for the cache.
    * @param <T> The value type of the cache entries
    * @return A file cache
    * @throws IOException if the {@link DirectoryWatcher} cannot be initialized
@@ -191,6 +194,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    *
    * @param converter Converts a path to the cached value type T
    * @param factory A factory to create a directory watcher
+   * @param options Options for the cache
    * @param <T> The value type of the cache entries
    * @return A file cache
    * @throws IOException if the {@link DirectoryWatcher} cannot be initialized
@@ -209,6 +213,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    *
    * @param converter Converts a path to the cached value type T
    * @param observer Observer of events for this cache
+   * @param options Options for the cache
    * @param <T> The value type of the cache entries
    * @return A file cache
    * @throws IOException if the {@link DirectoryWatcher} cannot be initialized
@@ -228,6 +233,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @param converter Converts a path to the cached value type T
    * @param factory A factory to create a directory watcher
    * @param observer Observer of events for this cache
+   * @param options Options for the cache
    * @param <T> The value type of the cache entries
    * @return A file cache
    * @throws IOException if the {@link DirectoryWatcher} cannot be initialized

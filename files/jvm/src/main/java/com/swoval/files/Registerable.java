@@ -19,8 +19,8 @@ public interface Registerable extends java.nio.file.WatchService {
    *
    * @param path The path to monitor.
    * @param kinds The types of events to monitor.
-   * @return
-   * @throws IOException
+   * @return WatchKey the key returned by the WatchService
+   * @throws IOException when the path cannot be registered
    */
   WatchKey register(final Path path, final WatchEvent.Kind<?>... kinds) throws IOException;
 }
