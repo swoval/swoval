@@ -18,6 +18,7 @@ files/jvm/src/test/scala/com/swoval/files/NioDirectoryWatcherTest.scala
 files/jvm/src/test/scala/com/swoval/files/DirectoryTest.scala
 files/jvm/src/test/scala/com/swoval/files/AppleDirectoryWatcherTest.scala
 files/jvm/src/test/scala/com/swoval/files/PathTest.scala
+files/jvm/src/test/scala/com/swoval/functional/EitherTest.scala
 #END FILESJVM TEST SYMLINKS
 
 #BEGIN FILESJS TEST SYMLINKS

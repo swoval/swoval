@@ -12,7 +12,7 @@ import scala.language.higherKinds
 import scala.util.Try
 
 package object test {
-  final val DEFAULT_TIMEOUT = 1.second
+  final val DEFAULT_TIMEOUT = 5.second
 
   /** Taken from shapeless */
   sealed trait <:!<[T, R]
