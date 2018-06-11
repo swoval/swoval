@@ -78,9 +78,11 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
                     final MacOSXWatchKey key =
                         childKey == null ? registered.get(path.getParent()) : childKey;
                     final boolean exists = Files.exists(path, LinkOption.NOFOLLOW_LINKS);
-                    if (exists && key.reportModifyEvents()) createEvent(key, ENTRY_MODIFY, path);
-                    else if (!exists && key.reportDeleteEvents())
-                      createEvent(key, ENTRY_DELETE, path);
+                    if (key != null) {
+                      if (exists && key.reportModifyEvents()) createEvent(key, ENTRY_MODIFY, path);
+                      else if (!exists && key.reportDeleteEvents())
+                        createEvent(key, ENTRY_DELETE, path);
+                    }
                   }
                 }
               });
