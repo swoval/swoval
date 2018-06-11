@@ -32,24 +32,27 @@ object DirectoryWatcher {
   def defaultWatcher(latency: Long,
                      timeUnit: TimeUnit,
                      flags: Flags.Create,
-                     callback: Callback): DirectoryWatcher =
+                     callback: Callback,
+                     executor: Executor): DirectoryWatcher =
     if (Platform.isMac)
-      new AppleDirectoryWatcher(timeUnit.toNanos(latency) / 1.0e9, flags, callback)
-    else new NioDirectoryWatcher(callback)
+      new AppleDirectoryWatcher(timeUnit.toNanos(latency) / 1.0e9, flags, callback, executor)
+    else new NioDirectoryWatcher(callback, executor)
 
   /**
    * Create a platform compatible DirectoryWatcher.
    *
    * @param callback [[Callback]] to run on file events
+   * @param executor The executor to run internal callbacks on
    * @return DirectoryWatcher for the runtime platform
    *     initialized
    *     initialization
    */
-  def defaultWatcher(callback: Callback): DirectoryWatcher =
+  def defaultWatcher(callback: Callback, executor: Executor): DirectoryWatcher =
     defaultWatcher(10,
                    TimeUnit.MILLISECONDS,
                    new Flags.Create().setNoDefer().setFileEvents(),
-                   callback)
+                   callback,
+                   executor)
 
   /**
    * Instantiates new [[DirectoryWatcher]] instances with a [[Callback]]. This is primarily
@@ -57,13 +60,20 @@ object DirectoryWatcher {
    */
   trait Factory {
 
-    def create(callback: Callback): DirectoryWatcher
+    /**
+     * Creates a new DirectoryWatcher
+     *
+     * @param callback The callback to invoke on directory updates
+     * @param executor The executor on which internal updates are invoked
+     * @return
+     */
+    def create(callback: Callback, executor: Executor): DirectoryWatcher
 
   }
 
   val DEFAULT_FACTORY: Factory = new Factory() {
-    override def create(callback: Callback): DirectoryWatcher =
-      defaultWatcher(callback)
+    override def create(callback: Callback, executor: Executor): DirectoryWatcher =
+      defaultWatcher(callback, executor)
   }
 
   object Event {

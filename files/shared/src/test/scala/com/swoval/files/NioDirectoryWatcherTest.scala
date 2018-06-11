@@ -235,24 +235,25 @@ object NioDirectoryWatcherTest extends TestSuite {
           secondLatch.countDown()
         }
       }
-      usingAsync(new NioDirectoryWatcher(callback, WatchService.newWatchService(), executor)) { w =>
-        w.register(dir, 0)
-        val otherFile = dir.resolve("other-file")
-        val file = dir.resolve("file").createFile()
-        latch
-          .waitFor(DEFAULT_TIMEOUT) {
-            otherFile.createFile()
-            100.milliseconds.sleep
-            executor.clear()
-          }
-          .flatMap { _ =>
-            secondLatch.waitFor(DEFAULT_TIMEOUT * 2) {}
-          }
-          .andThen {
-            case Failure(_: TimeoutException) =>
-              println(
-                s"Test timed out -- latch ${latch.getCount}, secondLatch ${secondLatch.getCount}")
-          }
+      usingAsync(new NioDirectoryWatcher(callback, WatchService.newWatchService(), executor, null)) {
+        w =>
+          w.register(dir, 0)
+          val otherFile = dir.resolve("other-file")
+          val file = dir.resolve("file").createFile()
+          latch
+            .waitFor(DEFAULT_TIMEOUT) {
+              otherFile.createFile()
+              100.milliseconds.sleep
+              executor.clear()
+            }
+            .flatMap { _ =>
+              secondLatch.waitFor(DEFAULT_TIMEOUT * 2) {}
+            }
+            .andThen {
+              case Failure(_: TimeoutException) =>
+                println(
+                  s"Test timed out -- latch ${latch.getCount}, secondLatch ${secondLatch.getCount}")
+            }
       }
     }
   } else

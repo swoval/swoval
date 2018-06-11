@@ -38,6 +38,7 @@ object Converter {
       .replaceAll("(?s)(.+?import[^\n]+?)\n\nimport", "$1\nimport")
       .replaceAll("""(?s)(.+?)<a.+?href=["]([^"]+)["][^>]*>""", "$1[[$2 ")
       .replaceAll("</a>", "]]")
+      .replaceAll("java.lang.Boolean", "Boolean")
       .lines
       .toIndexedSeq
 

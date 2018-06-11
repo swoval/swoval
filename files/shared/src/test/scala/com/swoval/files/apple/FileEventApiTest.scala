@@ -2,10 +2,11 @@ package com.swoval.files.apple
 
 import java.nio.file.{ Files => JFiles }
 
-import com.swoval.files.apple.FileEventsApi.Consumer
 import com.swoval.files.test.{ CountDownLatch, _ }
+import com.swoval.functional.Consumer
 import com.swoval.test._
 import utest._
+import utest.framework.ExecutionContext.RunNow
 
 object FileEventApiTest extends TestSuite {
 
@@ -28,7 +29,11 @@ object FileEventApiTest extends TestSuite {
       api.createStream(dir.toString, 0.05, new Flags.Create().setNoDefer.getValue)
       JFiles.createFile(file)
 
-      latch.waitFor(DEFAULT_TIMEOUT) {}
+      latch
+        .waitFor(DEFAULT_TIMEOUT) {}
+        .andThen {
+          case _ => api.close()
+        }(RunNow)
     }
     'removeStream - withTempDirectory { dir =>
       withTempDirectory(dir) { subdir =>
@@ -39,7 +44,11 @@ object FileEventApiTest extends TestSuite {
         })
         api.createStream(subdir.toString, 0.05, new Flags.Create().setNoDefer.getValue)
         api.createStream(dir.toString, 0.05, new Flags.Create().setNoDefer.getValue)
-        latch.waitFor(DEFAULT_TIMEOUT) {}
+        latch
+          .waitFor(DEFAULT_TIMEOUT) {}
+          .andThen {
+            case _ => api.close()
+          }(RunNow)
       }
     }
     'close - {

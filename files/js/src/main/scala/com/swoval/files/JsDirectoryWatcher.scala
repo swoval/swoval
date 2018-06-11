@@ -13,7 +13,8 @@ class JsDirectoryWatcher(callback: js.UndefOr[js.Function2[String, String, Unit]
     extends js.Object {
   private[this] val callbacks = new Callbacks()
   callback.toOption.foreach(addCallback)
-  private[this] val inner: DirectoryWatcher = DirectoryWatcher.defaultWatcher(callbacks)
+  private[this] val inner: DirectoryWatcher =
+    DirectoryWatcher.defaultWatcher(callbacks, Executor.make(""))
   def close(): Unit = inner.close()
   def register(path: String, recursive: Boolean = true): Unit =
     inner.register(Paths.get(path), recursive)

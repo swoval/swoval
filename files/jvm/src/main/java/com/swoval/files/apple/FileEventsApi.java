@@ -2,6 +2,7 @@ package com.swoval.files.apple;
 
 import com.swoval.concurrent.ThreadFactory;
 import com.swoval.files.NativeLoader;
+import com.swoval.functional.Consumer;
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -25,15 +26,6 @@ public class FileEventsApi implements AutoCloseable {
     public ClosedFileEventsApiException(final String msg) {
       super(msg);
     }
-  }
-
-  /**
-   * Represents an operation that takes an input and returns no result
-   *
-   * @param <T> The input type
-   */
-  public interface Consumer<T> {
-    void accept(T t);
   }
 
   private long handle;

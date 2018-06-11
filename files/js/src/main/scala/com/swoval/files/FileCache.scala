@@ -3,11 +3,11 @@ package com.swoval.files
 import com.swoval.files.DirectoryWatcher.DEFAULT_FACTORY
 import com.swoval.files.DirectoryWatcher.Event.Overflow
 import com.swoval.files.EntryFilters.AllPass
-import com.swoval.concurrent.Lock
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.Observer
 import com.swoval.files.Directory.OnChange
-import com.swoval.files.SymlinkWatcher.OnLoop
+import com.swoval.files.SymlinkWatcher.OnError
+import com.swoval.functional.Either
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -23,6 +23,7 @@ import java.util.List
 import java.util.Map
 import java.util.Map.Entry
 import java.util.Set
+import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicBoolean
 import Option._
 import FileCache._
@@ -38,7 +39,7 @@ object FileCache {
    * @return A file cache
    */
   def apply[T](converter: Converter[T], options: FileCache.Option*): FileCache[T] =
-    new FileCacheImpl(converter, DEFAULT_FACTORY, options: _*)
+    new FileCacheImpl(converter, DEFAULT_FACTORY, null, options: _*)
 
   /**
    * Create a file cache using a specific DirectoryWatcher created by the provided factory
@@ -51,7 +52,7 @@ object FileCache {
   def apply[T](converter: Converter[T],
                factory: DirectoryWatcher.Factory,
                options: FileCache.Option*): FileCache[T] =
-    new FileCacheImpl(converter, factory, options: _*)
+    new FileCacheImpl(converter, factory, null, options: _*)
 
   /**
    * Create a file cache with an Observer of events
@@ -65,7 +66,7 @@ object FileCache {
                observer: Observer[T],
                options: FileCache.Option*): FileCache[T] = {
     val res: FileCache[T] =
-      new FileCacheImpl[T](converter, DEFAULT_FACTORY, options: _*)
+      new FileCacheImpl[T](converter, DEFAULT_FACTORY, null, options: _*)
     res.addObserver(observer)
     res
   }
@@ -83,7 +84,8 @@ object FileCache {
                factory: DirectoryWatcher.Factory,
                observer: Observer[T],
                options: FileCache.Option*): FileCache[T] = {
-    val res: FileCache[T] = new FileCacheImpl[T](converter, factory, options: _*)
+    val res: FileCache[T] =
+      new FileCacheImpl[T](converter, factory, null, options: _*)
     res.addObserver(observer)
     res
   }
@@ -253,6 +255,7 @@ private[files] object FileCacheImpl {
 
 private[files] class FileCacheImpl[T](private val converter: Converter[T],
                                       factory: DirectoryWatcher.Factory,
+                                      executor: Executor,
                                       options: FileCache.Option*)
     extends FileCache[T] {
 
@@ -260,7 +263,10 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
 
-  private val lock: Lock = new Lock()
+  private val internalExecutor: Executor =
+    if (executor == null)
+      Executor.make("com.swoval.files.FileCache-callback-internalExecutor")
+    else executor
 
   private val symlinkWatcher: SymlinkWatcher =
     if (!ArrayOps.contains(options, FileCache.Option.NOFOLLOW_LINKS))
@@ -271,31 +277,33 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
           }
         },
         factory,
-        new OnLoop() {
+        new OnError() {
           override def accept(symlink: Path, exception: IOException): Unit = {
             observers.onError(symlink, exception)
           }
-        }
+        },
+        this.internalExecutor.copy()
       )
     else null
 
-  private val callback: DirectoryWatcher.Callback =
+  private def callback(executor: Executor): DirectoryWatcher.Callback =
     new DirectoryWatcher.Callback() {
       override def apply(event: DirectoryWatcher.Event): Unit = {
-        if (lock.lock()) {
-          try {
+        executor.run(new Runnable() {
+          override def run(): Unit = {
             val path: Path = event.path
             if (event.kind == Overflow) {
               handleOverflow(path)
             } else {
               handleEvent(path)
             }
-          } finally lock.unlock()
-        }
+          }
+        })
       }
     }
 
-  private val watcher: DirectoryWatcher = factory.create(callback)
+  private val watcher: DirectoryWatcher =
+    factory.create(callback(this.internalExecutor.copy()), this.internalExecutor.copy())
 
   /**
  Cleans up the directory watcher and clears the directory cache.
@@ -308,6 +316,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
         directories.values.iterator()
       while (directoryIterator.hasNext) directoryIterator.next().close()
       directories.clear()
+      internalExecutor.close()
     }
   }
 
@@ -320,82 +329,100 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
   }
 
   override def register(path: Path, maxDepth: Int): Directory[T] = {
-    var result: Directory[T] = null
+    var result: Either[Either[Directory[T], IOException], Exception] = null
     if (Files.exists(path)) {
       watcher.register(path, maxDepth)
-      if (lock.lock()) {
-        try {
-          val dirs: List[Directory[T]] =
-            new ArrayList[Directory[T]](directories.values)
-          Collections.sort(
-            new ArrayList(directories.values),
-            new Comparator[Directory[T]]() {
-              override def compare(left: Directory[T], right: Directory[T]): Int =
-                left.path.compareTo(right.path)
-            }
-          )
-          val it: Iterator[Directory[T]] = dirs.iterator()
-          var existing: Directory[T] = null
-          while (it.hasNext && existing == null) {
-            val dir: Directory[T] = it.next()
-            if (path.startsWith(dir.path)) {
-              val depth: Int =
-                if (path == dir.path) 0
-                else (dir.path.relativize(path).getNameCount - 1)
-              if (dir.getDepth == java.lang.Integer.MAX_VALUE || maxDepth < dir.getDepth - depth) {
-                existing = dir
-              } else if (depth <= dir.getDepth) {
-                dir.close()
-                existing = Directory.cached(dir.path,
-                                            converter,
-                                            if (maxDepth < java.lang.Integer.MAX_VALUE - depth - 1)
-                                              maxDepth + depth + 1
-                                            else java.lang.Integer.MAX_VALUE)
-                directories.put(dir.path, existing)
+      result = internalExecutor.block(new Callable[Either[Directory[T], IOException]]() {
+        override def call(): Either[Directory[T], IOException] =
+          try {
+            var result: Directory[T] = null
+            val dirs: List[Directory[T]] =
+              new ArrayList[Directory[T]](directories.values)
+            Collections.sort(
+              new ArrayList(directories.values),
+              new Comparator[Directory[T]]() {
+                override def compare(left: Directory[T], right: Directory[T]): Int =
+                  left.path.compareTo(right.path)
               }
-            }
-          }
-          if (existing == null) {
-            result = Directory.cached(path, converter, maxDepth)
-            directories.put(path, result)
-            val entryIterator: Iterator[Directory.Entry[T]] =
-              result.list(true, EntryFilters.AllPass).iterator()
-            if (symlinkWatcher != null) {
-              while (entryIterator.hasNext) {
-                val entry: Directory.Entry[T] = entryIterator.next()
-                if (entry.isSymbolicLink) {
-                  symlinkWatcher.addSymlink(entry.path, entry.isDirectory)
+            )
+            val it: Iterator[Directory[T]] = dirs.iterator()
+            var existing: Directory[T] = null
+            while (it.hasNext && existing == null) {
+              val dir: Directory[T] = it.next()
+              if (path.startsWith(dir.path)) {
+                val depth: Int =
+                  if (path == dir.path) 0
+                  else (dir.path.relativize(path).getNameCount - 1)
+                if (dir.getDepth == java.lang.Integer.MAX_VALUE || maxDepth < dir.getDepth - depth) {
+                  existing = dir
+                } else if (depth <= dir.getDepth) {
+                  dir.close()
+                  try {
+                    existing =
+                      Directory.cached(dir.path,
+                                       converter,
+                                       if (maxDepth < java.lang.Integer.MAX_VALUE - depth - 1)
+                                         maxDepth + depth + 1
+                                       else java.lang.Integer.MAX_VALUE)
+                    directories.put(dir.path, existing)
+                  } catch {
+                    case e: IOException => existing = null
+
+                  }
                 }
               }
             }
+            if (existing == null) {
+              result = Directory.cached(path, converter, maxDepth)
+              directories.put(path, result)
+              val entryIterator: Iterator[Directory.Entry[T]] =
+                result.list(true, EntryFilters.AllPass).iterator()
+              if (symlinkWatcher != null) {
+                while (entryIterator.hasNext) {
+                  val entry: Directory.Entry[T] = entryIterator.next()
+                  if (entry.isSymbolicLink) {
+                    symlinkWatcher.addSymlink(entry.path, entry.isDirectory, maxDepth - 1)
+                  }
+                }
+              }
+            }
+            Either.left(result)
+          } catch {
+            case e: IOException => Either.right(e)
+
           }
-        } finally lock.unlock()
-      }
+      })
     }
-    result
+    if (result != null) {
+      if (result.isRight) {
+        throw new RuntimeException(result.right())
+      } else {
+        if (result.left().isRight) throw result.left().right()
+        else result.left().left()
+      }
+    } else {
+      null
+    }
   }
 
   private def listImpl(
       path: Path,
       maxDepth: Int,
       filter: Directory.EntryFilter[_ >: T]): Pair[Directory[T], List[Directory.Entry[T]]] = {
-    lock.lock()
-    try {
-      var foundDir: Directory[T] = null
-      val it: Iterator[Directory[T]] = directories.values.iterator()
-      while (it.hasNext) {
-        val dir: Directory[T] = it.next()
-        if (path.startsWith(dir.path) &&
-            (foundDir == null || dir.path.startsWith(foundDir.path))) {
-          foundDir = dir
-        }
+    var foundDir: Directory[T] = null
+    val it: Iterator[Directory[T]] = directories.values.iterator()
+    while (it.hasNext) {
+      val dir: Directory[T] = it.next()
+      if (path.startsWith(dir.path) &&
+          (foundDir == null || dir.path.startsWith(foundDir.path))) {
+        foundDir = dir
       }
-      if (foundDir != null) {
-        new Pair(foundDir, foundDir.list(path, maxDepth, filter))
-      } else {
-        null
-      }
-    } finally lock.unlock()
+    }
+    if (foundDir != null) {
+      new Pair(foundDir, foundDir.list(path, maxDepth, filter))
+    } else {
+      null
+    }
   }
 
   private def diff(left: Directory[T], right: Directory[T]): Boolean = {
@@ -425,13 +452,12 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
     catch {
       case e: IOException => {}
 
-    } finally lock.unlock()
+    }
     res
   }
 
-  private def handleOverflow(path: Path): Boolean = {
-    lock.lock()
-    try if (!closed.get) {
+  private def handleOverflow(path: Path): Boolean =
+    if (!closed.get) {
       val directoryIterator: Iterator[Directory[T]] =
         directories.values.iterator()
       val toReplace: List[Directory[T]] = new ArrayList[Directory[T]]()
@@ -507,8 +533,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       creations.isEmpty && deletions.isEmpty && updates.isEmpty
     } else {
       false
-    } finally lock.unlock()
-  }
+    }
 
   private def handleEvent(path: Path): Unit = {
     if (!closed.get) {
@@ -530,9 +555,13 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
           val paths: List[Directory.Entry[T]] = pair.second
           if (!paths.isEmpty || path != dir.path) {
             val toUpdate: Path = if (paths.isEmpty) path else paths.get(0).path
-            if (attrs.isSymbolicLink && symlinkWatcher != null)
-              symlinkWatcher.addSymlink(path, Files.isDirectory(path))
             try {
+              if (attrs.isSymbolicLink && symlinkWatcher != null)
+                symlinkWatcher.addSymlink(path,
+                                          Files.isDirectory(path),
+                                          if (dir.getDepth == java.lang.Integer.MAX_VALUE)
+                                            java.lang.Integer.MAX_VALUE
+                                          else dir.getDepth - 1)
               val it: Iterator[Array[Directory.Entry[T]]] = dir
                 .addUpdate(toUpdate, Directory.Entry.getKind(toUpdate, attrs))
                 .iterator()
@@ -553,16 +582,14 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       } else {
         val removeIterators: List[Iterator[Directory.Entry[T]]] =
           new ArrayList[Iterator[Directory.Entry[T]]]()
-        lock.lock()
-        try {
-          val it: Iterator[Directory[T]] = directories.values.iterator()
-          while (it.hasNext) {
-            val dir: Directory[T] = it.next()
-            if (path.startsWith(dir.path)) {
-              removeIterators.add(dir.remove(path).iterator())
-            }
+        val directoryIterator: Iterator[Directory[T]] =
+          directories.values.iterator()
+        while (directoryIterator.hasNext) {
+          val dir: Directory[T] = directoryIterator.next()
+          if (path.startsWith(dir.path)) {
+            removeIterators.add(dir.remove(path).iterator())
           }
-        } finally lock.unlock()
+        }
         val it: Iterator[Iterator[Directory.Entry[T]]] =
           removeIterators.iterator()
         while (it.hasNext) {

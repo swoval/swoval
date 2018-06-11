@@ -23,7 +23,11 @@ object DirectoryWatcherTest extends TestSuite {
   def defaultWatcher(latency: FiniteDuration,
                      flags: Flags.Create,
                      callback: Callback): DirectoryWatcher =
-    DirectoryWatcher.defaultWatcher(latency.toNanos, TimeUnit.NANOSECONDS, flags, callback)
+    DirectoryWatcher.defaultWatcher(latency.toNanos,
+                                    TimeUnit.NANOSECONDS,
+                                    flags,
+                                    callback,
+                                    Executor.make("foo"))
   val tests = Tests {
     val events = new ArrayBlockingQueue[DirectoryWatcher.Event](10)
     'files - {
@@ -83,7 +87,8 @@ object DirectoryWatcherTest extends TestSuite {
                                                     fileFlags,
                                                     Executor.make("apple-directory-watcher-test"),
                                                     (_: DirectoryWatcher.Event) => {},
-                                                    callback);
+                                                    callback,
+                                                    null);
             usingAsync(watcher) { w =>
               w.register(subdir)
               w.register(dir)

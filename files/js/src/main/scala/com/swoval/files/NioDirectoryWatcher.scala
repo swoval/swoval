@@ -17,8 +17,12 @@ import scala.scalajs.js
  * @param onFileEvent The callback to run on file events
  */
 class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
+  def this(onFileEvent: Callback, executor: Executor) = this(onFileEvent)
   def this(onFileEvent: Callback, registerable: Registerable) = this(onFileEvent)
-  private[files] def this(onFileEvent: Callback, registerable: Registerable, executor: Executor) =
+  private[files] def this(onFileEvent: Callback,
+                          registerable: Registerable,
+                          callbackExecutor: Executor,
+                          executor: Executor) =
     this(onFileEvent)
   private object DirectoryFilter extends FileFilter {
     override def accept(pathname: File): Boolean = pathname.isDirectory

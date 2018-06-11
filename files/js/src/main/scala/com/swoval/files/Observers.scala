@@ -1,6 +1,5 @@
 package com.swoval.files
 
-import com.swoval.concurrent.Lock
 import com.swoval.files.Directory.Entry
 import com.swoval.files.Directory.Observer
 import com.swoval.files.Directory.OnChange
@@ -8,9 +7,10 @@ import com.swoval.files.Directory.OnError
 import com.swoval.files.Directory.OnUpdate
 import java.io.IOException
 import java.nio.file.Path
-import java.util.Collection
+import java.util.ArrayList
 import java.util.HashMap
 import java.util.Iterator
+import java.util.List
 import java.util.Map
 import java.util.concurrent.atomic.AtomicInteger
 import Observers._
@@ -73,63 +73,55 @@ private[files] class Observers[T] extends Observer[T] with AutoCloseable {
 
   private val counter: AtomicInteger = new AtomicInteger(0)
 
-  private val lock: Lock = new Lock()
-
   private val observers: Map[Integer, Observer[T]] = new HashMap()
 
   override def onCreate(newEntry: Entry[T]): Unit = {
-    var cbs: Collection[Observer[T]] = null
-    if (lock.lock()) {
-      try cbs = observers.values
-      finally lock.unlock()
-      val it: Iterator[Observer[T]] = cbs.iterator()
-      while (it.hasNext) it.next().onCreate(newEntry)
+    var cbs: List[Observer[T]] = null
+    observers.synchronized {
+      cbs = new ArrayList(observers.values)
     }
+    val it: Iterator[Observer[T]] = cbs.iterator()
+    while (it.hasNext) it.next().onCreate(newEntry)
   }
 
   override def onDelete(oldEntry: Entry[T]): Unit = {
-    var cbs: Collection[Observer[T]] = null
-    if (lock.lock()) {
-      try cbs = observers.values
-      finally lock.unlock()
-      val it: Iterator[Observer[T]] = cbs.iterator()
-      while (it.hasNext) it.next().onDelete(oldEntry)
+    var cbs: List[Observer[T]] = null
+    observers.synchronized {
+      cbs = new ArrayList(observers.values)
     }
+    val it: Iterator[Observer[T]] = cbs.iterator()
+    while (it.hasNext) it.next().onDelete(oldEntry)
   }
 
   override def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit = {
-    var cbs: Collection[Observer[T]] = null
-    if (lock.lock()) {
-      try cbs = observers.values
-      finally lock.unlock()
-      val it: Iterator[Observer[T]] = cbs.iterator()
-      while (it.hasNext) it.next().onUpdate(oldEntry, newEntry)
+    var cbs: List[Observer[T]] = null
+    observers.synchronized {
+      cbs = new ArrayList(observers.values)
     }
+    val it: Iterator[Observer[T]] = cbs.iterator()
+    while (it.hasNext) it.next().onUpdate(oldEntry, newEntry)
   }
 
   override def onError(path: Path, exception: IOException): Unit = {
-    var cbs: Collection[Observer[T]] = null
-    if (lock.lock()) {
-      try cbs = observers.values
-      finally lock.unlock()
-      val it: Iterator[Observer[T]] = cbs.iterator()
-      while (it.hasNext) it.next().onError(path, exception)
+    var cbs: List[Observer[T]] = null
+    observers.synchronized {
+      cbs = new ArrayList(observers.values)
     }
+    val it: Iterator[Observer[T]] = cbs.iterator()
+    while (it.hasNext) it.next().onError(path, exception)
   }
 
   def addObserver(observer: Observer[T]): Int = {
     val key: Int = counter.getAndIncrement
-    if (lock.lock()) {
-      try observers.put(key, observer)
-      finally lock.unlock()
+    observers.synchronized {
+      observers.put(key, observer)
     }
     key
   }
 
   def removeObserver(handle: Int): Unit = {
-    if (lock.lock()) {
-      try observers.remove(handle)
-      finally lock.unlock()
+    observers.synchronized {
+      observers.remove(handle)
     }
   }
 

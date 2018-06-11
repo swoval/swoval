@@ -398,6 +398,7 @@ object Build {
                              "Event",
                              "FileEvent",
                              "Flags").value
+              convertSources("com/swoval/functional", "Consumer", "Either").value
             }
           },
           scalafmt in Compile,

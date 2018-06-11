@@ -77,27 +77,36 @@ public abstract class DirectoryWatcher implements AutoCloseable {
    *     initialization
    */
   public static DirectoryWatcher defaultWatcher(
-      long latency, TimeUnit timeUnit, Flags.Create flags, Callback callback)
+      final long latency,
+      final TimeUnit timeUnit,
+      final Flags.Create flags,
+      final Callback callback,
+      final Executor executor)
       throws IOException, InterruptedException {
     return Platform.isMac()
-        ? new AppleDirectoryWatcher(timeUnit.toNanos(latency) / 1.0e9, flags, callback)
-        : new NioDirectoryWatcher(callback);
+        ? new AppleDirectoryWatcher(timeUnit.toNanos(latency) / 1.0e9, flags, callback, executor)
+        : new NioDirectoryWatcher(callback, executor);
   }
 
   /**
    * Create a platform compatible DirectoryWatcher.
    *
    * @param callback {@link Callback} to run on file events
+   * @param executor The executor to run internal callbacks on
    * @return DirectoryWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
    * @throws InterruptedException when the {@link DirectoryWatcher} is interrupted during
    *     initialization
    */
-  public static DirectoryWatcher defaultWatcher(Callback callback)
+  public static DirectoryWatcher defaultWatcher(final Callback callback, final Executor executor)
       throws IOException, InterruptedException {
     return defaultWatcher(
-        10, TimeUnit.MILLISECONDS, new Flags.Create().setNoDefer().setFileEvents(), callback);
+        10,
+        TimeUnit.MILLISECONDS,
+        new Flags.Create().setNoDefer().setFileEvents(),
+        callback,
+        executor);
   }
 
   /**
@@ -105,14 +114,26 @@ public abstract class DirectoryWatcher implements AutoCloseable {
    * so that the {@link DirectoryWatcher} in {@link FileCache} may be changed in testing.
    */
   public interface Factory {
-    DirectoryWatcher create(Callback callback) throws InterruptedException, IOException;
+
+    /**
+     * Creates a new DirectoryWatcher
+     *
+     * @param callback The callback to invoke on directory updates
+     * @param executor The executor on which internal updates are invoked
+     * @return
+     * @throws InterruptedException
+     * @throws IOException
+     */
+    DirectoryWatcher create(final Callback callback, final Executor executor)
+        throws InterruptedException, IOException;
   }
 
   public static final Factory DEFAULT_FACTORY =
       new Factory() {
         @Override
-        public DirectoryWatcher create(Callback callback) throws InterruptedException, IOException {
-          return defaultWatcher(callback);
+        public DirectoryWatcher create(Callback callback, final Executor executor)
+            throws InterruptedException, IOException {
+          return defaultWatcher(callback, executor);
         }
       };
 

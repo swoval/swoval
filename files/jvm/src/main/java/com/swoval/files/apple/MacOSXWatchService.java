@@ -8,7 +8,7 @@ import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 import com.swoval.concurrent.ThreadFactory;
 import com.swoval.files.Registerable;
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
-import com.swoval.files.apple.FileEventsApi.Consumer;
+import com.swoval.functional.Consumer;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.Files;
