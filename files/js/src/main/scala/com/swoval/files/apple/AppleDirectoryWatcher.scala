@@ -3,6 +3,7 @@ package com.swoval.files.apple
 import com.swoval.files.DirectoryWatcher.Event.Create
 import com.swoval.files.DirectoryWatcher.Event.Delete
 import com.swoval.files.DirectoryWatcher.Event.Modify
+import com.swoval.concurrent.Lock
 import com.swoval.files.DirectoryWatcher
 import com.swoval.files.Executor
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException
@@ -64,9 +65,9 @@ class AppleDirectoryWatcher(private val latency: Double,
 
   private val streams: Map[Path, Stream] = new HashMap()
 
-  private val lock: AnyRef = new AnyRef()
-
   private val closed: AtomicBoolean = new AtomicBoolean(false)
+
+  private val lock: Lock = new Lock()
 
   private val fileEventsApi: FileEventsApi = FileEventsApi.apply(
     new Consumer[FileEvent]() {
@@ -106,10 +107,11 @@ class AppleDirectoryWatcher(private val latency: Double,
       override def accept(stream: String): Unit = {
         executor.run(new Runnable() {
           override def run(): Unit = {
-            lock.synchronized {
-              streams.remove(stream)
+            if (lock.lock()) {
+              try streams.remove(Paths.get(stream))
+              finally lock.unlock()
+              onStreamRemoved.apply(stream)
             }
-            onStreamRemoved.apply(stream)
           }
         })
       }
@@ -146,8 +148,9 @@ class AppleDirectoryWatcher(private val latency: Double,
             result = false
             System.err.println("Error watching " + path + ".")
           } else {
-            lock.synchronized {
-              streams.put(path, new Stream(path, id, maxDepth))
+            if (lock.lock()) {
+              try streams.put(path, new Stream(path, id, maxDepth))
+              finally lock.unlock()
             }
           }
         } catch {
@@ -188,8 +191,8 @@ class AppleDirectoryWatcher(private val latency: Double,
    * @param path The directory to remove from monitoring
    */
   override def unregister(path: Path): Unit = {
-    lock.synchronized {
-      if (!closed.get) {
+    if (lock.lock()) {
+      try if (!closed.get) {
         val stream: Stream = streams.remove(path)
         if (stream != null && stream.id != -1) {
           executor.run(new Runnable() {
@@ -198,7 +201,7 @@ class AppleDirectoryWatcher(private val latency: Double,
             }
           })
         }
-      }
+      } finally lock.unlock()
     }
   }
 
@@ -208,11 +211,12 @@ class AppleDirectoryWatcher(private val latency: Double,
   override def close(): Unit = {
     if (closed.compareAndSet(false, true)) {
       super.close()
-      lock.synchronized {
-        streams.clear()
+      if (lock.lock()) {
+        try streams.clear()
+        finally lock.unlock()
+        fileEventsApi.close()
+        executor.close()
       }
-      fileEventsApi.close()
-      executor.close()
     }
   }
 

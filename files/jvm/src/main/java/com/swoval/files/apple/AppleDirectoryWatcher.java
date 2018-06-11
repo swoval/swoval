@@ -4,6 +4,7 @@ import static com.swoval.files.DirectoryWatcher.Event.Create;
 import static com.swoval.files.DirectoryWatcher.Event.Delete;
 import static com.swoval.files.DirectoryWatcher.Event.Modify;
 
+import com.swoval.concurrent.Lock;
 import com.swoval.files.DirectoryWatcher;
 import com.swoval.files.Executor;
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
@@ -24,8 +25,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class AppleDirectoryWatcher extends DirectoryWatcher {
   private final Map<Path, Stream> streams = new HashMap<>();
-  private final Object lock = new Object();
   private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final Lock lock = new Lock();
   private final double latency;
   private final Executor executor;
   private final Flags.Create flags;
@@ -80,8 +81,12 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
             result = false;
             System.err.println("Error watching " + path + ".");
           } else {
-            synchronized (lock) {
-              streams.put(path, new Stream(path, id, maxDepth));
+            if (lock.lock()) {
+              try {
+                streams.put(path, new Stream(path, id, maxDepth));
+              } finally {
+                lock.unlock();
+              }
             }
           }
         } catch (ClosedFileEventsApiException e) {
@@ -119,18 +124,22 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    */
   @Override
   public void unregister(Path path) {
-    synchronized (lock) {
-      if (!closed.get()) {
-        final Stream stream = streams.remove(path);
-        if (stream != null && stream.id != -1) {
-          executor.run(
-              new Runnable() {
-                @Override
-                public void run() {
-                  fileEventsApi.stopStream(stream.id);
-                }
-              });
+    if (lock.lock()) {
+      try {
+        if (!closed.get()) {
+          final Stream stream = streams.remove(path);
+          if (stream != null && stream.id != -1) {
+            executor.run(
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    fileEventsApi.stopStream(stream.id);
+                  }
+                });
+          }
         }
+      } finally {
+        lock.unlock();
       }
     }
   }
@@ -140,11 +149,15 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
   public void close() {
     if (closed.compareAndSet(false, true)) {
       super.close();
-      synchronized (lock) {
-        streams.clear();
+      if (lock.lock()) {
+        try {
+          streams.clear();
+        } finally {
+          lock.unlock();
+        }
+        fileEventsApi.close();
+        executor.close();
       }
-      fileEventsApi.close();
-      executor.close();
     }
   }
 
@@ -255,10 +268,14 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
                     new Runnable() {
                       @Override
                       public void run() {
-                        synchronized (lock) {
-                          streams.remove(stream);
+                        if (lock.lock()) {
+                          try {
+                            streams.remove(Paths.get(stream));
+                          } finally {
+                            lock.unlock();
+                          }
+                          onStreamRemoved.apply(stream);
                         }
-                        onStreamRemoved.apply(stream);
                       }
                     });
               }

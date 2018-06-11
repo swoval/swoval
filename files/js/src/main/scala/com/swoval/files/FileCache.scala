@@ -3,6 +3,7 @@ package com.swoval.files
 import com.swoval.files.DirectoryWatcher.DEFAULT_FACTORY
 import com.swoval.files.DirectoryWatcher.Event.Overflow
 import com.swoval.files.EntryFilters.AllPass
+import com.swoval.concurrent.Lock
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.Observer
 import com.swoval.files.Directory.OnChange
@@ -23,7 +24,6 @@ import java.util.Map
 import java.util.Map.Entry
 import java.util.Set
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.ReentrantLock
 import Option._
 import FileCache._
 import FileCacheImpl._
@@ -258,7 +258,9 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
 
   private val directories: Map[Path, Directory[T]] = new HashMap()
 
-  private val lock: ReentrantLock = new ReentrantLock()
+  private val closed: AtomicBoolean = new AtomicBoolean(false)
+
+  private val lock: Lock = new Lock()
 
   private val symlinkWatcher: SymlinkWatcher =
     if (!ArrayOps.contains(options, FileCache.Option.NOFOLLOW_LINKS))
@@ -277,20 +279,19 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       )
     else null
 
-  private val closed: AtomicBoolean = new AtomicBoolean(false)
-
   private val callback: DirectoryWatcher.Callback =
     new DirectoryWatcher.Callback() {
       override def apply(event: DirectoryWatcher.Event): Unit = {
-        lock.lock()
-        try {
-          val path: Path = event.path
-          if (event.kind == Overflow) {
-            handleOverflow(path)
-          } else {
-            handleEvent(path)
-          }
-        } finally lock.unlock()
+        if (lock.lock()) {
+          try {
+            val path: Path = event.path
+            if (event.kind == Overflow) {
+              handleOverflow(path)
+            } else {
+              handleEvent(path)
+            }
+          } finally lock.unlock()
+        }
       }
     }
 
@@ -322,51 +323,53 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
     var result: Directory[T] = null
     if (Files.exists(path)) {
       watcher.register(path, maxDepth)
-      directories.synchronized {
-        val dirs: List[Directory[T]] =
-          new ArrayList[Directory[T]](directories.values)
-        Collections.sort(
-          new ArrayList(directories.values),
-          new Comparator[Directory[T]]() {
-            override def compare(left: Directory[T], right: Directory[T]): Int =
-              left.path.compareTo(right.path)
-          }
-        )
-        val it: Iterator[Directory[T]] = dirs.iterator()
-        var existing: Directory[T] = null
-        while (it.hasNext && existing == null) {
-          val dir: Directory[T] = it.next()
-          if (path.startsWith(dir.path)) {
-            val depth: Int =
-              if (path == dir.path) 0
-              else (dir.path.relativize(path).getNameCount - 1)
-            if (dir.getDepth == java.lang.Integer.MAX_VALUE || maxDepth < dir.getDepth - depth) {
-              existing = dir
-            } else if (depth <= dir.getDepth) {
-              dir.close()
-              existing = Directory.cached(dir.path,
-                                          converter,
-                                          if (maxDepth < java.lang.Integer.MAX_VALUE - depth - 1)
-                                            maxDepth + depth + 1
-                                          else java.lang.Integer.MAX_VALUE)
-              directories.put(dir.path, existing)
+      if (lock.lock()) {
+        try {
+          val dirs: List[Directory[T]] =
+            new ArrayList[Directory[T]](directories.values)
+          Collections.sort(
+            new ArrayList(directories.values),
+            new Comparator[Directory[T]]() {
+              override def compare(left: Directory[T], right: Directory[T]): Int =
+                left.path.compareTo(right.path)
             }
-          }
-        }
-        if (existing == null) {
-          result = Directory.cached(path, converter, maxDepth)
-          directories.put(path, result)
-          val entryIterator: Iterator[Directory.Entry[T]] =
-            result.list(true, EntryFilters.AllPass).iterator()
-          if (symlinkWatcher != null) {
-            while (entryIterator.hasNext) {
-              val entry: Directory.Entry[T] = entryIterator.next()
-              if (entry.isSymbolicLink) {
-                symlinkWatcher.addSymlink(entry.path, entry.isDirectory)
+          )
+          val it: Iterator[Directory[T]] = dirs.iterator()
+          var existing: Directory[T] = null
+          while (it.hasNext && existing == null) {
+            val dir: Directory[T] = it.next()
+            if (path.startsWith(dir.path)) {
+              val depth: Int =
+                if (path == dir.path) 0
+                else (dir.path.relativize(path).getNameCount - 1)
+              if (dir.getDepth == java.lang.Integer.MAX_VALUE || maxDepth < dir.getDepth - depth) {
+                existing = dir
+              } else if (depth <= dir.getDepth) {
+                dir.close()
+                existing = Directory.cached(dir.path,
+                                            converter,
+                                            if (maxDepth < java.lang.Integer.MAX_VALUE - depth - 1)
+                                              maxDepth + depth + 1
+                                            else java.lang.Integer.MAX_VALUE)
+                directories.put(dir.path, existing)
               }
             }
           }
-        }
+          if (existing == null) {
+            result = Directory.cached(path, converter, maxDepth)
+            directories.put(path, result)
+            val entryIterator: Iterator[Directory.Entry[T]] =
+              result.list(true, EntryFilters.AllPass).iterator()
+            if (symlinkWatcher != null) {
+              while (entryIterator.hasNext) {
+                val entry: Directory.Entry[T] = entryIterator.next()
+                if (entry.isSymbolicLink) {
+                  symlinkWatcher.addSymlink(entry.path, entry.isDirectory)
+                }
+              }
+            }
+          }
+        } finally lock.unlock()
       }
     }
     result
@@ -375,8 +378,9 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
   private def listImpl(
       path: Path,
       maxDepth: Int,
-      filter: Directory.EntryFilter[_ >: T]): Pair[Directory[T], List[Directory.Entry[T]]] =
-    directories.synchronized {
+      filter: Directory.EntryFilter[_ >: T]): Pair[Directory[T], List[Directory.Entry[T]]] = {
+    lock.lock()
+    try {
       var foundDir: Directory[T] = null
       val it: Iterator[Directory[T]] = directories.values.iterator()
       while (it.hasNext) {
@@ -391,7 +395,8 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       } else {
         null
       }
-    }
+    } finally lock.unlock()
+  }
 
   private def diff(left: Directory[T], right: Directory[T]): Boolean = {
     val oldEntries: List[Directory.Entry[T]] =
@@ -420,12 +425,13 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
     catch {
       case e: IOException => {}
 
-    }
+    } finally lock.unlock()
     res
   }
 
-  private def handleOverflow(path: Path): Boolean = directories.synchronized {
-    if (!closed.get) {
+  private def handleOverflow(path: Path): Boolean = {
+    lock.lock()
+    try if (!closed.get) {
       val directoryIterator: Iterator[Directory[T]] =
         directories.values.iterator()
       val toReplace: List[Directory[T]] = new ArrayList[Directory[T]]()
@@ -501,7 +507,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       creations.isEmpty && deletions.isEmpty && updates.isEmpty
     } else {
       false
-    }
+    } finally lock.unlock()
   }
 
   private def handleEvent(path: Path): Unit = {
@@ -547,7 +553,8 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       } else {
         val removeIterators: List[Iterator[Directory.Entry[T]]] =
           new ArrayList[Iterator[Directory.Entry[T]]]()
-        directories.synchronized {
+        lock.lock()
+        try {
           val it: Iterator[Directory[T]] = directories.values.iterator()
           while (it.hasNext) {
             val dir: Directory[T] = it.next()
@@ -555,7 +562,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
               removeIterators.add(dir.remove(path).iterator())
             }
           }
-        }
+        } finally lock.unlock()
         val it: Iterator[Iterator[Directory.Entry[T]]] =
           removeIterators.iterator()
         while (it.hasNext) {

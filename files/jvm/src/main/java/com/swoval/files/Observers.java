@@ -1,5 +1,6 @@
 package com.swoval.files;
 
+import com.swoval.concurrent.Lock;
 import com.swoval.files.Directory.Entry;
 import com.swoval.files.Directory.Observer;
 import com.swoval.files.Directory.OnChange;
@@ -21,60 +22,84 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 class Observers<T> implements Observer<T>, AutoCloseable {
   private final AtomicInteger counter = new AtomicInteger(0);
-  private final Object lock = new Object();
+  private final Lock lock = new Lock();
   private final Map<Integer, Observer<T>> observers = new HashMap<>();
 
   @Override
   public void onCreate(final Entry<T> newEntry) {
     final Collection<Observer<T>> cbs;
-    synchronized (lock) {
-      cbs = observers.values();
+    if (lock.lock()) {
+      try {
+        cbs = observers.values();
+      } finally {
+        lock.unlock();
+      }
+      final Iterator<Observer<T>> it = cbs.iterator();
+      while (it.hasNext()) it.next().onCreate(newEntry);
     }
-    final Iterator<Observer<T>> it = cbs.iterator();
-    while (it.hasNext()) it.next().onCreate(newEntry);
   }
 
   @Override
   public void onDelete(final Entry<T> oldEntry) {
     final Collection<Observer<T>> cbs;
-    synchronized (lock) {
-      cbs = observers.values();
+    if (lock.lock()) {
+      try {
+        cbs = observers.values();
+      } finally {
+        lock.unlock();
+      }
+      final Iterator<Observer<T>> it = cbs.iterator();
+      while (it.hasNext()) it.next().onDelete(oldEntry);
     }
-    final Iterator<Observer<T>> it = cbs.iterator();
-    while (it.hasNext()) it.next().onDelete(oldEntry);
   }
 
   @Override
   public void onUpdate(final Entry<T> oldEntry, final Entry<T> newEntry) {
     final Collection<Observer<T>> cbs;
-    synchronized (lock) {
-      cbs = observers.values();
+    if (lock.lock()) {
+      try {
+        cbs = observers.values();
+      } finally {
+        lock.unlock();
+      }
+      final Iterator<Observer<T>> it = cbs.iterator();
+      while (it.hasNext()) it.next().onUpdate(oldEntry, newEntry);
     }
-    final Iterator<Observer<T>> it = cbs.iterator();
-    while (it.hasNext()) it.next().onUpdate(oldEntry, newEntry);
   }
 
   @Override
   public void onError(Path path, IOException exception) {
     final Collection<Observer<T>> cbs;
-    synchronized (lock) {
-      cbs = observers.values();
+    if (lock.lock()) {
+      try {
+        cbs = observers.values();
+      } finally {
+        lock.unlock();
+      }
+      final Iterator<Observer<T>> it = cbs.iterator();
+      while (it.hasNext()) it.next().onError(path, exception);
     }
-    final Iterator<Observer<T>> it = cbs.iterator();
-    while (it.hasNext()) it.next().onError(path, exception);
   }
 
   public int addObserver(Observer<T> observer) {
     final int key = counter.getAndIncrement();
-    synchronized (lock) {
-      observers.put(key, observer);
+    if (lock.lock()) {
+      try {
+        observers.put(key, observer);
+      } finally {
+        lock.unlock();
+      }
     }
     return key;
   }
 
   public void removeObserver(int handle) {
-    synchronized (lock) {
-      observers.remove(handle);
+    if (lock.lock()) {
+      try {
+        observers.remove(handle);
+      } finally {
+        lock.unlock();
+      }
     }
   }
 

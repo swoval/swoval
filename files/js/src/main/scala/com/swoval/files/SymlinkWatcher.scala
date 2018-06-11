@@ -1,6 +1,7 @@
 package com.swoval.files
 
 import java.util.Map.Entry
+import com.swoval.concurrent.Lock
 import java.io.IOException
 import java.nio.file.FileSystemLoopException
 import java.nio.file.Files
@@ -12,22 +13,21 @@ import java.util.Iterator
 import java.util.List
 import java.util.Map
 import java.util.Set
-import java.util.concurrent.locks.ReentrantLock
 import SymlinkWatcher._
 
 object SymlinkWatcher {
+
+  trait EventConsumer {
+
+    def accept(path: Path): Unit
+
+  }
 
   private class RegisteredPath(val path: Path, val isDirectory: Boolean, base: Path) {
 
     val paths: Set[Path] = new HashSet()
 
     paths.add(base)
-
-  }
-
-  trait EventConsumer {
-
-    def accept(path: Path): Unit
 
   }
 
@@ -49,7 +49,7 @@ class SymlinkWatcher(handleEvent: EventConsumer,
                      private val onLoop: OnLoop)
     extends AutoCloseable {
 
-  private val lock: ReentrantLock = new ReentrantLock()
+  private val lock: Lock = new Lock()
 
   private val watchedSymlinksByDirectory: Map[Path, RegisteredPath] =
     new HashMap()
@@ -70,42 +70,43 @@ class SymlinkWatcher(handleEvent: EventConsumer,
 
   val callback: DirectoryWatcher.Callback = new DirectoryWatcher.Callback() {
     override def apply(event: DirectoryWatcher.Event): Unit = {
-      lock.lock()
-      val callbacks: List[Runnable] = new ArrayList[Runnable]()
-      try {
-        val path: Path = event.path
-        val registeredPath: RegisteredPath =
-          find(path, watchedSymlinksByTarget)
-        if (registeredPath != null) {
-          val relativized: Path = registeredPath.path.relativize(path)
-          val it: Iterator[Path] = registeredPath.paths.iterator()
-          while (it.hasNext) {
-            val p: Path = it.next()
-            callbacks.add(new Runnable() {
-              override def run(): Unit = {
-                if (registeredPath.isDirectory)
-                  handleEvent.accept(p.resolve(relativized))
-                else handleEvent.accept(p)
-              }
-            })
-          }
-        }
-        if (!Files.exists(event.path)) {
-          val parent: Path = event.path.getParent
-          watchedSymlinksByTarget.remove(event.path)
+      if (lock.lock()) {
+        val callbacks: List[Runnable] = new ArrayList[Runnable]()
+        try {
+          val path: Path = event.path
           val registeredPath: RegisteredPath =
-            watchedSymlinksByDirectory.get(parent)
+            find(path, watchedSymlinksByTarget)
           if (registeredPath != null) {
-            registeredPath.paths.remove(event.path)
-            if (registeredPath.paths.isEmpty) {
-              watcher.unregister(parent)
-              watchedSymlinksByDirectory.remove(parent)
+            val relativized: Path = registeredPath.path.relativize(path)
+            val it: Iterator[Path] = registeredPath.paths.iterator()
+            while (it.hasNext) {
+              val p: Path = it.next()
+              callbacks.add(new Runnable() {
+                override def run(): Unit = {
+                  if (registeredPath.isDirectory)
+                    handleEvent.accept(p.resolve(relativized))
+                  else handleEvent.accept(p)
+                }
+              })
             }
           }
-        }
-      } finally lock.unlock()
-      val it: Iterator[Runnable] = callbacks.iterator()
-      while (it.hasNext) it.next().run()
+          if (!Files.exists(event.path)) {
+            val parent: Path = event.path.getParent
+            watchedSymlinksByTarget.remove(event.path)
+            val registeredPath: RegisteredPath =
+              watchedSymlinksByDirectory.get(parent)
+            if (registeredPath != null) {
+              registeredPath.paths.remove(event.path)
+              if (registeredPath.paths.isEmpty) {
+                watcher.unregister(parent)
+                watchedSymlinksByDirectory.remove(parent)
+              }
+            }
+          }
+        } finally lock.unlock()
+        val it: Iterator[Runnable] = callbacks.iterator()
+        while (it.hasNext) it.next().run()
+      }
     }
   }
 
@@ -129,55 +130,56 @@ class SymlinkWatcher(handleEvent: EventConsumer,
    * @param path The symlink base file.
    */
   def addSymlink(path: Path, isDirectory: Boolean): Unit = {
-    lock.lock()
-    try {
-      val realPath: Path = path.toRealPath()
-      val targetRegistrationPath: RegisteredPath =
-        watchedSymlinksByTarget.get(realPath)
-      if (targetRegistrationPath == null) {
-        val registrationPath: Path =
-          if (isDirectory) realPath else realPath.getParent
-        val registeredPath: RegisteredPath =
-          watchedSymlinksByDirectory.get(registrationPath)
-        if (registeredPath != null) {
-          if (!isDirectory || registeredPath.isDirectory) {
-            registeredPath.paths.add(realPath)
-            val symlinkChildren: RegisteredPath =
-              watchedSymlinksByTarget.get(realPath)
-            if (symlinkChildren != null) {
-              symlinkChildren.paths.add(path)
+    if (lock.lock()) {
+      try {
+        val realPath: Path = path.toRealPath()
+        val targetRegistrationPath: RegisteredPath =
+          watchedSymlinksByTarget.get(realPath)
+        if (targetRegistrationPath == null) {
+          val registrationPath: Path =
+            if (isDirectory) realPath else realPath.getParent
+          val registeredPath: RegisteredPath =
+            watchedSymlinksByDirectory.get(registrationPath)
+          if (registeredPath != null) {
+            if (!isDirectory || registeredPath.isDirectory) {
+              registeredPath.paths.add(realPath)
+              val symlinkChildren: RegisteredPath =
+                watchedSymlinksByTarget.get(realPath)
+              if (symlinkChildren != null) {
+                symlinkChildren.paths.add(path)
+              }
+            } else if (watcher.register(registrationPath, true)) {
+              val parentPath: RegisteredPath =
+                new RegisteredPath(registrationPath, true, realPath)
+              parentPath.paths.addAll(registeredPath.paths)
+              watchedSymlinksByDirectory.put(registrationPath, parentPath)
+              val symlinkPaths: RegisteredPath =
+                new RegisteredPath(realPath, true, path)
+              val existingSymlinkPaths: RegisteredPath =
+                watchedSymlinksByTarget.get(realPath)
+              if (existingSymlinkPaths != null) {
+                symlinkPaths.paths.addAll(existingSymlinkPaths.paths)
+              }
+              watchedSymlinksByTarget.put(realPath, symlinkPaths)
             }
-          } else if (watcher.register(registrationPath, true)) {
-            val parentPath: RegisteredPath =
-              new RegisteredPath(registrationPath, true, realPath)
-            parentPath.paths.addAll(registeredPath.paths)
-            watchedSymlinksByDirectory.put(registrationPath, parentPath)
-            val symlinkPaths: RegisteredPath =
-              new RegisteredPath(realPath, true, path)
-            val existingSymlinkPaths: RegisteredPath =
-              watchedSymlinksByTarget.get(realPath)
-            if (existingSymlinkPaths != null) {
-              symlinkPaths.paths.addAll(existingSymlinkPaths.paths)
+          } else {
+            if (watcher.register(registrationPath, isDirectory)) {
+              watchedSymlinksByDirectory.put(
+                registrationPath,
+                new RegisteredPath(registrationPath, isDirectory, realPath))
+              watchedSymlinksByTarget.put(realPath, new RegisteredPath(realPath, isDirectory, path))
             }
-            watchedSymlinksByTarget.put(realPath, symlinkPaths)
           }
+        } else if (Files.isDirectory(realPath)) {
+          onLoop.accept(path, new FileSystemLoopException(path.toString))
         } else {
-          if (watcher.register(registrationPath, isDirectory)) {
-            watchedSymlinksByDirectory.put(
-              registrationPath,
-              new RegisteredPath(registrationPath, isDirectory, realPath))
-            watchedSymlinksByTarget.put(realPath, new RegisteredPath(realPath, isDirectory, path))
-          }
+          targetRegistrationPath.paths.add(path)
         }
-      } else if (Files.isDirectory(realPath)) {
-        onLoop.accept(path, new FileSystemLoopException(path.toString))
-      } else {
-        targetRegistrationPath.paths.add(path)
-      }
-    } catch {
-      case e: IOException => {}
+      } catch {
+        case e: IOException => {}
 
-    } finally lock.unlock()
+      } finally lock.unlock()
+    }
   }
 
   /**
@@ -187,39 +189,40 @@ class SymlinkWatcher(handleEvent: EventConsumer,
    * @param path The symlink base to stop monitoring
    */
   def remove(path: Path): Unit = {
-    lock.lock()
-    try {
-      var target: Path = null
-      val it: Iterator[Entry[Path, RegisteredPath]] =
-        watchedSymlinksByTarget.entrySet().iterator()
-      while (it.hasNext && target == null) {
-        val entry: Entry[Path, RegisteredPath] = it.next()
-        if (entry.getValue.paths.remove(path)) {
-          target = entry.getKey
+    if (lock.lock()) {
+      try {
+        var target: Path = null
+        val it: Iterator[Entry[Path, RegisteredPath]] =
+          watchedSymlinksByTarget.entrySet().iterator()
+        while (it.hasNext && target == null) {
+          val entry: Entry[Path, RegisteredPath] = it.next()
+          if (entry.getValue.paths.remove(path)) {
+            target = entry.getKey
+          }
         }
-      }
-      if (target != null) {
-        val removalPath: Path =
-          if (Files.isDirectory(target)) target else target.getParent
-        val targetRegisteredPath: RegisteredPath =
-          watchedSymlinksByTarget.get(target)
-        if (targetRegisteredPath != null) {
-          targetRegisteredPath.paths.remove(path)
-          if (targetRegisteredPath.paths.isEmpty) {
-            watchedSymlinksByTarget.remove(target)
-            val registeredPath: RegisteredPath =
-              watchedSymlinksByDirectory.get(removalPath)
-            if (registeredPath != null) {
-              registeredPath.paths.remove(target)
-              if (registeredPath.paths.isEmpty) {
-                watcher.unregister(removalPath)
-                watchedSymlinksByDirectory.remove(removalPath)
+        if (target != null) {
+          val removalPath: Path =
+            if (Files.isDirectory(target)) target else target.getParent
+          val targetRegisteredPath: RegisteredPath =
+            watchedSymlinksByTarget.get(target)
+          if (targetRegisteredPath != null) {
+            targetRegisteredPath.paths.remove(path)
+            if (targetRegisteredPath.paths.isEmpty) {
+              watchedSymlinksByTarget.remove(target)
+              val registeredPath: RegisteredPath =
+                watchedSymlinksByDirectory.get(removalPath)
+              if (registeredPath != null) {
+                registeredPath.paths.remove(target)
+                if (registeredPath.paths.isEmpty) {
+                  watcher.unregister(removalPath)
+                  watchedSymlinksByDirectory.remove(removalPath)
+                }
               }
             }
           }
         }
-      }
-    } finally lock.unlock()
+      } finally lock.unlock()
+    }
   }
 
 }
