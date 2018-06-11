@@ -26,7 +26,6 @@ class TestExecutor(name: String) extends Executor {
    */
   override def run(runnable: Runnable): Unit = {
     if (this.synchronized(running)) throw new RejectedExecutionException()
-    this.synchronized(running = true)
     try {
       executor.submit(new Runnable {
         override def run(): Unit = {
@@ -34,6 +33,7 @@ class TestExecutor(name: String) extends Executor {
           finally this.synchronized(running = false)
         }
       })
+      this.synchronized(running = true)
     } catch {
       case e: RejectedExecutionException => this.synchronized(running = false)
     }
@@ -44,4 +44,6 @@ class TestExecutor(name: String) extends Executor {
     executor.awaitTermination(5, TimeUnit.SECONDS)
     super.close()
   }
+
+  override def toString = s"TestExecutor($name, running = $running)"
 }
