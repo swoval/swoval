@@ -340,5 +340,10 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
     public T context() {
       return _context;
     }
+
+    @Override
+    public String toString() {
+      return "Event(" + _context + ", " + _kind + ")";
+    }
   }
 }
