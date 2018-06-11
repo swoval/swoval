@@ -18,24 +18,31 @@ class TestExecutor(name: String) extends Executor {
                                                       new ThreadFactory(name))
 
   private[this] var running = false
+  private[this] val lock = new Object
+
+  def clear(): Unit = {
+    lock.synchronized(running = false)
+  }
+
+  def overflow(): Unit = {
+    lock.synchronized(running = true)
+  }
 
   /**
    * Runs the task on a thread
    *
    * @param runnable task to run
    */
-  override def run(runnable: Runnable): Unit = {
-    if (this.synchronized(running)) throw new RejectedExecutionException()
+  override def run(runnable: Runnable): Unit = lock.synchronized {
+    if (running) {
+      throw new RejectedExecutionException()
+    }
     try {
       executor.submit(new Runnable {
-        override def run(): Unit = {
-          try runnable.run()
-          finally this.synchronized(running = false)
-        }
+        override def run(): Unit = runnable.run()
       })
-      this.synchronized(running = true)
     } catch {
-      case e: RejectedExecutionException => this.synchronized(running = false)
+      case _: RejectedExecutionException =>
     }
   }
 

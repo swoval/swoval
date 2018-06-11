@@ -10,4 +10,7 @@ class TestExecutor(name: String) extends Executor {
   override def run(runnable: Runnable): Unit = {
     runnable.run()
   }
+
+  def clear(): Unit = {}
+  def overflow(): Unit = {}
 }

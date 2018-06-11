@@ -104,23 +104,30 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
                       throw new IllegalMonitorStateException("Couldn't acquire lock");
                     }
                   }
-                  callbackExecutor.run(
-                      new Runnable() {
-                        @Override
-                        public void run() {
-                          if (!kind.equals(Overflow)) {
-                            final Path path = ((Path) key.watchable()).resolve((Path) e.context());
-                            handleEvent(callback, path, key, kind);
-                          } else {
-                            handleOverflow(callback, key);
-                          }
-                        }
-                      });
+                  if (lock.lock()) {
+                    try {
+                      callbackExecutor.run(
+                          new Runnable() {
+                            @Override
+                            public void run() {
+                              if (!kind.equals(Overflow)) {
+                                final Path path =
+                                    ((Path) key.watchable()).resolve((Path) e.context());
+                                handleEvent(callback, path, key, kind);
+                              } else {
+                                handleOverflow(callback, key);
+                              }
+                            }
+                          });
+                    } finally {
+                      lock.unlock();
+                    }
+                  }
                 }
               } catch (RejectedExecutionException e) {
-                boolean result = false;
                 if (lock.lock()) {
                   try {
+                    boolean result = false;
                     while (!result && !executor.isClosed()) {
                       final Iterator<WatchedDir> it = watchedDirs.values().iterator();
                       final List<Runnable> runnables = new ArrayList<>();
@@ -136,18 +143,23 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
                       }
                       while (!result) {
                         try {
-                          callbackExecutor.run(
-                              new Runnable() {
-                                @Override
-                                public void run() {
-                                  final Iterator<Runnable> it = runnables.iterator();
-                                  while (it.hasNext()) {
-                                    it.next().run();
+                          try {
+                            callbackExecutor.run(
+                                new Runnable() {
+                                  @Override
+                                  public void run() {
+                                    final Iterator<Runnable> it = runnables.iterator();
+                                    while (it.hasNext()) {
+                                      it.next().run();
+                                    }
                                   }
-                                }
-                              });
+                                });
+                            result = true;
+                          } catch (RejectedExecutionException ex) {
+                            Thread.sleep(5);
+                          }
+                        } catch (InterruptedException ie) {
                           result = true;
-                        } catch (RejectedExecutionException ex) {
                         }
                       }
                     }
@@ -244,17 +256,19 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
           key.cancel();
           watchedDirs.remove(key.watchable());
         }
-        final WatchedDir watchedDir = watchedDirs.get(key.watchable());
+        final Path path = (Path) key.watchable();
+        final WatchedDir watchedDir = watchedDirs.get(path);
         boolean stop = false;
-        while ((watchedDir != null && watchedDir.maxDepth > 0) && !stop) {
+        while (!stop && watchedDir != null && watchedDir.maxDepth > 0) {
+          final Set<Watchable> initialKeys = new HashSet<>(watchedDirs.keySet());
           try {
-            final Iterator<QuickFile> fileIterator =
-                QuickList.list((Path) key.watchable(), watchedDir.maxDepth).iterator();
             boolean registered = false;
-            while (fileIterator.hasNext()) {
-              final QuickFile file = fileIterator.next();
-              if (file.isDirectory() && register(file.toPath(), watchedDir.maxDepth - 1))
-                registered = true;
+            final Iterator<QuickFile> it = QuickList.list(path, 0).iterator();
+            while (it.hasNext()) {
+              final QuickFile file = it.next();
+              if (file.isDirectory()) {
+                registered = registered || register(file.toPath(), watchedDir.maxDepth - 1);
+              }
             }
             stop = !registered;
           } catch (NoSuchFileException e) {
@@ -262,6 +276,8 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
           } catch (IOException e) {
             stop = true;
           }
+          final Set<Watchable> newKeys = new HashSet<>(watchedDirs.keySet());
+          stop = stop || !different(initialKeys, newKeys);
         }
         final Iterator<Watchable> pathIterator = watchedDirs.keySet().iterator();
         final List<Watchable> toRemove = new ArrayList<>();
@@ -285,7 +301,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
   private <T> boolean differentElements(final Set<T> left, final Set right) {
     boolean result = false;
     final Iterator<T> it = left.iterator();
-    while (result && it.hasNext()) {
+    while (!result && it.hasNext()) {
       result = !right.contains(it.next());
     }
     return result;
