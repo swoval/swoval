@@ -3,6 +3,7 @@ package com.swoval.files.apple;
 import static com.swoval.files.DirectoryWatcher.Event.Create;
 import static com.swoval.files.DirectoryWatcher.Event.Delete;
 import static com.swoval.files.DirectoryWatcher.Event.Modify;
+import static com.swoval.files.DirectoryWatcher.Event.Overflow;
 
 import com.swoval.files.DirectoryWatcher;
 import com.swoval.files.Executor;
@@ -346,7 +347,9 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
                         }
                         if (validKey) {
                           DirectoryWatcher.Event event;
-                          if (fileEvent.itemIsFile()) {
+                          if (fileEvent.mustScanSubDirs()) {
+                            event = new DirectoryWatcher.Event(path, Overflow);
+                          } else if (fileEvent.itemIsFile()) {
                             if (fileEvent.isNewFile() && Files.exists(path)) {
                               event = new DirectoryWatcher.Event(path, Create);
                             } else if (fileEvent.isRemoved() || !Files.exists(path)) {
