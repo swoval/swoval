@@ -321,8 +321,8 @@ public class Directory<T> implements AutoCloseable {
     final Collection<Entry<T>> files;
     final Collection<Directory<T>> subdirectories;
     synchronized (this.lock) {
-      files = this.files.values();
-      subdirectories = this.subdirectories.values();
+      files = new ArrayList<>(this.files.values());
+      subdirectories = new ArrayList<>(this.subdirectories.values());
     }
     final Iterator<Entry<T>> filesIterator = files.iterator();
     while (filesIterator.hasNext()) {
