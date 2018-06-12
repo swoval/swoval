@@ -7,8 +7,8 @@ import static com.swoval.files.EntryFilters.AllPass;
 import com.swoval.files.Directory.Converter;
 import com.swoval.files.Directory.Observer;
 import com.swoval.files.Directory.OnChange;
+import com.swoval.files.Directory.OnError;
 import com.swoval.files.DirectoryWatcher.Event;
-import com.swoval.files.SymlinkWatcher.OnError;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import java.io.IOException;
@@ -314,7 +314,7 @@ class FileCacheImpl<T> extends FileCache<T> {
     symlinkWatcher =
         !ArrayOps.contains(options, FileCache.Option.NOFOLLOW_LINKS)
             ? new SymlinkWatcher(
-                new SymlinkWatcher.EventConsumer() {
+                new Consumer<Path>() {
                   @Override
                   public void accept(Path path) {
                     handleEvent(path);
@@ -323,7 +323,7 @@ class FileCacheImpl<T> extends FileCache<T> {
                 factory,
                 new OnError() {
                   @Override
-                  public void accept(final Path symlink, final IOException exception) {
+                  public void apply(final Path symlink, final IOException exception) {
                     observers.onError(symlink, exception);
                   }
                 },

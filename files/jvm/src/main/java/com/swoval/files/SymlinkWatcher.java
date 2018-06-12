@@ -2,6 +2,7 @@ package com.swoval.files;
 
 import static java.util.Map.Entry;
 
+import com.swoval.files.Directory.OnError;
 import com.swoval.files.DirectoryWatcher.Event;
 import com.swoval.functional.Consumer;
 import java.io.IOException;
@@ -29,10 +30,6 @@ class SymlinkWatcher implements AutoCloseable {
   private final OnError onError;
   private final Executor internalExecutor;
 
-  interface EventConsumer {
-    void accept(final Path path);
-  }
-
   private static final class RegisteredPath {
     public final Path path;
     public final Set<Path> paths = new HashSet<>();
@@ -57,7 +54,7 @@ class SymlinkWatcher implements AutoCloseable {
   }
 
   SymlinkWatcher(
-      final EventConsumer handleEvent,
+      final Consumer<Path> handleEvent,
       final DirectoryWatcher.Factory factory,
       final OnError onError,
       final Executor executor)
@@ -188,12 +185,12 @@ class SymlinkWatcher implements AutoCloseable {
                   }
                 }
               } else if (Files.isDirectory(realPath)) {
-                onError.accept(path, new FileSystemLoopException(path.toString()));
+                onError.apply(path, new FileSystemLoopException(path.toString()));
               } else {
                 targetRegistrationPath.paths.add(path);
               }
             } catch (IOException e) {
-              onError.accept(path, e);
+              onError.apply(path, e);
             }
           }
         });
@@ -241,9 +238,5 @@ class SymlinkWatcher implements AutoCloseable {
             }
           }
         });
-  }
-
-  interface OnError {
-    void accept(final Path symlink, final IOException exception);
   }
 }
