@@ -1,6 +1,6 @@
 package com.swoval.files
 
-import java.nio.file.{ Files => JFiles, Path => JPath }
+import java.nio.file.{ Paths, Files, Path }
 import java.util.concurrent.TimeoutException
 
 import com.swoval.functional.Consumer
@@ -21,13 +21,13 @@ object NioDirectoryWatcherTest extends TestSuite {
     val events = new ArrayBlockingQueue[DirectoryWatcher.Event](1)
     implicit val latch: com.swoval.files.test.CountDownLatch = new CountDownLatch(1)
 
-    def check(file: JPath)(f: JPath => Unit): Future[Unit] = events.poll(DEFAULT_TIMEOUT) { e =>
+    def check(file: Path)(f: Path => Unit): Future[Unit] = events.poll(DEFAULT_TIMEOUT) { e =>
       e.path ==> file
       f(e.path)
     }
 
     'onCreate - withTempDirectory { dir =>
-      val f = dir.resolve(Path("create"))
+      val f = dir.resolve(Paths.get("create"))
       val callback: Consumer[DirectoryWatcher.Event] =
         (e: DirectoryWatcher.Event) => if (e.path == f) events.add(e)
       usingAsync(new NioDirectoryWatcher(callback)) { w =>
@@ -37,7 +37,7 @@ object NioDirectoryWatcherTest extends TestSuite {
       }
     }
     'onModify - withTempDirectory { dir =>
-      val f = dir.resolve(Path("modify"))
+      val f = dir.resolve(Paths.get("modify"))
       val callback: Consumer[DirectoryWatcher.Event] =
         (e: DirectoryWatcher.Event) => if (e.path == f) events.add(e)
       usingAsync(new NioDirectoryWatcher(callback)) { w =>
@@ -48,7 +48,7 @@ object NioDirectoryWatcherTest extends TestSuite {
       }
     }
     'onDelete - withTempDirectory { dir =>
-      val f = dir.resolve(Path("delete"))
+      val f = dir.resolve(Paths.get("delete"))
       val callback: Consumer[DirectoryWatcher.Event] =
         (e: DirectoryWatcher.Event) => if (e.path == f) events.add(e)
       usingAsync(new NioDirectoryWatcher(callback)) { w =>
@@ -65,7 +65,7 @@ object NioDirectoryWatcherTest extends TestSuite {
             (e: DirectoryWatcher.Event) => if (e.path != dir && !e.path.isDirectory) events.add(e)
           usingAsync(new NioDirectoryWatcher(callback)) { w =>
             w.register(dir)
-            val f = subdir.resolve(Path("foo")).createFile()
+            val f = subdir.resolve(Paths.get("foo")).createFile()
             check(f)(p => assert(p.exists))
           }
         }
@@ -79,13 +79,13 @@ object NioDirectoryWatcherTest extends TestSuite {
       val fileLatch = new CountDownLatch(subdirsToAdd)
       val subdirs = (1 to subdirsToAdd).map(i => dir.resolve(s"subdir-$i-overflow"))
       val last = subdirs.last
-      val files = mutable.Set.empty[JPath]
+      val files = mutable.Set.empty[Path]
       val callback: Consumer[DirectoryWatcher.Event] = (_: DirectoryWatcher.Event) match {
         case e if e.kind == DirectoryWatcher.Event.Overflow => overflowLatch.countDown()
         case e if e.path == last =>
           overflowLatch.countDown()
           subdirLatch.countDown()
-        case e if JFiles.isRegularFile(e.path) && !files.contains(e.path) =>
+        case e if Files.isRegularFile(e.path) && !files.contains(e.path) =>
           files += e.path
           fileLatch.countDown()
         case _ =>
@@ -93,14 +93,14 @@ object NioDirectoryWatcherTest extends TestSuite {
       val service = new BoundedWatchService(1, WatchService.newWatchService())
       usingAsync(new NioDirectoryWatcher(callback, service)) { w =>
         w.register(dir)
-        subdirs.foreach(JFiles.createDirectory(_))
+        subdirs.foreach(Files.createDirectory(_))
         overflowLatch
           .waitFor(DEFAULT_TIMEOUT * 2)(())
           .flatMap { _ =>
             subdirLatch.waitFor(DEFAULT_TIMEOUT) {
-              subdirs.foreach(subdir => JFiles.write(subdir.resolve("foo.scala"), "foo".getBytes))
+              subdirs.foreach(subdir => Files.write(subdir.resolve("foo.scala"), "foo".getBytes))
               fileLatch.waitFor(DEFAULT_TIMEOUT) {
-                new String(JFiles.readAllBytes(last.resolve("foo.scala"))) ==> "foo"
+                new String(Files.readAllBytes(last.resolve("foo.scala"))) ==> "foo"
               }
             }
           }
@@ -115,7 +115,7 @@ object NioDirectoryWatcherTest extends TestSuite {
       }
     }
     'unregister - withTempDirectory { base =>
-      val dir = JFiles.createDirectories(base.resolve("dir"))
+      val dir = Files.createDirectories(base.resolve("dir"))
       val firstLatch = new CountDownLatch(1)
       val secondLatch = new CountDownLatch(1)
       val callback: Consumer[DirectoryWatcher.Event] = (e: DirectoryWatcher.Event) => {
@@ -127,14 +127,14 @@ object NioDirectoryWatcherTest extends TestSuite {
       }
       usingAsync(new NioDirectoryWatcher(callback)) { c =>
         c.register(dir)
-        val file = JFiles.createFile(dir.resolve("file"))
+        val file = Files.createFile(dir.resolve("file"))
         firstLatch
           .waitFor(DEFAULT_TIMEOUT) {
-            assert(JFiles.exists(file))
+            assert(Files.exists(file))
           }
           .flatMap { _ =>
             c.unregister(dir)
-            JFiles.createFile(dir.resolve("other-file"))
+            Files.createFile(dir.resolve("other-file"))
             secondLatch
               .waitFor(20.millis) {
                 throw new IllegalStateException(

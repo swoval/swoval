@@ -1,6 +1,6 @@
 package com.swoval.files
 
-import java.nio.file.{ Path => JPath }
+import java.nio.file.{ Path, Paths }
 
 import com.swoval.test.Implicits.executionContext
 import scala.collection.mutable
@@ -55,39 +55,39 @@ package object test {
       }
     }
   }
-  def withTempFile[R](dir: JPath)(f: JPath => Future[R]): Future[Unit] =
-    com.swoval.test.Files.withTempFile(dir.toString)(s => f(Path(s)).map(_ => ()))
+  def withTempFile[R](dir: Path)(f: Path => Future[R]): Future[Unit] =
+    com.swoval.test.TestFiles.withTempFile(dir.toString)(s => f(Paths.get(s)).map(_ => ()))
 
-  def withTempFile[R](f: JPath => Future[R]): Future[Unit] =
-    com.swoval.test.Files.withTempFile(s => f(Path(s)).map(_ => ()))
+  def withTempFile[R](f: Path => Future[R]): Future[Unit] =
+    com.swoval.test.TestFiles.withTempFile(s => f(Paths.get(s)).map(_ => ()))
 
-  def withTempDirectory[R](f: JPath => Future[R]): Future[Unit] =
-    com.swoval.test.Files.withTempDirectory(d => f(Path(d)).map(_ => ()))
+  def withTempDirectory[R](f: Path => Future[R]): Future[Unit] =
+    com.swoval.test.TestFiles.withTempDirectory(d => f(Paths.get(d)).map(_ => ()))
 
-  def withTempDirectory[R](dir: JPath)(f: JPath => Future[R]): Future[Unit] =
-    com.swoval.test.Files.withTempDirectory(dir.toString)(d => f(Path(d)).map(_ => ()))
+  def withTempDirectory[R](dir: Path)(f: Path => Future[R]): Future[Unit] =
+    com.swoval.test.TestFiles.withTempDirectory(dir.toString)(d => f(Paths.get(d)).map(_ => ()))
 
-  def withDirectory[R](dir: JPath)(f: => Future[R]): Future[Unit] =
-    com.swoval.test.Files.withDirectory(dir.toString)(f.map(_ => ()))
+  def withDirectory[R](dir: Path)(f: => Future[R]): Future[Unit] =
+    com.swoval.test.TestFiles.withDirectory(dir.toString)(f.map(_ => ()))
 
-  def wrap[R](f: JPath => R): JPath => Future[Unit] = (path: JPath) => {
+  def wrap[R](f: Path => R): Path => Future[Unit] = (path: Path) => {
     val p = Promise[Unit]()
     p.tryComplete(util.Try { f(path); () })
     p.future
   }
-  def withTempFileSync[R: NotFuture](dir: JPath)(f: JPath => R): Future[Unit] =
+  def withTempFileSync[R: NotFuture](dir: Path)(f: Path => R): Future[Unit] =
     withTempFile(dir)(wrap(f))
 
-  def withTempFileSync[R: NotFuture](f: JPath => R): Future[Unit] =
+  def withTempFileSync[R: NotFuture](f: Path => R): Future[Unit] =
     withTempFile(wrap(f))
 
-  def withTempDirectorySync[R: NotFuture](f: JPath => R): Future[Unit] = withTempDirectory(wrap(f))
+  def withTempDirectorySync[R: NotFuture](f: Path => R): Future[Unit] = withTempDirectory(wrap(f))
 
-  def withTempDirectorySync[R: NotFuture](dir: JPath)(f: JPath => R): Future[Unit] =
+  def withTempDirectorySync[R: NotFuture](dir: Path)(f: Path => R): Future[Unit] =
     withTempDirectory(dir)(wrap(f))
 
-  def withDirectorySync[R: NotFuture](dir: JPath)(f: => R): Future[Unit] =
-    com.swoval.test.Files.withDirectory(dir.toString) {
+  def withDirectorySync[R: NotFuture](dir: Path)(f: => R): Future[Unit] =
+    com.swoval.test.TestFiles.withDirectory(dir.toString) {
       val p = Promise[Unit]
       p.tryComplete(util.Try { f; () })
       p.future

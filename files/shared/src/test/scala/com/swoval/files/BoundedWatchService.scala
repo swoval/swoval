@@ -1,6 +1,6 @@
 package com.swoval.files
 import java.nio.file.StandardWatchEventKinds.OVERFLOW
-import java.nio.file.{ WatchEvent, WatchKey, Watchable, Path => JPath }
+import java.nio.file.{ WatchEvent, WatchKey, Watchable, Path }
 import java.util
 import java.util.concurrent.TimeUnit
 
@@ -8,7 +8,7 @@ import scala.collection.JavaConverters._
 
 class BoundedWatchService(val queueSize: Int, underlying: Registerable)
     extends RegisterableWatchService(underlying) {
-  override def register(path: JPath, kinds: WatchEvent.Kind[_]*): WatchKey = {
+  override def register(path: Path, kinds: WatchEvent.Kind[_]*): WatchKey = {
     val underlying = super.register(path, kinds: _*)
     new BoundedWatchKey(queueSize, underlying)
   }

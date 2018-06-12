@@ -76,7 +76,7 @@ package object test {
     f(c).andThen { case _ => c.close() }
   }
 
-  object Files {
+  object TestFiles {
     def withTempFile[R](dir: String)(f: String => Future[R]): Future[R] = {
       val file: String = platform.createTempFile(dir, "file")
       f(file).andThen { case _ => platform.delete(file) }

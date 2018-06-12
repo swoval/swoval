@@ -1,7 +1,7 @@
 package com.swoval.files
 
 import java.nio.file.attribute.FileTime
-import java.nio.file.{ Files => JFiles }
+import java.nio.file.{ Paths, Files }
 import java.util.concurrent.{ TimeUnit, TimeoutException }
 
 import com.swoval.files.DirectoryWatcher.Event.{ Create, Delete, Modify }
@@ -37,7 +37,7 @@ object DirectoryWatcherTest extends TestSuite {
 
         usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
           w.register(dir)
-          dir.resolve(Path("foo")).createFile()
+          dir.resolve(Paths.get("foo")).createFile()
           val expected =
             if (System.getProperty("java.vm.name") == "Scala.js" && !Platform.isMac) Modify
             else Create
@@ -108,14 +108,14 @@ object DirectoryWatcherTest extends TestSuite {
         import Implicits.executionContext
         usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { c =>
           c.register(dir)
-          val file = JFiles.createFile(dir.resolve("file"))
+          val file = Files.createFile(dir.resolve("file"))
           firstLatch
             .waitFor(DEFAULT_TIMEOUT) {
-              assert(JFiles.exists(file))
+              assert(Files.exists(file))
             }
             .flatMap { _ =>
               c.unregister(dir)
-              JFiles.delete(file)
+              Files.delete(file)
               secondLatch
                 .waitFor(5.millis) {
                   throw new IllegalStateException(
@@ -135,7 +135,7 @@ object DirectoryWatcherTest extends TestSuite {
             (e: DirectoryWatcher.Event) => if (e.path.endsWith("foo")) events.add(e)
           usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
             w.register(dir, 0)
-            val file = subdir.resolve(Path("foo")).createFile()
+            val file = subdir.resolve(Paths.get("foo")).createFile()
             events
               .poll(100.milliseconds) { _ =>
                 throw new IllegalStateException(
@@ -215,7 +215,7 @@ object DirectoryWatcherTest extends TestSuite {
                     .recoverWith {
                       case _: TimeoutException =>
                         w.register(dir, 2)
-                        JFiles.setLastModifiedTime(file, FileTime.fromMillis(3000))
+                        Files.setLastModifiedTime(file, FileTime.fromMillis(3000))
                         events
                           .poll(DEFAULT_TIMEOUT) { e =>
                             e.path ==> file

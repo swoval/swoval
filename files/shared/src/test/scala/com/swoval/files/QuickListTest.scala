@@ -7,8 +7,8 @@ import java.nio.file.{
   Files,
   NoSuchFileException,
   NotDirectoryException,
-  Paths,
-  Path => JPath
+  Path,
+  Paths
 }
 
 import utest._
@@ -21,18 +21,18 @@ import com.swoval.functional.Filter
 
 object QuickListTest {
   implicit class QuickListOps(val ql: QuickLister) extends AnyVal {
-    def ls(path: JPath, recursive: Boolean, followLinks: Boolean = false): Seq[JPath] =
+    def ls(path: Path, recursive: Boolean, followLinks: Boolean = false): Seq[Path] =
       ql.list(path, if (recursive) java.lang.Integer.MAX_VALUE else 1, followLinks)
         .asScala
         .map(_.toPath().normalize())
-    def ls(path: JPath, depth: Int): Seq[JPath] = ls(path, depth, followLinks = true)
-    def ls(path: JPath, depth: Int, followLinks: Boolean): Seq[JPath] =
+    def ls(path: Path, depth: Int): Seq[Path] = ls(path, depth, followLinks = true)
+    def ls(path: Path, depth: Int, followLinks: Boolean): Seq[Path] =
       ql.list(path, depth, followLinks).asScala.map(_.toPath())
   }
 }
 class QuickListTest(quickLister: QuickLister, run: Boolean) extends TestSuite {
   // This is because the utest scala 2.10 macro expansion can't handle the `===` expression
-  def check(l: Traversable[JPath], r: Traversable[JPath]): Unit = l === r
+  def check(l: Traversable[Path], r: Traversable[Path]): Unit = l === r
   val tests = if (run) Tests {
     'simple - withTempFileSync { file =>
       check(quickLister.ls(file.getParent, recursive = true), Seq(file))
@@ -148,7 +148,7 @@ class QuickListTest(quickLister: QuickLister, run: Boolean) extends TestSuite {
             })
             .asScala
             .map((_: QuickFile).toPath),
-          Seq.empty[JPath]
+          Seq.empty[Path]
         )
         check(quickLister
                 .list(parent, 2, true, new Filter[QuickFile] {

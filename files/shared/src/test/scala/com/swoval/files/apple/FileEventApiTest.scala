@@ -1,6 +1,6 @@
 package com.swoval.files.apple
 
-import java.nio.file.{ Files => JFiles }
+import java.nio.file.Files
 
 import com.swoval.files.test.{ CountDownLatch, _ }
 import com.swoval.functional.Consumer
@@ -23,11 +23,11 @@ object FileEventApiTest extends TestSuite {
       val file = dir.resolve("file")
       val api = getFileEventsApi(fe => {
         assert(fe.fileName.startsWith(dir.toString))
-        JFiles.deleteIfExists(file)
+        Files.deleteIfExists(file)
         latch.countDown()
       })
       api.createStream(dir.toString, 0.05, new Flags.Create().setNoDefer.getValue)
-      JFiles.createFile(file)
+      Files.createFile(file)
 
       latch
         .waitFor(DEFAULT_TIMEOUT) {}
