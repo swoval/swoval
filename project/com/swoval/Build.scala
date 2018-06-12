@@ -8,7 +8,8 @@ import java.util.jar.JarFile
 
 import _root_.bintray.BintrayPlugin
 import bintray.BintrayKeys._
-import com.github.sbt.jacoco.JacocoKeys.jacocoExcludes
+import com.github.sbt.jacoco.JacocoKeys.{ jacocoExcludes, jacocoReportSettings }
+import com.github.sbt.jacoco.report.{ JacocoReportSettings, JacocoThresholds }
 import com.swoval.Dependencies.{ logback => SLogback, _ }
 import com.typesafe.sbt.GitVersioning
 import com.typesafe.sbt.SbtGit.git
@@ -417,6 +418,14 @@ object Build {
                            sourceDirectory.value.toPath.resolve("main/native/include").toString) ++
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty) ++
         Seq("-Xlint:unchecked"),
+      jacocoReportSettings in Test := JacocoReportSettings()
+        .withThresholds(
+          JacocoThresholds(instruction = .88,
+                           branch = .75,
+                           line = .88,
+                           clazz = .95,
+                           complexity = .7,
+                           method = .9)),
       jacocoExcludes in Test := Seq(
         "*NativeLoader*",
         "*QuickFileImpl$PathWithFileTypeImpl*"
