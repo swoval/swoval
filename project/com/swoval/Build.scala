@@ -259,7 +259,7 @@ object Build {
             }
           } else None
         }
-        if (!Properties.isWin) {
+        if (Properties.isMac) {
           this.synchronized {
             val content = new String(Files.readAllBytes(root.resolve(".gitignore")))
             val name = s"$projectName ${conf.name.toUpperCase}"
