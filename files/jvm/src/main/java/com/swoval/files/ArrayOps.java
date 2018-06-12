@@ -1,10 +1,8 @@
 package com.swoval.files;
 
-class ArrayOps {
-  public interface Filter<T> {
-    boolean accept(T t);
-  }
+import com.swoval.functional.Filter;
 
+class ArrayOps {
   public static <T> boolean contains(final T[] array, final T el) {
     return find(array, el) != null;
   }
