@@ -2,7 +2,7 @@ package com.swoval.files
 
 import java.io.IOException
 import java.nio.file.attribute.FileTime
-import java.nio.file.{ FileSystemLoopException, Files, Paths, Path }
+import java.nio.file.{ FileSystemLoopException, Files, Path, Paths }
 
 import com.swoval.files.Directory._
 import com.swoval.files.EntryOps._
@@ -17,16 +17,14 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
-import scala.util.Failure
+import scala.util.{ Failure, Try }
 
 trait FileCacheTest extends TestSuite {
   def factory: DirectoryWatcher.Factory
   def boundedFactory: DirectoryWatcher.Factory
   def identity: Converter[Path] = (p: Path) => p
   def simpleCache(f: Entry[Path] => Unit): FileCache[Path] =
-    FileCache.apply(((p: Path) => p): Converter[Path],
-                    factory,
-                    Observers.apply(f: OnChange[Path]))
+    FileCache.apply(((p: Path) => p): Converter[Path], factory, Observers.apply(f: OnChange[Path]))
   class LoopObserver(val latch: CountDownLatch) extends Observer[Path] {
     override def onCreate(newEntry: Entry[Path]): Unit = {}
     override def onDelete(oldEntry: Entry[Path]): Unit = {}
@@ -112,9 +110,10 @@ trait FileCacheTest extends TestSuite {
         }
         'addmany - withTempDirectory { dir =>
           // Windows is slow (at least on my vm)
-          val subdirsToAdd = if (System.getProperty("java.vm.name", "") == "Scala.js") {
-            if (Platform.isWin) 5 else 50
-          } else 200
+          val subdirsToAdd = System.getProperty("swoval.test.subdir-count") match {
+            case null => if (!Platform.isJVM) { if (Platform.isWin) 5 else 50 } else 200
+            case c    => Try(c.toInt).getOrElse(200)
+          }
           val timeout = DEFAULT_TIMEOUT * 5
           val filesPerSubdir = 4
           val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
@@ -230,21 +229,22 @@ trait FileCacheTest extends TestSuite {
             withTempDirectory(subdir) { nestedSubdir =>
               withTempFile(nestedSubdir) { file =>
                 val latch = new CountDownLatch(1)
-                usingAsync(simpleCache((e: Entry[Path]) =>
-                  if (e.path.endsWith("deep")) latch.countDown())) { c =>
-                  c.register(dir, 1)
-                  c.ls(dir) === Set(subdir, nestedSubdir)
-                  c.register(nestedSubdir, 0)
-                  c.ls(dir) === Set(subdir, nestedSubdir, file)
-                  val deep = Files.createDirectory(nestedSubdir.resolve("deep"))
-                  val deepFile = Files.createFile(deep.resolve("file"))
-                  latch.waitFor(DEFAULT_TIMEOUT) {
-                    var i = 0
-                    while (!Files.exists(deepFile) && i < 1000) { i += 1 }
-                    val existing = FileOps.list(dir, true).asScala.map(_.toPath).toSet
-                    existing === Set(subdir, nestedSubdir, file, deep, deepFile)
-                    c.ls(dir) === Set(subdir, nestedSubdir, file, deep)
-                  }
+                usingAsync(
+                  simpleCache((e: Entry[Path]) => if (e.path.endsWith("deep")) latch.countDown())) {
+                  c =>
+                    c.register(dir, 1)
+                    c.ls(dir) === Set(subdir, nestedSubdir)
+                    c.register(nestedSubdir, 0)
+                    c.ls(dir) === Set(subdir, nestedSubdir, file)
+                    val deep = Files.createDirectory(nestedSubdir.resolve("deep"))
+                    val deepFile = Files.createFile(deep.resolve("file"))
+                    latch.waitFor(DEFAULT_TIMEOUT) {
+                      var i = 0
+                      while (!Files.exists(deepFile) && i < 1000) { i += 1 }
+                      val existing = FileOps.list(dir, true).asScala.map(_.toPath).toSet
+                      existing === Set(subdir, nestedSubdir, file, deep, deepFile)
+                      c.ls(dir) === Set(subdir, nestedSubdir, file, deep)
+                    }
                 }
               }
             }
@@ -398,13 +398,13 @@ trait FileCacheTest extends TestSuite {
             val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
             val linkedFile = link.resolve(otherDir.relativize(file))
             val latch = new CountDownLatch(1)
-            usingAsync(
-              simpleCache((e: Entry[Path]) => if (e.path == linkedFile) latch.countDown())) { c =>
-              c.reg(dir)
-              Files.write(file, "foo".getBytes)
-              latch.waitFor(DEFAULT_TIMEOUT) {
-                new String(Files.readAllBytes(file)) ==> "foo"
-              }
+            usingAsync(simpleCache((e: Entry[Path]) => if (e.path == linkedFile) latch.countDown())) {
+              c =>
+                c.reg(dir)
+                Files.write(file, "foo".getBytes)
+                latch.waitFor(DEFAULT_TIMEOUT) {
+                  new String(Files.readAllBytes(file)) ==> "foo"
+                }
             }
           }
         }
@@ -425,13 +425,13 @@ trait FileCacheTest extends TestSuite {
                   Files.createSymbolicLink(otherDir.resolve("dir"), dir)
                   val latch = new CountDownLatch(1)
                   val observer = new LoopObserver(latch)
-                  usingAsync(
-                    FileCache.apply(((p: Path) => p): Converter[Path], factory, observer)) { c =>
-                    c.reg(dir)
-                    Files.createSymbolicLink(dir.resolve("other"), otherDir)
-                    latch.waitFor(DEFAULT_TIMEOUT) {
-                      c.ls(dir) === Seq.empty[Path]
-                    }
+                  usingAsync(FileCache.apply(((p: Path) => p): Converter[Path], factory, observer)) {
+                    c =>
+                      c.reg(dir)
+                      Files.createSymbolicLink(dir.resolve("other"), otherDir)
+                      latch.waitFor(DEFAULT_TIMEOUT) {
+                        c.ls(dir) === Seq.empty[Path]
+                      }
                   }
                 }
               }
@@ -442,13 +442,13 @@ trait FileCacheTest extends TestSuite {
                   val link = Files.createSymbolicLink(dir.resolve("other"), otherDir)
                   val latch = new CountDownLatch(1)
                   val observer = new LoopObserver(latch)
-                  usingAsync(
-                    FileCache.apply(((p: Path) => p): Converter[Path], factory, observer)) { c =>
-                    c.reg(dir)
-                    Files.createSymbolicLink(otherDir.resolve("dir"), dir)
-                    latch.waitFor(DEFAULT_TIMEOUT) {
-                      c.ls(dir) === Seq(link)
-                    }
+                  usingAsync(FileCache.apply(((p: Path) => p): Converter[Path], factory, observer)) {
+                    c =>
+                      c.reg(dir)
+                      Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+                      latch.waitFor(DEFAULT_TIMEOUT) {
+                        c.ls(dir) === Seq(link)
+                      }
                   }
                 }
               }

@@ -289,7 +289,12 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
         while (it.hasNext()) {
           final QuickFile file = it.next();
           if (file.isDirectory()) {
-            registered = registered || registerImpl(file.toPath(), watchedDir.maxDepth - 1);
+            final Path p = file.toPath();
+            final WatchedDir dir = watchedDirs.get(p);
+            if (dir == null || dir.maxDepth < watchedDir.maxDepth - 1) {
+              final boolean result = registerImpl(p, watchedDir.maxDepth -1);
+              registered = registered || result;
+            }
           }
         }
         stop = !registered;
