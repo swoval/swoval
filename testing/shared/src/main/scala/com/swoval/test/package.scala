@@ -12,7 +12,8 @@ import scala.language.higherKinds
 import scala.util.Try
 
 package object test {
-  final val DEFAULT_TIMEOUT = 5.second
+  final val DEFAULT_TIMEOUT =
+    Try(System.getProperty("swoval.test.timeout", "5").toInt).getOrElse(5).seconds
 
   /** Taken from shapeless */
   sealed trait <:!<[T, R]

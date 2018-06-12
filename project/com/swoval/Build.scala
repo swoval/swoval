@@ -62,6 +62,14 @@ object Build {
       licenses += ("MIT", url("https://opensource.org/licenses/MIT")),
       scalacOptions ++= Seq("-feature"),
       publishMavenStyle in publishLocal := false,
+      setProp := {
+        val args = Def.spaceDelimited("<arg>").parsed
+        val Array(key, value) = args.toArray match {
+          case Array(prop) => prop.split("=")
+          case s           => s
+        }
+        System.setProperty(key, value)
+      },
       publishTo := {
         val p = publishTo.value
         if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true"))
@@ -110,6 +118,7 @@ object Build {
   lazy val travisQuickListReflectionTest =
     taskKey[Unit]("Check that reflection works for quick list")
   lazy val quickListReflectionTest = inputKey[Unit]("Check that reflection works for quick list")
+  lazy val setProp = inputKey[Unit]("Set a system property")
 
   def projects: Seq[ProjectReference] = Seq[ProjectReference](
     files.js,
