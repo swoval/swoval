@@ -59,8 +59,10 @@ class NioDirectoryWatcher(val onFileEvent: Consumer[Event]) extends DirectoryWat
           onFileEvent.accept(new Event(watchPath, kind))
           events.foreach(onFileEvent.accept)
         }
+      val watcher: FSWatcher = Fs.watch(p.toString, options, callback)
+      watcher.onError(e => println(e))
       watchedDirs
-        .put(p.toString, WatchedDir(Fs.watch(p.toString, options, callback), depth))
+        .put(p.toString, WatchedDir(watcher, depth))
         .foreach(_.watcher.close())
       true
     }
