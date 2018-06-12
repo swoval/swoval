@@ -2,6 +2,7 @@ package com.swoval.files
 
 import com.swoval.files.apple.AppleDirectoryWatcher
 import com.swoval.files.apple.Flags
+import com.swoval.functional.Consumer
 import java.io.IOException
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
@@ -10,21 +11,13 @@ import DirectoryWatcher._
 object DirectoryWatcher {
 
   /**
- Callback to run when monitored files are created, updated and deleted.
-   */
-  trait Callback {
-
-    def apply(event: Event): Unit
-
-  }
-
-  /**
    * Create a DirectoryWatcher for the runtime platform.
    *
    * @param latency The latency used by the [[AppleDirectoryWatcher]] on osx
    * @param timeUnit The TimeUnit or the latency parameter
    * @param flags Flags used by the apple directory watcher
-   * @param callback [[Callback]] to run on file events
+   * @param callback [[Consumer]] to run on file events
+   * @param executor provides a single threaded context to manage state
    * @return DirectoryWatcher for the runtime platform
    *     initialized
    *     initialization
@@ -32,38 +25,52 @@ object DirectoryWatcher {
   def defaultWatcher(latency: Long,
                      timeUnit: TimeUnit,
                      flags: Flags.Create,
-                     callback: Callback): DirectoryWatcher =
+                     callback: Consumer[DirectoryWatcher.Event],
+                     executor: Executor): DirectoryWatcher =
     if (Platform.isMac)
-      new AppleDirectoryWatcher(timeUnit.toNanos(latency) / 1.0e9, flags, callback)
-    else new NioDirectoryWatcher(callback)
+      new AppleDirectoryWatcher(timeUnit.toNanos(latency) / 1.0e9, flags, callback, executor)
+    else new NioDirectoryWatcher(callback, executor)
 
   /**
    * Create a platform compatible DirectoryWatcher.
    *
-   * @param callback [[Callback]] to run on file events
+   * @param callback [[Consumer]] to run on file events
+   * @param executor The executor to run internal callbacks on
    * @return DirectoryWatcher for the runtime platform
    *     initialized
    *     initialization
    */
-  def defaultWatcher(callback: Callback): DirectoryWatcher =
+  def defaultWatcher(callback: Consumer[DirectoryWatcher.Event],
+                     executor: Executor): DirectoryWatcher =
     defaultWatcher(10,
                    TimeUnit.MILLISECONDS,
                    new Flags.Create().setNoDefer().setFileEvents(),
-                   callback)
+                   callback,
+                   executor)
 
   /**
-   * Instantiates new [[DirectoryWatcher]] instances with a [[Callback]]. This is primarily
+   * Instantiates new [[DirectoryWatcher]] instances with a [[Consumer]]. This is primarily
    * so that the [[DirectoryWatcher]] in [[FileCache]] may be changed in testing.
    */
   trait Factory {
 
-    def create(callback: Callback): DirectoryWatcher
+    /**
+     * Creates a new DirectoryWatcher
+     *
+     * @param callback The callback to invoke on directory updates
+     * @param executor The executor on which internal updates are invoked
+     * @return A DirectoryWatcher instance
+     *     this can occur on mac
+     *     and windows
+     */
+    def create(callback: Consumer[DirectoryWatcher.Event], executor: Executor): DirectoryWatcher
 
   }
 
   val DEFAULT_FACTORY: Factory = new Factory() {
-    override def create(callback: Callback): DirectoryWatcher =
-      defaultWatcher(callback)
+    override def create(callback: Consumer[DirectoryWatcher.Event],
+                        executor: Executor): DirectoryWatcher =
+      defaultWatcher(callback, executor)
   }
 
   object Event {
@@ -130,7 +137,11 @@ object DirectoryWatcher {
 abstract class DirectoryWatcher extends AutoCloseable {
 
   /**
-   * Register a path to monitor for file events
+   * Register a path to monitor for file events. The watcher will only watch child subdirectories up
+   * to maxDepth. For example, with a directory structure like /foo/bar/baz, if we register the path
+   * /foo/ with maxDepth 0, we will be notified for any files that are created, updated or deleted
+   * in foo, but not bar. If we increase maxDepth to 1, then the files in /foo/bar are monitored,
+   * but not the files in /foo/bar/baz.
    *
    * @param path The directory to watch for file events
    * @param maxDepth The maximum maxDepth of subdirectories to watch
@@ -139,7 +150,7 @@ abstract class DirectoryWatcher extends AutoCloseable {
   def register(path: Path, maxDepth: Int): Boolean
 
   /**
-   * Register a path to monitor for file events
+   * Register a path to monitor for file events. The monitoring may be recurs
    *
    * @param path The directory to watch for file events
    * @param recursive Toggles whether or not to monitor subdirectories
@@ -149,7 +160,7 @@ abstract class DirectoryWatcher extends AutoCloseable {
     register(path, if (recursive) java.lang.Integer.MAX_VALUE else 0)
 
   /**
-   * Register a path to monitor for file events
+   * Register a path to monitor for file events recursively.
    *
    * @param path The directory to watch for file events
    * @return true if the registration is successful

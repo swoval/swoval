@@ -2,6 +2,7 @@ package com.swoval.files.apple;
 
 import com.swoval.concurrent.ThreadFactory;
 import com.swoval.files.NativeLoader;
+import com.swoval.functional.Consumer;
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -21,19 +22,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *     target="_blank"></a>
  */
 public class FileEventsApi implements AutoCloseable {
-  public class ClosedFileEventsApiException extends IOException {
+  /**
+   * Checked exception that is thrown when one of the mutation methods (e.g. {@link
+   * FileEventsApi#createStream(String, double, int)} ) is called on a closed {@link FileEventsApi}
+   */
+  public static class ClosedFileEventsApiException extends IOException {
     public ClosedFileEventsApiException(final String msg) {
       super(msg);
     }
-  }
-
-  /**
-   * Represents an operation that takes an input and returns no result
-   *
-   * @param <T> The input type
-   */
-  public interface Consumer<T> {
-    void accept(T t);
   }
 
   private long handle;
@@ -102,7 +98,7 @@ public class FileEventsApi implements AutoCloseable {
     }
   }
 
-  public void loop() {
+  private void loop() {
     loop(handle);
   }
 
@@ -113,6 +109,8 @@ public class FileEventsApi implements AutoCloseable {
    * @param latency The minimum time in seconds between events for the path
    * @param flags The flags for the stream @see {@link Flags.Create}
    * @return handle that can be used to stop the stream in the future
+   * @throws ClosedFileEventsApiException when the {@link FileEventsApi} instance has previously
+   *     been closed.
    */
   public int createStream(String path, double latency, int flags)
       throws ClosedFileEventsApiException {

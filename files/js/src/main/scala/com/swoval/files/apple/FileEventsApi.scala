@@ -2,6 +2,8 @@ package com.swoval.files.apple
 
 import java.io.IOException
 
+import com.swoval.functional.Consumer
+
 import scala.scalajs.js
 import scala.scalajs.js.annotation._
 
@@ -47,9 +49,6 @@ class FileEventsApi(handle: Double) extends AutoCloseable {
 @JSExportTopLevel("com.swoval.files.apple.FileEventsApi$")
 object FileEventsApi {
   class ClosedFileEventsApiException(msg: String) extends IOException(msg)
-  trait Consumer[T] {
-    def accept(t: T): Unit
-  }
   @JSExport("apply")
   def apply(consumer: Consumer[FileEvent], pathConsumer: Consumer[String]): FileEventsApi = {
     val jsConsumer: js.Function2[String, Int, Unit] = (s: String, i: Int) =>

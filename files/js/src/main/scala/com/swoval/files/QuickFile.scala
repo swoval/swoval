@@ -61,6 +61,8 @@ trait QuickFile {
    * methods will generally cache the value of the native file result returned by readdir (posix) or
    * FindNextFile (windows) and use this value to compute [[QuickFile.isDirectory]] and [[QuickFile.isFile]], the returned [[FileWithFileType]] is generally unsuitable to be used as
    * a persistent value. Instead, use [[QuickFile.toFile]].
+   *
+   * @return An instance of FileWithFileType. This may just be a cast.
    */
   def asFile(): FileWithFileType
 

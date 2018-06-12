@@ -5,9 +5,8 @@ import java.nio.charset.Charset
 import java.nio.file.attribute.FileTime
 import java.nio.file.{ Files, NoSuchFileException, Path }
 
-import com.swoval.files.apple.AppleDirectoryWatcher.OnStreamRemoved
 import com.swoval.files.Directory._
-import com.swoval.files.DirectoryWatcher.Callback
+import com.swoval.functional.Consumer
 import com.swoval.test._
 import utest._
 
@@ -51,11 +50,8 @@ package object files extends PlatformFiles {
       f(newCachedPath)
     override def onError(path: Path, exception: IOException): Unit = {}
   }
-  implicit class CallbackFunctionOps(val f: DirectoryWatcher.Event => Unit) extends Callback {
-    override def apply(fileWatchEvent: DirectoryWatcher.Event): Unit = f(fileWatchEvent)
-  }
-  implicit class OnStreamRemovedFunctionOps[T](val f: String => Unit) extends OnStreamRemoved {
-    override def apply(s: String): Unit = f(s)
+  implicit class ConsumerFunctionOps[T](val f: T => Unit) extends Consumer[T] {
+    override def accept(t: T): Unit = f(t)
   }
   implicit class SeqPathOps[T](val l: Seq[Path]) extends AnyVal {
     def ===(r: Seq[Path]): Unit = new RichTraversable(l) === r

@@ -1,5 +1,6 @@
 package com.swoval.files;
 
+import com.swoval.functional.Filter;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Path;

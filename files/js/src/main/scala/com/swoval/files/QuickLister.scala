@@ -1,5 +1,6 @@
 package com.swoval.files
 
+import com.swoval.functional.Filter
 import java.io.File
 import java.io.IOException
 import java.nio.file.FileSystemLoopException

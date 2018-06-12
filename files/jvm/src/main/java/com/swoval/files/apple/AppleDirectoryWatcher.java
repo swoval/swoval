@@ -4,11 +4,11 @@ import static com.swoval.files.DirectoryWatcher.Event.Create;
 import static com.swoval.files.DirectoryWatcher.Event.Delete;
 import static com.swoval.files.DirectoryWatcher.Event.Modify;
 
-import com.swoval.concurrent.Lock;
 import com.swoval.files.DirectoryWatcher;
 import com.swoval.files.Executor;
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
-import com.swoval.files.apple.FileEventsApi.Consumer;
+import com.swoval.functional.Consumer;
+import com.swoval.functional.Either;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,6 +19,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -29,9 +30,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class AppleDirectoryWatcher extends DirectoryWatcher {
   private final Map<Path, Stream> streams = new HashMap<>();
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private final Lock lock = new Lock();
   private final double latency;
-  private final Executor executor;
+  private final Executor callbackExecutor;
+  private final Executor internalExecutor;
   private final Flags.Create flags;
   private final FileEventsApi fileEventsApi;
   private static final DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
@@ -82,6 +83,18 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    * @return true if the path is a directory and has not previously been registered
    */
   public boolean register(final Path path, final Flags.Create flags, final int maxDepth) {
+    final Either<Boolean, Exception> either =
+        internalExecutor.block(
+            new Callable<Boolean>() {
+              @Override
+              public Boolean call() {
+                return registerImpl(path, flags, maxDepth);
+              }
+            });
+    return either.isLeft() && either.left();
+  }
+
+  public boolean registerImpl(final Path path, final Flags.Create flags, final int maxDepth) {
     boolean result = true;
     Path realPath = null;
     try {
@@ -89,41 +102,33 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     } catch (IOException e) {
       result = false;
     }
-    if (lock.lock()) {
-      try {
-        if (result && Files.isDirectory(realPath) && !realPath.equals(realPath.getRoot())) {
-          final Entry<Path, Stream> entry = find(realPath);
-          if (entry == null) {
-            try {
-              int id = fileEventsApi.createStream(realPath.toString(), latency, flags.getValue());
-              if (id == -1) {
-                result = false;
-                System.err.println("Error watching " + realPath + ".");
-              } else {
-                final int newMaxDepth = removeRedundantStreams(realPath, maxDepth);
-                streams.put(realPath, new Stream(realPath, id, newMaxDepth));
-              }
-            } catch (ClosedFileEventsApiException e) {
-              close();
-              result = false;
-            }
+    if (result && Files.isDirectory(realPath) && !realPath.equals(realPath.getRoot())) {
+      final Entry<Path, Stream> entry = find(realPath);
+      if (entry == null) {
+        try {
+          int id = fileEventsApi.createStream(realPath.toString(), latency, flags.getValue());
+          if (id == -1) {
+            result = false;
+            System.err.println("Error watching " + realPath + ".");
           } else {
-            final Path key = entry.getKey();
-            final Stream stream = entry.getValue();
-            final int depth = key.equals(realPath) ? 0 : key.relativize(realPath).getNameCount();
-            final int newMaxDepth = removeRedundantStreams(key, maxDepth);
-            if (newMaxDepth != stream.maxDepth && stream.maxDepth >= depth) {
-              streams.put(key, new Stream(key, stream.id, newMaxDepth));
-            } else {
-              streams.put(realPath, new Stream(realPath, -1, maxDepth));
-            }
+            final int newMaxDepth = removeRedundantStreams(realPath, maxDepth);
+            streams.put(realPath, new Stream(realPath, id, newMaxDepth));
           }
+        } catch (ClosedFileEventsApiException e) {
+          close();
+          result = false;
         }
-      } finally {
-        lock.unlock();
+      } else {
+        final Path key = entry.getKey();
+        final Stream stream = entry.getValue();
+        final int depth = key.equals(realPath) ? 0 : key.relativize(realPath).getNameCount();
+        final int newMaxDepth = removeRedundantStreams(key, maxDepth);
+        if (newMaxDepth != stream.maxDepth && stream.maxDepth >= depth) {
+          streams.put(key, new Stream(key, stream.id, newMaxDepth));
+        } else {
+          streams.put(realPath, new Stream(realPath, -1, maxDepth));
+        }
       }
-    } else {
-      result = false;
     }
     return result;
   }
@@ -150,9 +155,24 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     }
     final Iterator<Path> pathIterator = toRemove.iterator();
     while (pathIterator.hasNext()) {
-      unregister(pathIterator.next());
+      unregisterImpl(pathIterator.next());
     }
     return newMaxDepth;
+  }
+
+  private void unregisterImpl(final Path path) {
+    if (!closed.get()) {
+      final Stream stream = streams.remove(path);
+      if (stream != null && stream.id != -1) {
+        callbackExecutor.run(
+            new Runnable() {
+              @Override
+              public void run() {
+                fileEventsApi.stopStream(stream.id);
+              }
+            });
+      }
+    }
   }
 
   /**
@@ -161,77 +181,40 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    * @param path The directory to remove from monitoring
    */
   @Override
-  public void unregister(Path path) {
-    if (lock.lock()) {
-      try {
-        if (!closed.get()) {
-          final Stream stream = streams.remove(path);
-          if (stream != null && stream.id != -1) {
-            executor.run(
-                new Runnable() {
-                  @Override
-                  public void run() {
-                    fileEventsApi.stopStream(stream.id);
-                  }
-                });
+  public void unregister(final Path path) {
+    internalExecutor.block(
+        new Runnable() {
+          @Override
+          public void run() {
+            unregisterImpl(path);
           }
-        }
-      } finally {
-        lock.unlock();
-      }
-    }
+        });
   }
 
-  /** Closes the FileEventsApi and shuts down the {@code executor}. */
+  /** Closes the FileEventsApi and shuts down the {@code callbackExecutor}. */
   @Override
   public void close() {
     if (closed.compareAndSet(false, true)) {
       super.close();
-      if (lock.lock()) {
-        try {
-          streams.clear();
-        } finally {
-          lock.unlock();
-        }
-        fileEventsApi.close();
-        executor.close();
-      }
+      internalExecutor.block(
+          new Runnable() {
+            @Override
+            public void run() {
+              streams.clear();
+              fileEventsApi.close();
+              callbackExecutor.close();
+            }
+          });
+      internalExecutor.close();
     }
   }
 
-  /**
-   * Callback to run when the native file events api removes a redundant stream. This can occur when
-   * a child directory is registered with the watcher before the parent.
-   */
-  public interface OnStreamRemoved {
-    void apply(String stream);
-  }
-
-  static class DefaultOnStreamRemoved implements OnStreamRemoved {
+  /** A no-op callback to invoke when streams are removed. */
+  static class DefaultOnStreamRemoved implements Consumer<String> {
     DefaultOnStreamRemoved() {}
 
     @Override
-    public void apply(String stream) {}
-  }
-
-  public AppleDirectoryWatcher(
-      final double latency, final Flags.Create flags, final DirectoryWatcher.Callback onFileEvent)
-      throws InterruptedException {
-    this(
-        latency,
-        flags,
-        Executor.make("com.swoval.files.apple.AppleDirectoryWatcher.executorThread"),
-        onFileEvent,
-        DefaultOnStreamRemoved);
-  }
-
-  public AppleDirectoryWatcher(
-      final double latency,
-      final Flags.Create flags,
-      final Executor executor,
-      final DirectoryWatcher.Callback onFileEvent)
-      throws InterruptedException {
-    this(latency, flags, executor, onFileEvent, DefaultOnStreamRemoved);
+    public void accept(String stream) {}
   }
 
   /**
@@ -242,29 +225,112 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    *
    * @param latency specified in fractional seconds
    * @param flags Native flags
-   * @param executor Executor to run callbacks on
-   * @param onFileEvent Callback to run on file events
-   * @param onStreamRemoved Callback to run when a redundant stream is removed from the underlying
-   *     native file events implementation
+   * @param onFileEvent {@link Consumer} to run on file events
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
    */
   public AppleDirectoryWatcher(
       final double latency,
       final Flags.Create flags,
-      final Executor executor,
-      final DirectoryWatcher.Callback onFileEvent,
-      final OnStreamRemoved onStreamRemoved)
+      final Consumer<DirectoryWatcher.Event> onFileEvent)
+      throws InterruptedException {
+    this(
+        latency,
+        flags,
+        Executor.make("com.swoval.files.apple.AppleDirectoryWatcher.executorThread"),
+        onFileEvent,
+        DefaultOnStreamRemoved,
+        null);
+  }
+
+  /**
+   * Creates a new AppleDirectoryWatcher which is a wrapper around {@link FileEventsApi}, which in
+   * turn is a native wrapper around <a
+   * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
+   * Apple File System Events</a>
+   *
+   * @param latency specified in fractional seconds
+   * @param flags Native flags
+   * @param callbackExecutor Executor to run callbacks on
+   * @param onFileEvent {@link Consumer} to run on file events
+   * @throws InterruptedException if the native file events implementation is interrupted during
+   *     initialization
+   */
+  public AppleDirectoryWatcher(
+      final double latency,
+      final Flags.Create flags,
+      final Executor callbackExecutor,
+      final Consumer<DirectoryWatcher.Event> onFileEvent)
+      throws InterruptedException {
+    this(latency, flags, callbackExecutor, onFileEvent, DefaultOnStreamRemoved, null);
+  }
+
+  /**
+   * Creates a new AppleDirectoryWatcher which is a wrapper around {@link FileEventsApi}, which in
+   * turn is a native wrapper around <a
+   * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
+   * Apple File System Events</a>
+   *
+   * @param latency specified in fractional seconds
+   * @param flags Native flags
+   * @param onFileEvent {@link Consumer} to run on file events
+   * @param internalExecutor The internal executor to manage the directory watcher state
+   * @throws InterruptedException if the native file events implementation is interrupted during
+   *     initialization
+   */
+  public AppleDirectoryWatcher(
+      final double latency,
+      final Flags.Create flags,
+      final Consumer<DirectoryWatcher.Event> onFileEvent,
+      final Executor internalExecutor)
+      throws InterruptedException {
+    this(
+        latency,
+        flags,
+        Executor.make("com.swoval.files.apple.AppleDirectoryWatcher.executorThread"),
+        onFileEvent,
+        DefaultOnStreamRemoved,
+        internalExecutor);
+  }
+
+  /**
+   * Creates a new AppleDirectoryWatcher which is a wrapper around {@link FileEventsApi}, which in
+   * turn is a native wrapper around <a
+   * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
+   * Apple File System Events</a>
+   *
+   * @param latency specified in fractional seconds
+   * @param flags Native flags
+   * @param callbackExecutor Executor to run callbacks on
+   * @param onFileEvent {@link Consumer} to run on file events
+   * @param onStreamRemoved {@link Consumer} to run when a redundant stream is removed from the
+   *     underlying native file events implementation
+   * @param executor The internal executor to manage the directory watcher state
+   * @throws InterruptedException if the native file events implementation is interrupted during
+   *     initialization
+   */
+  public AppleDirectoryWatcher(
+      final double latency,
+      final Flags.Create flags,
+      final Executor callbackExecutor,
+      final Consumer<DirectoryWatcher.Event> onFileEvent,
+      final Consumer<String> onStreamRemoved,
+      final Executor executor)
       throws InterruptedException {
     this.latency = latency;
     this.flags = flags;
-    this.executor = executor;
+    this.callbackExecutor = callbackExecutor;
+    this.internalExecutor =
+        executor == null
+            ? Executor.make(
+                "com.swoval.files.apple.AppleDirectoryWatcher-internal-internalExecutor")
+            : executor;
     fileEventsApi =
         FileEventsApi.apply(
             new Consumer<FileEvent>() {
               @Override
               public void accept(final FileEvent fileEvent) {
-                executor.run(
+                callbackExecutor.run(
                     new Runnable() {
                       @Override
                       public void run() {
@@ -293,7 +359,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
                           } else {
                             event = new DirectoryWatcher.Event(path, Delete);
                           }
-                          onFileEvent.apply(event);
+                          onFileEvent.accept(event);
                         }
                       }
                     });
@@ -302,18 +368,17 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
             new Consumer<String>() {
               @Override
               public void accept(final String stream) {
-                executor.run(
+                callbackExecutor.run(
                     new Runnable() {
                       @Override
                       public void run() {
-                        if (lock.lock()) {
-                          try {
+                        new Runnable() {
+                          @Override
+                          public void run() {
                             streams.remove(Paths.get(stream));
-                          } finally {
-                            lock.unlock();
                           }
-                          onStreamRemoved.apply(stream);
-                        }
+                        }.run();
+                        onStreamRemoved.accept(stream);
                       }
                     });
               }

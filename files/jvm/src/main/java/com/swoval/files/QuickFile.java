@@ -65,6 +65,8 @@ public interface QuickFile {
    * FindNextFile (windows) and use this value to compute {@link QuickFile#isDirectory} and {@link
    * QuickFile#isFile}, the returned {@link FileWithFileType} is generally unsuitable to be used as
    * a persistent value. Instead, use {@link QuickFile#toFile}.
+   *
+   * @return An instance of FileWithFileType. This may just be a cast.
    */
   FileWithFileType asFile();
 

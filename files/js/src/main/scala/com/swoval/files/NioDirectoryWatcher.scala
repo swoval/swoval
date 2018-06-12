@@ -3,8 +3,9 @@ package com.swoval.files
 import java.io.{ File, FileFilter }
 import java.nio.file.{ FileSystemLoopException, Files, Path, Paths }
 
-import com.swoval.files.DirectoryWatcher.{ Callback, Event }
+import com.swoval.files.DirectoryWatcher.Event
 import com.swoval.files.DirectoryWatcher.Event.{ Create, Delete, Modify }
+import com.swoval.functional.{ Consumer, Filter }
 import io.scalajs.nodejs
 import io.scalajs.nodejs.fs.{ FSWatcher, FSWatcherOptions, Fs }
 
@@ -16,9 +17,13 @@ import scala.scalajs.js
  * Native directory watcher implementation for Linux and Windows
  * @param onFileEvent The callback to run on file events
  */
-class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
-  def this(onFileEvent: Callback, registerable: Registerable) = this(onFileEvent)
-  private[files] def this(onFileEvent: Callback, registerable: Registerable, executor: Executor) =
+class NioDirectoryWatcher(val onFileEvent: Consumer[Event]) extends DirectoryWatcher {
+  def this(onFileEvent: Consumer[Event], executor: Executor) = this(onFileEvent)
+  def this(onFileEvent: Consumer[Event], registerable: Registerable) = this(onFileEvent)
+  private[files] def this(onFileEvent: Consumer[Event],
+                          registerable: Registerable,
+                          callbackExecutor: Executor,
+                          executor: Executor) =
     this(onFileEvent)
   private object DirectoryFilter extends FileFilter {
     override def accept(pathname: File): Boolean = pathname.isDirectory
@@ -51,8 +56,8 @@ class NioDirectoryWatcher(val onFileEvent: Callback) extends DirectoryWatcher {
               case _: FileSystemLoopException =>
             }
           }
-          onFileEvent(new Event(watchPath, kind))
-          events.foreach(onFileEvent(_))
+          onFileEvent.accept(new Event(watchPath, kind))
+          events.foreach(onFileEvent.accept)
         }
       watchedDirs
         .put(p.toString, WatchedDir(Fs.watch(p.toString, options, callback), depth))
