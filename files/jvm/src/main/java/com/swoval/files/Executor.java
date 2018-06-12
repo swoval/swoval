@@ -69,7 +69,7 @@ public abstract class Executor implements AutoCloseable {
     try {
       return queue.take();
     } catch (InterruptedException e) {
-      return Either.right((Exception) e);
+      return Either.right(e);
     }
   }
 
