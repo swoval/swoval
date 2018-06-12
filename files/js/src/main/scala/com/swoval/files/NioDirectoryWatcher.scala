@@ -26,7 +26,7 @@ class NioDirectoryWatcher(val onFileEvent: Consumer[Event]) extends DirectoryWat
                           executor: Executor) =
     this(onFileEvent)
   private object DirectoryFilter extends FileFilter {
-    override def accept(pathname: File): Boolean = pathname.isDirectory
+    override def accept(pathname: File): Boolean = pathname.isDirectory()
   }
   private[this] val options = new FSWatcherOptions(recursive = false)
   override def register(path: Path, maxDepth: Int): Boolean = {
@@ -49,7 +49,7 @@ class NioDirectoryWatcher(val onFileEvent: Consumer[Event]) extends DirectoryWat
             try {
               if (register(watchPath, if (depth == Integer.MAX_VALUE) depth else depth - 1)) {
                 QuickList.list(watchPath, depth - 1).asScala foreach { newPath =>
-                  events += new Event(watchPath, Create)
+                  events += new Event(newPath.asPath(), Create)
                 }
               }
             } catch {
@@ -59,24 +59,26 @@ class NioDirectoryWatcher(val onFileEvent: Consumer[Event]) extends DirectoryWat
           onFileEvent.accept(new Event(watchPath, kind))
           events.foreach(onFileEvent.accept)
         }
+      val watcher: FSWatcher = Fs.watch(p.toString, options, callback)
+      watcher.onError(e => println(e))
       watchedDirs
-        .put(p.toString, WatchedDir(Fs.watch(p.toString, options, callback), depth))
+        .put(p.toString, WatchedDir(watcher, depth))
         .foreach(_.watcher.close())
       true
     }
     Files.exists(path) && {
       val realPath = path.toRealPath()
       if (!path.equals(realPath) && watchedDirs.contains(realPath.toString))
-        throw new FileSystemLoopException(path.toString());
+        throw new FileSystemLoopException(path.toString)
       impl(path, maxDepth)
     } && (maxDepth == 0) || {
       QuickList
-        .list(path, 0, true, new Filter[QuickFile] {
-          override def accept(file: QuickFile) = file.isDirectory
+        .list(path, maxDepth = 0, followLinks = true, new Filter[QuickFile] {
+          override def accept(file: QuickFile): Boolean = file.isDirectory()
         })
         .asScala
         .forall { dir =>
-          register(dir.asPath,
+          register(dir.asPath(),
                    if (maxDepth == Integer.MAX_VALUE) Integer.MAX_VALUE else maxDepth - 1)
         }
     }

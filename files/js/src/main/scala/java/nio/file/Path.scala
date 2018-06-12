@@ -80,7 +80,7 @@ class JSPath(val rawPath: String) extends Path {
   override def resolveSibling(other: Path): Path = ???
   override def resolveSibling(other: String): Path = ???
   override def relativize(other: Path): Path = {
-    val raw = JPath.relative(path, other.asInstanceOf[JSPath].path)
+    val raw = JPath.relative(path, other.toString)
     new JSPath(if (isWin) raw.replaceAll("\\\\\\\\", "\\\\") else raw)
   }
   override def toUri(): URI = file.toURI

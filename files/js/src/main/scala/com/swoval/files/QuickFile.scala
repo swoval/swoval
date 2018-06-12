@@ -200,8 +200,7 @@ private[files] class QuickFileImpl(name: String, private val kind: Int)
 
   override def asPath(): PathWithFileType = {
     val path: Path = toPath()
-    val self: QuickFileImpl = this
-    new PathWithFileTypeImpl(self, path)
+    new PathWithFileTypeImpl(this, path)
   }
 
   override def asFile(): FileWithFileType = this
