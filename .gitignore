@@ -4,19 +4,19 @@
 out
 
 #BEGIN FILESJVM TEST SYMLINKS
-files/jvm/src/test/scala/com/swoval/files/apple/FileEventApiTest.scala
-files/jvm/src/test/scala/com/swoval/files/test/package.scala
-files/jvm/src/test/scala/com/swoval/files/test/FileBytes.scala
-files/jvm/src/test/scala/com/swoval/files/BoundedWatchService.scala
-files/jvm/src/test/scala/com/swoval/files/FileCacheTest.scala
-files/jvm/src/test/scala/com/swoval/files/DirectoryWatcherTest.scala
-files/jvm/src/test/scala/com/swoval/files/QuickListTest.scala
-files/jvm/src/test/scala/com/swoval/files/package.scala
-files/jvm/src/test/scala/com/swoval/files/EntryFilterTest.scala
-files/jvm/src/test/scala/com/swoval/files/NioDirectoryWatcherTest.scala
-files/jvm/src/test/scala/com/swoval/files/DirectoryTest.scala
 files/jvm/src/test/scala/com/swoval/files/AppleDirectoryWatcherTest.scala
+files/jvm/src/test/scala/com/swoval/files/BoundedWatchService.scala
+files/jvm/src/test/scala/com/swoval/files/DirectoryTest.scala
+files/jvm/src/test/scala/com/swoval/files/DirectoryWatcherTest.scala
+files/jvm/src/test/scala/com/swoval/files/EntryFilterTest.scala
+files/jvm/src/test/scala/com/swoval/files/FileCacheTest.scala
+files/jvm/src/test/scala/com/swoval/files/NioDirectoryWatcherTest.scala
 files/jvm/src/test/scala/com/swoval/files/PathTest.scala
+files/jvm/src/test/scala/com/swoval/files/QuickListTest.scala
+files/jvm/src/test/scala/com/swoval/files/apple/FileEventApiTest.scala
+files/jvm/src/test/scala/com/swoval/files/package.scala
+files/jvm/src/test/scala/com/swoval/files/test/FileBytes.scala
+files/jvm/src/test/scala/com/swoval/files/test/package.scala
 files/jvm/src/test/scala/com/swoval/functional/EitherTest.scala
 #END FILESJVM TEST SYMLINKS
 
