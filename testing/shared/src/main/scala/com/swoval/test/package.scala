@@ -12,7 +12,8 @@ import scala.language.higherKinds
 import scala.util.Try
 
 package object test {
-  final val DEFAULT_TIMEOUT = 5.second
+  final val DEFAULT_TIMEOUT =
+    Try(System.getProperty("swoval.test.timeout", "5").toInt).getOrElse(5).seconds
 
   /** Taken from shapeless */
   sealed trait <:!<[T, R]
@@ -75,7 +76,7 @@ package object test {
     f(c).andThen { case _ => c.close() }
   }
 
-  object Files {
+  object TestFiles {
     def withTempFile[R](dir: String)(f: String => Future[R]): Future[R] = {
       val file: String = platform.createTempFile(dir, "file")
       f(file).andThen { case _ => platform.delete(file) }

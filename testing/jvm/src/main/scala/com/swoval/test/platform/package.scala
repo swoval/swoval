@@ -8,7 +8,7 @@ import java.nio.file.{
   FileVisitor,
   Path,
   Paths,
-  Files => JFiles
+  Files
 }
 
 import scala.concurrent.ExecutionContext
@@ -16,22 +16,22 @@ import scala.concurrent.ExecutionContext
 package object platform {
   def executionContext: ExecutionContext = ExecutionContext.global
   def createTempFile(dir: String, prefix: String): String =
-    deleteOnExit(JFiles.createTempFile(Paths.get(dir), prefix, "").toRealPath())
+    deleteOnExit(Files.createTempFile(Paths.get(dir), prefix, "").toRealPath())
 
   def createTempDirectory(): String =
-    deleteOnExit(JFiles.createTempDirectory("dir").toRealPath())
+    deleteOnExit(Files.createTempDirectory("dir").toRealPath())
 
   def createTempSubdirectory(dir: String): String =
-    deleteOnExit(JFiles.createTempDirectory(Paths.get(dir), "subdir").toRealPath())
+    deleteOnExit(Files.createTempDirectory(Paths.get(dir), "subdir").toRealPath())
 
   def delete(dir: String): Unit = {
-    JFiles.walkFileTree(
+    Files.walkFileTree(
       Paths.get(dir),
       new FileVisitor[Path] {
         override def preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult =
           FileVisitResult.CONTINUE
         override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult = {
-          JFiles.deleteIfExists(file)
+          Files.deleteIfExists(file)
           FileVisitResult.CONTINUE
         }
         override def visitFileFailed(file: Path, exc: IOException): FileVisitResult = {
@@ -39,7 +39,7 @@ package object platform {
         }
         override def postVisitDirectory(dir: Path, exc: IOException): FileVisitResult = {
           try {
-            JFiles.deleteIfExists(dir)
+            Files.deleteIfExists(dir)
           } catch {
             case _: DirectoryNotEmptyException => delete(dir.toString)
           }
@@ -48,7 +48,7 @@ package object platform {
       }
     )
   }
-  def mkdir(path: String): String = JFiles.createDirectories(Paths.get(path)).toRealPath().toString
+  def mkdir(path: String): String = Files.createDirectories(Paths.get(path)).toRealPath().toString
   private def deleteOnExit(path: Path): String = {
     Runtime
       .getRuntime()

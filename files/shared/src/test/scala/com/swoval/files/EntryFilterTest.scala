@@ -1,7 +1,7 @@
 package com.swoval.files
 
 import java.io.File
-import java.nio.file.{ Path => JPath }
+import java.nio.file.Path
 
 import com.swoval.files.Directory.{ Entry, EntryFilter }
 import com.swoval.files.test._
@@ -14,7 +14,7 @@ object EntryFilterTest extends TestSuite {
   }
   override val tests = Tests {
     'simple - withTempFileSync { f =>
-      val filter: EntryFilter[JPath] = EntryFilters.fromFileFilter((_: File) == f.toFile)
+      val filter: EntryFilter[Path] = EntryFilters.fromFileFilter((_: File) == f.toFile)
       assert(filter.accept(new Entry(f, f)))
     }
     'combined - withTempFileSync { f =>

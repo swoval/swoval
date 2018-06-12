@@ -1,7 +1,7 @@
 package com.swoval.files
 
 import java.io.File
-import java.nio.file.{ Path => JPath }
+import java.nio.file.{ Paths, Path }
 
 import com.swoval.files.Directory.{ Entry, EntryFilter }
 import EntryFilters.AllPass
@@ -15,7 +15,7 @@ object DirectoryTest extends TestSuite {
   implicit class DirectoryOps[T](val d: Directory[T]) {
     def ls(recursive: Boolean, filter: EntryFilter[_ >: T]): Seq[Entry[T]] =
       d.list(recursive, filter).asScala
-    def ls(path: JPath, recursive: Boolean, filter: EntryFilter[_ >: T]): Seq[Entry[T]] =
+    def ls(path: Path, recursive: Boolean, filter: EntryFilter[_ >: T]): Seq[Entry[T]] =
       d.list(path, recursive, filter).asScala
   }
 
@@ -41,7 +41,7 @@ object DirectoryTest extends TestSuite {
       "resolution" - withTempDirectory { dir =>
         withTempDirectory(dir) { subdir =>
           withTempFileSync(subdir) { f =>
-            def parentEquals(dir: JPath): EntryFilter[JPath] =
+            def parentEquals(dir: Path): EntryFilter[Path] =
               EntryFilters.fromFileFilter((_: File).toPath.getParent == dir)
             val directory = Directory.of(dir)
             directory.ls(recursive = true, parentEquals(dir)) === Seq(subdir)
@@ -77,7 +77,7 @@ object DirectoryTest extends TestSuite {
             assert(
               Directory
                 .of(dir)
-                .ls(Path(s"$subdir.1"), recursive = true, AllPass)
+                .ls(Paths.get(s"$subdir.1"), recursive = true, AllPass)
                 .isEmpty)
           }
         }
@@ -162,7 +162,7 @@ object DirectoryTest extends TestSuite {
       'overrides - {
         withTempFileSync { f =>
           val dir =
-            Directory.cached[LastModified](f.getParent, LastModified(_: JPath), true)
+            Directory.cached[LastModified](f.getParent, LastModified(_: Path), true)
           val lastModified = f.lastModified
           val updatedLastModified = 2000
           f.setLastModifiedTime(updatedLastModified)
@@ -174,7 +174,7 @@ object DirectoryTest extends TestSuite {
       'newFields - withTempFileSync { f =>
         f.write("foo")
         val initialBytes = "foo".getBytes.toIndexedSeq
-        val dir = Directory.cached[FileBytes](f.getParent, FileBytes(_: JPath), true)
+        val dir = Directory.cached[FileBytes](f.getParent, FileBytes(_: Path), true)
         def filter(bytes: Seq[Byte]): EntryFilter[FileBytes] =
           new EntryFilter[FileBytes] {
             override def accept(p: Entry[_ <: FileBytes]): Boolean = p.value.bytes == bytes
@@ -189,7 +189,7 @@ object DirectoryTest extends TestSuite {
         dir.addUpdate(f, Entry.FILE)
         val newCachedFile = dir.ls(f, recursive = true, filter(newBytes)).head
         assert(newCachedFile.value.bytes.sameElements(newBytes))
-        dir.ls(f, recursive = true, filter(initialBytes)) === Seq.empty[JPath]
+        dir.ls(f, recursive = true, filter(initialBytes)) === Seq.empty[Path]
       }
     }
     'recursive - withTempDirectory { dir =>

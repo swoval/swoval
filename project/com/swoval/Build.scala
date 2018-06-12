@@ -62,6 +62,14 @@ object Build {
       licenses += ("MIT", url("https://opensource.org/licenses/MIT")),
       scalacOptions ++= Seq("-feature"),
       publishMavenStyle in publishLocal := false,
+      setProp := {
+        val args = Def.spaceDelimited("<arg>").parsed
+        val Array(key, value) = args.toArray match {
+          case Array(prop) => prop.split("=")
+          case s           => s
+        }
+        System.setProperty(key, value)
+      },
       publishTo := {
         val p = publishTo.value
         if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true"))
@@ -110,6 +118,7 @@ object Build {
   lazy val travisQuickListReflectionTest =
     taskKey[Unit]("Check that reflection works for quick list")
   lazy val quickListReflectionTest = inputKey[Unit]("Check that reflection works for quick list")
+  lazy val setProp = inputKey[Unit]("Set a system property")
 
   def projects: Seq[ProjectReference] = Seq[ProjectReference](
     files.js,
@@ -244,13 +253,7 @@ object Build {
                 val relativeSource = sharedBase.relativize(p)
                 val resolved = dir.resolve(relativeSource)
                 if (!Files.exists(resolved.getParent)) Files.createDirectories(resolved.getParent)
-                if (Properties.isWin && false) {
-                  val needCopy = scala.util
-                    .Try(
-                      new String(Files.readAllBytes(p)) != new String(Files.readAllBytes(resolved)))
-                    .getOrElse(true)
-                  if (needCopy) Files.copy(p, resolved, REPLACE_EXISTING)
-                } else if (!Files.exists(resolved) && !Files.isSymbolicLink(resolved)) {
+                if (!Files.exists(resolved) && !Files.isSymbolicLink(resolved)) {
                   Files.createSymbolicLink(resolved, resolved.getParent.relativize(p))
                 }
                 Some(root.relativize(resolved))
@@ -260,13 +263,13 @@ object Build {
             }
           } else None
         }
-        if (Properties.isMac) {
+        if (!Properties.isWin) {
           this.synchronized {
             val content = new String(Files.readAllBytes(root.resolve(".gitignore")))
             val name = s"$projectName ${conf.name.toUpperCase}"
             val newGitignore = if (content.contains(name)) {
               content.replaceAll(s"(?s)(#BEGIN $name SYMLINKS)(.*)(#END $name SYMLINKS)",
-                                 s"$$1\n${links.mkString("\n")}\n$$3")
+                                 s"$$1\n${links.sorted.mkString("\n")}\n$$3")
             } else {
               s"$content${links.mkString(s"\n#BEGIN $name SYMLINKS\n", "\n", s"\n#END $name SYMLINKS\n")}"
             }

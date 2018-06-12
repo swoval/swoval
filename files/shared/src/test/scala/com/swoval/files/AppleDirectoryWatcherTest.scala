@@ -1,5 +1,7 @@
 package com.swoval.files
 
+import java.nio.file.Paths
+
 import com.swoval.files.apple.Flags
 import com.swoval.files.test._
 import com.swoval.functional.Consumer
@@ -23,7 +25,7 @@ object AppleDirectoryWatcherTest extends TestSuite {
 
           usingAsync(defaultWatcher(DEFAULT_LATENCY, dirFlags, callback)) { w =>
             w.register(dir)
-            val f = dir.resolve(Path("foo")).createFile()
+            val f = dir.resolve(Paths.get("foo")).createFile()
             events.poll(DEFAULT_TIMEOUT)(_.path === dir)
           }
         }
@@ -33,7 +35,7 @@ object AppleDirectoryWatcherTest extends TestSuite {
           (e: DirectoryWatcher.Event) => events.add(e)
 
         usingAsync(defaultWatcher(DEFAULT_LATENCY, dirFlags, callback)) { w =>
-          val f = dir.resolve(Path("foo")).createFile()
+          val f = dir.resolve(Paths.get("foo")).createFile()
           w.register(dir)
           f.setLastModifiedTime(0L)
           f.delete()
@@ -46,7 +48,7 @@ object AppleDirectoryWatcherTest extends TestSuite {
           (e: DirectoryWatcher.Event) => events.add(e)
 
         usingAsync(defaultWatcher(DEFAULT_LATENCY, dirFlags, callback)) { w =>
-          val f = dir.resolve(Path("foo")).createFile()
+          val f = dir.resolve(Paths.get("foo")).createFile()
           w.register(dir)
           f.delete()
           events.poll(DEFAULT_TIMEOUT)(_.path === dir)
@@ -60,7 +62,7 @@ object AppleDirectoryWatcherTest extends TestSuite {
 
             usingAsync(defaultWatcher(DEFAULT_LATENCY, dirFlags, callback)) { w =>
               w.register(dir)
-              subdir.resolve(Path("foo")).createFile()
+              subdir.resolve(Paths.get("foo")).createFile()
               events.poll(DEFAULT_TIMEOUT)(_.path ==> subdir)
             }
           }
