@@ -54,15 +54,10 @@ public abstract class Executor implements AutoCloseable {
         new Runnable() {
           @Override
           public void run() {
-            Either<T, Exception> result;
             try {
-              result = Either.left(callable.call());
+              queue.add(Either.<T, Exception, T>left(callable.call()));
             } catch (Exception e) {
-              result = Either.right(e);
-            }
-            try {
-              queue.add(result);
-            } catch (Exception e) {
+              queue.add(Either.<T, Exception, Exception>right(e));
             }
           }
         });
