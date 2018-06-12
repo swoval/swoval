@@ -70,7 +70,8 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    * @throws IOException when the WatchService can't be started
    * @throws InterruptedException when the WatchService initialization is interrupted
    */
-  public NioDirectoryWatcher(final Consumer<Event> callback) throws IOException, InterruptedException {
+  public NioDirectoryWatcher(final Consumer<Event> callback)
+      throws IOException, InterruptedException {
     this(callback, Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchService());
   }
 

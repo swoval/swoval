@@ -67,7 +67,7 @@ class Observers<T> implements Observer<T>, AutoCloseable {
   public int addObserver(Observer<T> observer) {
     final int key = counter.getAndIncrement();
     synchronized (observers) {
-        observers.put(key, observer);
+      observers.put(key, observer);
     }
     return key;
   }

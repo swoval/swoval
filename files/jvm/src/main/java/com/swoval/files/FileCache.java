@@ -36,8 +36,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Directory.EntryFilter)} method. The cache stores the path information in {@link Directory.Entry}
  * instances.
  *
- * <p>A default implementation is provided by {@link FileCache#apply}. The user may cache arbitrary information in the
- * cache by customizing the {@link Directory.Converter} that is passed into the factory {@link FileCache#apply}.
+ * <p>A default implementation is provided by {@link FileCache#apply}. The user may cache arbitrary
+ * information in the cache by customizing the {@link Directory.Converter} that is passed into the
+ * factory {@link FileCache#apply}.
  *
  * @param <T> The type of data stored in the {@link Directory.Entry} instances for the cache
  */
