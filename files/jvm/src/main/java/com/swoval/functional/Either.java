@@ -18,15 +18,14 @@ public abstract class Either<L, R> {
   public abstract boolean isRight();
 
   @SuppressWarnings("unchecked")
-  public <L, R, T extends L> Either<T, R> castLeft(
-      final Class<T> clazz) {
+  public <L, R, T extends L> Either<T, R> castLeft(final Class<T> clazz) {
     if (isRight()) return (Either<T, R>) this;
     else if (clazz.isAssignableFrom(left().getClass())) return (Either<T, R>) this;
     else throw new ClassCastException(left() + " is not an instance of " + clazz);
   }
 
   @SuppressWarnings("unchecked")
-  public <L, R, T extends R> Either<L, T> castRight( final Class<T> clazz) {
+  public <L, R, T extends R> Either<L, T> castRight(final Class<T> clazz) {
     if (this.isLeft()) return (Either<L, T>) this;
     else if (clazz.isAssignableFrom(right().getClass())) return (Either<L, T>) this;
     else throw new ClassCastException(right() + " is not an instance of " + clazz);
