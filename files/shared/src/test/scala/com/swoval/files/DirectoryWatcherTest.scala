@@ -4,11 +4,10 @@ import java.nio.file.attribute.FileTime
 import java.nio.file.{ Files => JFiles }
 import java.util.concurrent.{ TimeUnit, TimeoutException }
 
-import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.DirectoryWatcher.Event.{ Create, Delete, Modify }
-import com.swoval.files.apple.AppleDirectoryWatcher.OnStreamRemoved
 import com.swoval.files.apple.{ AppleDirectoryWatcher, Flags }
 import com.swoval.files.test.{ ArrayBlockingQueue, _ }
+import com.swoval.functional.Consumer
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
 import utest._
@@ -22,7 +21,7 @@ object DirectoryWatcherTest extends TestSuite {
   val fileFlags = new Flags.Create().setNoDefer().setFileEvents()
   def defaultWatcher(latency: FiniteDuration,
                      flags: Flags.Create,
-                     callback: Callback): DirectoryWatcher =
+                     callback: Consumer[DirectoryWatcher.Event]): DirectoryWatcher =
     DirectoryWatcher.defaultWatcher(latency.toNanos,
                                     TimeUnit.NANOSECONDS,
                                     flags,
@@ -32,7 +31,7 @@ object DirectoryWatcherTest extends TestSuite {
     val events = new ArrayBlockingQueue[DirectoryWatcher.Event](10)
     'files - {
       "handle file creation events" - withTempDirectory { dir =>
-        val callback: Callback = (e: DirectoryWatcher.Event) => {
+        val callback: Consumer[DirectoryWatcher.Event] = (e: DirectoryWatcher.Event) => {
           if (!e.path.isDirectory) events.add(e)
         }
 
@@ -46,7 +45,7 @@ object DirectoryWatcherTest extends TestSuite {
         }
       }
       "handle file touch events" - withTempFile { f =>
-        val callback: Callback =
+        val callback: Consumer[DirectoryWatcher.Event] =
           (e: DirectoryWatcher.Event) => if (!e.path.isDirectory && e.kind != Create) events.add(e)
         usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
           w.register(f.getParent)
@@ -55,7 +54,7 @@ object DirectoryWatcherTest extends TestSuite {
         }
       }
       "handle file modify events" - withTempFile { f =>
-        val callback: Callback =
+        val callback: Consumer[DirectoryWatcher.Event] =
           (e: DirectoryWatcher.Event) => if (!e.path.isDirectory && e.kind != Create) events.add(e)
         usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
           w.register(f.getParent)
@@ -64,7 +63,7 @@ object DirectoryWatcherTest extends TestSuite {
         }
       }
       "handle file deletion events" - withTempFile { f =>
-        val callback: Callback = (e: DirectoryWatcher.Event) => {
+        val callback: Consumer[DirectoryWatcher.Event] = (e: DirectoryWatcher.Event) => {
           if (!e.path.exists && e.kind != Create && e.path == f)
             events.add(e)
         }
@@ -79,9 +78,7 @@ object DirectoryWatcherTest extends TestSuite {
       "remove redundant watchers" - withTempDirectory { dir =>
         if (Platform.isMac) {
           val events = new ArrayBlockingQueue[String](10)
-          val callback: OnStreamRemoved = new OnStreamRemoved {
-            override def apply(stream: String): Unit = events.add(stream)
-          }
+          val callback: Consumer[String] = (stream: String) => events.add(stream)
           withTempDirectory(dir) { subdir =>
             val watcher = new AppleDirectoryWatcher(DEFAULT_LATENCY.toNanos / 1.0e9,
                                                     fileFlags,
@@ -102,7 +99,7 @@ object DirectoryWatcherTest extends TestSuite {
       'unregister - withTempDirectory { dir =>
         val firstLatch = new CountDownLatch(1)
         val secondLatch = new CountDownLatch(2)
-        val callback: Callback = (e: DirectoryWatcher.Event) => {
+        val callback: Consumer[DirectoryWatcher.Event] = (e: DirectoryWatcher.Event) => {
           if (e.path.endsWith("file")) {
             firstLatch.countDown()
             secondLatch.countDown()
@@ -134,7 +131,7 @@ object DirectoryWatcherTest extends TestSuite {
     'depth - {
       'limit - withTempDirectory { dir =>
         withTempDirectory(dir) { subdir =>
-          val callback: Callback =
+          val callback: Consumer[DirectoryWatcher.Event] =
             (e: DirectoryWatcher.Event) => if (e.path.endsWith("foo")) events.add(e)
           usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
             w.register(dir, 0)
@@ -163,7 +160,7 @@ object DirectoryWatcherTest extends TestSuite {
             withTempDirectory(subdir) { secondSubdir =>
               withTempDirectory(secondSubdir) { thirdSubdir =>
                 val subdirEvents = new ArrayBlockingQueue[DirectoryWatcher.Event](1)
-                val callback: Callback = (e: DirectoryWatcher.Event) => {
+                val callback: Consumer[DirectoryWatcher.Event] = (e: DirectoryWatcher.Event) => {
                   if (e.path.endsWith("foo")) events.add(e)
                   if (e.path.endsWith("bar")) subdirEvents.add(e)
                 }
@@ -202,7 +199,7 @@ object DirectoryWatcherTest extends TestSuite {
             withTempDirectory(subdir) { secondSubdir =>
               withTempDirectory(secondSubdir) { thirdSubdir =>
                 val subdirEvents = new ArrayBlockingQueue[DirectoryWatcher.Event](1)
-                val callback: Callback = (e: DirectoryWatcher.Event) => {
+                val callback: Consumer[DirectoryWatcher.Event] = (e: DirectoryWatcher.Event) => {
                   if (e.path.endsWith("foo")) events.add(e)
                   if (e.path.endsWith("bar")) subdirEvents.add(e)
                 }

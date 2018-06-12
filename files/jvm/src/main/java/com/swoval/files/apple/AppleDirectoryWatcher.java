@@ -209,22 +209,12 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     }
   }
 
-  /**
-   * Callback to run when the native file events api removes a redundant stream. This can occur when
-   * a child directory is registered with the watcher before the parent.
-   */
-  public interface OnStreamRemoved {
-    void apply(String stream);
-  }
-
-  /**
-   * A no-op callback to invoke when streams are removed.
-   */
-  static class DefaultOnStreamRemoved implements OnStreamRemoved {
+  /** A no-op callback to invoke when streams are removed. */
+  static class DefaultOnStreamRemoved implements Consumer<String> {
     DefaultOnStreamRemoved() {}
 
     @Override
-    public void apply(String stream) {}
+    public void accept(String stream) {}
   }
 
   /**
@@ -235,13 +225,14 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    *
    * @param latency specified in fractional seconds
    * @param flags Native flags
-   * @param onFileEvent Callback to run on file events
-   *
+   * @param onFileEvent {@link Consumer} to run on file events
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
    */
   public AppleDirectoryWatcher(
-      final double latency, final Flags.Create flags, final DirectoryWatcher.Callback onFileEvent)
+      final double latency,
+      final Flags.Create flags,
+      final Consumer<DirectoryWatcher.Event> onFileEvent)
       throws InterruptedException {
     this(
         latency,
@@ -261,8 +252,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    * @param latency specified in fractional seconds
    * @param flags Native flags
    * @param callbackExecutor Executor to run callbacks on
-   * @param onFileEvent Callback to run on file events
-   *
+   * @param onFileEvent {@link Consumer} to run on file events
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
    */
@@ -270,7 +260,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
       final double latency,
       final Flags.Create flags,
       final Executor callbackExecutor,
-      final DirectoryWatcher.Callback onFileEvent)
+      final Consumer<DirectoryWatcher.Event> onFileEvent)
       throws InterruptedException {
     this(latency, flags, callbackExecutor, onFileEvent, DefaultOnStreamRemoved, null);
   }
@@ -283,16 +273,15 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    *
    * @param latency specified in fractional seconds
    * @param flags Native flags
-   * @param onFileEvent Callback to run on file events
+   * @param onFileEvent {@link Consumer} to run on file events
    * @param internalExecutor The internal executor to manage the directory watcher state
-   *
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
    */
   public AppleDirectoryWatcher(
       final double latency,
       final Flags.Create flags,
-      final DirectoryWatcher.Callback onFileEvent,
+      final Consumer<DirectoryWatcher.Event> onFileEvent,
       final Executor internalExecutor)
       throws InterruptedException {
     this(
@@ -313,11 +302,10 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    * @param latency specified in fractional seconds
    * @param flags Native flags
    * @param callbackExecutor Executor to run callbacks on
-   * @param onFileEvent Callback to run on file events
-   * @param onStreamRemoved Callback to run when a redundant stream is removed from the underlying
-   *     native file events implementation
+   * @param onFileEvent {@link Consumer} to run on file events
+   * @param onStreamRemoved {@link Consumer} to run when a redundant stream is removed from the
+   *     underlying native file events implementation
    * @param executor The internal executor to manage the directory watcher state
-   *
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
    */
@@ -325,8 +313,8 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
       final double latency,
       final Flags.Create flags,
       final Executor callbackExecutor,
-      final DirectoryWatcher.Callback onFileEvent,
-      final OnStreamRemoved onStreamRemoved,
+      final Consumer<DirectoryWatcher.Event> onFileEvent,
+      final Consumer<String> onStreamRemoved,
       final Executor executor)
       throws InterruptedException {
     this.latency = latency;
@@ -371,7 +359,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
                           } else {
                             event = new DirectoryWatcher.Event(path, Delete);
                           }
-                          onFileEvent.apply(event);
+                          onFileEvent.accept(event);
                         }
                       }
                     });
@@ -390,7 +378,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
                             streams.remove(Paths.get(stream));
                           }
                         }.run();
-                        onStreamRemoved.apply(stream);
+                        onStreamRemoved.accept(stream);
                       }
                     });
               }

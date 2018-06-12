@@ -17,7 +17,7 @@ trait Registerable extends java.nio.file.WatchService {
    *
    * @param path The path to monitor.
    * @param kinds The types of events to monitor.
-   * @return
+   * @return WatchKey the key returned by the WatchService
    */
   def register(path: Path, kinds: WatchEvent.Kind[_]*): WatchKey
 

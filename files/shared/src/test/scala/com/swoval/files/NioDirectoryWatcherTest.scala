@@ -3,7 +3,7 @@ package com.swoval.files
 import java.nio.file.{ Files => JFiles, Path => JPath }
 import java.util.concurrent.TimeoutException
 
-import com.swoval.files.DirectoryWatcher.Callback
+import com.swoval.functional.Consumer
 import com.swoval.files.test._
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
@@ -28,7 +28,8 @@ object NioDirectoryWatcherTest extends TestSuite {
 
     'onCreate - withTempDirectory { dir =>
       val f = dir.resolve(Path("create"))
-      val callback: Callback = (e: DirectoryWatcher.Event) => if (e.path == f) events.add(e)
+      val callback: Consumer[DirectoryWatcher.Event] =
+        (e: DirectoryWatcher.Event) => if (e.path == f) events.add(e)
       usingAsync(new NioDirectoryWatcher(callback)) { w =>
         w.register(dir)
         f.createFile()
@@ -37,7 +38,8 @@ object NioDirectoryWatcherTest extends TestSuite {
     }
     'onModify - withTempDirectory { dir =>
       val f = dir.resolve(Path("modify"))
-      val callback: Callback = (e: DirectoryWatcher.Event) => if (e.path == f) events.add(e)
+      val callback: Consumer[DirectoryWatcher.Event] =
+        (e: DirectoryWatcher.Event) => if (e.path == f) events.add(e)
       usingAsync(new NioDirectoryWatcher(callback)) { w =>
         f.createFile()
         w.register(dir)
@@ -47,7 +49,8 @@ object NioDirectoryWatcherTest extends TestSuite {
     }
     'onDelete - withTempDirectory { dir =>
       val f = dir.resolve(Path("delete"))
-      val callback: Callback = (e: DirectoryWatcher.Event) => if (e.path == f) events.add(e)
+      val callback: Consumer[DirectoryWatcher.Event] =
+        (e: DirectoryWatcher.Event) => if (e.path == f) events.add(e)
       usingAsync(new NioDirectoryWatcher(callback)) { w =>
         f.createFile()
         w.register(dir)
@@ -58,7 +61,7 @@ object NioDirectoryWatcherTest extends TestSuite {
     'subdirectories - {
       'onCreate - withTempDirectory { dir =>
         withTempDirectory(dir) { subdir =>
-          val callback: Callback =
+          val callback: Consumer[DirectoryWatcher.Event] =
             (e: DirectoryWatcher.Event) => if (e.path != dir && !e.path.isDirectory) events.add(e)
           usingAsync(new NioDirectoryWatcher(callback)) { w =>
             w.register(dir)
@@ -77,7 +80,7 @@ object NioDirectoryWatcherTest extends TestSuite {
       val subdirs = (1 to subdirsToAdd).map(i => dir.resolve(s"subdir-$i-overflow"))
       val last = subdirs.last
       val files = mutable.Set.empty[JPath]
-      val callback: Callback = (_: DirectoryWatcher.Event) match {
+      val callback: Consumer[DirectoryWatcher.Event] = (_: DirectoryWatcher.Event) match {
         case e if e.kind == DirectoryWatcher.Event.Overflow => overflowLatch.countDown()
         case e if e.path == last =>
           overflowLatch.countDown()
@@ -115,7 +118,7 @@ object NioDirectoryWatcherTest extends TestSuite {
       val dir = JFiles.createDirectories(base.resolve("dir"))
       val firstLatch = new CountDownLatch(1)
       val secondLatch = new CountDownLatch(1)
-      val callback: Callback = (e: DirectoryWatcher.Event) => {
+      val callback: Consumer[DirectoryWatcher.Event] = (e: DirectoryWatcher.Event) => {
         if (e.path.endsWith("file")) {
           firstLatch.countDown()
         } else if (e.path.endsWith("other-file")) {
@@ -149,7 +152,7 @@ object NioDirectoryWatcherTest extends TestSuite {
           withTempDirectory(subdir) { secondSubdir =>
             withTempDirectory(secondSubdir) { thirdSubdir =>
               val subdirEvents = new ArrayBlockingQueue[DirectoryWatcher.Event](1)
-              val callback: Callback = (e: DirectoryWatcher.Event) => {
+              val callback: Consumer[DirectoryWatcher.Event] = (e: DirectoryWatcher.Event) => {
                 if (e.path.endsWith("foo")) events.add(e)
                 if (e.path.endsWith("bar")) subdirEvents.add(e)
               }
@@ -188,7 +191,7 @@ object NioDirectoryWatcherTest extends TestSuite {
           withTempDirectory(subdir) { secondSubdir =>
             withTempDirectory(secondSubdir) { thirdSubdir =>
               val subdirEvents = new ArrayBlockingQueue[DirectoryWatcher.Event](1)
-              val callback: Callback = (e: DirectoryWatcher.Event) => {
+              val callback: Consumer[DirectoryWatcher.Event] = (e: DirectoryWatcher.Event) => {
                 if (e.path.endsWith("baz")) events.add(e)
                 if (e.path.endsWith("buzz")) subdirEvents.add(e)
               }
@@ -227,7 +230,7 @@ object NioDirectoryWatcherTest extends TestSuite {
       val latch = new CountDownLatch(1)
       val secondLatch = new CountDownLatch(1)
       val executor = new TestExecutor("backedup-test-executor-thread")
-      val callback: DirectoryWatcher.Callback = (e: DirectoryWatcher.Event) => {
+      val callback: Consumer[DirectoryWatcher.Event] = (e: DirectoryWatcher.Event) => {
         if (latch.getCount > 0) {
           executor.overflow()
           latch.countDown()

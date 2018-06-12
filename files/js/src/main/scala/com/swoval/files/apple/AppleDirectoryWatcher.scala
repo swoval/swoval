@@ -44,18 +44,11 @@ object AppleDirectoryWatcher {
   }
 
   /**
-   * Callback to run when the native file events api removes a redundant stream. This can occur when
-   * a child directory is registered with the watcher before the parent.
+ A no-op callback to invoke when streams are removed.
    */
-  trait OnStreamRemoved {
+  class DefaultOnStreamRemoved() extends Consumer[String] {
 
-    def apply(stream: String): Unit
-
-  }
-
-  class DefaultOnStreamRemoved() extends OnStreamRemoved {
-
-    override def apply(stream: String): Unit = {}
+    override def accept(stream: String): Unit = {}
 
   }
 
@@ -67,8 +60,8 @@ object AppleDirectoryWatcher {
 class AppleDirectoryWatcher(private val latency: Double,
                             private val flags: Flags.Create,
                             private val callbackExecutor: Executor,
-                            onFileEvent: DirectoryWatcher.Callback,
-                            onStreamRemoved: OnStreamRemoved,
+                            onFileEvent: Consumer[DirectoryWatcher.Event],
+                            onStreamRemoved: Consumer[String],
                             executor: Executor)
     extends DirectoryWatcher {
 
@@ -109,7 +102,7 @@ class AppleDirectoryWatcher(private val latency: Double,
                 else if (Files.exists(path))
                   new DirectoryWatcher.Event(path, Modify)
                 else new DirectoryWatcher.Event(path, Delete)
-              onFileEvent.apply(event)
+              onFileEvent.accept(event)
             }
           }
         })
@@ -124,7 +117,7 @@ class AppleDirectoryWatcher(private val latency: Double,
                 streams.remove(Paths.get(stream))
               }
             }.run()
-            onStreamRemoved.apply(stream)
+            onStreamRemoved.accept(stream)
           }
         })
       }
@@ -272,7 +265,17 @@ class AppleDirectoryWatcher(private val latency: Double,
     }
   }
 
-  def this(latency: Double, flags: Flags.Create, onFileEvent: DirectoryWatcher.Callback) =
+  /**
+   * Creates a new AppleDirectoryWatcher which is a wrapper around [[FileEventsApi]], which in
+   * turn is a native wrapper around [[https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1
+   * Apple File System Events]]
+   *
+   * @param latency specified in fractional seconds
+   * @param flags Native flags
+   * @param onFileEvent [[Consumer]] to run on file events
+   *     initialization
+   */
+  def this(latency: Double, flags: Flags.Create, onFileEvent: Consumer[DirectoryWatcher.Event]) =
     this(latency,
          flags,
          Executor.make("com.swoval.files.apple.AppleDirectoryWatcher.executorThread"),
@@ -280,15 +283,37 @@ class AppleDirectoryWatcher(private val latency: Double,
          DefaultOnStreamRemoved,
          null)
 
+  /**
+   * Creates a new AppleDirectoryWatcher which is a wrapper around [[FileEventsApi]], which in
+   * turn is a native wrapper around [[https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1
+   * Apple File System Events]]
+   *
+   * @param latency specified in fractional seconds
+   * @param flags Native flags
+   * @param callbackExecutor Executor to run callbacks on
+   * @param onFileEvent [[Consumer]] to run on file events
+   *     initialization
+   */
   def this(latency: Double,
            flags: Flags.Create,
            callbackExecutor: Executor,
-           onFileEvent: DirectoryWatcher.Callback) =
+           onFileEvent: Consumer[DirectoryWatcher.Event]) =
     this(latency, flags, callbackExecutor, onFileEvent, DefaultOnStreamRemoved, null)
 
+  /**
+   * Creates a new AppleDirectoryWatcher which is a wrapper around [[FileEventsApi]], which in
+   * turn is a native wrapper around [[https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1
+   * Apple File System Events]]
+   *
+   * @param latency specified in fractional seconds
+   * @param flags Native flags
+   * @param onFileEvent [[Consumer]] to run on file events
+   * @param internalExecutor The internal executor to manage the directory watcher state
+   *     initialization
+   */
   def this(latency: Double,
            flags: Flags.Create,
-           onFileEvent: DirectoryWatcher.Callback,
+           onFileEvent: Consumer[DirectoryWatcher.Event],
            internalExecutor: Executor) =
     this(latency,
          flags,

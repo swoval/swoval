@@ -6,7 +6,9 @@ import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.Observer
 import com.swoval.files.Directory.OnChange
+import com.swoval.files.DirectoryWatcher.Event
 import com.swoval.files.SymlinkWatcher.OnError
+import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import java.io.IOException
 import java.nio.file.Files
@@ -35,6 +37,7 @@ object FileCache {
    * Create a file cache
    *
    * @param converter Converts a path to the cached value type T
+   * @param options Options for the cache.
    * @tparam T The value type of the cache entries
    * @return A file cache
    */
@@ -46,6 +49,7 @@ object FileCache {
    *
    * @param converter Converts a path to the cached value type T
    * @param factory A factory to create a directory watcher
+   * @param options Options for the cache
    * @tparam T The value type of the cache entries
    * @return A file cache
    */
@@ -59,6 +63,7 @@ object FileCache {
    *
    * @param converter Converts a path to the cached value type T
    * @param observer Observer of events for this cache
+   * @param options Options for the cache
    * @tparam T The value type of the cache entries
    * @return A file cache
    */
@@ -77,6 +82,7 @@ object FileCache {
    * @param converter Converts a path to the cached value type T
    * @param factory A factory to create a directory watcher
    * @param observer Observer of events for this cache
+   * @param options Options for the cache
    * @tparam T The value type of the cache entries
    * @return A file cache
    */
@@ -116,9 +122,8 @@ object FileCache {
  * Directory.EntryFilter)]] method. The cache stores the path information in [[Directory.Entry]]
  * instances.
  *
- * <p>A default implementation is provided by [[FileCache#apply(Converter, Observer,
- * Option...)]] . The user may cache arbitrary information in the cache by customizing the [[Directory.Converter]] that is passed into the factory [[FileCache#apply(Converter, Observer,
- * Option...)]]
+ * <p>A default implementation is provided by [[FileCache.apply]]. The user may cache arbitrary information in the
+ * cache by customizing the [[Directory.Converter]] that is passed into the factory [[FileCache.apply]].
  *
  * @tparam T The type of data stored in the [[Directory.Entry]] instances for the cache
  */
@@ -190,6 +195,7 @@ abstract class FileCache[T] extends AutoCloseable {
    *     this path or the empty list if the path is not monitored by the cache.
    *     <p>is recursively monitoring the input path, it will not return cache entries for children
    *     if this flag is false.
+   * @param recursive Toggles whether or not to traverse the children of the path
    * @return The list of cache elements. This will be empty if the path is not monitored in a
    *     monitored path. If the path is a file and the file is monitored by the cache, the returned
    *     list will contain just the cache entry for the path.
@@ -286,9 +292,9 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       )
     else null
 
-  private def callback(executor: Executor): DirectoryWatcher.Callback =
-    new DirectoryWatcher.Callback() {
-      override def apply(event: DirectoryWatcher.Event): Unit = {
+  private def callback(executor: Executor): Consumer[Event] =
+    new Consumer[Event]() {
+      override def accept(event: DirectoryWatcher.Event): Unit = {
         executor.run(new Runnable() {
           override def run(): Unit = {
             val path: Path = event.path

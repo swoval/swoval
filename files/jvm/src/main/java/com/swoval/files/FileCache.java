@@ -7,7 +7,9 @@ import static com.swoval.files.EntryFilters.AllPass;
 import com.swoval.files.Directory.Converter;
 import com.swoval.files.Directory.Observer;
 import com.swoval.files.Directory.OnChange;
+import com.swoval.files.DirectoryWatcher.Event;
 import com.swoval.files.SymlinkWatcher.OnError;
+import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -272,11 +274,11 @@ class FileCacheImpl<T> extends FileCache<T> {
   private final Executor internalExecutor;
   private final SymlinkWatcher symlinkWatcher;
 
-  private DirectoryWatcher.Callback callback(final Executor executor) {
-    return new DirectoryWatcher.Callback() {
+  private Consumer<Event> callback(final Executor executor) {
+    return new Consumer<Event>() {
       @SuppressWarnings("unchecked")
       @Override
-      public void apply(final DirectoryWatcher.Event event) {
+      public void accept(final DirectoryWatcher.Event event) {
         executor.run(
             new Runnable() {
               @Override

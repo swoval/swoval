@@ -1,8 +1,8 @@
 package com.swoval.files
 
-import com.swoval.files.DirectoryWatcher.Callback
 import com.swoval.files.apple.Flags
 import com.swoval.files.test._
+import com.swoval.functional.Consumer
 import com.swoval.test._
 
 import scala.concurrent.duration._
@@ -18,7 +18,8 @@ object AppleDirectoryWatcherTest extends TestSuite {
       'onCreate - {
         withTempDirectory { dir =>
           assert(dir.exists)
-          val callback: Callback = (e: DirectoryWatcher.Event) => events.add(e)
+          val callback: Consumer[DirectoryWatcher.Event] =
+            (e: DirectoryWatcher.Event) => events.add(e)
 
           usingAsync(defaultWatcher(DEFAULT_LATENCY, dirFlags, callback)) { w =>
             w.register(dir)
@@ -28,7 +29,8 @@ object AppleDirectoryWatcherTest extends TestSuite {
         }
       }
       'onModify - withTempDirectory { dir =>
-        val callback: Callback = (e: DirectoryWatcher.Event) => events.add(e)
+        val callback: Consumer[DirectoryWatcher.Event] =
+          (e: DirectoryWatcher.Event) => events.add(e)
 
         usingAsync(defaultWatcher(DEFAULT_LATENCY, dirFlags, callback)) { w =>
           val f = dir.resolve(Path("foo")).createFile()
@@ -40,7 +42,8 @@ object AppleDirectoryWatcherTest extends TestSuite {
         }
       }
       'onDelete - withTempDirectory { dir =>
-        val callback: Callback = (e: DirectoryWatcher.Event) => events.add(e)
+        val callback: Consumer[DirectoryWatcher.Event] =
+          (e: DirectoryWatcher.Event) => events.add(e)
 
         usingAsync(defaultWatcher(DEFAULT_LATENCY, dirFlags, callback)) { w =>
           val f = dir.resolve(Path("foo")).createFile()
@@ -52,7 +55,7 @@ object AppleDirectoryWatcherTest extends TestSuite {
       'subdirectories - {
         'onCreate - withTempDirectory { dir =>
           withTempDirectory(dir) { subdir =>
-            val callback: Callback =
+            val callback: Consumer[DirectoryWatcher.Event] =
               (e: DirectoryWatcher.Event) => if (e.path != dir) events.add(e)
 
             usingAsync(defaultWatcher(DEFAULT_LATENCY, dirFlags, callback)) { w =>

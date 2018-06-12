@@ -8,6 +8,7 @@ import com.swoval.files.Directory._
 import com.swoval.files.EntryOps._
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.test._
+import com.swoval.functional.Consumer
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
 import utest._
@@ -706,11 +707,13 @@ object DefaultFileCacheTest extends FileCacheTest {
 
 object NioFileCacheTest extends FileCacheTest {
   val factory = new DirectoryWatcher.Factory {
-    override def create(callback: DirectoryWatcher.Callback, executor: Executor): DirectoryWatcher =
+    override def create(callback: Consumer[DirectoryWatcher.Event],
+                        executor: Executor): DirectoryWatcher =
       new NioDirectoryWatcher(callback, executor)
   }
   val boundedFactory = new DirectoryWatcher.Factory {
-    override def create(callback: DirectoryWatcher.Callback, executor: Executor): DirectoryWatcher =
+    override def create(callback: Consumer[DirectoryWatcher.Event],
+                        executor: Executor): DirectoryWatcher =
       new NioDirectoryWatcher(callback, new BoundedWatchService(4, WatchService.newWatchService()))
   }
   val tests =

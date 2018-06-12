@@ -2,6 +2,8 @@ package com.swoval.files;
 
 import static java.util.Map.Entry;
 
+import com.swoval.files.DirectoryWatcher.Event;
+import com.swoval.functional.Consumer;
 import java.io.IOException;
 import java.nio.file.FileSystemLoopException;
 import java.nio.file.Files;
@@ -65,11 +67,11 @@ class SymlinkWatcher implements AutoCloseable {
         executor == null
             ? Executor.make("com.swoval.files.SymlinkWatcher-callback-internalExecutor")
             : executor;
-    final DirectoryWatcher.Callback callback =
-        new DirectoryWatcher.Callback() {
+    final Consumer<Event> callback =
+        new Consumer<Event>() {
           @SuppressWarnings("unchecked")
           @Override
-          public void apply(final DirectoryWatcher.Event event) {
+          public void accept(final Event event) {
             SymlinkWatcher.this.internalExecutor.run(
                 new Runnable() {
                   @Override

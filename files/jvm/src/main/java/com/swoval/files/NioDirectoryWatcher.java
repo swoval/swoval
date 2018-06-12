@@ -10,6 +10,7 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
 import com.swoval.files.apple.MacOSXWatchService;
+import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
@@ -54,7 +55,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    * @throws IOException when the WatchService can't be started
    * @throws InterruptedException when the WatchService initialization is interrupted
    */
-  NioDirectoryWatcher(final Callback callback, final Executor executor)
+  NioDirectoryWatcher(final Consumer<Event> callback, final Executor executor)
       throws IOException, InterruptedException {
     this(
         callback,
@@ -69,7 +70,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    * @throws IOException when the WatchService can't be started
    * @throws InterruptedException when the WatchService initialization is interrupted
    */
-  public NioDirectoryWatcher(final Callback callback) throws IOException, InterruptedException {
+  public NioDirectoryWatcher(final Consumer<Event> callback) throws IOException, InterruptedException {
     this(callback, Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchService());
   }
 
@@ -79,7 +80,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    * @param callback The callback to invoke on a created/deleted/modified path
    * @param watchService The underlying watchservice that is used to monitor directories for events
    */
-  public NioDirectoryWatcher(final Callback callback, final Registerable watchService) {
+  public NioDirectoryWatcher(final Consumer<Event> callback, final Registerable watchService) {
     this(callback, watchService, Executor.make("NioDirectoryWatcher-callback-thread"), null);
   }
 
@@ -92,7 +93,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    * @param executor The Executor to internally manage the watcher
    */
   NioDirectoryWatcher(
-      final Callback callback,
+      final Consumer<Event> callback,
       final Registerable watchService,
       final Executor callbackExecutor,
       final Executor executor) {
@@ -238,18 +239,18 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     }
   }
 
-  private void runCallback(final Callback callback, final DirectoryWatcher.Event event) {
+  private void runCallback(final Consumer<Event> callback, final DirectoryWatcher.Event event) {
     callbackExecutor.run(
         new Runnable() {
           @Override
           public void run() {
-            callback.apply(event);
+            callback.accept(event);
           }
         });
   }
 
   private void handleEvent(
-      final Callback callback, final Path path, final WatchKey key, final Event.Kind kind) {
+      final Consumer<Event> callback, final Path path, final WatchKey key, final Event.Kind kind) {
     final Path keyPath = (Path) key.watchable();
     final Set<Path> newFiles = new HashSet<>();
     if (Files.isDirectory(path)) {
@@ -271,7 +272,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
     }
   }
 
-  private void handleOverflow(final Callback callback, final WatchKey key) {
+  private void handleOverflow(final Consumer<Event> callback, final WatchKey key) {
     if (!key.reset()) {
       key.cancel();
       watchedDirs.remove(key.watchable());
@@ -315,7 +316,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
         new Runnable() {
           @Override
           public void run() {
-            callback.apply(new DirectoryWatcher.Event((Path) key.watchable(), Overflow));
+            callback.accept(new DirectoryWatcher.Event((Path) key.watchable(), Overflow));
           }
         });
   }

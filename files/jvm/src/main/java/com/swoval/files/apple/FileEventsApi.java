@@ -22,7 +22,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *     target="_blank"></a>
  */
 public class FileEventsApi implements AutoCloseable {
-  public class ClosedFileEventsApiException extends IOException {
+  /**
+   * Checked exception that is thrown when one of the mutation methods (e.g. {@link
+   * FileEventsApi#createStream(String, double, int)} ) is called on a closed {@link FileEventsApi}
+   */
+  public static class ClosedFileEventsApiException extends IOException {
     public ClosedFileEventsApiException(final String msg) {
       super(msg);
     }
@@ -94,7 +98,7 @@ public class FileEventsApi implements AutoCloseable {
     }
   }
 
-  public void loop() {
+  private void loop() {
     loop(handle);
   }
 

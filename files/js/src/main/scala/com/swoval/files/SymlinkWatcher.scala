@@ -1,6 +1,8 @@
 package com.swoval.files
 
 import java.util.Map.Entry
+import com.swoval.files.DirectoryWatcher.Event
+import com.swoval.functional.Consumer
 import java.io.IOException
 import java.nio.file.FileSystemLoopException
 import java.nio.file.Files
@@ -74,8 +76,8 @@ class SymlinkWatcher(handleEvent: EventConsumer,
     }
   }
 
-  val callback: DirectoryWatcher.Callback = new DirectoryWatcher.Callback() {
-    override def apply(event: DirectoryWatcher.Event): Unit = {
+  val callback: Consumer[Event] = new Consumer[Event]() {
+    override def accept(event: Event): Unit = {
       SymlinkWatcher.this.internalExecutor.run(new Runnable() {
         override def run(): Unit = {
           val callbacks: List[Runnable] = new ArrayList[Runnable]()

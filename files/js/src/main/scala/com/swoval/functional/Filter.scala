@@ -1,4 +1,6 @@
-package com.swoval.files
+package com.swoval.functional
+
+import com.swoval.files.QuickList
 
 /**
  * Generic Filter functional interface. Primarily used by [[QuickList]].

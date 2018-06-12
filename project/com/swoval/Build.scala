@@ -385,7 +385,6 @@ object Build {
                 "EntryFilters",
                 "FileCache",
                 "FileType",
-                "Filter",
                 "NioQuickLister",
                 "Observers",
                 "QuickFile",
@@ -398,7 +397,7 @@ object Build {
                              "Event",
                              "FileEvent",
                              "Flags").value
-              convertSources("com/swoval/functional", "Consumer", "Either").value
+              convertSources("com/swoval/functional", "Consumer", "Either", "Filter").value
             }
           },
           scalafmt in Compile,

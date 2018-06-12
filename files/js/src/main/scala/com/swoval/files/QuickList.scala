@@ -3,6 +3,8 @@ package com.swoval.files
 import java.nio.file.Path
 import java.util.List
 
+import com.swoval.functional.Filter
+
 object QuickList {
   private val INSTANCE: QuickLister =
     if (Platform.isJVM) new NativeQuickLister() else new NioQuickLister()

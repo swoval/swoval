@@ -2,6 +2,7 @@ package com.swoval.files;
 
 import com.swoval.files.apple.AppleDirectoryWatcher;
 import com.swoval.files.apple.Flags;
+import com.swoval.functional.Consumer;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
@@ -18,17 +19,12 @@ import java.util.concurrent.TimeUnit;
  */
 public abstract class DirectoryWatcher implements AutoCloseable {
 
-  /** Callback to run when monitored files are created, updated and deleted. */
-  public interface Callback {
-    void apply(Event event);
-  }
-
   /**
-   * Register a path to monitor for file events. The watcher will only watch child subdirectories
-   * up to maxDepth. For example, with a directory structure like /foo/bar/baz, if we register
-   * the path /foo/ with maxDepth 0, we will be notified for any files that are created, updated or
-   * deleted in foo, but not bar. If we increase maxDepth to 1, then the files in /foo/bar are
-   * monitored, but not the files in /foo/bar/baz.
+   * Register a path to monitor for file events. The watcher will only watch child subdirectories up
+   * to maxDepth. For example, with a directory structure like /foo/bar/baz, if we register the path
+   * /foo/ with maxDepth 0, we will be notified for any files that are created, updated or deleted
+   * in foo, but not bar. If we increase maxDepth to 1, then the files in /foo/bar are monitored,
+   * but not the files in /foo/bar/baz.
    *
    * @param path The directory to watch for file events
    * @param maxDepth The maximum maxDepth of subdirectories to watch
@@ -73,7 +69,7 @@ public abstract class DirectoryWatcher implements AutoCloseable {
    * @param latency The latency used by the {@link AppleDirectoryWatcher} on osx
    * @param timeUnit The TimeUnit or the latency parameter
    * @param flags Flags used by the apple directory watcher
-   * @param callback {@link Callback} to run on file events
+   * @param callback {@link Consumer} to run on file events
    * @param executor provides a single threaded context to manage state
    * @return DirectoryWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
@@ -85,7 +81,7 @@ public abstract class DirectoryWatcher implements AutoCloseable {
       final long latency,
       final TimeUnit timeUnit,
       final Flags.Create flags,
-      final Callback callback,
+      final Consumer<DirectoryWatcher.Event> callback,
       final Executor executor)
       throws IOException, InterruptedException {
     return Platform.isMac()
@@ -96,7 +92,7 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   /**
    * Create a platform compatible DirectoryWatcher.
    *
-   * @param callback {@link Callback} to run on file events
+   * @param callback {@link Consumer} to run on file events
    * @param executor The executor to run internal callbacks on
    * @return DirectoryWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
@@ -104,7 +100,8 @@ public abstract class DirectoryWatcher implements AutoCloseable {
    * @throws InterruptedException when the {@link DirectoryWatcher} is interrupted during
    *     initialization
    */
-  public static DirectoryWatcher defaultWatcher(final Callback callback, final Executor executor)
+  public static DirectoryWatcher defaultWatcher(
+      final Consumer<DirectoryWatcher.Event> callback, final Executor executor)
       throws IOException, InterruptedException {
     return defaultWatcher(
         10,
@@ -115,7 +112,7 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   }
 
   /**
-   * Instantiates new {@link DirectoryWatcher} instances with a {@link Callback}. This is primarily
+   * Instantiates new {@link DirectoryWatcher} instances with a {@link Consumer}. This is primarily
    * so that the {@link DirectoryWatcher} in {@link FileCache} may be changed in testing.
    */
   public interface Factory {
@@ -126,17 +123,21 @@ public abstract class DirectoryWatcher implements AutoCloseable {
      * @param callback The callback to invoke on directory updates
      * @param executor The executor on which internal updates are invoked
      * @return A DirectoryWatcher instance
-     * @throws InterruptedException if the DirectoryWatcher is interrupted during initialization -- this can occur on mac
-     * @throws IOException if an IOException occurs during initialization -- this can occur on linux and windows
+     * @throws InterruptedException if the DirectoryWatcher is interrupted during initialization --
+     *     this can occur on mac
+     * @throws IOException if an IOException occurs during initialization -- this can occur on linux
+     *     and windows
      */
-    DirectoryWatcher create(final Callback callback, final Executor executor)
+    DirectoryWatcher create(
+        final Consumer<DirectoryWatcher.Event> callback, final Executor executor)
         throws InterruptedException, IOException;
   }
 
   public static final Factory DEFAULT_FACTORY =
       new Factory() {
         @Override
-        public DirectoryWatcher create(Callback callback, final Executor executor)
+        public DirectoryWatcher create(
+            Consumer<DirectoryWatcher.Event> callback, final Executor executor)
             throws InterruptedException, IOException {
           return defaultWatcher(callback, executor);
         }
