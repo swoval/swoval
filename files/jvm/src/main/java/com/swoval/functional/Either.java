@@ -69,6 +69,11 @@ public abstract class Either<L, R> {
     public boolean isRight() {
       return false;
     }
+
+    @Override
+    public String toString() {
+      return "Left(" + value + ")";
+    }
   }
 
   private static final class Right<L, R> extends Either<L, R> {
@@ -96,6 +101,11 @@ public abstract class Either<L, R> {
     @Override
     public boolean isRight() {
       return true;
+    }
+
+    @Override
+    public String toString() {
+      return "Right(" + value + ")";
     }
   }
 }
