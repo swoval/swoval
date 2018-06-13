@@ -13,10 +13,11 @@ object DirectoryWatcher {
   /**
    * Create a DirectoryWatcher for the runtime platform.
    *
-   * @param latency The latency used by the [[AppleDirectoryWatcher]] on osx
+   * @param latency The latency used by the [[com.swoval.files.apple.AppleDirectoryWatcher]] on
+   *     osx
    * @param timeUnit The TimeUnit or the latency parameter
    * @param flags Flags used by the apple directory watcher
-   * @param callback [[Consumer]] to run on file events
+   * @param callback [[com.swoval.functional.Consumer]] to run on file events
    * @param executor provides a single threaded context to manage state
    * @return DirectoryWatcher for the runtime platform
    *     initialized
@@ -34,7 +35,7 @@ object DirectoryWatcher {
   /**
    * Create a platform compatible DirectoryWatcher.
    *
-   * @param callback [[Consumer]] to run on file events
+   * @param callback [[com.swoval.functional.Consumer]] to run on file events
    * @param executor The executor to run internal callbacks on
    * @return DirectoryWatcher for the runtime platform
    *     initialized
@@ -49,8 +50,8 @@ object DirectoryWatcher {
                    executor)
 
   /**
-   * Instantiates new [[DirectoryWatcher]] instances with a [[Consumer]]. This is primarily
-   * so that the [[DirectoryWatcher]] in [[FileCache]] may be changed in testing.
+   * Instantiates new [[DirectoryWatcher]] instances with a [[com.swoval.functional.Consumer]]. This is primarily so that the [[DirectoryWatcher]] in
+   * [[FileCache]] may be changed in testing.
    */
   trait Factory {
 
@@ -150,7 +151,7 @@ abstract class DirectoryWatcher extends AutoCloseable {
   def register(path: Path, maxDepth: Int): Boolean
 
   /**
-   * Register a path to monitor for file events. The monitoring may be recurs
+   * Register a path to monitor for file events. The monitoring may be recursive.
    *
    * @param path The directory to watch for file events
    * @param recursive Toggles whether or not to monitor subdirectories
