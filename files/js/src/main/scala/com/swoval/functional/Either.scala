@@ -135,6 +135,10 @@ abstract class Either[L, R] private () {
    */
   def getOrElse(r: R): R = if (isRight) right().getValue else r
 
+  override def hashCode(): Int
+
+  override def equals(other: Any): Boolean
+
   /**
    * Casts an either to a more specific left type
    *

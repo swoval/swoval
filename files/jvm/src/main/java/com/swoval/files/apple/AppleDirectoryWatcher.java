@@ -12,6 +12,7 @@ import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -68,10 +69,13 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    *
    * @param path The directory to watch for file events
    * @param maxDepth The maximum number of subdirectory levels to visit
-   * @return true if the path is a directory and has not previously been registered
+   * @return an {@link com.swoval.functional.Either} containing the result of the registration or an
+   *     IOException if registration fails. This method should be idempotent and return true the
+   *     first time the directory is registered or when the depth is changed. Otherwise it should
+   *     return false.
    */
   @Override
-  public boolean register(final Path path, final int maxDepth) {
+  public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
     return register(path, flags, maxDepth);
   }
 
@@ -81,29 +85,30 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    * @param path The directory to watch for file events
    * @param flags The flags {@link com.swoval.files.apple.Flags.Create} to set for the directory
    * @param maxDepth The maximum number of subdirectory levels to visit
-   * @return true if the path is a directory and has not previously been registered
+   * @return an {@link com.swoval.functional.Either} containing the result of the registration or an
+   *     IOException if registration fails. This method should be idempotent and return true the
+   *     first time the directory is registered or when the depth is changed. Otherwise it should
+   *     return false.
    */
-  public boolean register(final Path path, final Flags.Create flags, final int maxDepth) {
+  public Either<IOException, Boolean> register(
+      final Path path, final Flags.Create flags, final int maxDepth) {
     final Either<Exception, Boolean> either =
         internalExecutor.block(
             new Callable<Boolean>() {
               @Override
-              public Boolean call() {
+              public Boolean call() throws IOException {
                 return registerImpl(path, flags, maxDepth);
               }
             });
-    return either.getOrElse(false);
+    return either.castLeft(IOException.class);
   }
 
-  public boolean registerImpl(final Path path, final Flags.Create flags, final int maxDepth) {
+  private boolean registerImpl(final Path path, final Flags.Create flags, final int maxDepth)
+      throws IOException {
+    if (!Files.isDirectory(path)) throw new NotDirectoryException(path.toString());
     boolean result = true;
-    Path realPath = null;
-    try {
-      realPath = path.toRealPath();
-    } catch (IOException e) {
-      result = false;
-    }
-    if (result && Files.isDirectory(realPath) && !realPath.equals(realPath.getRoot())) {
+    final Path realPath = path.toRealPath();
+    if (Files.isDirectory(realPath) && !realPath.equals(realPath.getRoot())) {
       final Entry<Path, Stream> entry = find(realPath);
       if (entry == null) {
         try {

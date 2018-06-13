@@ -8,9 +8,10 @@ import com.swoval.files.Directory._
 import com.swoval.files.EntryOps._
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.test._
-import com.swoval.functional.Consumer
+import com.swoval.functional.{ Consumer, Either => SEither }
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
+import com.swoval.files.test.platform.Bool
 import utest._
 
 import scala.collection.JavaConverters._
@@ -412,9 +413,9 @@ trait FileCacheTest extends TestSuite {
           'initial - withTempDirectory { dir =>
             withTempDirectory { otherDir =>
               Files.createSymbolicLink(dir.resolve("other"), otherDir)
-              Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+              val link = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
               using(simpleCache((_: Entry[Path]) => {})) { c =>
-                intercept[FileSystemLoopException](c.reg(dir))
+                assert(c.reg(dir).left.getValue.isInstanceOf[FileSystemLoopException])
               }
             }
           }
@@ -697,7 +698,7 @@ object FileCacheTest {
            recursive: Boolean = true,
            filter: EntryFilter[_ >: T] = EntryFilters.AllPass): Seq[Entry[T]] =
       fileCache.list(dir, recursive, filter).asScala
-    def reg(dir: Path, recursive: Boolean = true): Directory[T] =
+    def reg(dir: Path, recursive: Boolean = true): SEither[IOException, Bool] =
       fileCache.register(dir, recursive)
   }
 }

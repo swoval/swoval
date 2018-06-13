@@ -4,6 +4,7 @@ import java.util.Map.Entry
 import com.swoval.files.Directory.OnError
 import com.swoval.files.DirectoryWatcher.Event
 import com.swoval.functional.Consumer
+import com.swoval.functional.Either
 import java.io.IOException
 import java.nio.file.FileSystemLoopException
 import java.nio.file.Files
@@ -149,27 +150,37 @@ class SymlinkWatcher(handleEvent: Consumer[Path],
                 if (symlinkChildren != null) {
                   symlinkChildren.paths.add(path)
                 }
-              } else if (watcher.register(registrationPath, maxDepth)) {
-                val parentPath: RegisteredPath =
-                  new RegisteredPath(registrationPath, true, realPath)
-                parentPath.paths.addAll(registeredPath.paths)
-                watchedSymlinksByDirectory.put(registrationPath, parentPath)
-                val symlinkPaths: RegisteredPath =
-                  new RegisteredPath(realPath, true, path)
-                val existingSymlinkPaths: RegisteredPath =
-                  watchedSymlinksByTarget.get(realPath)
-                if (existingSymlinkPaths != null) {
-                  symlinkPaths.paths.addAll(existingSymlinkPaths.paths)
+              } else {
+                val result: Either[IOException, Boolean] =
+                  watcher.register(registrationPath, maxDepth)
+                if (result.getOrElse(false)) {
+                  val parentPath: RegisteredPath =
+                    new RegisteredPath(registrationPath, true, realPath)
+                  parentPath.paths.addAll(registeredPath.paths)
+                  watchedSymlinksByDirectory.put(registrationPath, parentPath)
+                  val symlinkPaths: RegisteredPath =
+                    new RegisteredPath(realPath, true, path)
+                  val existingSymlinkPaths: RegisteredPath =
+                    watchedSymlinksByTarget.get(realPath)
+                  if (existingSymlinkPaths != null) {
+                    symlinkPaths.paths.addAll(existingSymlinkPaths.paths)
+                  }
+                  watchedSymlinksByTarget.put(realPath, symlinkPaths)
+                } else if (result.isLeft) {
+                  onError.apply(registrationPath, result.left().getValue)
                 }
-                watchedSymlinksByTarget.put(realPath, symlinkPaths)
               }
             } else {
-              if (watcher.register(registrationPath, maxDepth)) {
+              val result: Either[IOException, Boolean] =
+                watcher.register(registrationPath, maxDepth)
+              if (result.getOrElse(false)) {
                 watchedSymlinksByDirectory.put(
                   registrationPath,
                   new RegisteredPath(registrationPath, isDirectory, realPath))
                 watchedSymlinksByTarget.put(realPath,
                                             new RegisteredPath(realPath, isDirectory, path))
+              } else if (result.isLeft) {
+                onError.apply(registrationPath, result.left().getValue)
               }
             }
           } else if (Files.isDirectory(realPath)) {

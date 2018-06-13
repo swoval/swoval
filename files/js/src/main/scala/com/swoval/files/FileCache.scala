@@ -13,6 +13,8 @@ import com.swoval.functional.Either
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
+import java.nio.file.NoSuchFileException
+import java.nio.file.NotDirectoryException
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.ArrayList
@@ -220,27 +222,36 @@ abstract class FileCache[T] extends AutoCloseable {
    *
    * @param path The path to monitor
    * @param maxDepth The maximum depth of subdirectories to include
-   * @return The registered directory if it hasn't previously been registered, null otherwise
+   * @return an instance of [[com.swoval.functional.Either]] that contains a boolean flag
+   *     indicating whether registration succeeds. If an IOException is thrown registering the
+   *     directory, it is returned as a [[com.swoval.functional.Either.Left]]. This method
+   *     should be idempotent and returns false if the call was a no-op.
    */
-  def register(path: Path, maxDepth: Int): Directory[T]
+  def register(path: Path, maxDepth: Int): Either[IOException, Boolean]
 
   /**
    * Register the directory for monitoring.
    *
    * @param path The path to monitor
    * @param recursive Recursively monitor the path if true
-   * @return The registered directory if it hasn't previously been registered, null otherwise
+   * @return an instance of [[com.swoval.functional.Either]] that contains a boolean flag
+   *     indicating whether registration succeeds. If an IOException is thrown registering the
+   *     directory, it is returned as a [[com.swoval.functional.Either.Left]]. This method
+   *     should be idempotent and returns false if the call was a no-op.
    */
-  def register(path: Path, recursive: Boolean): Directory[T] =
+  def register(path: Path, recursive: Boolean): Either[IOException, Boolean] =
     register(path, if (recursive) java.lang.Integer.MAX_VALUE else 0)
 
   /**
    * Register the directory for monitoring recursively.
    *
    * @param path The path to monitor
-   * @return The registered directory if it hasn't previously been registered, null otherwise
+   * @return an instance of [[com.swoval.functional.Either]] that contains a boolean flag
+   *     indicating whether registration succeeds. If an IOException is thrown registering the
+   *     directory, it is returned as a [[com.swoval.functional.Either.Left]]. This method
+   *     should be idempotent and returns false if the call was a no-op.
    */
-  def register(path: Path): Directory[T] =
+  def register(path: Path): Either[IOException, Boolean] =
     register(path, java.lang.Integer.MAX_VALUE)
 
   /**
@@ -335,23 +346,19 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
     if (pair == null) new ArrayList[Directory.Entry[T]]() else pair.second
   }
 
-  override def register(path: Path, maxDepth: Int): Directory[T] = {
-    var result: Either[Exception, Either[IOException, Directory[T]]] = null
-    if (Files.exists(path)) {
-      watcher.register(path, maxDepth)
-      result = internalExecutor.block(new Callable[Either[IOException, Directory[T]]]() {
-        override def call(): Either[IOException, Directory[T]] =
-          try {
-            var result: Directory[T] = null
+  override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] = {
+    var result: Either[IOException, Boolean] = watcher.register(path, maxDepth)
+    if (result.isRight) {
+      result = internalExecutor
+        .block(new Callable[Boolean]() {
+          override def call(): Boolean = {
+            var result: Boolean = false
             val dirs: List[Directory[T]] =
               new ArrayList[Directory[T]](directories.values)
-            Collections.sort(
-              new ArrayList(directories.values),
-              new Comparator[Directory[T]]() {
-                override def compare(left: Directory[T], right: Directory[T]): Int =
-                  left.path.compareTo(right.path)
-              }
-            )
+            Collections.sort(dirs, new Comparator[Directory[T]]() {
+              override def compare(left: Directory[T], right: Directory[T]): Int =
+                left.path.compareTo(right.path)
+            })
             val it: Iterator[Directory[T]] = dirs.iterator()
             var existing: Directory[T] = null
             while (it.hasNext && existing == null) {
@@ -363,6 +370,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
                 if (dir.getDepth == java.lang.Integer.MAX_VALUE || maxDepth < dir.getDepth - depth) {
                   existing = dir
                 } else if (depth <= dir.getDepth) {
+                  result = true
                   dir.close()
                   try {
                     existing =
@@ -380,10 +388,11 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
               }
             }
             if (existing == null) {
-              result = Directory.cached(path, converter, maxDepth)
-              directories.put(path, result)
+              val dir: Directory[T] =
+                Directory.cached(path, converter, maxDepth)
+              directories.put(path, dir)
               val entryIterator: Iterator[Directory.Entry[T]] =
-                result.list(true, EntryFilters.AllPass).iterator()
+                dir.list(true, EntryFilters.AllPass).iterator()
               if (symlinkWatcher != null) {
                 while (entryIterator.hasNext) {
                   val entry: Directory.Entry[T] = entryIterator.next()
@@ -392,24 +401,14 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
                   }
                 }
               }
+              result = true
             }
-            Either.right(result)
-          } catch {
-            case e: IOException => Either.left(e)
-
+            result
           }
-      })
+        })
+        .castLeft(classOf[IOException])
     }
-    if (result != null) {
-      if (result.isLeft) {
-        throw new RuntimeException(result.left().getValue)
-      } else {
-        val res: Either[IOException, Directory[T]] = result.get
-        if (res.isLeft) throw res.left().getValue else res.get
-      }
-    } else {
-      null
-    }
+    result
   }
 
   private def listImpl(

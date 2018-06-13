@@ -3,6 +3,7 @@ package com.swoval.files;
 import com.swoval.files.apple.AppleDirectoryWatcher;
 import com.swoval.files.apple.Flags;
 import com.swoval.functional.Consumer;
+import com.swoval.functional.Either;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
@@ -28,17 +29,23 @@ public abstract class DirectoryWatcher implements AutoCloseable {
    *
    * @param path The directory to watch for file events
    * @param maxDepth The maximum maxDepth of subdirectories to watch
-   * @return true if the registration is successful
+   * @return an {@link com.swoval.functional.Either} containing the result of the registration or an
+   *     IOException if registration fails. This method should be idempotent and return true the
+   *     first time the directory is registered or when the depth is changed. Otherwise it should
+   *     return false.
    */
-  public abstract boolean register(Path path, int maxDepth);
+  public abstract Either<IOException, Boolean> register(Path path, int maxDepth);
   /**
    * Register a path to monitor for file events. The monitoring may be recursive.
    *
    * @param path The directory to watch for file events
    * @param recursive Toggles whether or not to monitor subdirectories
-   * @return true if the registration is successful
+   * @return an {@link com.swoval.functional.Either} containing the result of the registration or an
+   *     IOException if registration fails. This method should be idempotent and return true the
+   *     first time the directory is registered or when the depth is changed. Otherwise it should
+   *     return false.
    */
-  public boolean register(Path path, boolean recursive) {
+  public Either<IOException, Boolean> register(Path path, boolean recursive) {
     return register(path, recursive ? Integer.MAX_VALUE : 0);
   }
 
@@ -46,9 +53,12 @@ public abstract class DirectoryWatcher implements AutoCloseable {
    * Register a path to monitor for file events recursively.
    *
    * @param path The directory to watch for file events
-   * @return true if the registration is successful
+   * @return an {@link com.swoval.functional.Either} containing the result of the registration or an
+   *     IOException if registration fails. This method should be idempotent and return true the
+   *     first time the directory is registered or when the depth is changed. Otherwise it should
+   *     return false.
    */
-  public boolean register(Path path) {
+  public Either<IOException, Boolean> register(Path path) {
     return register(path, true);
   }
 

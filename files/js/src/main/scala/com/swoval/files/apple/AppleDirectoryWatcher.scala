@@ -11,6 +11,7 @@ import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.NotDirectoryException
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.ArrayList
@@ -132,9 +133,12 @@ class AppleDirectoryWatcher(private val latency: Double,
    *
    * @param path The directory to watch for file events
    * @param maxDepth The maximum number of subdirectory levels to visit
-   * @return true if the path is a directory and has not previously been registered
+   * @return an [[com.swoval.functional.Either]] containing the result of the registration or an
+   *     IOException if registration fails. This method should be idempotent and return true the
+   *     first time the directory is registered or when the depth is changed. Otherwise it should
+   *     return false.
    */
-  override def register(path: Path, maxDepth: Int): Boolean =
+  override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] =
     register(path, flags, maxDepth)
 
   /**
@@ -143,26 +147,26 @@ class AppleDirectoryWatcher(private val latency: Double,
    * @param path The directory to watch for file events
    * @param flags The flags [[com.swoval.files.apple.Flags.Create]] to set for the directory
    * @param maxDepth The maximum number of subdirectory levels to visit
-   * @return true if the path is a directory and has not previously been registered
+   * @return an [[com.swoval.functional.Either]] containing the result of the registration or an
+   *     IOException if registration fails. This method should be idempotent and return true the
+   *     first time the directory is registered or when the depth is changed. Otherwise it should
+   *     return false.
    */
-  def register(path: Path, flags: Flags.Create, maxDepth: Int): Boolean = {
+  def register(path: Path, flags: Flags.Create, maxDepth: Int): Either[IOException, Boolean] = {
     val either: Either[Exception, Boolean] =
       internalExecutor.block(new Callable[Boolean]() {
         override def call(): Boolean =
           registerImpl(path, flags, maxDepth)
       })
-    either.getOrElse(false)
+    either.castLeft(classOf[IOException])
   }
 
-  def registerImpl(path: Path, flags: Flags.Create, maxDepth: Int): Boolean = {
+  private def registerImpl(path: Path, flags: Flags.Create, maxDepth: Int): Boolean = {
+    if (!Files.isDirectory(path))
+      throw new NotDirectoryException(path.toString)
     var result: Boolean = true
-    var realPath: Path = null
-    try realPath = path.toRealPath()
-    catch {
-      case e: IOException => result = false
-
-    }
-    if (result && Files.isDirectory(realPath) && realPath != realPath.getRoot) {
+    val realPath: Path = path.toRealPath()
+    if (Files.isDirectory(realPath) && realPath != realPath.getRoot) {
       val entry: Entry[Path, Stream] = find(realPath)
       if (entry == null) {
         try {

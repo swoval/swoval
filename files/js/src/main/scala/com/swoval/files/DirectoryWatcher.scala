@@ -3,6 +3,7 @@ package com.swoval.files
 import com.swoval.files.apple.AppleDirectoryWatcher
 import com.swoval.files.apple.Flags
 import com.swoval.functional.Consumer
+import com.swoval.functional.Either
 import java.io.IOException
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
@@ -146,27 +147,36 @@ abstract class DirectoryWatcher extends AutoCloseable {
    *
    * @param path The directory to watch for file events
    * @param maxDepth The maximum maxDepth of subdirectories to watch
-   * @return true if the registration is successful
+   * @return an [[com.swoval.functional.Either]] containing the result of the registration or an
+   *     IOException if registration fails. This method should be idempotent and return true the
+   *     first time the directory is registered or when the depth is changed. Otherwise it should
+   *     return false.
    */
-  def register(path: Path, maxDepth: Int): Boolean
+  def register(path: Path, maxDepth: Int): Either[IOException, Boolean]
 
   /**
    * Register a path to monitor for file events. The monitoring may be recursive.
    *
    * @param path The directory to watch for file events
    * @param recursive Toggles whether or not to monitor subdirectories
-   * @return true if the registration is successful
+   * @return an [[com.swoval.functional.Either]] containing the result of the registration or an
+   *     IOException if registration fails. This method should be idempotent and return true the
+   *     first time the directory is registered or when the depth is changed. Otherwise it should
+   *     return false.
    */
-  def register(path: Path, recursive: Boolean): Boolean =
+  def register(path: Path, recursive: Boolean): Either[IOException, Boolean] =
     register(path, if (recursive) java.lang.Integer.MAX_VALUE else 0)
 
   /**
    * Register a path to monitor for file events recursively.
    *
    * @param path The directory to watch for file events
-   * @return true if the registration is successful
+   * @return an [[com.swoval.functional.Either]] containing the result of the registration or an
+   *     IOException if registration fails. This method should be idempotent and return true the
+   *     first time the directory is registered or when the depth is changed. Otherwise it should
+   *     return false.
    */
-  def register(path: Path): Boolean = register(path, true)
+  def register(path: Path): Either[IOException, Boolean] = register(path, true)
 
   /**
    * Stop watching a directory

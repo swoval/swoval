@@ -14,6 +14,8 @@ import com.swoval.functional.Either;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
@@ -145,19 +147,23 @@ public abstract class FileCache<T> implements AutoCloseable {
    *
    * @param path The path to monitor
    * @param maxDepth The maximum depth of subdirectories to include
-   * @return The registered directory if it hasn't previously been registered, null otherwise
-   * @throws IOException if the directory can't be listed
+   * @return an instance of {@link com.swoval.functional.Either} that contains a boolean flag
+   *     indicating whether registration succeeds. If an IOException is thrown registering the
+   *     directory, it is returned as a {@link com.swoval.functional.Either.Left}. This method
+   *     should be idempotent and returns false if the call was a no-op.
    */
-  public abstract Directory<T> register(final Path path, final int maxDepth) throws IOException;
+  public abstract Either<IOException, Boolean> register(final Path path, final int maxDepth);
   /**
    * Register the directory for monitoring.
    *
    * @param path The path to monitor
    * @param recursive Recursively monitor the path if true
-   * @return The registered directory if it hasn't previously been registered, null otherwise
-   * @throws IOException if the directory can't be listed
+   * @return an instance of {@link com.swoval.functional.Either} that contains a boolean flag
+   *     indicating whether registration succeeds. If an IOException is thrown registering the
+   *     directory, it is returned as a {@link com.swoval.functional.Either.Left}. This method
+   *     should be idempotent and returns false if the call was a no-op.
    */
-  public Directory<T> register(final Path path, final boolean recursive) throws IOException {
+  public Either<IOException, Boolean> register(final Path path, final boolean recursive) {
     return register(path, recursive ? Integer.MAX_VALUE : 0);
   }
 
@@ -165,10 +171,12 @@ public abstract class FileCache<T> implements AutoCloseable {
    * Register the directory for monitoring recursively.
    *
    * @param path The path to monitor
-   * @return The registered directory if it hasn't previously been registered, null otherwise
-   * @throws IOException if the directory can't be listed
+   * @return an instance of {@link com.swoval.functional.Either} that contains a boolean flag
+   *     indicating whether registration succeeds. If an IOException is thrown registering the
+   *     directory, it is returned as a {@link com.swoval.functional.Either.Left}. This method
+   *     should be idempotent and returns false if the call was a no-op.
    */
-  public Directory<T> register(final Path path) throws IOException {
+  public Either<IOException, Boolean> register(final Path path) {
     return register(path, Integer.MAX_VALUE);
   }
 
@@ -355,88 +363,77 @@ class FileCacheImpl<T> extends FileCache<T> {
   }
 
   @Override
-  public Directory<T> register(final Path path, final int maxDepth) throws IOException {
-    Either<Exception, Either<IOException, Directory<T>>> result = null;
-    if (Files.exists(path)) {
-      watcher.register(path, maxDepth);
+  public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
+    Either<IOException, Boolean> result = watcher.register(path, maxDepth);
+    if (result.isRight()) {
       result =
-          internalExecutor.block(
-              new Callable<Either<IOException, Directory<T>>>() {
-                @Override
-                public Either<IOException, Directory<T>> call() {
-                  try {
-                    Directory<T> result = null;
-                    final List<Directory<T>> dirs = new ArrayList<>(directories.values());
-                    Collections.sort(
-                        new ArrayList<>(directories.values()),
-                        new Comparator<Directory<T>>() {
-                          @Override
-                          public int compare(Directory<T> left, Directory<T> right) {
-                            return left.path.compareTo(right.path);
-                          }
-                        });
-                    final Iterator<Directory<T>> it = dirs.iterator();
-                    Directory<T> existing = null;
-                    while (it.hasNext() && existing == null) {
-                      final Directory<T> dir = it.next();
-                      if (path.startsWith(dir.path)) {
-                        final int depth =
-                            path.equals(dir.path)
-                                ? 0
-                                : (dir.path.relativize(path).getNameCount() - 1);
-                        if (dir.getDepth() == Integer.MAX_VALUE
-                            || maxDepth < dir.getDepth() - depth) {
-                          existing = dir;
-                        } else if (depth <= dir.getDepth()) {
-                          dir.close();
-                          try {
-                            existing =
-                                Directory.cached(
-                                    dir.path,
-                                    converter,
-                                    maxDepth < Integer.MAX_VALUE - depth - 1
-                                        ? maxDepth + depth + 1
-                                        : Integer.MAX_VALUE);
-                            directories.put(dir.path, existing);
-                          } catch (IOException e) {
-                            existing = null;
-                          }
-                        }
-                      }
-                    }
-                    if (existing == null) {
-                      result = Directory.cached(path, converter, maxDepth);
-                      directories.put(path, result);
-                      final Iterator<Directory.Entry<T>> entryIterator =
-                          result.list(true, EntryFilters.AllPass).iterator();
-                      if (symlinkWatcher != null) {
-                        while (entryIterator.hasNext()) {
-                          final Directory.Entry<T> entry = entryIterator.next();
-                          if (entry.isSymbolicLink()) {
-                            symlinkWatcher.addSymlink(
-                                entry.path, entry.isDirectory(), maxDepth - 1);
+          internalExecutor
+              .block(
+                  new Callable<Boolean>() {
+                    @Override
+                    public Boolean call() throws IOException {
+                      boolean result = false;
+                      final List<Directory<T>> dirs = new ArrayList<>(directories.values());
+                      Collections.sort(
+                          dirs,
+                          new Comparator<Directory<T>>() {
+                            @Override
+                            public int compare(Directory<T> left, Directory<T> right) {
+                              return left.path.compareTo(right.path);
+                            }
+                          });
+                      final Iterator<Directory<T>> it = dirs.iterator();
+                      Directory<T> existing = null;
+                      while (it.hasNext() && existing == null) {
+                        final Directory<T> dir = it.next();
+                        if (path.startsWith(dir.path)) {
+                          final int depth =
+                              path.equals(dir.path)
+                                  ? 0
+                                  : (dir.path.relativize(path).getNameCount() - 1);
+                          if (dir.getDepth() == Integer.MAX_VALUE
+                              || maxDepth < dir.getDepth() - depth) {
+                            existing = dir;
+                          } else if (depth <= dir.getDepth()) {
+                            result = true;
+                            dir.close();
+                            try {
+                              existing =
+                                  Directory.cached(
+                                      dir.path,
+                                      converter,
+                                      maxDepth < Integer.MAX_VALUE - depth - 1
+                                          ? maxDepth + depth + 1
+                                          : Integer.MAX_VALUE);
+                              directories.put(dir.path, existing);
+                            } catch (IOException e) {
+                              existing = null;
+                            }
                           }
                         }
                       }
+                      if (existing == null) {
+                        final Directory<T> dir = Directory.cached(path, converter, maxDepth);
+                        directories.put(path, dir);
+                        final Iterator<Directory.Entry<T>> entryIterator =
+                            dir.list(true, EntryFilters.AllPass).iterator();
+                        if (symlinkWatcher != null) {
+                          while (entryIterator.hasNext()) {
+                            final Directory.Entry<T> entry = entryIterator.next();
+                            if (entry.isSymbolicLink()) {
+                              symlinkWatcher.addSymlink(
+                                  entry.path, entry.isDirectory(), maxDepth - 1);
+                            }
+                          }
+                        }
+                        result = true;
+                      }
+                      return result;
                     }
-                    return Either.right(result);
-                  } catch (IOException e) {
-                    return Either.left(e);
-                  }
-                }
-              });
+                  })
+              .castLeft(IOException.class);
     }
-    if (result != null) {
-      if (result.isLeft()) {
-        throw new RuntimeException(result.left().getValue());
-      } else {
-        final Either<IOException, Directory<T>> res = result.get();
-        if (res.isLeft()) throw res.left().getValue();
-        else return res.get();
-      }
-    } else {
-      return null;
-    }
+    return result;
   }
 
   private Pair<Directory<T>, List<Directory.Entry<T>>> listImpl(

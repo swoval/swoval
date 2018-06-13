@@ -352,7 +352,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    * @param path The newly created directory to add
    * @param maxDepth The maximum depth of the subdirectory traversal
    * @param newFiles The set of files that are found for the newly created directory
-   * @return
+   * @return true if no exception is thrown
    */
   private boolean add(final Path path, final int maxDepth, final Set<Path> newFiles) {
     boolean result = true;
@@ -439,19 +439,22 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    *
    * @param path The directory to watch for file events
    * @param maxDepth The maximum maxDepth of subdirectories to watch
-   * @return true if the registration is successful
+   * @return an {@link com.swoval.functional.Either} containing the result of the registration or an
+   *     IOException if registration fails. This method should be idempotent and return true the
+   *     first time the directory is registered or when the depth is changed. Otherwise it should
+   *     return false.
    */
   @Override
-  public boolean register(final Path path, final int maxDepth) {
-    final Either<Exception, Boolean> either =
-        executor.block(
+  public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
+    return executor
+        .block(
             new Callable<Boolean>() {
               @Override
               public Boolean call() throws IOException {
                 return registerImpl(path, maxDepth);
               }
-            });
-    return either.getOrElse(false);
+            })
+        .castLeft(IOException.class);
   }
   /**
    * Stop watching a directory

@@ -6,6 +6,7 @@ import scala.scalajs.js.timers._
 import scala.util.{ Failure, Try }
 
 object platform {
+  type Bool = Boolean
   def newTimedPromise[T](p: Promise[T], timeout: FiniteDuration): TimedPromise[T] =
     new TimedPromise[T] {
       private[this] var cancelled = false
