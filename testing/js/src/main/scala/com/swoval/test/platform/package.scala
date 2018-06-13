@@ -16,8 +16,10 @@ package object platform {
         callbacks.dequeueAll(_ => true).foreach(_.run())
       }
     }
-    override def reportFailure(cause: Throwable): Unit =
-      Console.err.println(s"Caught error running runnable $cause")
+    override def reportFailure(cause: Throwable): Unit = {
+      Console.err.println(
+        s"Caught error running runnable $cause\n${cause.getStackTrace mkString "\n"}")
+    }
   }
   def createTempFile(dir: String, prefix: String): String = {
     val path = s"$dir$sep$prefix${new scala.util.Random().alphanumeric.take(10).mkString}"
