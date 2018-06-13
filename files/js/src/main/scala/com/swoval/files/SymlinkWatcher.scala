@@ -1,6 +1,7 @@
 package com.swoval.files
 
 import java.util.Map.Entry
+import com.swoval.files.Directory.OnError
 import com.swoval.files.DirectoryWatcher.Event
 import com.swoval.functional.Consumer
 import java.io.IOException
@@ -19,12 +20,6 @@ import SymlinkWatcher._
 
 object SymlinkWatcher {
 
-  trait EventConsumer {
-
-    def accept(path: Path): Unit
-
-  }
-
   private class RegisteredPath(val path: Path, val isDirectory: Boolean, base: Path) {
 
     val paths: Set[Path] = new HashSet()
@@ -33,20 +28,14 @@ object SymlinkWatcher {
 
   }
 
-  trait OnError {
-
-    def accept(symlink: Path, exception: IOException): Unit
-
-  }
-
 }
 
 /**
  * Monitors symlink targets. The [[SymlinkWatcher]] maintains a mapping of symlink targets to
  * symlink. When the symlink target is modified, the watcher will detect the update and invoke a
- * provided [[SymlinkWatcher.EventConsumer]] for the symlink.
+ * provided [[com.swoval.functional.Consumer]] for the symlink.
  */
-class SymlinkWatcher(handleEvent: EventConsumer,
+class SymlinkWatcher(handleEvent: Consumer[Path],
                      factory: DirectoryWatcher.Factory,
                      private val onError: OnError,
                      executor: Executor)
@@ -184,12 +173,12 @@ class SymlinkWatcher(handleEvent: EventConsumer,
               }
             }
           } else if (Files.isDirectory(realPath)) {
-            onError.accept(path, new FileSystemLoopException(path.toString))
+            onError.apply(path, new FileSystemLoopException(path.toString))
           } else {
             targetRegistrationPath.paths.add(path)
           }
         } catch {
-          case e: IOException => onError.accept(path, e)
+          case e: IOException => onError.apply(path, e)
 
         }
       }

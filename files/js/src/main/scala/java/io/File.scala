@@ -5,6 +5,7 @@ import java.nio.file.{ JSPath, Path }
 
 import io.scalajs.nodejs.fs.Fs
 import io.scalajs.nodejs.path.{ Path => JPath }
+
 import scala.util.Try
 
 class File(pathname: String) {
@@ -18,7 +19,10 @@ class File(pathname: String) {
   def getCanonicalPath(): String = JPath.normalize(JPath.resolve(pathname))
   def getCanonicalFile(): File = new File(getCanonicalPath)
   def getName(): String = JPath.basename(pathname)
-  def getParent(): String = JPath.dirname(pathname)
+  def getParent(): String = JPath.dirname(pathname) match {
+    case "" if pathname.nonEmpty => null
+    case p                       => p
+  }
   def getParentFile(): File = new File(getParent)
   def getPath(): String = pathname
   def isAbsolute(): Boolean = JPath.isAbsolute(pathname)

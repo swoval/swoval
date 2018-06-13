@@ -132,5 +132,15 @@ object PathTest extends TestSuite {
         }
       }
     }
+    'getParent - {
+      'normal - {
+        val path = get(root, "foo", "bar")
+        path.getParent ==> get(root, "foo")
+      }
+      'root - {
+        val path = get(root, "")
+        path.getParent ==> null
+      }
+    }
   }
 }

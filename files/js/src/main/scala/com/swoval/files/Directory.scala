@@ -541,8 +541,8 @@ class Directory[T] private (val path: Path,
     var files: Collection[Entry[T]] = null
     var subdirectories: Collection[Directory[T]] = null
     this.lock.synchronized {
-      files = this.files.values
-      subdirectories = this.subdirectories.values
+      files = new ArrayList(this.files.values)
+      subdirectories = new ArrayList(this.subdirectories.values)
     }
     val filesIterator: Iterator[Entry[T]] = files.iterator()
     while (filesIterator.hasNext) {

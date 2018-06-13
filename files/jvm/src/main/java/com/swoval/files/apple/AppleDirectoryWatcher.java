@@ -226,7 +226,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    *
    * @param latency specified in fractional seconds
    * @param flags Native flags
-   * @param onFileEvent {@link Consumer} to run on file events
+   * @param onFileEvent {@link com.swoval.functional.Consumer} to run on file events
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
    */
@@ -253,7 +253,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    * @param latency specified in fractional seconds
    * @param flags Native flags
    * @param callbackExecutor Executor to run callbacks on
-   * @param onFileEvent {@link Consumer} to run on file events
+   * @param onFileEvent {@link com.swoval.functional.Consumer} to run on file events
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
    */
@@ -274,7 +274,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    *
    * @param latency specified in fractional seconds
    * @param flags Native flags
-   * @param onFileEvent {@link Consumer} to run on file events
+   * @param onFileEvent {@link com.swoval.functional.Consumer} to run on file events
    * @param internalExecutor The internal executor to manage the directory watcher state
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
@@ -303,9 +303,9 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    * @param latency specified in fractional seconds
    * @param flags Native flags
    * @param callbackExecutor Executor to run callbacks on
-   * @param onFileEvent {@link Consumer} to run on file events
-   * @param onStreamRemoved {@link Consumer} to run when a redundant stream is removed from the
-   *     underlying native file events implementation
+   * @param onFileEvent {@link com.swoval.functional.Consumer} to run on file events
+   * @param onStreamRemoved {@link com.swoval.functional.Consumer} to run when a redundant stream is
+   *     removed from the underlying native file events implementation
    * @param executor The internal executor to manage the directory watcher state
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization

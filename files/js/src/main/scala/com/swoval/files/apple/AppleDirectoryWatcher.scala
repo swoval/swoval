@@ -3,6 +3,7 @@ package com.swoval.files.apple
 import com.swoval.files.DirectoryWatcher.Event.Create
 import com.swoval.files.DirectoryWatcher.Event.Delete
 import com.swoval.files.DirectoryWatcher.Event.Modify
+import com.swoval.files.DirectoryWatcher.Event.Overflow
 import com.swoval.files.DirectoryWatcher
 import com.swoval.files.Executor
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException
@@ -93,7 +94,9 @@ class AppleDirectoryWatcher(private val latency: Double,
             if (validKey) {
               var event: DirectoryWatcher.Event = null
               event =
-                if (fileEvent.itemIsFile())
+                if (fileEvent.mustScanSubDirs())
+                  new DirectoryWatcher.Event(path, Overflow)
+                else if (fileEvent.itemIsFile())
                   if (fileEvent.isNewFile && Files.exists(path))
                     new DirectoryWatcher.Event(path, Create)
                   else if (fileEvent.isRemoved || !Files.exists(path))
@@ -272,7 +275,7 @@ class AppleDirectoryWatcher(private val latency: Double,
    *
    * @param latency specified in fractional seconds
    * @param flags Native flags
-   * @param onFileEvent [[Consumer]] to run on file events
+   * @param onFileEvent [[com.swoval.functional.Consumer]] to run on file events
    *     initialization
    */
   def this(latency: Double, flags: Flags.Create, onFileEvent: Consumer[DirectoryWatcher.Event]) =
@@ -291,7 +294,7 @@ class AppleDirectoryWatcher(private val latency: Double,
    * @param latency specified in fractional seconds
    * @param flags Native flags
    * @param callbackExecutor Executor to run callbacks on
-   * @param onFileEvent [[Consumer]] to run on file events
+   * @param onFileEvent [[com.swoval.functional.Consumer]] to run on file events
    *     initialization
    */
   def this(latency: Double,
@@ -307,7 +310,7 @@ class AppleDirectoryWatcher(private val latency: Double,
    *
    * @param latency specified in fractional seconds
    * @param flags Native flags
-   * @param onFileEvent [[Consumer]] to run on file events
+   * @param onFileEvent [[com.swoval.functional.Consumer]] to run on file events
    * @param internalExecutor The internal executor to manage the directory watcher state
    *     initialization
    */

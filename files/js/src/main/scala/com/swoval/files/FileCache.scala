@@ -6,8 +6,8 @@ import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.Observer
 import com.swoval.files.Directory.OnChange
+import com.swoval.files.Directory.OnError
 import com.swoval.files.DirectoryWatcher.Event
-import com.swoval.files.SymlinkWatcher.OnError
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import java.io.IOException
@@ -122,8 +122,9 @@ object FileCache {
  * Directory.EntryFilter)]] method. The cache stores the path information in [[Directory.Entry]]
  * instances.
  *
- * <p>A default implementation is provided by [[FileCache.apply]]. The user may cache arbitrary information in the
- * cache by customizing the [[Directory.Converter]] that is passed into the factory [[FileCache.apply]].
+ * <p>A default implementation is provided by [[FileCache.apply]]. The user may cache arbitrary
+ * information in the cache by customizing the [[Directory.Converter]] that is passed into the
+ * factory [[FileCache.apply]].
  *
  * @tparam T The type of data stored in the [[Directory.Entry]] instances for the cache
  */
@@ -277,14 +278,14 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
   private val symlinkWatcher: SymlinkWatcher =
     if (!ArrayOps.contains(options, FileCache.Option.NOFOLLOW_LINKS))
       new SymlinkWatcher(
-        new SymlinkWatcher.EventConsumer() {
+        new Consumer[Path]() {
           override def accept(path: Path): Unit = {
             handleEvent(path)
           }
         },
         factory,
         new OnError() {
-          override def accept(symlink: Path, exception: IOException): Unit = {
+          override def apply(symlink: Path, exception: IOException): Unit = {
             observers.onError(symlink, exception)
           }
         },

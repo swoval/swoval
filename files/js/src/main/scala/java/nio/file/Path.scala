@@ -42,14 +42,16 @@ trait Path {
 
 import JSPath._
 class JSPath(val rawPath: String) extends Path {
-  val path = if (isWin) {
-    JPath.normalize(rawPath.replaceAll("[\\\\](?![\\\\])", "\\\\\\\\"))
-  } else {
-    JPath.normalize(rawPath)
-  }.replaceAll("(/|\\\\\\\\)$", "")
   val parsed = JPath.parse(rawPath)
   val root = parsed.root.toOption.getOrElse("")
   val dir = parsed.dir.toOption.getOrElse("")
+  val path = if (isWin) {
+    JPath.normalize(rawPath.replaceAll("[\\\\](?![\\\\])", "\\\\\\\\"))
+  } else if (rawPath == root) {
+    root
+  } else {
+    JPath.normalize(rawPath)
+  }.replaceAll("(/|\\\\\\\\)$", "")
   val fullPath = dir.drop(root.length) + JPath.sep + parsed.base
   private lazy val file = new File(path)
   lazy val parts: Seq[String] = fullPath.split(JSPath.regexSep) match {
@@ -61,7 +63,10 @@ class JSPath(val rawPath: String) extends Path {
   override def getRoot(): Path = new JSPath(File.separator)
   override def getFileName(): Path = new JSPath(file.getName)
   override def getFileSystem: FileSystem = ???
-  override def getParent(): Path = new JSPath(file.getParent)
+  override def getParent(): Path = this.file.getParent match {
+    case `root` => null
+    case p      => new JSPath(p)
+  }
   override def getNameCount(): Int = parts.length
   override def getName(index: Int): Path = new JSPath(parts(index))
   override def isAbsolute(): Boolean = file.isAbsolute
