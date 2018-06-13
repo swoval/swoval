@@ -336,11 +336,11 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
   }
 
   override def register(path: Path, maxDepth: Int): Directory[T] = {
-    var result: Either[Either[Directory[T], IOException], Exception] = null
+    var result: Either[Exception, Either[IOException, Directory[T]]] = null
     if (Files.exists(path)) {
       watcher.register(path, maxDepth)
-      result = internalExecutor.block(new Callable[Either[Directory[T], IOException]]() {
-        override def call(): Either[Directory[T], IOException] =
+      result = internalExecutor.block(new Callable[Either[IOException, Directory[T]]]() {
+        override def call(): Either[IOException, Directory[T]] =
           try {
             var result: Directory[T] = null
             val dirs: List[Directory[T]] =
@@ -393,19 +393,19 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
                 }
               }
             }
-            Either.left(result)
+            Either.right(result)
           } catch {
-            case e: IOException => Either.right(e)
+            case e: IOException => Either.left(e)
 
           }
       })
     }
     if (result != null) {
-      if (result.isRight) {
-        throw new RuntimeException(result.right())
+      if (result.isLeft) {
+        throw new RuntimeException(result.left().getValue)
       } else {
-        if (result.left().isRight) throw result.left().right()
-        else result.left().left()
+        val res: Either[IOException, Directory[T]] = result.get
+        if (res.isLeft) throw res.left().getValue else res.get
       }
     } else {
       null

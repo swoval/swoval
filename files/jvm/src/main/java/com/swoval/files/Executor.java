@@ -6,7 +6,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -50,23 +49,23 @@ public abstract class Executor implements AutoCloseable {
    * @param <T> The result type of the Callable
    * @return The result evaluated by the Callable
    */
-  public <T> Either<T, Exception> block(final Callable<T> callable) {
-    final ArrayBlockingQueue<Either<T, Exception>> queue = new ArrayBlockingQueue<>(1);
+  public <T> Either<Exception, T> block(final Callable<T> callable) {
+    final ArrayBlockingQueue<Either<Exception, T>> queue = new ArrayBlockingQueue<>(1);
     run(
         new Runnable() {
           @Override
           public void run() {
             try {
-              queue.add(Either.<T, Exception, T>left(callable.call()));
+              queue.add(Either.<Exception, T, T>right(callable.call()));
             } catch (Exception e) {
-              queue.add(Either.<T, Exception, Exception>right(e));
+              queue.add(Either.<Exception, T, Exception>left(e));
             }
           }
         });
     try {
       return queue.take();
     } catch (InterruptedException e) {
-      return Either.right(e);
+      return Either.left(e);
     }
   }
 

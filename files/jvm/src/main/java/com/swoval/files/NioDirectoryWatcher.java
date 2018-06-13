@@ -443,7 +443,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    */
   @Override
   public boolean register(final Path path, final int maxDepth) {
-    final Either<Boolean, Exception> either =
+    final Either<Exception, Boolean> either =
         executor.block(
             new Callable<Boolean>() {
               @Override
@@ -451,7 +451,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
                 return registerImpl(path, maxDepth);
               }
             });
-    return either.isLeft() && either.left();
+    return either.getOrElse(false);
   }
   /**
    * Stop watching a directory

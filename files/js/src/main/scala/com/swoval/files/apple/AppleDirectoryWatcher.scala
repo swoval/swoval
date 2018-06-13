@@ -146,12 +146,12 @@ class AppleDirectoryWatcher(private val latency: Double,
    * @return true if the path is a directory and has not previously been registered
    */
   def register(path: Path, flags: Flags.Create, maxDepth: Int): Boolean = {
-    val either: Either[Boolean, Exception] =
+    val either: Either[Exception, Boolean] =
       internalExecutor.block(new Callable[Boolean]() {
         override def call(): Boolean =
           registerImpl(path, flags, maxDepth)
       })
-    either.isLeft && either.left()
+    either.getOrElse(false)
   }
 
   def registerImpl(path: Path, flags: Flags.Create, maxDepth: Int): Boolean = {

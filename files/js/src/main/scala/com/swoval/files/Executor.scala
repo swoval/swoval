@@ -26,11 +26,11 @@ abstract class Executor extends AutoCloseable {
     }
   }
   def block(runnable: Runnable): Unit = runnable.run()
-  def block[T](callable: Callable[T]): Either[T, Exception] =
+  def block[T](callable: Callable[T]): Either[Exception, T] =
     try {
-      Either.left(callable.call())
+      Either.right(callable.call())
     } catch {
-      case e: Exception => Either.right(e)
+      case e: Exception => Either.left(e)
     }
 
   /**

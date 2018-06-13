@@ -356,14 +356,14 @@ class FileCacheImpl<T> extends FileCache<T> {
 
   @Override
   public Directory<T> register(final Path path, final int maxDepth) throws IOException {
-    Either<Either<Directory<T>, IOException>, Exception> result = null;
+    Either<Exception, Either<IOException, Directory<T>>> result = null;
     if (Files.exists(path)) {
       watcher.register(path, maxDepth);
       result =
           internalExecutor.block(
-              new Callable<Either<Directory<T>, IOException>>() {
+              new Callable<Either<IOException, Directory<T>>>() {
                 @Override
-                public Either<Directory<T>, IOException> call() {
+                public Either<IOException, Directory<T>> call() {
                   try {
                     Directory<T> result = null;
                     final List<Directory<T>> dirs = new ArrayList<>(directories.values());
@@ -419,19 +419,20 @@ class FileCacheImpl<T> extends FileCache<T> {
                         }
                       }
                     }
-                    return Either.left(result);
+                    return Either.right(result);
                   } catch (IOException e) {
-                    return Either.right(e);
+                    return Either.left(e);
                   }
                 }
               });
     }
     if (result != null) {
-      if (result.isRight()) {
-        throw new RuntimeException(result.right());
+      if (result.isLeft()) {
+        throw new RuntimeException(result.left().getValue());
       } else {
-        if (result.left().isRight()) throw result.left().right();
-        else return result.left().left();
+        final Either<IOException, Directory<T>> res = result.get();
+        if (res.isLeft()) throw res.left().getValue();
+        else return res.get();
       }
     } else {
       return null;

@@ -84,7 +84,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    * @return true if the path is a directory and has not previously been registered
    */
   public boolean register(final Path path, final Flags.Create flags, final int maxDepth) {
-    final Either<Boolean, Exception> either =
+    final Either<Exception, Boolean> either =
         internalExecutor.block(
             new Callable<Boolean>() {
               @Override
@@ -92,7 +92,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
                 return registerImpl(path, flags, maxDepth);
               }
             });
-    return either.isLeft() && either.left();
+    return either.getOrElse(false);
   }
 
   public boolean registerImpl(final Path path, final Flags.Create flags, final int maxDepth) {
