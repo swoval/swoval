@@ -1,5 +1,17 @@
 swoval
 ===
+
+| Linux | macOS | Windows |
+| :---- | :------ | :---- |
+[ ![Linux build status][1]][2] | [![macOS build status][3]][4] | [![Windows build status][5]][6] |
+
+[1]: https://travis-ci.org/swoval/swoval.svg?branch=master
+[2]: https://travis-ci.org/swoval/swoval
+[3]: https://travis-ci.org/swoval/swoval.svg?branch=master
+[4]: https://travis-ci.org/swoval/swoval
+[5]: https://ci.appveyor.com/api/projects/status/oy6siu8mom9tk8us?svg=true
+[6]: https://ci.appveyor.com/project/eatkins/swoval/branch/master
+
 A collection of small libraries to facilitate scala development.
 
 CloseWatch
