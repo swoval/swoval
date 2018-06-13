@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Monitors symlink targets. The {@link SymlinkWatcher} maintains a mapping of symlink targets to
  * symlink. When the symlink target is modified, the watcher will detect the update and invoke a
- * provided {@link SymlinkWatcher.EventConsumer} for the symlink.
+ * provided {@link com.swoval.functional.Consumer} for the symlink.
  */
 class SymlinkWatcher implements AutoCloseable {
   private final AtomicBoolean isClosed = new AtomicBoolean(false);

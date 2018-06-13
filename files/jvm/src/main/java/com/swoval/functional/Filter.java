@@ -1,9 +1,7 @@
 package com.swoval.functional;
 
-import com.swoval.files.QuickList;
-
 /**
- * Generic Filter functional interface. Primarily used by {@link QuickList}.
+ * Generic Filter functional interface. Primarily used by {@link com.swoval.files.QuickList}.
  *
  * @param <T> The type of object to filter
  */

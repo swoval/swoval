@@ -66,10 +66,11 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   /**
    * Create a DirectoryWatcher for the runtime platform.
    *
-   * @param latency The latency used by the {@link AppleDirectoryWatcher} on osx
+   * @param latency The latency used by the {@link com.swoval.files.apple.AppleDirectoryWatcher} on
+   *     osx
    * @param timeUnit The TimeUnit or the latency parameter
    * @param flags Flags used by the apple directory watcher
-   * @param callback {@link Consumer} to run on file events
+   * @param callback {@link com.swoval.functional.Consumer} to run on file events
    * @param executor provides a single threaded context to manage state
    * @return DirectoryWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
@@ -92,7 +93,7 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   /**
    * Create a platform compatible DirectoryWatcher.
    *
-   * @param callback {@link Consumer} to run on file events
+   * @param callback {@link com.swoval.functional.Consumer} to run on file events
    * @param executor The executor to run internal callbacks on
    * @return DirectoryWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
@@ -112,8 +113,9 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   }
 
   /**
-   * Instantiates new {@link DirectoryWatcher} instances with a {@link Consumer}. This is primarily
-   * so that the {@link DirectoryWatcher} in {@link FileCache} may be changed in testing.
+   * Instantiates new {@link DirectoryWatcher} instances with a {@link
+   * com.swoval.functional.Consumer}. This is primarily so that the {@link DirectoryWatcher} in
+   * {@link FileCache} may be changed in testing.
    */
   public interface Factory {
 
