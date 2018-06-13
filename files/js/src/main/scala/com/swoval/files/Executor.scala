@@ -17,7 +17,14 @@ abstract class Executor extends AutoCloseable {
    *
    * @param runnable task to run
    */
-  def run(runnable: Runnable): Unit = runnable.run()
+  def run(runnable: Runnable): Unit = {
+    try {
+      runnable.run()
+    } catch {
+      case e: Exception =>
+        System.err.println(s"Error running: $runnable\n$e\n${e.getStackTrace mkString "\n"}")
+    }
+  }
   def block(runnable: Runnable): Unit = runnable.run()
   def block[T](callable: Callable[T]): Either[T, Exception] =
     try {

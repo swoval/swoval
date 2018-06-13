@@ -7,6 +7,8 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -111,7 +113,28 @@ public abstract class Executor implements AutoCloseable {
   public static Executor make(final String name) {
     return new Executor() {
       final ThreadFactory factory = new ThreadFactory(name);
-      final ExecutorService service = Executors.newSingleThreadExecutor(factory);
+      final ExecutorService service =
+          new ThreadPoolExecutor(
+              1,
+              1,
+              0,
+              TimeUnit.SECONDS,
+              new LinkedBlockingQueue<Runnable>(),
+              factory) {
+            protected void finalize() {
+              shutdown();
+            }
+            @Override
+            protected void afterExecute(Runnable r, Throwable t) {
+              super.afterExecute(r, t);
+              if (t != null) {
+                System.err.println("Error running: " + r + "\n" + t);
+                for (final StackTraceElement el : t.getStackTrace()) {
+                  System.err.println(el);
+                }
+              }
+            }
+          };
 
       @SuppressWarnings("EmptyCatchBlock")
       @Override
