@@ -179,6 +179,21 @@ abstract class FileCache[T] extends AutoCloseable {
    *
    * @param path The path to list. This may be a file in which case the result list contains only
    *     this path or the empty list if the path is not monitored by the cache.
+   * @param maxDepth The maximum depth of children of the parent to traverse in the tree.
+   * @param filter Only include cache entries that are accepted by the filter.
+   * @return The list of cache elements. This will be empty if the path is not monitored in a
+   *     monitored path. If the path is a file and the file is monitored by the cache, the returned
+   *     list will contain just the cache entry for the path.
+   */
+  def list(path: Path,
+           maxDepth: Int,
+           filter: Directory.EntryFilter[_ >: T]): List[Directory.Entry[T]]
+
+  /**
+   * Lists the cache elements in the particular path
+   *
+   * @param path The path to list. This may be a file in which case the result list contains only
+   *     this path or the empty list if the path is not monitored by the cache.
    * @param recursive Toggles whether or not to include paths in subdirectories. Even when the cache
    *     is recursively monitoring the input path, it will not return cache entries for children if
    *     this flag is false.
@@ -189,7 +204,23 @@ abstract class FileCache[T] extends AutoCloseable {
    */
   def list(path: Path,
            recursive: Boolean,
-           filter: Directory.EntryFilter[_ >: T]): List[Directory.Entry[T]]
+           filter: Directory.EntryFilter[_ >: T]): List[Directory.Entry[T]] =
+    list(path, if (recursive) java.lang.Integer.MAX_VALUE else 0, filter)
+
+  /**
+   * Lists the cache elements in the particular path without any filtering
+   *
+   * @param path The path to list. This may be a file in which case the result list contains only
+   *     this path or the empty list if the path is not monitored by the cache.
+   *     <p>is recursively monitoring the input path, it will not return cache entries for children
+   *     if this flag is false.
+   * @param maxDepth The maximum depth of children of the parent to traverse in the tree.
+   * @return The list of cache elements. This will be empty if the path is not monitored in a
+   *     monitored path. If the path is a file and the file is monitored by the cache, the returned
+   *     list will contain just the cache entry for the path.
+   */
+  def list(path: Path, maxDepth: Int): List[Directory.Entry[T]] =
+    list(path, maxDepth, AllPass)
 
   /**
    * Lists the cache elements in the particular path without any filtering
@@ -215,7 +246,8 @@ abstract class FileCache[T] extends AutoCloseable {
    *     monitored path. If the path is a file and the file is monitored by the cache, the returned
    *     list will contain just the cache entry for the path.
    */
-  def list(path: Path): List[Directory.Entry[T]] = list(path, true, AllPass)
+  def list(path: Path): List[Directory.Entry[T]] =
+    list(path, java.lang.Integer.MAX_VALUE, AllPass)
 
   /**
    * Register the directory for monitoring.
@@ -342,10 +374,10 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
   }
 
   override def list(path: Path,
-                    recursive: Boolean,
+                    maxDepth: Int,
                     filter: Directory.EntryFilter[_ >: T]): List[Directory.Entry[T]] = {
     val pair: Pair[Directory[T], List[Directory.Entry[T]]] =
-      listImpl(path, if (recursive) java.lang.Integer.MAX_VALUE else 0, filter)
+      listImpl(path, maxDepth, filter)
     if (pair == null) new ArrayList[Directory.Entry[T]]() else pair.second
   }
 

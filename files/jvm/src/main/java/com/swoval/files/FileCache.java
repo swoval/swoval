@@ -101,6 +101,20 @@ public abstract class FileCache<T> implements AutoCloseable {
    *
    * @param path The path to list. This may be a file in which case the result list contains only
    *     this path or the empty list if the path is not monitored by the cache.
+   * @param maxDepth The maximum depth of children of the parent to traverse in the tree.
+   * @param filter Only include cache entries that are accepted by the filter.
+   * @return The list of cache elements. This will be empty if the path is not monitored in a
+   *     monitored path. If the path is a file and the file is monitored by the cache, the returned
+   *     list will contain just the cache entry for the path.
+   */
+  public abstract List<Directory.Entry<T>> list(
+      final Path path, final int maxDepth, final Directory.EntryFilter<? super T> filter);
+
+  /**
+   * Lists the cache elements in the particular path
+   *
+   * @param path The path to list. This may be a file in which case the result list contains only
+   *     this path or the empty list if the path is not monitored by the cache.
    * @param recursive Toggles whether or not to include paths in subdirectories. Even when the cache
    *     is recursively monitoring the input path, it will not return cache entries for children if
    *     this flag is false.
@@ -109,9 +123,27 @@ public abstract class FileCache<T> implements AutoCloseable {
    *     monitored path. If the path is a file and the file is monitored by the cache, the returned
    *     list will contain just the cache entry for the path.
    */
-  public abstract List<Directory.Entry<T>> list(
-      final Path path, final boolean recursive, final Directory.EntryFilter<? super T> filter);
+  public List<Directory.Entry<T>> list(
+      final Path path, final boolean recursive, final Directory.EntryFilter<? super T> filter) {
+    return list(path, recursive ? Integer.MAX_VALUE : 0, filter);
+  }
 
+  /**
+   * Lists the cache elements in the particular path without any filtering
+   *
+   * @param path The path to list. This may be a file in which case the result list contains only
+   *     this path or the empty list if the path is not monitored by the cache.
+   *     <p>is recursively monitoring the input path, it will not return cache entries for children
+   *     if this flag is false.
+   * @param maxDepth The maximum depth of children of the parent to traverse in the tree.
+   * @return The list of cache elements. This will be empty if the path is not monitored in a
+   *     monitored path. If the path is a file and the file is monitored by the cache, the returned
+   *     list will contain just the cache entry for the path.
+   */
+  @SuppressWarnings("unused")
+  public List<Directory.Entry<T>> list(final Path path, final int maxDepth) {
+    return list(path, maxDepth, AllPass);
+  }
   /**
    * Lists the cache elements in the particular path without any filtering
    *
@@ -140,7 +172,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    */
   @SuppressWarnings("unused")
   public List<Directory.Entry<T>> list(final Path path) {
-    return list(path, true, AllPass);
+    return list(path, Integer.MAX_VALUE, AllPass);
   }
   /**
    * Register the directory for monitoring.
@@ -358,9 +390,8 @@ class FileCacheImpl<T> extends FileCache<T> {
 
   @Override
   public List<Directory.Entry<T>> list(
-      final Path path, final boolean recursive, final Directory.EntryFilter<? super T> filter) {
-    Pair<Directory<T>, List<Directory.Entry<T>>> pair =
-        listImpl(path, recursive ? Integer.MAX_VALUE : 0, filter);
+      final Path path, final int maxDepth, final Directory.EntryFilter<? super T> filter) {
+    Pair<Directory<T>, List<Directory.Entry<T>>> pair = listImpl(path, maxDepth, filter);
     return pair == null ? new ArrayList<Directory.Entry<T>>() : pair.second;
   }
 
