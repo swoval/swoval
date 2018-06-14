@@ -491,7 +491,7 @@ class FileCacheImpl<T> extends FileCache<T> {
   }
 
   @SuppressWarnings("unchecked")
-  private boolean handleOverflow(final Path path) {
+  private void handleOverflow(final Path path) {
     if (!closed.get()) {
       final Iterator<Directory<T>> directoryIterator = directories.values().iterator();
       final List<Directory<T>> toReplace = new ArrayList<>();
@@ -563,9 +563,6 @@ class FileCacheImpl<T> extends FileCache<T> {
               }
             }
           });
-      return creations.isEmpty() && deletions.isEmpty() && updates.isEmpty();
-    } else {
-      return false;
     }
   }
 

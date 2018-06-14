@@ -465,7 +465,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
     res
   }
 
-  private def handleOverflow(path: Path): Boolean =
+  private def handleOverflow(path: Path): Unit = {
     if (!closed.get) {
       val directoryIterator: Iterator[Directory[T]] =
         directories.values.iterator()
@@ -544,10 +544,8 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
           }
         }
       })
-      creations.isEmpty && deletions.isEmpty && updates.isEmpty
-    } else {
-      false
     }
+  }
 
   private def handleEvent(path: Path): Unit = {
     if (!closed.get) {
