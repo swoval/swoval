@@ -111,75 +111,21 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
             while (!isStopped.get() && !Thread.currentThread().isInterrupted()) {
               try {
                 final WatchKey key = watchService.take();
-                NioDirectoryWatcher.this.executor.run(
-                    new Runnable() {
-                      @Override
-                      public void run() {
-                        final Iterator<WatchEvent<?>> it = key.pollEvents().iterator();
-                        while (it.hasNext()) {
-                          final WatchEvent<?> e = it.next();
-                          final WatchEvent.Kind<?> k = e.kind();
-                          final Event.Kind kind =
-                              k.equals(ENTRY_DELETE)
-                                  ? Delete
-                                  : k.equals(ENTRY_CREATE)
-                                      ? Create
-                                      : k.equals(OVERFLOW) ? Overflow : Modify;
-                          if (!key.reset()) {
-                            key.cancel();
-                            watchedDirs.remove(key.watchable());
+                boolean submitted = false;
+                while (!submitted && !isStopped.get() && !Thread.currentThread().isInterrupted()) {
+                  try {
+                    NioDirectoryWatcher.this.executor.run(
+                        new Runnable() {
+                          @Override
+                          public void run() {
+                            onEvent(callback, key);
                           }
-                          try {
-                            if (!kind.equals(Overflow)) {
-                              final Path path =
-                                  ((Path) key.watchable()).resolve((Path) e.context());
-                              handleEvent(callback, path, key, kind);
-                            } else {
-                              handleOverflow(callback, key);
-                            }
-                          } catch (RejectedExecutionException ex2) {
-                            boolean result = false;
-                            while (!result && !callbackExecutor.isClosed()) {
-                              final Iterator<WatchedDir> itx = watchedDirs.values().iterator();
-                              final List<Runnable> runnables = new ArrayList<>();
-                              while (itx.hasNext()) {
-                                final WatchedDir watchedDir = itx.next();
-                                runnables.add(
-                                    new Runnable() {
-                                      @Override
-                                      public void run() {
-                                        handleOverflow(callback, watchedDir.key);
-                                      }
-                                    });
-                              }
-                              while (!result) {
-                                try {
-                                  try {
-                                    callbackExecutor.run(
-                                        new Runnable() {
-                                          @Override
-                                          public void run() {
-                                            final Iterator<Runnable> it = runnables.iterator();
-                                            while (it.hasNext()) {
-                                              it.next().run();
-                                            }
-                                          }
-                                        });
-                                    result = true;
-                                  } catch (RejectedExecutionException ex) {
-                                    Thread.sleep(5);
-                                  }
-                                } catch (InterruptedException ie) {
-                                  result = true;
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    });
-              } catch (RejectedExecutionException e) {
-                if (!isStopped.get()) throw e;
+                        });
+                    submitted = true;
+                  } catch (RejectedExecutionException e) {
+                    Thread.sleep(2);
+                  }
+                }
               } catch (ClosedWatchServiceException | InterruptedException e) {
                 isStopped.set(true);
               }
@@ -248,6 +194,67 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
             callback.accept(event);
           }
         });
+  }
+
+  private void onEvent(final Consumer<Event> callback, final WatchKey key) {
+    final Iterator<WatchEvent<?>> it = key.pollEvents().iterator();
+    while (it.hasNext()) {
+      final WatchEvent<?> e = it.next();
+      final WatchEvent.Kind<?> k = e.kind();
+      final Event.Kind kind =
+          k.equals(ENTRY_DELETE)
+              ? Delete
+              : k.equals(ENTRY_CREATE) ? Create : k.equals(OVERFLOW) ? Overflow : Modify;
+      if (!key.reset()) {
+        key.cancel();
+        watchedDirs.remove(key.watchable());
+      }
+      try {
+        if (!kind.equals(Overflow)) {
+          final Path path = ((Path) key.watchable()).resolve((Path) e.context());
+          handleEvent(callback, path, key, kind);
+        } else {
+          handleOverflow(callback, key);
+        }
+      } catch (RejectedExecutionException ex2) {
+        boolean result = false;
+        while (!result && !callbackExecutor.isClosed()) {
+          final Iterator<WatchedDir> itx = watchedDirs.values().iterator();
+          final List<Runnable> runnables = new ArrayList<>();
+          while (itx.hasNext()) {
+            final WatchedDir watchedDir = itx.next();
+            runnables.add(
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    handleOverflow(callback, watchedDir.key);
+                  }
+                });
+          }
+          while (!result) {
+            try {
+              try {
+                callbackExecutor.run(
+                    new Runnable() {
+                      @Override
+                      public void run() {
+                        final Iterator<Runnable> it = runnables.iterator();
+                        while (it.hasNext()) {
+                          it.next().run();
+                        }
+                      }
+                    });
+                result = true;
+              } catch (RejectedExecutionException ex) {
+                Thread.sleep(5);
+              }
+            } catch (InterruptedException ie) {
+              result = true;
+            }
+          }
+        }
+      }
+    }
   }
 
   private void handleEvent(
