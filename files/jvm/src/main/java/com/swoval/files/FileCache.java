@@ -281,6 +281,8 @@ class FileCacheImpl<T> extends FileCache<T> {
   private final Converter<T> converter;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final Executor internalExecutor;
+  private final Executor callbackExecutor =
+      Executor.make("com.swoval.files.FileCache-callback-executor");
   private final SymlinkWatcher symlinkWatcher;
 
   private Consumer<Event> callback(final Executor executor) {
@@ -546,15 +548,21 @@ class FileCacheImpl<T> extends FileCache<T> {
         final Directory<T> replacement = replacements.next();
         directories.put(replacement.path, replacement);
       }
-      final Iterator<Directory.Entry<T>> creationIterator = creations.iterator();
-      while (creationIterator.hasNext()) observers.onCreate(creationIterator.next());
-      final Iterator<Directory.Entry<T>> deletionIterator = deletions.iterator();
-      while (deletionIterator.hasNext()) observers.onDelete(deletionIterator.next());
-      final Iterator<Directory.Entry<T>[]> updateIterator = updates.iterator();
-      while (updateIterator.hasNext()) {
-        final Directory.Entry<T>[] update = updateIterator.next();
-        observers.onUpdate(update[0], update[1]);
-      }
+      callbackExecutor.run(
+          new Runnable() {
+            @Override
+            public void run() {
+              final Iterator<Directory.Entry<T>> creationIterator = creations.iterator();
+              while (creationIterator.hasNext()) observers.onCreate(creationIterator.next());
+              final Iterator<Directory.Entry<T>> deletionIterator = deletions.iterator();
+              while (deletionIterator.hasNext()) observers.onDelete(deletionIterator.next());
+              final Iterator<Directory.Entry<T>[]> updateIterator = updates.iterator();
+              while (updateIterator.hasNext()) {
+                final Directory.Entry<T>[] update = updateIterator.next();
+                observers.onUpdate(update[0], update[1]);
+              }
+            }
+          });
       return creations.isEmpty() && deletions.isEmpty() && updates.isEmpty();
     } else {
       return false;
@@ -565,6 +573,7 @@ class FileCacheImpl<T> extends FileCache<T> {
   private void handleEvent(final Path path) {
     if (!closed.get()) {
       BasicFileAttributes attrs = null;
+      final List<Runnable> callbacks = new ArrayList<>();
       try {
         attrs = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
       } catch (IOException e) {
@@ -595,14 +604,26 @@ class FileCacheImpl<T> extends FileCache<T> {
                   dir.addUpdate(toUpdate, Directory.Entry.getKind(toUpdate, attrs)).iterator();
               while (it.hasNext()) {
                 final Directory.Entry<T>[] entry = it.next();
-                if (entry.length == 2) {
-                  observers.onUpdate(entry[0], entry[1]);
-                } else {
-                  observers.onCreate(entry[0]);
-                }
+                callbacks.add(
+                    new Runnable() {
+                      @Override
+                      public void run() {
+                        if (entry.length == 2) {
+                          observers.onUpdate(entry[0], entry[1]);
+                        } else {
+                          observers.onCreate(entry[0]);
+                        }
+                      }
+                    });
               }
-            } catch (IOException e) {
-              observers.onError(path, e);
+            } catch (final IOException e) {
+              callbacks.add(
+                  new Runnable() {
+                    @Override
+                    public void run() {
+                      observers.onError(path, e);
+                    }
+                  });
             }
           }
         }
@@ -620,12 +641,30 @@ class FileCacheImpl<T> extends FileCache<T> {
           final Iterator<Directory.Entry<T>> removeIterator = it.next();
           while (removeIterator.hasNext()) {
             final Directory.Entry<T> entry = removeIterator.next();
-            observers.onDelete(entry);
+            callbacks.add(
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    observers.onDelete(entry);
+                  }
+                });
             if (symlinkWatcher != null) {
               symlinkWatcher.remove(entry.path);
             }
           }
         }
+      }
+      if (!callbacks.isEmpty()) {
+        callbackExecutor.run(
+            new Runnable() {
+              @Override
+              public void run() {
+                final Iterator<Runnable> runnableIterator = callbacks.iterator();
+                while (runnableIterator.hasNext()) {
+                  runnableIterator.next().run();
+                }
+              }
+            });
       }
     }
   }

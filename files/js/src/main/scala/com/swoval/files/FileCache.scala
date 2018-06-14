@@ -286,6 +286,9 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       Executor.make("com.swoval.files.FileCache-callback-internalExecutor")
     else executor
 
+  private val callbackExecutor: Executor =
+    Executor.make("com.swoval.files.FileCache-callback-executor")
+
   private val symlinkWatcher: SymlinkWatcher =
     if (!ArrayOps.contains(options, FileCache.Option.NOFOLLOW_LINKS))
       new SymlinkWatcher(
@@ -525,16 +528,22 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
         val replacement: Directory[T] = replacements.next()
         directories.put(replacement.path, replacement)
       }
-      val creationIterator: Iterator[Directory.Entry[T]] = creations.iterator()
-      while (creationIterator.hasNext) observers.onCreate(creationIterator.next())
-      val deletionIterator: Iterator[Directory.Entry[T]] = deletions.iterator()
-      while (deletionIterator.hasNext) observers.onDelete(deletionIterator.next())
-      val updateIterator: Iterator[Array[Directory.Entry[T]]] =
-        updates.iterator()
-      while (updateIterator.hasNext) {
-        val update: Array[Directory.Entry[T]] = updateIterator.next()
-        observers.onUpdate(update(0), update(1))
-      }
+      callbackExecutor.run(new Runnable() {
+        override def run(): Unit = {
+          val creationIterator: Iterator[Directory.Entry[T]] =
+            creations.iterator()
+          while (creationIterator.hasNext) observers.onCreate(creationIterator.next())
+          val deletionIterator: Iterator[Directory.Entry[T]] =
+            deletions.iterator()
+          while (deletionIterator.hasNext) observers.onDelete(deletionIterator.next())
+          val updateIterator: Iterator[Array[Directory.Entry[T]]] =
+            updates.iterator()
+          while (updateIterator.hasNext) {
+            val update: Array[Directory.Entry[T]] = updateIterator.next()
+            observers.onUpdate(update(0), update(1))
+          }
+        }
+      })
       creations.isEmpty && deletions.isEmpty && updates.isEmpty
     } else {
       false
@@ -543,6 +552,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
   private def handleEvent(path: Path): Unit = {
     if (!closed.get) {
       var attrs: BasicFileAttributes = null
+      val callbacks: List[Runnable] = new ArrayList[Runnable]()
       try attrs =
         Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS)
       catch {
@@ -572,14 +582,23 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
                 .iterator()
               while (it.hasNext) {
                 val entry: Array[Directory.Entry[T]] = it.next()
-                if (entry.length == 2) {
-                  observers.onUpdate(entry(0), entry(1))
-                } else {
-                  observers.onCreate(entry(0))
-                }
+                callbacks.add(new Runnable() {
+                  override def run(): Unit = {
+                    if (entry.length == 2) {
+                      observers.onUpdate(entry(0), entry(1))
+                    } else {
+                      observers.onCreate(entry(0))
+                    }
+                  }
+                })
               }
             } catch {
-              case e: IOException => observers.onError(path, e)
+              case e: IOException =>
+                callbacks.add(new Runnable() {
+                  override def run(): Unit = {
+                    observers.onError(path, e)
+                  }
+                })
 
             }
           }
@@ -601,12 +620,24 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
           val removeIterator: Iterator[Directory.Entry[T]] = it.next()
           while (removeIterator.hasNext) {
             val entry: Directory.Entry[T] = removeIterator.next()
-            observers.onDelete(entry)
+            callbacks.add(new Runnable() {
+              override def run(): Unit = {
+                observers.onDelete(entry)
+              }
+            })
             if (symlinkWatcher != null) {
               symlinkWatcher.remove(entry.path)
             }
           }
         }
+      }
+      if (!callbacks.isEmpty) {
+        callbackExecutor.run(new Runnable() {
+          override def run(): Unit = {
+            val runnableIterator: Iterator[Runnable] = callbacks.iterator()
+            while (runnableIterator.hasNext) runnableIterator.next().run()
+          }
+        })
       }
     }
   }
