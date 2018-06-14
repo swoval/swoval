@@ -531,11 +531,11 @@ class FileCacheImpl<T> extends FileCache<T> {
               newEntries.entrySet().iterator();
           while (newIterator.hasNext()) {
             final Entry<Path, Directory.Entry<T>> mapEntry = newIterator.next();
-            if (!oldEntries.containsKey(mapEntry.getKey())) {
+            final Directory.Entry<T> oldEntry = oldEntries.get(mapEntry.getKey());
+            if (oldEntry == null) {
               creations.add(mapEntry.getValue());
-            } else {
-              final Directory.Entry<T> oldEntry = oldEntries.get(mapEntry.getKey());
-              if (!oldEntry.equals(mapEntry.getValue())) {}
+            } else if (!oldEntry.equals(mapEntry.getValue())) {
+              updates.add(new Directory.Entry[] {oldEntry, mapEntry.getValue()});
             }
           }
           toReplace.add(newDir);

@@ -510,12 +510,11 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
             newEntries.entrySet().iterator()
           while (newIterator.hasNext) {
             val mapEntry: Entry[Path, Directory.Entry[T]] = newIterator.next()
-            if (!oldEntries.containsKey(mapEntry.getKey)) {
+            val oldEntry: Directory.Entry[T] = oldEntries.get(mapEntry.getKey)
+            if (oldEntry == null) {
               creations.add(mapEntry.getValue)
-            } else {
-              val oldEntry: Directory.Entry[T] =
-                oldEntries.get(mapEntry.getKey)
-              if (oldEntry != mapEntry.getValue) {}
+            } else if (oldEntry != mapEntry.getValue) {
+              updates.add(Array(oldEntry, mapEntry.getValue))
             }
           }
           toReplace.add(newDir)
