@@ -153,7 +153,10 @@ object Directory {
    *
    * @tparam T The value wrapped in the Entry
    */
-  class Entry[T](val path: Path, val value: T, @BeanProperty val kind: Int) {
+  class Entry[T] private (val path: Path,
+                          private val value: T,
+                          private val exception: IOException,
+                          @BeanProperty val kind: Int) {
 
     /**
  @return true if the underlying path is a directory
@@ -166,6 +169,57 @@ object Directory {
 
     def isSymbolicLink(): Boolean =
       is(Entry.LINK) || (is(Entry.UNKNOWN) && Files.isRegularFile(path))
+
+    /**
+     * Returns the value of this entry. The value may be null, so in general it is better to use
+     * [[Entry.getValueOrDefault]].
+     *
+     * @return the value
+     */
+    def getValue(): T = {
+      if (value == null) throw new NullPointerException()
+      value
+    }
+
+    /**
+     * Returns the value of this entry or a default if it is null
+     *
+     * @return the value
+     */
+    def getValueOrDefault(t: T): T = if (value == null) t else value
+
+    /**
+     * Get the IOException thrown trying to compute the value for this entry
+     *
+     * @return ehe IOException thrown trying to convert the path to a value. Will be null if no
+     *     exception was thrown
+     */
+    def getIOException(): IOException = exception
+
+    /**
+     * Create a new Entry
+     *
+     * @param path The path to which this entry corresponds blah
+     * @param exception The IOException that was thrown trying to generate the value
+     * @param kind The type of file that this entry represents. In the case of symbolic links, it
+     *     can be both a link and a directory or file.
+     */
+    def this(path: Path, exception: IOException, kind: Int) =
+      this(path, /* cast needed for code-gen */
+
+           null.asInstanceOf[T],
+           exception,
+           kind)
+
+    /**
+     * Create a new Entry
+     *
+     * @param path The path to which this entry corresponds blah
+     * @param value The {@code path} derived value for this entry
+     * @param kind The type of file that this entry represents. In the case of symbolic links, it
+     *     can be both a link and a directory or file.
+     */
+    def this(path: Path, value: T, kind: Int) = this(path, value, null, kind)
 
     /**
      * Create a new Entry using the FileSystem to check if the Entry is for a directory
@@ -182,7 +236,9 @@ object Directory {
      * @return A Entry where the {@code path</code> has been resolved against <code>other}
      */
     def resolvedFrom(other: Path): Entry[T] =
-      new Entry(other.resolve(path), this.value, this.kind)
+      if (this.value == null)
+        new Entry[T](other.resolve(path), exception, this.kind)
+      else new Entry(other.resolve(path), this.value, this.kind)
 
     /**
      * Resolve a Entry for a relative {@code path</code> where <code>isDirectory} is known in
@@ -193,12 +249,16 @@ object Directory {
      * @return A Entry where the {@code path</code> has been resolved against <code>other}
      */
     def resolvedFrom(other: Path, kind: Int): Entry[T] =
-      new Entry(other.resolve(path), this.value, kind)
+      if (this.value == null)
+        new Entry[T](other.resolve(path), exception, kind)
+      else new Entry(other.resolve(path), this.value, kind)
 
     override def equals(other: Any): Boolean = other match {
       case other: Directory.Entry[_] => {
         val that: Entry[_] = other
-        this.path == that.path && this.value == that.value
+        this.path == that.path &&
+        (if (this.value == null) that.value == null
+         else this.value == that.value)
       }
       case _ => false
 
@@ -297,8 +357,7 @@ class Directory[T] private (val path: Path,
   @BeanProperty
   val depth: Int = if (d > 0) d else 0
 
-  private val _cacheEntry: AtomicReference[Entry[T]] = new AtomicReference(
-    new Entry(path, converter.apply(path)))
+  private val _cacheEntry: AtomicReference[Entry[T]] = new AtomicReference(null)
 
   private val lock: AnyRef = new AnyRef()
 
@@ -321,6 +380,14 @@ class Directory[T] private (val path: Path,
    * @return The Entry for the directory itself
    */
   def entry(): Entry[T] = _cacheEntry.get
+
+  val kind: Int = Entry.getKind(path)
+
+  try this._cacheEntry.set(new Entry(path, converter.apply(realPath), kind))
+  catch {
+    case e: IOException => this._cacheEntry.set(new Entry[T](path, e, kind))
+
+  }
 
   /**
    * List all of the files for the {@code path}
@@ -617,10 +684,20 @@ class Directory[T] private (val path: Path,
                                  new Directory(p, realPath, converter, subdirectoryDepth())
                                    .init(parents))
             } else {
-              files.put(key.toString, new Entry(key, converter.apply(p), kind))
+              try files.put(key.toString, new Entry(key, converter.apply(p), kind))
+              catch {
+                case e: IOException =>
+                  files.put(key.toString, new Entry[T](key, e, kind))
+
+              }
             }
           } else {
-            files.put(key.toString, new Entry(key, converter.apply(p), kind))
+            try files.put(key.toString, new Entry(key, converter.apply(p), kind))
+            catch {
+              case e: IOException =>
+                files.put(key.toString, new Entry[T](key, e, kind))
+
+            }
           }
         }
       }

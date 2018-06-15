@@ -1,9 +1,9 @@
 package com.swoval.files
 
-import java.io.File
-import java.nio.file.{ Paths, Path }
+import java.io.{ File, IOException }
+import java.nio.file.{ Path, Paths }
 
-import com.swoval.files.Directory.{ Entry, EntryFilter }
+import com.swoval.files.Directory.{ Converter, Entry, EntryFilter }
 import EntryFilters.AllPass
 import com.swoval.files.test._
 import utest._
@@ -168,7 +168,7 @@ object DirectoryTest extends TestSuite {
           f.setLastModifiedTime(updatedLastModified)
           f.lastModified ==> updatedLastModified
           val cachedFile = dir.ls(f, recursive = true, AllPass).head
-          cachedFile.value.lastModified ==> lastModified
+          cachedFile.getValue.lastModified ==> lastModified
         }
       }
       'newFields - withTempFileSync { f =>
@@ -177,18 +177,18 @@ object DirectoryTest extends TestSuite {
         val dir = Directory.cached[FileBytes](f.getParent, FileBytes(_: Path), true)
         def filter(bytes: Seq[Byte]): EntryFilter[FileBytes] =
           new EntryFilter[FileBytes] {
-            override def accept(p: Entry[_ <: FileBytes]): Boolean = p.value.bytes == bytes
+            override def accept(p: Entry[_ <: FileBytes]): Boolean = p.getValue.bytes == bytes
           }
         val cachedFile =
           dir.ls(f, recursive = true, filter(initialBytes)).head
-        cachedFile.value.bytes ==> initialBytes
+        cachedFile.getValue.bytes ==> initialBytes
         f.write("bar")
         val newBytes = "bar".getBytes
-        cachedFile.value.bytes ==> initialBytes
+        cachedFile.getValue.bytes ==> initialBytes
         f.getBytes ==> newBytes
         dir.addUpdate(f, Entry.FILE)
         val newCachedFile = dir.ls(f, recursive = true, filter(newBytes)).head
-        assert(newCachedFile.value.bytes.sameElements(newBytes))
+        assert(newCachedFile.getValue.bytes.sameElements(newBytes))
         dir.ls(f, recursive = true, filter(initialBytes)) === Seq.empty[Path]
       }
     }
@@ -209,6 +209,18 @@ object DirectoryTest extends TestSuite {
           Directory.of(dir, 0).ls(recursive = true, AllPass) === Set(subdir)
           Directory.of(dir, 1).ls(recursive = true, AllPass) === Set(subdir, file)
         }
+      }
+    }
+    'converter - {
+      'exceptions - withTempFileSync { file =>
+        val parent = file.getParent
+        val dir = Directory.cached(parent, (p: Path) => {
+          if (true) throw new IOException("die")
+          1: Integer
+        })
+        dir.entry().getValueOrDefault(2) ==> 2
+        dir.entry().getIOException.getMessage ==> "die"
+        dir.ls(recursive = true, AllPass) === Seq(file)
       }
     }
   }

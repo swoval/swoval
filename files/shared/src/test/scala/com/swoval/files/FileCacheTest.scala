@@ -337,7 +337,8 @@ trait FileCacheTest extends TestSuite {
               override def onDelete(oldEntry: Entry[LastModified]): Unit = {}
               override def onUpdate(oldEntry: Entry[LastModified],
                                     newEntry: Entry[LastModified]): Unit =
-                if (oldEntry.value.lastModified != newEntry.value.lastModified) latch.countDown()
+                if (oldEntry.getValue.lastModified != newEntry.getValue.lastModified)
+                  latch.countDown()
               override def onError(path: Path, iOException: IOException): Unit = {}
             }
           )) { c =>
@@ -347,7 +348,7 @@ trait FileCacheTest extends TestSuite {
               case Seq(f) if f.path == file => f
               case p                        => throw new IllegalStateException(p.toString)
             }
-          val lastModified = cachedFile.value.lastModified
+          val lastModified = cachedFile.getValue.lastModified
           lastModified ==> file.lastModified
           val updatedLastModified = 3000
           file.setLastModifiedTime(updatedLastModified)
@@ -357,8 +358,8 @@ trait FileCacheTest extends TestSuite {
                 case Seq(f) if f.path == file => f
                 case p                        => throw new IllegalStateException(p.toString)
               }
-            cachedFile.value.lastModified ==> lastModified
-            newCachedFile.value.lastModified ==> updatedLastModified
+            cachedFile.getValue.lastModified ==> lastModified
+            newCachedFile.getValue.lastModified ==> updatedLastModified
           }
         }
       }

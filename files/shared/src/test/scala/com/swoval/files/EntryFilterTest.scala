@@ -23,9 +23,9 @@ object EntryFilterTest extends TestSuite {
       val lastModified = 2000
       f.setLastModifiedTime(lastModified)
       val base
-        : EntryFilter[LastModified] = (_: Entry[LastModified]).value.lastModified == lastModified
+        : EntryFilter[LastModified] = (_: Entry[LastModified]).getValue.lastModified == lastModified
       val hashFilter: EntryFilter[FileBytes] =
-        (_: Entry[FileBytes]).value.bytes.sameElements(bytes)
+        (_: Entry[FileBytes]).getValue.bytes.sameElements(bytes)
       val filter = hashFilter && base
       assert(filter.accept(new Entry(f, FileBytes(f))))
       f.write("bar")

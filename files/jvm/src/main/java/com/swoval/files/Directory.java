@@ -89,7 +89,13 @@ public class Directory<T> implements AutoCloseable {
     this.realPath = realPath;
     this.converter = converter;
     this.depth = d > 0 ? d : 0;
-    this._cacheEntry = new AtomicReference<>(new Entry<>(path, converter.apply(path)));
+    final int kind = Entry.getKind(path);
+    this._cacheEntry = new AtomicReference<>(null);
+    try {
+      this._cacheEntry.set(new Entry<>(path, converter.apply(realPath), kind));
+    } catch (final IOException e) {
+      this._cacheEntry.set(new Entry<T>(path, e, kind));
+    }
   }
 
   /**
@@ -399,10 +405,18 @@ public class Directory<T> implements AutoCloseable {
                   key.toString(),
                   new Directory<>(p, realPath, converter, subdirectoryDepth()).init(parents));
             } else {
-              files.put(key.toString(), new Entry<>(key, converter.apply(p), kind));
+              try {
+                files.put(key.toString(), new Entry<>(key, converter.apply(p), kind));
+              } catch (final IOException e) {
+                files.put(key.toString(), new Entry<T>(key, e, kind));
+              }
             }
           } else {
-            files.put(key.toString(), new Entry<>(key, converter.apply(p), kind));
+            try {
+              files.put(key.toString(), new Entry<>(key, converter.apply(p), kind));
+            } catch (final IOException e) {
+              files.put(key.toString(), new Entry<T>(key, e, kind));
+            }
           }
         }
       }
@@ -528,7 +542,8 @@ public class Directory<T> implements AutoCloseable {
     public static final int UNKNOWN = 8;
     private final int kind;
     public final Path path;
-    public final T value;
+    private final T value;
+    private final IOException exception;
 
     /**
      * Compute the underlying file type for the path.
@@ -573,6 +588,55 @@ public class Directory<T> implements AutoCloseable {
     }
 
     /**
+     * Returns the value of this entry. The value may be null, so in general it is better to use
+     * {@link Entry#getValueOrDefault}.
+     *
+     * @return the value
+     * @throws NullPointerException if the value is null
+     */
+    public T getValue() throws NullPointerException {
+      if (value == null) throw new NullPointerException();
+      return value;
+    }
+
+    /**
+     * Returns the value of this entry or a default if it is null
+     *
+     * @param t The nullable value
+     * @return the value
+     */
+    public T getValueOrDefault(final T t) {
+      return value == null ? t : value;
+    }
+
+    /**
+     * Get the IOException thrown trying to compute the value for this entry
+     *
+     * @return ehe IOException thrown trying to convert the path to a value. Will be null if no
+     *     exception was thrown
+     */
+    public IOException getIOException() {
+      return exception;
+    }
+
+    private Entry(final Path path, final T value, final IOException exception, final int kind) {
+      this.path = path;
+      this.value = value;
+      this.kind = kind;
+      this.exception = exception;
+    }
+    /**
+     * Create a new Entry
+     *
+     * @param path The path to which this entry corresponds blah
+     * @param exception The IOException that was thrown trying to generate the value
+     * @param kind The type of file that this entry represents. In the case of symbolic links, it
+     *     can be both a link and a directory or file.
+     */
+    public Entry(final Path path, final IOException exception, final int kind) {
+      this(path, /* cast needed for code-gen */ (T) null, exception, kind);
+    }
+    /**
      * Create a new Entry
      *
      * @param path The path to which this entry corresponds blah
@@ -581,9 +645,7 @@ public class Directory<T> implements AutoCloseable {
      *     can be both a link and a directory or file.
      */
     public Entry(final Path path, final T value, final int kind) {
-      this.path = path;
-      this.value = value;
-      this.kind = kind;
+      this(path, value, null, kind);
     }
 
     /**
@@ -605,7 +667,9 @@ public class Directory<T> implements AutoCloseable {
      */
     @SuppressWarnings("unchecked")
     public Entry<T> resolvedFrom(Path other) {
-      return new Entry(other.resolve(path), this.value, this.kind);
+      return this.value == null
+          ? new Entry<T>(other.resolve(path), exception, this.kind)
+          : new Entry<>(other.resolve(path), this.value, this.kind);
     }
     /**
      * Resolve a Entry for a relative {@code path</code> where <code>isDirectory} is known in
@@ -617,14 +681,17 @@ public class Directory<T> implements AutoCloseable {
      */
     @SuppressWarnings("unchecked")
     public Entry<T> resolvedFrom(Path other, final int kind) {
-      return new Entry(other.resolve(path), this.value, kind);
+      return this.value == null
+          ? new Entry<T>(other.resolve(path), exception, kind)
+          : new Entry<>(other.resolve(path), this.value, kind);
     }
 
     @Override
     public boolean equals(Object other) {
       if (other instanceof Directory.Entry<?>) {
         Entry<?> that = (Entry<?>) other;
-        return this.path.equals(that.path) && this.value.equals(that.value);
+        return this.path.equals(that.path)
+            && (this.value == null ? that.value == null : this.value.equals(that.value));
       } else {
         return false;
       }
