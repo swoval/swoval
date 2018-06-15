@@ -163,6 +163,7 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
                 key.cancel();
                 key.reset();
               }
+              watchedDirs.clear();
             }
           });
       executor.close();
