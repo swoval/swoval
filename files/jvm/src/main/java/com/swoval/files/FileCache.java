@@ -405,66 +405,66 @@ class FileCacheImpl<T> extends FileCache<T> {
                   new Callable<Boolean>() {
                     @Override
                     public Boolean call() throws IOException {
-                      boolean result = false;
-                      final List<Directory<T>> dirs = new ArrayList<>(directories.values());
-                      Collections.sort(
-                          dirs,
-                          new Comparator<Directory<T>>() {
-                            @Override
-                            public int compare(Directory<T> left, Directory<T> right) {
-                              return left.path.compareTo(right.path);
-                            }
-                          });
-                      final Iterator<Directory<T>> it = dirs.iterator();
-                      Directory<T> existing = null;
-                      while (it.hasNext() && existing == null) {
-                        final Directory<T> dir = it.next();
-                        if (path.startsWith(dir.path)) {
-                          final int depth =
-                              path.equals(dir.path)
-                                  ? 0
-                                  : (dir.path.relativize(path).getNameCount() - 1);
-                          if (dir.getDepth() == Integer.MAX_VALUE
-                              || maxDepth < dir.getDepth() - depth) {
-                            existing = dir;
-                          } else if (depth <= dir.getDepth()) {
-                            result = true;
-                            dir.close();
-                            try {
-                              existing =
-                                  Directory.cached(
-                                      dir.path,
-                                      converter,
-                                      maxDepth < Integer.MAX_VALUE - depth - 1
-                                          ? maxDepth + depth + 1
-                                          : Integer.MAX_VALUE);
-                              directories.put(dir.path, existing);
-                            } catch (IOException e) {
-                              existing = null;
-                            }
-                          }
-                        }
-                      }
-                      if (existing == null) {
-                        final Directory<T> dir = Directory.cached(path, converter, maxDepth);
-                        directories.put(path, dir);
-                        final Iterator<Directory.Entry<T>> entryIterator =
-                            dir.list(true, EntryFilters.AllPass).iterator();
-                        if (symlinkWatcher != null) {
-                          while (entryIterator.hasNext()) {
-                            final Directory.Entry<T> entry = entryIterator.next();
-                            if (entry.isSymbolicLink()) {
-                              symlinkWatcher.addSymlink(
-                                  entry.path, entry.isDirectory(), maxDepth - 1);
-                            }
-                          }
-                        }
-                        result = true;
-                      }
-                      return result;
+                      return doReg(path, maxDepth);
                     }
                   })
               .castLeft(IOException.class);
+    }
+    return result;
+  }
+
+  private boolean doReg(final Path path, final int maxDepth) throws IOException {
+    boolean result = false;
+    final List<Directory<T>> dirs = new ArrayList<>(directories.values());
+    Collections.sort(
+        dirs,
+        new Comparator<Directory<T>>() {
+          @Override
+          public int compare(Directory<T> left, Directory<T> right) {
+            return left.path.compareTo(right.path);
+          }
+        });
+    final Iterator<Directory<T>> it = dirs.iterator();
+    Directory<T> existing = null;
+    while (it.hasNext() && existing == null) {
+      final Directory<T> dir = it.next();
+      if (path.startsWith(dir.path)) {
+        final int depth =
+            path.equals(dir.path) ? 0 : (dir.path.relativize(path).getNameCount() - 1);
+        if (dir.getDepth() == Integer.MAX_VALUE || maxDepth < dir.getDepth() - depth) {
+          existing = dir;
+        } else if (depth <= dir.getDepth()) {
+          result = true;
+          dir.close();
+          try {
+            existing =
+                Directory.cached(
+                    dir.path,
+                    converter,
+                    maxDepth < Integer.MAX_VALUE - depth - 1
+                        ? maxDepth + depth + 1
+                        : Integer.MAX_VALUE);
+            directories.put(dir.path, existing);
+          } catch (IOException e) {
+            existing = null;
+          }
+        }
+      }
+    }
+    if (existing == null) {
+      final Directory<T> dir = Directory.cached(path, converter, maxDepth);
+      directories.put(path, dir);
+      final Iterator<Directory.Entry<T>> entryIterator =
+          dir.list(true, EntryFilters.AllPass).iterator();
+      if (symlinkWatcher != null) {
+        while (entryIterator.hasNext()) {
+          final Directory.Entry<T> entry = entryIterator.next();
+          if (entry.isSymbolicLink()) {
+            symlinkWatcher.addSymlink(entry.path, entry.isDirectory(), maxDepth - 1);
+          }
+        }
+      }
+      result = true;
     }
     return result;
   }

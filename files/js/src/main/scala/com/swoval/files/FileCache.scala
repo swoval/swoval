@@ -386,62 +386,62 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
     if (result.isRight) {
       result = internalExecutor
         .block(new Callable[Boolean]() {
-          override def call(): Boolean = {
-            var result: Boolean = false
-            val dirs: List[Directory[T]] =
-              new ArrayList[Directory[T]](directories.values)
-            Collections.sort(dirs, new Comparator[Directory[T]]() {
-              override def compare(left: Directory[T], right: Directory[T]): Int =
-                left.path.compareTo(right.path)
-            })
-            val it: Iterator[Directory[T]] = dirs.iterator()
-            var existing: Directory[T] = null
-            while (it.hasNext && existing == null) {
-              val dir: Directory[T] = it.next()
-              if (path.startsWith(dir.path)) {
-                val depth: Int =
-                  if (path == dir.path) 0
-                  else (dir.path.relativize(path).getNameCount - 1)
-                if (dir.getDepth == java.lang.Integer.MAX_VALUE || maxDepth < dir.getDepth - depth) {
-                  existing = dir
-                } else if (depth <= dir.getDepth) {
-                  result = true
-                  dir.close()
-                  try {
-                    existing =
-                      Directory.cached(dir.path,
-                                       converter,
-                                       if (maxDepth < java.lang.Integer.MAX_VALUE - depth - 1)
-                                         maxDepth + depth + 1
-                                       else java.lang.Integer.MAX_VALUE)
-                    directories.put(dir.path, existing)
-                  } catch {
-                    case e: IOException => existing = null
-
-                  }
-                }
-              }
-            }
-            if (existing == null) {
-              val dir: Directory[T] =
-                Directory.cached(path, converter, maxDepth)
-              directories.put(path, dir)
-              val entryIterator: Iterator[Directory.Entry[T]] =
-                dir.list(true, EntryFilters.AllPass).iterator()
-              if (symlinkWatcher != null) {
-                while (entryIterator.hasNext) {
-                  val entry: Directory.Entry[T] = entryIterator.next()
-                  if (entry.isSymbolicLink) {
-                    symlinkWatcher.addSymlink(entry.path, entry.isDirectory, maxDepth - 1)
-                  }
-                }
-              }
-              result = true
-            }
-            result
-          }
+          override def call(): Boolean = doReg(path, maxDepth)
         })
         .castLeft(classOf[IOException])
+    }
+    result
+  }
+
+  private def doReg(path: Path, maxDepth: Int): Boolean = {
+    var result: Boolean = false
+    val dirs: List[Directory[T]] =
+      new ArrayList[Directory[T]](directories.values)
+    Collections.sort(dirs, new Comparator[Directory[T]]() {
+      override def compare(left: Directory[T], right: Directory[T]): Int =
+        left.path.compareTo(right.path)
+    })
+    val it: Iterator[Directory[T]] = dirs.iterator()
+    var existing: Directory[T] = null
+    while (it.hasNext && existing == null) {
+      val dir: Directory[T] = it.next()
+      if (path.startsWith(dir.path)) {
+        val depth: Int =
+          if (path == dir.path) 0
+          else (dir.path.relativize(path).getNameCount - 1)
+        if (dir.getDepth == java.lang.Integer.MAX_VALUE || maxDepth < dir.getDepth - depth) {
+          existing = dir
+        } else if (depth <= dir.getDepth) {
+          result = true
+          dir.close()
+          try {
+            existing = Directory.cached(dir.path,
+                                        converter,
+                                        if (maxDepth < java.lang.Integer.MAX_VALUE - depth - 1)
+                                          maxDepth + depth + 1
+                                        else java.lang.Integer.MAX_VALUE)
+            directories.put(dir.path, existing)
+          } catch {
+            case e: IOException => existing = null
+
+          }
+        }
+      }
+    }
+    if (existing == null) {
+      val dir: Directory[T] = Directory.cached(path, converter, maxDepth)
+      directories.put(path, dir)
+      val entryIterator: Iterator[Directory.Entry[T]] =
+        dir.list(true, EntryFilters.AllPass).iterator()
+      if (symlinkWatcher != null) {
+        while (entryIterator.hasNext) {
+          val entry: Directory.Entry[T] = entryIterator.next()
+          if (entry.isSymbolicLink) {
+            symlinkWatcher.addSymlink(entry.path, entry.isDirectory, maxDepth - 1)
+          }
+        }
+      }
+      result = true
     }
     result
   }
