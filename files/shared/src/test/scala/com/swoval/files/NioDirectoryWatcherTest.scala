@@ -110,8 +110,9 @@ object NioDirectoryWatcherTest extends TestSuite {
             println(
               s"Overflow latch was not triggered\noverflowLatch count: ${overflowLatch.getCount}" +
                 s"\nfileLatch count: ${fileLatch.getCount}")
-          if (subdirLatch.getCount > 0) println("Subdirectory latch was not triggered")
-          if (fileLatch.getCount > 0) println("File latch was not triggered")
+          if (subdirLatch.getCount > 0)
+            println(s"Subdirectory latch was not triggered ${subdirLatch.getCount}")
+          if (fileLatch.getCount > 0) println(s"File latch was not triggered ${fileLatch.getCount}")
       }
     }
     'unregister - withTempDirectory { base =>
