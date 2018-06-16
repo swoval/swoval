@@ -1,6 +1,8 @@
 package com.swoval.files
 
 import com.swoval.files.EntryFilters.AllPass
+import com.swoval.functional.Filter
+import com.swoval.functional.Filters
 import java.io.IOException
 import java.nio.file.FileSystemLoopException
 import java.nio.file.Files
@@ -63,7 +65,7 @@ object Directory {
    * @return A directory whose entries just contain the path itself
    */
   def of(path: Path, depth: Int): Directory[Path] =
-    new Directory(path, path, PATH_CONVERTER, depth).init()
+    new Directory(path, path, PATH_CONVERTER, depth, Filters.AllPass).init()
 
   /**
    * Make a new Directory with no cache value associated with the path
@@ -73,8 +75,11 @@ object Directory {
    * @return A directory whose entries just contain the path itself
    */
   def of(path: Path, recursive: Boolean): Directory[Path] =
-    new Directory(path, path, PATH_CONVERTER, if (recursive) java.lang.Integer.MAX_VALUE else 0)
-      .init()
+    new Directory(path,
+                  path,
+                  PATH_CONVERTER,
+                  if (recursive) java.lang.Integer.MAX_VALUE else 0,
+                  Filters.AllPass).init()
 
   /**
    * Make a new Directory with a cache entries created by {@code converter}
@@ -85,7 +90,7 @@ object Directory {
    * @return A directory with entries of type T
    */
   def cached[T](path: Path, converter: Converter[T]): Directory[T] =
-    new Directory(path, path, converter, java.lang.Integer.MAX_VALUE).init()
+    new Directory(path, path, converter, java.lang.Integer.MAX_VALUE, Filters.AllPass).init()
 
   /**
    * Make a new Directory with a cache entries created by {@code converter}
@@ -97,7 +102,11 @@ object Directory {
    * @return A directory with entries of type T
    */
   def cached[T](path: Path, converter: Converter[T], recursive: Boolean): Directory[T] =
-    new Directory(path, path, converter, if (recursive) java.lang.Integer.MAX_VALUE else 0).init()
+    new Directory(path,
+                  path,
+                  converter,
+                  if (recursive) java.lang.Integer.MAX_VALUE else 0,
+                  Filters.AllPass).init()
 
   /**
    * Make a new Directory with a cache entries created by {@code converter}
@@ -109,7 +118,7 @@ object Directory {
    * @return A directory with entries of type T
    */
   def cached[T](path: Path, converter: Converter[T], depth: Int): Directory[T] =
-    new Directory(path, path, converter, depth).init()
+    new Directory(path, path, converter, depth, Filters.AllPass).init()
 
   object Entry {
 
@@ -348,10 +357,11 @@ object Directory {
  *
  * @tparam T The cache value type
  */
-class Directory[T] private (val path: Path,
-                            val realPath: Path,
-                            private val converter: Converter[T],
-                            d: Int)
+class Directory[T](val path: Path,
+                   val realPath: Path,
+                   private val converter: Converter[T],
+                   d: Int,
+                   filter: Filter[_ >: QuickFile])
     extends AutoCloseable {
 
   @BeanProperty
@@ -364,6 +374,9 @@ class Directory[T] private (val path: Path,
   private val subdirectories: MapByName[Directory[T]] = new MapByName()
 
   private val files: MapByName[Entry[T]] = new MapByName()
+
+  private val pathFilter: Filter[QuickFile] =
+    filter.asInstanceOf[Filter[QuickFile]]
 
   override def close(): Unit = {
     this.lock.synchronized {
@@ -470,9 +483,11 @@ class Directory[T] private (val path: Path,
    *     traversing the directory.
    */
   def addUpdate(path: Path, kind: Int): List[Array[Entry[T]]] =
-    if (!path.isAbsolute) updateImpl(FileOps.parts(path), kind)
-    else if ((path.startsWith(this.path)))
-      updateImpl(FileOps.parts(this.path.relativize(path)), kind)
+    if (pathFilter.accept(new QuickFileImpl(path.toString, kind)))
+      if (!path.isAbsolute) updateImpl(FileOps.parts(path), kind)
+      else if ((path.startsWith(this.path)))
+        updateImpl(FileOps.parts(this.path.relativize(path)), kind)
+      else new ArrayList[Array[Entry[T]]]()
     else new ArrayList[Array[Entry[T]]]()
 
   /**
@@ -502,7 +517,9 @@ class Directory[T] private (val path: Path,
   private def addDirectory(currentDir: Directory[T],
                            path: Path,
                            updates: List[Array[Entry[T]]]): Unit = {
-    val dir: Directory[T] = cached(path, converter, subdirectoryDepth())
+    val dir: Directory[T] =
+      new Directory(path, path, converter, subdirectoryDepth(), pathFilter)
+        .init()
     currentDir.subdirectories.put(path.getFileName.toString, dir)
     addUpdate(updates, dir.entry())
     val it: Iterator[Entry[T]] =
@@ -664,25 +681,37 @@ class Directory[T] private (val path: Path,
         val it: Iterator[QuickFile] = QuickList.list(path, 0, true).iterator()
         while (it.hasNext) {
           val file: QuickFile = it.next()
-          val kind: Int = (if (file.isSymbolicLink) Entry.LINK else 0) |
-            (if (file.isDirectory) Entry.DIRECTORY else Entry.FILE)
-          val p: Path = file.toPath()
-          val key: Path = path.relativize(p).getFileName
-          if (file.isDirectory) {
-            if (depth > 0) {
-              var realPath: Path = p
-              if (file.isSymbolicLink) {
-                val parentIt: Iterator[Path] = parents.iterator()
-                realPath = p.toRealPath()
-                while (parentIt.hasNext) {
-                  val parent: Path = parentIt.next()
-                  if (parent == realPath)
-                    throw new FileSystemLoopException(p.toString)
+          if (pathFilter.accept(file)) {
+            val kind: Int = (if (file.isSymbolicLink) Entry.LINK else 0) |
+              (if (file.isDirectory) Entry.DIRECTORY else Entry.FILE)
+            val p: Path = file.toPath()
+            val key: Path = path.relativize(p).getFileName
+            if (file.isDirectory) {
+              if (depth > 0) {
+                var realPath: Path = p
+                if (file.isSymbolicLink) {
+                  val parentIt: Iterator[Path] = parents.iterator()
+                  realPath = p.toRealPath()
+                  while (parentIt.hasNext) {
+                    val parent: Path = parentIt.next()
+                    if (parent == realPath)
+                      throw new FileSystemLoopException(p.toString)
+                  }
+                }
+                subdirectories.put(key.toString,
+                                   new Directory(p,
+                                                 realPath,
+                                                 converter,
+                                                 subdirectoryDepth(),
+                                                 pathFilter).init(parents))
+              } else {
+                try files.put(key.toString, new Entry(key, converter.apply(p), kind))
+                catch {
+                  case e: IOException =>
+                    files.put(key.toString, new Entry[T](key, e, kind))
+
                 }
               }
-              subdirectories.put(key.toString,
-                                 new Directory(p, realPath, converter, subdirectoryDepth())
-                                   .init(parents))
             } else {
               try files.put(key.toString, new Entry(key, converter.apply(p), kind))
               catch {
@@ -690,13 +719,6 @@ class Directory[T] private (val path: Path,
                   files.put(key.toString, new Entry[T](key, e, kind))
 
               }
-            }
-          } else {
-            try files.put(key.toString, new Entry(key, converter.apply(p), kind))
-            catch {
-              case e: IOException =>
-                files.put(key.toString, new Entry[T](key, e, kind))
-
             }
           }
         }
