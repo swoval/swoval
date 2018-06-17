@@ -2,6 +2,7 @@ package com.swoval.files;
 
 import static com.swoval.files.EntryFilters.AllPass;
 
+import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
 import com.swoval.functional.Filters;
 import java.io.IOException;
@@ -153,13 +154,12 @@ public class Directory<T> implements AutoCloseable {
    */
   public List<Entry<T>> list(
       final Path path, final int maxDepth, final EntryFilter<? super T> filter) {
-    final FindResult findResult = find(path);
+    final Either<Entry<T>, Directory<T>> findResult = find(path);
     if (findResult != null) {
-      final Directory<T> dir = findResult.directory;
-      if (dir != null) {
-        return dir.list(maxDepth, filter);
+      if (findResult.isRight()) {
+        return findResult.get().list(maxDepth, filter);
       } else {
-        final Entry<T> entry = findResult.entry;
+        final Entry<T> entry = findResult.left().getValue();
         final List<Entry<T>> result = new ArrayList<>();
         if (entry != null && filter.accept(entry)) result.add(entry);
         return result;
@@ -304,20 +304,21 @@ public class Directory<T> implements AutoCloseable {
     return result;
   }
 
-  private FindResult findImpl(final List<Path> parts) {
+  private Either<Entry<T>, Directory<T>> findImpl(final List<Path> parts) {
     final Iterator<Path> it = parts.iterator();
     Directory<T> currentDir = this;
-    FindResult result = null;
+    Either<Entry<T>, Directory<T>> result = null;
     while (it.hasNext() && currentDir != null && result == null) {
       final Path p = it.next();
       if (!it.hasNext()) {
         synchronized (currentDir.lock) {
           final Directory<T> subdir = currentDir.subdirectories.getByName(p);
           if (subdir != null) {
-            result = right(subdir);
+            result = Either.right(subdir);
           } else {
             final Entry<T> file = currentDir.files.getByName(p);
-            if (file != null) result = left(file.resolvedFrom(currentDir.path, file.getKind()));
+            if (file != null)
+              result = Either.left(file.resolvedFrom(currentDir.path, file.getKind()));
           }
         }
       } else {
@@ -329,9 +330,9 @@ public class Directory<T> implements AutoCloseable {
     return result;
   }
 
-  private FindResult find(final Path path) {
+  private Either<Entry<T>, Directory<T>> find(final Path path) {
     if (path.equals(this.path)) {
-      return right(this);
+      return Either.right(this);
     } else if (!path.isAbsolute()) {
       return findImpl(FileOps.parts(path));
     } else if (path.startsWith(this.path)) {
@@ -535,24 +536,6 @@ public class Directory<T> implements AutoCloseable {
   public static <T> Directory<T> cached(
       final Path path, final Converter<T> converter, final int depth) throws IOException {
     return new Directory<>(path, path, converter, depth, Filters.AllPass).init();
-  }
-
-  private class FindResult {
-    public final Entry<T> entry;
-    public final Directory<T> directory;
-
-    FindResult(final Entry<T> entry, final Directory<T> directory) {
-      this.entry = entry;
-      this.directory = directory;
-    }
-  }
-
-  private FindResult left(Entry<T> entry) {
-    return new FindResult(entry, null);
-  }
-
-  private FindResult right(Directory<T> directory) {
-    return new FindResult(null, directory);
   }
 
   /**

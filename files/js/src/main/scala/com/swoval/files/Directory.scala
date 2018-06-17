@@ -1,6 +1,7 @@
 package com.swoval.files
 
 import com.swoval.files.EntryFilters.AllPass
+import com.swoval.functional.Either
 import com.swoval.functional.Filter
 import com.swoval.functional.Filters
 import java.io.IOException
@@ -440,13 +441,12 @@ class Directory[T](val path: Path,
    *     created without the recursive flag.
    */
   def list(path: Path, maxDepth: Int, filter: EntryFilter[_ >: T]): List[Entry[T]] = {
-    val findResult: FindResult = find(path)
+    val findResult: Either[Entry[T], Directory[T]] = find(path)
     if (findResult != null) {
-      val dir: Directory[T] = findResult.directory
-      if (dir != null) {
-        dir.list(maxDepth, filter)
+      if (findResult.isRight) {
+        findResult.get.list(maxDepth, filter)
       } else {
-        val entry: Entry[T] = findResult.entry
+        val entry: Entry[T] = findResult.left().getValue
         val result: List[Entry[T]] = new ArrayList[Entry[T]]()
         if (entry != null && filter.accept(entry)) result.add(entry)
         result
@@ -584,21 +584,21 @@ class Directory[T](val path: Path,
     result
   }
 
-  private def findImpl(parts: List[Path]): FindResult = {
+  private def findImpl(parts: List[Path]): Either[Entry[T], Directory[T]] = {
     val it: Iterator[Path] = parts.iterator()
     var currentDir: Directory[T] = this
-    var result: FindResult = null
+    var result: Either[Entry[T], Directory[T]] = null
     while (it.hasNext && currentDir != null && result == null) {
       val p: Path = it.next()
       if (!it.hasNext) {
         currentDir.lock.synchronized {
           val subdir: Directory[T] = currentDir.subdirectories.getByName(p)
           if (subdir != null) {
-            result = right(subdir)
+            result = Either.right(subdir)
           } else {
             val file: Entry[T] = currentDir.files.getByName(p)
             if (file != null)
-              result = left(file.resolvedFrom(currentDir.path, file.getKind))
+              result = Either.left(file.resolvedFrom(currentDir.path, file.getKind))
           }
         }
       } else {
@@ -610,9 +610,9 @@ class Directory[T](val path: Path,
     result
   }
 
-  private def find(path: Path): FindResult =
+  private def find(path: Path): Either[Entry[T], Directory[T]] =
     if (path == this.path) {
-      right(this)
+      Either.right(this)
     } else if (!path.isAbsolute) {
       findImpl(FileOps.parts(path))
     } else if (path.startsWith(this.path)) {
@@ -726,12 +726,5 @@ class Directory[T](val path: Path,
     }
     this
   }
-
-  private class FindResult(val entry: Entry[T], val directory: Directory[T])
-
-  private def left(entry: Entry[T]): FindResult = new FindResult(entry, null)
-
-  private def right(directory: Directory[T]): FindResult =
-    new FindResult(null, directory)
 
 }
