@@ -162,11 +162,14 @@ class AppleDirectoryWatcher(private val latency: Double,
   }
 
   private def registerImpl(path: Path, flags: Flags.Create, maxDepth: Int): Boolean = {
-    if (!Files.isDirectory(path))
-      throw new NotDirectoryException(path.toString)
     var result: Boolean = true
-    val realPath: Path = path.toRealPath()
-    if (Files.isDirectory(realPath) && realPath != realPath.getRoot) {
+    var realPath: Path = path
+    try realPath = path.toRealPath()
+    catch {
+      case e: IOException => {}
+
+    }
+    if (realPath != realPath.getRoot) {
       val entry: Entry[Path, Stream] = find(realPath)
       if (entry == null) {
         try {

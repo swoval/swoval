@@ -421,7 +421,7 @@ object Build {
                              "Event",
                              "FileEvent",
                              "Flags").value
-              convertSources("com/swoval/functional", "Consumer", "Either", "Filter").value
+              convertSources("com/swoval/functional", "Consumer", "Either", "Filter", "Filters").value
             }
           },
           scalafmt in Compile,

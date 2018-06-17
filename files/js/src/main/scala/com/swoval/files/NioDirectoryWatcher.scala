@@ -67,7 +67,7 @@ class NioDirectoryWatcher(val onFileEvent: Consumer[Event]) extends DirectoryWat
               if (register(watchPath, if (depth == Integer.MAX_VALUE) depth else depth - 1)
                     .getOrElse(false)) {
                 QuickList.list(watchPath, depth - 1).asScala foreach { newPath =>
-                  events += new Event(newPath.asPath(), Create)
+                  events += new Event(newPath.toPath(), Create)
                 }
               }
             } catch {
@@ -98,7 +98,7 @@ class NioDirectoryWatcher(val onFileEvent: Consumer[Event]) extends DirectoryWat
           })
           .asScala
           .forall { dir =>
-            register(dir.asPath(),
+            register(dir.toPath(),
                      if (maxDepth == Integer.MAX_VALUE) Integer.MAX_VALUE else maxDepth - 1)
               .getOrElse(false)
           }
