@@ -146,7 +146,7 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
 
   private void createEvent(
       final MacOSXWatchKey key, final WatchEvent.Kind<Path> kind, final Path file) {
-    Event<Path> event = new Event<>(kind, 1, file);
+    Event<Path> event = new Event<>(kind, 1, key.watchable.relativize(file));
     key.addEvent(event);
     if (!readyKeys.contains(key)) {
       readyKeys.offer(key);
