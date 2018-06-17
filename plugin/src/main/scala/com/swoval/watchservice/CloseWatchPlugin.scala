@@ -41,7 +41,6 @@ object CloseWatchPlugin extends AutoPlugin {
   import autoImport._
 
   import scala.language.implicitConversions
-  private implicit def toSwovalPath(f: File): Path = Paths.get(f.toString)
   private def defaultSourcesFor(conf: Configuration) = Def.task[Seq[File]] {
     val cache = closeWatchFileCache.value
     (unmanagedSourceDirectories in conf).value foreach (f => cache.register(f.toPath))
@@ -55,9 +54,10 @@ object CloseWatchPlugin extends AutoPlugin {
     }
     def list(recursive: Boolean, filter: FileFilter): File => Seq[File] =
       (f: File) => {
-        _internalFileCache.register(f, recursive)
+        val path = f.toPath()
+        _internalFileCache.register(path, recursive)
         _internalFileCache
-          .list(f, recursive, filter)
+          .list(path, recursive, filter)
           .asScala
           .map(_.path.toFile)
       }
@@ -99,7 +99,9 @@ object CloseWatchPlugin extends AutoPlugin {
                  .show(include)} && !${Filter.show(exclude)}
                |)""".stripMargin
         }
-        Seq(Compat.makeScopedSource(baseDir, pathFilter, (baseDirectory in config).scopedKey))
+        Seq(
+          Compat
+            .makeScopedSource(baseDir.toPath, pathFilter, (baseDirectory in config).scopedKey))
       } else Nil
     val unmanagedSourceDirs = ((unmanagedSourceDirectories in Compile).value ++
       (unmanagedSourceDirectories in Test).value).map(_.toPath)
@@ -178,7 +180,7 @@ object CloseWatchPlugin extends AutoPlugin {
                          task: TaskKey[Seq[File]],
                          extraExclude: Option[FileFilter] = None) =
     Def.task {
-      val dirs = (key in config).value.filter(_.exists)
+      val dirs = (key in config).value
       val ef = (excludeFilter in task).value
       val include = (includeFilter in task).value
       val exclude = extraExclude match {
@@ -193,9 +195,9 @@ object CloseWatchPlugin extends AutoPlugin {
           }
           override def toString: String = s"${Filter.show(include)} && !${Filter.show(ef)}"
         }
-        new SourceFilter(dir, pathFilter, key.scopedKey)
+        new SourceFilter(dir.toPath, pathFilter, key.scopedKey)
       }
-      dirs.map(d => Compat.makeSource(d, filter(d)))
+      dirs.map(d => Compat.makeSource(d.toPath, filter(d)))
     }
   private def paths(tasks: Seq[ScopedKey[_]]): Def.Initialize[Task[Seq[SourcePath]]] = Def.task {
     val visited = mutable.HashSet.empty[String]
