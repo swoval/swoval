@@ -443,12 +443,12 @@ object Build {
         Seq("-Xlint:unchecked"),
       jacocoReportSettings in Test := JacocoReportSettings()
         .withThresholds(
-          JacocoThresholds(instruction = .88,
-                           branch = .75,
-                           line = .88,
-                           clazz = .95,
-                           complexity = .7,
-                           method = .9)),
+          JacocoThresholds(instruction = 85,
+                           branch = 75,
+                           line = 88,
+                           clazz = 95,
+                           complexity = 70,
+                           method = 85)),
       jacocoExcludes in Test := Seq(
         "*NativeLoader*",
         "*QuickFileImpl$PathWithFileTypeImpl*"
