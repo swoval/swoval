@@ -13,8 +13,6 @@ import com.swoval.functional.Either
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
-import java.nio.file.NoSuchFileException
-import java.nio.file.NotDirectoryException
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.ArrayList
@@ -607,21 +605,9 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
                                           if (dir.getDepth == java.lang.Integer.MAX_VALUE)
                                             java.lang.Integer.MAX_VALUE
                                           else dir.getDepth - 1)
-              val it: Iterator[Array[Directory.Entry[T]]] = dir
-                .addUpdate(toUpdate, Directory.Entry.getKind(toUpdate, attrs))
-                .iterator()
-              while (it.hasNext) {
-                val entry: Array[Directory.Entry[T]] = it.next()
-                callbacks.add(new Runnable() {
-                  override def run(): Unit = {
-                    if (entry.length == 2) {
-                      observers.onUpdate(entry(0), entry(1))
-                    } else {
-                      observers.onCreate(entry(0))
-                    }
-                  }
-                })
-              }
+              val updates: Directory.Updates[T] =
+                dir.update(toUpdate, Directory.Entry.getKind(toUpdate, attrs))
+              updates.observe(callbackObserver(callbacks))
             } catch {
               case e: IOException =>
                 callbacks.add(new Runnable() {
@@ -671,5 +657,40 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       }
     }
   }
+
+  private def callbackObserver(callbacks: List[Runnable]): Observer[T] =
+    new Observer[T]() {
+      override def onCreate(newEntry: Directory.Entry[T]): Unit = {
+        callbacks.add(new Runnable() {
+          override def run(): Unit = {
+            observers.onCreate(newEntry)
+          }
+        })
+      }
+
+      override def onDelete(oldEntry: Directory.Entry[T]): Unit = {
+        callbacks.add(new Runnable() {
+          override def run(): Unit = {
+            observers.onDelete(oldEntry)
+          }
+        })
+      }
+
+      override def onUpdate(oldEntry: Directory.Entry[T], newEntry: Directory.Entry[T]): Unit = {
+        callbacks.add(new Runnable() {
+          override def run(): Unit = {
+            observers.onUpdate(oldEntry, newEntry)
+          }
+        })
+      }
+
+      override def onError(path: Path, exception: IOException): Unit = {
+        callbacks.add(new Runnable() {
+          override def run(): Unit = {
+            observers.onError(path, exception)
+          }
+        })
+      }
+    }
 
 }

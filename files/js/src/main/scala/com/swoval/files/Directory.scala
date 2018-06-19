@@ -1,6 +1,5 @@
 package com.swoval.files
 
-import com.swoval.files.EntryFilters.AllPass
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
 import com.swoval.functional.Filters
@@ -13,8 +12,11 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.util.ArrayList
 import java.util.Collection
 import java.util.HashMap
+import java.util.HashSet
 import java.util.Iterator
 import java.util.List
+import java.util.Map
+import java.util.Set
 import java.util.concurrent.atomic.AtomicReference
 import Directory._
 import scala.beans.{ BeanProperty, BooleanBeanProperty }
@@ -194,6 +196,7 @@ object Directory {
     /**
      * Returns the value of this entry or a default if it is null
      *
+     * @param t The nullable value
      * @return the value
      */
     def getValueOrDefault(t: T): T = if (value == null) t else value
@@ -279,6 +282,42 @@ object Directory {
     override def toString(): String = "Entry(" + path + ", " + value + ")"
 
     private def is(kind: Int): Boolean = (kind & this.kind) != 0
+
+  }
+
+  class Updates[T] extends Observer[T] {
+
+    private val creations: List[Entry[T]] = new ArrayList()
+
+    private val deletions: List[Entry[T]] = new ArrayList()
+
+    private val updates: List[Array[Entry[T]]] = new ArrayList()
+
+    def observe(observer: Observer[T]): Unit = {
+      val creationIterator: Iterator[Entry[T]] = creations.iterator()
+      while (creationIterator.hasNext) observer.onCreate(creationIterator.next())
+      val updateIterator: Iterator[Array[Entry[T]]] = updates.iterator()
+      while (updateIterator.hasNext) {
+        val entries: Array[Entry[T]] = updateIterator.next()
+        observer.onUpdate(entries(0), entries(1))
+      }
+      val deletionIterator: Iterator[Entry[T]] = deletions.iterator()
+      while (deletionIterator.hasNext) observer.onDelete(deletionIterator.next())
+    }
+
+    override def onCreate(newEntry: Entry[T]): Unit = {
+      creations.add(newEntry)
+    }
+
+    override def onDelete(oldEntry: Entry[T]): Unit = {
+      deletions.add(oldEntry)
+    }
+
+    override def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit = {
+      updates.add(Array(oldEntry, newEntry))
+    }
+
+    override def onError(path: Path, exception: IOException): Unit = {}
 
   }
 
@@ -376,8 +415,10 @@ class Directory[T](val path: Path,
 
   private val files: MapByName[Entry[T]] = new MapByName()
 
-  private val pathFilter: Filter[QuickFile] =
-    filter.asInstanceOf[Filter[QuickFile]]
+  private val pathFilter: Filter[QuickFile] = new Filter[QuickFile]() {
+    override def accept(quickFile: QuickFile): Boolean =
+      quickFile.toPath().startsWith(Directory.this.path) && filter.accept(quickFile)
+  }
 
   override def close(): Unit = {
     this.lock.synchronized {
@@ -397,7 +438,7 @@ class Directory[T](val path: Path,
 
   val kind: Int = Entry.getKind(path)
 
-  try this._cacheEntry.set(new Entry(path, converter.apply(realPath), kind))
+  try this._cacheEntry.set(new Entry(path, this.converter.apply(realPath), kind))
   catch {
     case e: IOException => this._cacheEntry.set(new Entry[T](path, e, kind))
 
@@ -471,24 +512,23 @@ class Directory[T](val path: Path,
     list(path, if (recursive) java.lang.Integer.MAX_VALUE else 0, filter)
 
   /**
-   * Update the Directory entry for a particular path.
+   * Updates the Directory entry for a particular path.
    *
-   * @param path The path to addUpdate
+   * @param path The path to update
    * @param kind Specifies the type of file. This can be DIRECTORY, FILE with an optional LINK bit
    *     set if the file is a symbolic link.
    * @return A list of updates for the path. When the path is new, the updates have the
    *     oldCachedPath field set to null and will contain all of the children of the new path when
-   *     it is a directory. For an existing path, the List contains a single Update that contains
+   *     it is a directory. For an existing path, the List contains a single Updates that contains
    *     the previous and new [[Directory.Entry]]
    *     traversing the directory.
    */
-  def addUpdate(path: Path, kind: Int): List[Array[Entry[T]]] =
+  def update(path: Path, kind: Int): Updates[T] =
     if (pathFilter.accept(new QuickFileImpl(path.toString, kind)))
-      if (!path.isAbsolute) updateImpl(FileOps.parts(path), kind)
-      else if ((path.startsWith(this.path)))
-        updateImpl(FileOps.parts(this.path.relativize(path)), kind)
-      else new ArrayList[Array[Entry[T]]]()
-    else new ArrayList[Array[Entry[T]]]()
+      updateImpl(if (path == this.path) new ArrayList[Path]()
+                 else FileOps.parts(this.path.relativize(path)),
+                 kind)
+    else new Updates[T]()
 
   /**
    * Remove a path from the directory
@@ -514,33 +554,38 @@ class Directory[T](val path: Path,
     else if (depth > 0) depth - 1
     else 0
 
-  private def addDirectory(currentDir: Directory[T],
-                           path: Path,
-                           updates: List[Array[Entry[T]]]): Unit = {
+  private def addDirectory(currentDir: Directory[T], path: Path, updates: Updates[T]): Unit = {
     val dir: Directory[T] =
       new Directory(path, path, converter, subdirectoryDepth(), pathFilter)
         .init()
-    currentDir.subdirectories.put(path.getFileName.toString, dir)
-    addUpdate(updates, dir.entry())
+    val oldEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
+    val previous: Directory[T] =
+      currentDir.subdirectories.put(path.getFileName.toString, dir)
+    if (previous != null) {
+      oldEntries.put(previous.realPath, previous.entry())
+      val entryIterator: Iterator[Entry[T]] = previous
+        .list(java.lang.Integer.MAX_VALUE, EntryFilters.AllPass)
+        .iterator()
+      while (entryIterator.hasNext) {
+        val entry: Entry[T] = entryIterator.next()
+        oldEntries.put(entry.path, entry)
+      }
+    }
+    val newEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
+    newEntries.put(dir.realPath, dir.entry())
     val it: Iterator[Entry[T]] =
-      dir.list(java.lang.Integer.MAX_VALUE, AllPass).iterator()
-    while (it.hasNext) addUpdate(updates, it.next())
+      dir.list(java.lang.Integer.MAX_VALUE, EntryFilters.AllPass).iterator()
+    while (it.hasNext) {
+      val entry: Entry[T] = it.next()
+      newEntries.put(entry.path, entry)
+    }
+    MapOps.diffDirectoryEntries(oldEntries, newEntries, updates)
   }
 
-  private def addUpdate(list: List[Array[Entry[T]]],
-                        oldEntry: Entry[T],
-                        newEntry: Entry[T]): Unit = {
-    list.add(if (oldEntry == null) Array(newEntry) else Array(oldEntry, newEntry))
-  }
-
-  private def addUpdate(list: List[Array[Entry[T]]], entry: Entry[T]): Unit = {
-    addUpdate(list, null, entry)
-  }
-
-  private def updateImpl(parts: List[Path], kind: Int): List[Array[Entry[T]]] = {
+  private def updateImpl(parts: List[Path], kind: Int): Updates[T] = {
     val it: Iterator[Path] = parts.iterator()
     var currentDir: Directory[T] = this
-    val result: List[Array[Entry[T]]] = new ArrayList[Array[Entry[T]]]()
+    val result: Updates[T] = new Updates[T]()
     while (it.hasNext && currentDir != null) {
       val p: Path = it.next()
       if (p.toString.isEmpty) result
@@ -556,19 +601,14 @@ class Directory[T](val path: Path,
             val oldResolvedEntry: Entry[T] =
               if (oldEntry == null) null
               else oldEntry.resolvedFrom(currentDir.path)
-            addUpdate(result, oldResolvedEntry, newEntry.resolvedFrom(currentDir.path))
+            if (oldResolvedEntry == null) {
+              result.onCreate(newEntry.resolvedFrom(currentDir.path))
+            } else {
+              result.onUpdate(oldResolvedEntry, newEntry.resolvedFrom(currentDir.path))
+            }
             result
           } else {
-            val dir: Directory[T] = currentDir.subdirectories.getByName(p)
-            if (dir == null) {
-              addDirectory(currentDir, resolved, result)
-              result
-            } else {
-              val oldEntry: Entry[T] = dir.entry()
-              dir._cacheEntry.set(new Entry(dir.path, converter.apply(dir.path), kind))
-              addUpdate(result, oldEntry.resolvedFrom(currentDir.path), dir.entry())
-              result
-            }
+            addDirectory(currentDir, resolved, result)
           }
         }
       } else {
@@ -658,7 +698,7 @@ class Directory[T](val path: Path,
           } else {
             val dir: Directory[T] = currentDir.subdirectories.removeByName(p)
             if (dir != null) {
-              result.addAll(dir.list(java.lang.Integer.MAX_VALUE, AllPass))
+              result.addAll(dir.list(java.lang.Integer.MAX_VALUE, EntryFilters.AllPass))
               result.add(dir.entry())
             }
           }

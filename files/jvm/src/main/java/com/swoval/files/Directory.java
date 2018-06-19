@@ -1,7 +1,5 @@
 package com.swoval.files;
 
-import static com.swoval.files.EntryFilters.AllPass;
-
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
 import com.swoval.functional.Filters;
@@ -14,8 +12,11 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -186,26 +187,26 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * Update the Directory entry for a particular path.
+   * Updates the Directory entry for a particular path.
    *
-   * @param path The path to addUpdate
+   * @param path The path to update
    * @param kind Specifies the type of file. This can be DIRECTORY, FILE with an optional LINK bit
    *     set if the file is a symbolic link.
    * @return A list of updates for the path. When the path is new, the updates have the
    *     oldCachedPath field set to null and will contain all of the children of the new path when
-   *     it is a directory. For an existing path, the List contains a single Update that contains
+   *     it is a directory. For an existing path, the List contains a single Updates that contains
    *     the previous and new {@link Directory.Entry}
    * @throws IOException when the updated Path is a directory and an IOException is encountered
    *     traversing the directory.
    */
-  public List<Entry<T>[]> addUpdate(final Path path, final int kind) throws IOException {
+  public Updates<T> update(final Path path, final int kind) throws IOException {
     return pathFilter.accept(new QuickFileImpl(path.toString(), kind))
         ? updateImpl(
             path.equals(this.path)
                 ? new ArrayList<Path>()
                 : FileOps.parts(this.path.relativize(path)),
             kind)
-        : new ArrayList<Entry<T>[]>();
+        : new Updates<T>();
   }
 
   /**
@@ -236,33 +237,36 @@ public class Directory<T> implements AutoCloseable {
     return depth == Integer.MAX_VALUE ? depth : depth > 0 ? depth - 1 : 0;
   }
 
+  @SuppressWarnings("unchecked")
   private void addDirectory(
-      final Directory<T> currentDir, final Path path, final List<Entry<T>[]> updates)
-      throws IOException {
+      final Directory<T> currentDir, final Path path, final Updates<T> updates) throws IOException {
     final Directory<T> dir =
         new Directory<>(path, path, converter, subdirectoryDepth(), pathFilter).init();
-    currentDir.subdirectories.put(path.getFileName().toString(), dir);
-    addUpdate(updates, dir.entry());
-    final Iterator<Entry<T>> it = dir.list(Integer.MAX_VALUE, AllPass).iterator();
-    while (it.hasNext()) {
-      addUpdate(updates, it.next());
+    final Map<Path, Entry<T>> oldEntries = new HashMap<>();
+    final Directory<T> previous = currentDir.subdirectories.put(path.getFileName().toString(), dir);
+    if (previous != null) {
+      oldEntries.put(previous.realPath, previous.entry());
+      final Iterator<Entry<T>> entryIterator =
+          previous.list(Integer.MAX_VALUE, EntryFilters.AllPass).iterator();
+      while (entryIterator.hasNext()) {
+        final Entry<T> entry = entryIterator.next();
+        oldEntries.put(entry.path, entry);
+      }
     }
+    final Map<Path, Entry<T>> newEntries = new HashMap<>();
+    newEntries.put(dir.realPath, dir.entry());
+    final Iterator<Entry<T>> it = dir.list(Integer.MAX_VALUE, EntryFilters.AllPass).iterator();
+    while (it.hasNext()) {
+      final Entry<T> entry = it.next();
+      newEntries.put(entry.path, entry);
+    }
+    MapOps.diffDirectoryEntries(oldEntries, newEntries, updates);
   }
 
-  @SuppressWarnings("unchecked")
-  private void addUpdate(List<Entry<T>[]> list, Entry<T> oldEntry, Entry<T> newEntry) {
-    list.add(oldEntry == null ? new Entry[] {newEntry} : new Entry[] {oldEntry, newEntry});
-  }
-
-  @SuppressWarnings("unchecked")
-  private void addUpdate(List<Entry<T>[]> list, Entry<T> entry) {
-    addUpdate(list, null, entry);
-  }
-
-  private List<Entry<T>[]> updateImpl(final List<Path> parts, final int kind) throws IOException {
+  private Updates<T> updateImpl(final List<Path> parts, final int kind) throws IOException {
     final Iterator<Path> it = parts.iterator();
     Directory<T> currentDir = this;
-    List<Entry<T>[]> result = new ArrayList<>();
+    final Updates<T> result = new Updates<>();
     while (it.hasNext() && currentDir != null) {
       final Path p = it.next();
       if (p.toString().isEmpty()) return result;
@@ -276,19 +280,14 @@ public class Directory<T> implements AutoCloseable {
             currentDir.files.put(p.toString(), newEntry);
             final Entry<T> oldResolvedEntry =
                 oldEntry == null ? null : oldEntry.resolvedFrom(currentDir.path);
-            addUpdate(result, oldResolvedEntry, newEntry.resolvedFrom(currentDir.path));
+            if (oldResolvedEntry == null) {
+              result.onCreate(newEntry.resolvedFrom(currentDir.path));
+            } else {
+              result.onUpdate(oldResolvedEntry, newEntry.resolvedFrom(currentDir.path));
+            }
             return result;
           } else {
-            final Directory<T> dir = currentDir.subdirectories.getByName(p);
-            if (dir == null) {
-              addDirectory(currentDir, resolved, result);
-              return result;
-            } else {
-              final Entry<T> oldEntry = dir.entry();
-              dir._cacheEntry.set(new Entry<>(dir.path, converter.apply(dir.path), kind));
-              addUpdate(result, oldEntry.resolvedFrom(currentDir.path), dir.entry());
-              return result;
-            }
+            addDirectory(currentDir, resolved, result);
           }
         }
       } else {
@@ -380,7 +379,7 @@ public class Directory<T> implements AutoCloseable {
           } else {
             final Directory<T> dir = currentDir.subdirectories.removeByName(p);
             if (dir != null) {
-              result.addAll(dir.list(Integer.MAX_VALUE, AllPass));
+              result.addAll(dir.list(Integer.MAX_VALUE, EntryFilters.AllPass));
               result.add(dir.entry());
             }
           }
@@ -719,6 +718,48 @@ public class Directory<T> implements AutoCloseable {
     private boolean is(final int kind) {
       return (kind & this.kind) != 0;
     }
+  }
+
+  public static class Updates<T> implements Observer<T> {
+
+    private final List<Entry<T>> creations = new ArrayList<>();
+    private final List<Entry<T>> deletions = new ArrayList<>();
+    private final List<Entry<T>[]> updates = new ArrayList<>();
+
+    public void observe(final Observer<T> observer) {
+      final Iterator<Entry<T>> creationIterator = creations.iterator();
+      while (creationIterator.hasNext()) {
+        observer.onCreate(creationIterator.next());
+      }
+      final Iterator<Entry<T>[]> updateIterator = updates.iterator();
+      while (updateIterator.hasNext()) {
+        final Entry<T>[] entries = updateIterator.next();
+        observer.onUpdate(entries[0], entries[1]);
+      }
+      final Iterator<Entry<T>> deletionIterator = deletions.iterator();
+      while (deletionIterator.hasNext()) {
+        observer.onDelete(deletionIterator.next());
+      }
+    }
+
+    @Override
+    public void onCreate(Entry<T> newEntry) {
+      creations.add(newEntry);
+    }
+
+    @Override
+    public void onDelete(Entry<T> oldEntry) {
+      deletions.add(oldEntry);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public void onUpdate(Entry<T> oldEntry, Entry<T> newEntry) {
+      updates.add(new Entry[] {oldEntry, newEntry});
+    }
+
+    @Override
+    public void onError(Path path, IOException exception) {}
   }
 
   /**

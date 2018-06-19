@@ -1,13 +1,14 @@
 package com.swoval.files
 
 import java.io.{ File, IOException }
-import java.nio.file.{ Path, Paths }
+import java.nio.file.{ Files, Path, Paths }
 
-import com.swoval.files.Directory.{ Converter, Entry, EntryFilter }
-import EntryFilters.AllPass
+import com.swoval.files.Directory.{ Entry, EntryFilter }
+import com.swoval.files.EntryFilters.AllPass
+import com.swoval.files.EntryOps._
 import com.swoval.files.test._
+import com.swoval.test._
 import utest._
-import EntryOps._
 
 import scala.collection.JavaConverters._
 
@@ -17,6 +18,24 @@ object DirectoryTest extends TestSuite {
       d.list(recursive, filter).asScala
     def ls(path: Path, recursive: Boolean, filter: EntryFilter[_ >: T]): Seq[Entry[T]] =
       d.list(path, recursive, filter).asScala
+  }
+  class Updates[T](u: Directory.Updates[T]) {
+    private[this] var _creations: Seq[Directory.Entry[T]] = Nil
+    private[this] var _deletions: Seq[Directory.Entry[T]] = Nil
+    private[this] var _updates: Seq[(Directory.Entry[T], Entry[T])] = Nil
+    u.observe(new Directory.Observer[T] {
+      override def onCreate(newEntry: Directory.Entry[T]): Unit = _creations :+= newEntry
+      override def onDelete(oldEntry: Directory.Entry[T]): Unit = _deletions :+= oldEntry
+      override def onUpdate(oldEntry: Directory.Entry[T], newEntry: Directory.Entry[T]): Unit =
+        _updates :+= (oldEntry, newEntry)
+      override def onError(path: Path, exception: IOException): Unit = {}
+    })
+    def creations: Seq[Directory.Entry[T]] = _creations
+    def deletions: Seq[Directory.Entry[T]] = _deletions
+    def updates: Seq[(Directory.Entry[T], Directory.Entry[T])] = _updates
+  }
+  implicit class UpdateOps[T](val u: Directory.Updates[T]) extends AnyVal {
+    def toUpdates: DirectoryTest.Updates[T] = new DirectoryTest.Updates(u)
   }
 
   val tests = Tests {
@@ -101,7 +120,7 @@ object DirectoryTest extends TestSuite {
         val directory = Directory.of(dir)
         withTempFileSync(dir) { f =>
           directory.ls(f, recursive = false, AllPass) === Seq.empty
-          assert(directory.addUpdate(f, Entry.FILE).asScala.nonEmpty)
+          assert(directory.update(f, Entry.FILE).toUpdates.creations.nonEmpty)
           directory.ls(f, recursive = false, AllPass) === Seq(f)
         }
       }
@@ -110,7 +129,7 @@ object DirectoryTest extends TestSuite {
         withTempDirectory(dir) { subdir =>
           withTempFileSync(subdir) { f =>
             directory.ls(f, recursive = true, AllPass) === Seq.empty
-            assert(directory.addUpdate(f, Entry.FILE).asScala.nonEmpty)
+            assert(directory.update(f, Entry.FILE).toUpdates.creations.nonEmpty)
             directory.ls(dir, recursive = true, AllPass) === Seq(subdir, f)
           }
         }
@@ -118,9 +137,9 @@ object DirectoryTest extends TestSuite {
       'sequentially - withTempDirectory { dir =>
         val directory = Directory.of(dir)
         withTempDirectory(dir) { subdir =>
-          assert(directory.addUpdate(subdir, Entry.DIRECTORY).asScala.nonEmpty)
+          assert(directory.update(subdir, Entry.DIRECTORY).toUpdates.creations.nonEmpty)
           withTempFileSync(subdir) { f =>
-            assert(directory.addUpdate(f, Entry.FILE).asScala.nonEmpty)
+            assert(directory.update(f, Entry.FILE).toUpdates.creations.nonEmpty)
             directory.ls(recursive = true, AllPass) === Set(subdir, f)
           }
         }
@@ -129,8 +148,47 @@ object DirectoryTest extends TestSuite {
         val directory = Directory.of(dir)
         withTempDirectory(dir) { subdir =>
           withTempFileSync(subdir) { f =>
-            assert(directory.addUpdate(f, Entry.FILE).asScala.nonEmpty)
+            assert(directory.update(f, Entry.FILE).toUpdates.creations.nonEmpty)
             directory.ls(recursive = true, AllPass) === Set(f, subdir)
+          }
+        }
+      }
+    }
+    'update - {
+      'directory - {
+        'simple - withTempDirectory { dir =>
+          withTempDirectorySync(dir) { subdir =>
+            val directory = Directory.of(dir)
+            val file = subdir.resolve("file").createFile()
+            val updates = directory.update(subdir, Entry.DIRECTORY).toUpdates
+            val entry = new Entry[Path](subdir, subdir, Entry.DIRECTORY)
+            updates.updates === Seq(entry -> entry)
+            updates.creations === Seq(file)
+          }
+        }
+        'nested - {
+          'created - withTempDirectory { dir =>
+            withTempDirectorySync(dir) { subdir =>
+              val directory = Directory.of(dir)
+              val nestedSubdir = Files.createDirectory(subdir.resolve("nested"))
+              val nestedFile = nestedSubdir.resolve("file").createFile()
+              val updates = directory.update(subdir, Entry.DIRECTORY).toUpdates
+              val entry = new Entry[Path](subdir, subdir, Entry.DIRECTORY)
+              updates.updates === Seq(entry -> entry)
+              updates.creations === Set(nestedSubdir, nestedFile)
+            }
+          }
+          'removed - withTempDirectory { dir =>
+            withTempDirectorySync(dir) { subdir =>
+              val nestedSubdir = Files.createDirectory(subdir.resolve("nested"))
+              val nestedFile = nestedSubdir.resolve("file").createFile()
+              val directory = Directory.of(dir)
+              nestedSubdir.deleteRecursive()
+              val updates = directory.update(subdir, Entry.DIRECTORY).toUpdates
+              val entry = new Entry[Path](subdir, subdir, Entry.DIRECTORY)
+              updates.updates === Seq(entry -> entry)
+              updates.deletions === Set(nestedSubdir, nestedFile)
+            }
           }
         }
       }
@@ -186,7 +244,7 @@ object DirectoryTest extends TestSuite {
         val newBytes = "bar".getBytes
         cachedFile.getValue.bytes ==> initialBytes
         f.getBytes ==> newBytes
-        dir.addUpdate(f, Entry.FILE)
+        dir.update(f, Entry.FILE)
         val newCachedFile = dir.ls(f, recursive = true, filter(newBytes)).head
         assert(newCachedFile.getValue.bytes.sameElements(newBytes))
         dir.ls(f, recursive = true, filter(initialBytes)) === Seq.empty[Path]
@@ -212,15 +270,39 @@ object DirectoryTest extends TestSuite {
       }
     }
     'converter - {
-      'exceptions - withTempFileSync { file =>
-        val parent = file.getParent
-        val dir = Directory.cached(parent, (p: Path) => {
-          if (true) throw new IOException("die")
-          1: Integer
-        })
-        dir.entry().getValueOrDefault(2) ==> 2
-        dir.entry().getIOException.getMessage ==> "die"
-        dir.ls(recursive = true, AllPass) === Seq(file)
+      'exceptions - {
+        'directory - withTempFileSync { file =>
+          val parent = file.getParent
+          val dir = Directory.cached(parent, (p: Path) => {
+            if (Files.isDirectory(p)) throw new IOException("die")
+            1: Integer
+          })
+          dir.entry().getValueOrDefault(2) ==> 2
+          dir.entry().getIOException.getMessage ==> "die"
+          dir.ls(recursive = true, AllPass) === Seq(file)
+        }
+        'subdirectory - withTempDirectorySync { dir =>
+          val subdir = Files.createDirectory(dir.resolve("subdir"))
+          val directory = Directory.cached(dir, (p: Path) => {
+            if (p.toString.contains("subdir")) throw new IOException("die")
+            1: Integer
+          }, 0)
+          directory.entry().getValueOrDefault(2) ==> 1
+          directory
+            .ls(recursive = true, AllPass)
+            .map(e => e.path -> e.getValueOrDefault(3)) === Seq(subdir -> 3)
+        }
+        'file - withTempFileSync { file =>
+          val parent = file.getParent
+          val dir = Directory.cached(parent, (p: Path) => {
+            if (!Files.isDirectory(p)) throw new IOException("die")
+            1: Integer
+          })
+          dir.entry().getValueOrDefault(2) ==> 1
+          dir
+            .ls(recursive = true, AllPass)
+            .map(e => e.path -> e.getValueOrDefault(3)) === Seq(file -> 3)
+        }
       }
     }
   }

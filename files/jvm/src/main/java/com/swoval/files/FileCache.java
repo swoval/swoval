@@ -14,8 +14,6 @@ import com.swoval.functional.Either;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
@@ -628,22 +626,9 @@ class FileCacheImpl<T> extends FileCache<T> {
                     path,
                     Files.isDirectory(path),
                     dir.getDepth() == Integer.MAX_VALUE ? Integer.MAX_VALUE : dir.getDepth() - 1);
-              final Iterator<Directory.Entry<T>[]> it =
-                  dir.addUpdate(toUpdate, Directory.Entry.getKind(toUpdate, attrs)).iterator();
-              while (it.hasNext()) {
-                final Directory.Entry<T>[] entry = it.next();
-                callbacks.add(
-                    new Runnable() {
-                      @Override
-                      public void run() {
-                        if (entry.length == 2) {
-                          observers.onUpdate(entry[0], entry[1]);
-                        } else {
-                          observers.onCreate(entry[0]);
-                        }
-                      }
-                    });
-              }
+              final Directory.Updates<T> updates =
+                  dir.update(toUpdate, Directory.Entry.getKind(toUpdate, attrs));
+              updates.observe(callbackObserver(callbacks));
             } catch (final IOException e) {
               callbacks.add(
                   new Runnable() {
@@ -695,6 +680,54 @@ class FileCacheImpl<T> extends FileCache<T> {
             });
       }
     }
+  }
+
+  private Observer<T> callbackObserver(final List<Runnable> callbacks) {
+    return new Observer<T>() {
+      @Override
+      public void onCreate(final Directory.Entry<T> newEntry) {
+        callbacks.add(
+            new Runnable() {
+              @Override
+              public void run() {
+                observers.onCreate(newEntry);
+              }
+            });
+      }
+
+      @Override
+      public void onDelete(final Directory.Entry<T> oldEntry) {
+        callbacks.add(
+            new Runnable() {
+              @Override
+              public void run() {
+                observers.onDelete(oldEntry);
+              }
+            });
+      }
+
+      @Override
+      public void onUpdate(final Directory.Entry<T> oldEntry, final Directory.Entry<T> newEntry) {
+        callbacks.add(
+            new Runnable() {
+              @Override
+              public void run() {
+                observers.onUpdate(oldEntry, newEntry);
+              }
+            });
+      }
+
+      @Override
+      public void onError(final Path path, final IOException exception) {
+        callbacks.add(
+            new Runnable() {
+              @Override
+              public void run() {
+                observers.onError(path, exception);
+              }
+            });
+      }
+    };
   }
 
   private static class Pair<A, B> {
