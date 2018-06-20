@@ -115,15 +115,11 @@ public abstract class Executor implements AutoCloseable {
       final ThreadFactory factory = new ThreadFactory(name);
       final ExecutorService service =
           new ThreadPoolExecutor(
-              1,
-              1,
-              0,
-              TimeUnit.SECONDS,
-              new LinkedBlockingQueue<Runnable>(),
-              factory) {
+              1, 1, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(), factory) {
             protected void finalize() {
               shutdown();
             }
+
             @Override
             protected void afterExecute(Runnable r, Throwable t) {
               super.afterExecute(r, t);
