@@ -2,7 +2,7 @@ package com.swoval
 
 import java.io._
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
-import java.nio.file.{ Files, StandardCopyOption, Path => JPath }
+import java.nio.file.{ Files, Paths, StandardCopyOption, Path => JPath }
 import java.util.concurrent.TimeUnit
 import java.util.jar.JarFile
 
@@ -20,6 +20,7 @@ import org.scalajs.core.tools.linker.backend.ModuleKind
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ fastOptJS, fullOptJS, scalaJSModuleKind }
 import sbt.Keys._
 import sbt._
+import sbt.internal.TaskSequential
 import sbtcrossproject.CrossPlugin.autoImport._
 import sbtcrossproject.{ CrossProject, crossProject }
 import sbtdoge.CrossPerProjectPlugin
@@ -117,6 +118,7 @@ object Build {
   lazy val releaseSnapshot = taskKey[Unit]("Release a project snapshot.")
   lazy val releaseLocal = taskKey[Unit]("Release local project")
   lazy val releaseSigned = taskKey[Unit]("Release signed project")
+  lazy val generateJSSource = inputKey[Unit]("Generate scala source from java")
   lazy val generateJSSources = taskKey[Unit]("Generate scala sources from java")
   lazy val clangfmt = taskKey[Unit]("Run clang format")
   lazy val javafmt = taskKey[Unit]("Run java format")
@@ -383,6 +385,26 @@ object Build {
         swovalNodeMD5Sum = digest
         (compile in Compile).value
       },
+      generateJSSource := Def.inputTaskDyn {
+        val arg = Def.spaceDelimited("<arg>").parsed.head
+        Files
+          .walk(files.jvm.base.toPath)
+          .iterator
+          .asScala
+          .find(_.getFileName == Paths.get(s"$arg.java")) match {
+          case Some(p) =>
+            val pkg = p.iterator.asScala.toIndexedSeq.drop(5).dropRight(1).mkString("/")
+            val target = (scalaSource in Compile).value.toPath.resolve(pkg)
+            val ts = new TaskSequential {}
+            ts.sequential(
+              (run in scalagen in Compile).toTask(s" ${p.toAbsolutePath} $target"),
+              scalafmt in Compile,
+              compile in Compile,
+              Def.task(())
+            )
+          case _ => Def.task(println(s"Couldn't find source file for $arg"))
+        }
+      }.evaluated,
       generateJSSources := Def
         .sequential(
           Def.taskDyn {
