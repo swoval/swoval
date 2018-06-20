@@ -4,6 +4,7 @@ import java.io.{ File, IOException }
 import java.nio.file.{ Files, Path, Paths }
 
 import com.swoval.files.Directory.{ Entry, EntryFilter }
+import com.swoval.files.DirectoryWatcher.Event
 import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.EntryOps._
 import com.swoval.files.test._
@@ -150,6 +151,32 @@ object DirectoryTest extends TestSuite {
           withTempFileSync(subdir) { f =>
             assert(directory.update(f, Entry.FILE).toUpdates.creations.nonEmpty)
             directory.ls(recursive = true, AllPass) === Set(f, subdir)
+          }
+        }
+      }
+      'overlapping - {
+        'base - withTempDirectory { dir =>
+          val directory = Directory.of(dir, 0)
+          withTempDirectory(dir) { subdir =>
+            withTempFileSync(subdir) { file =>
+              directory.update(subdir, Directory.Entry.DIRECTORY)
+              directory.ls(recursive = true, AllPass) === Set(subdir)
+            }
+          }
+        }
+        'nested - withTempDirectory { dir =>
+          withTempDirectory(dir) { subdir =>
+            val directory = Directory.of(dir, 2)
+            withTempDirectory(subdir) { nestedSubdir =>
+              withTempDirectory(nestedSubdir) { deepNestedSubdir =>
+                withTempFileSync(deepNestedSubdir) { file =>
+                  directory.update(nestedSubdir, Directory.Entry.DIRECTORY)
+                  directory.ls(recursive = true, AllPass) === Set(subdir,
+                                                                  nestedSubdir,
+                                                                  deepNestedSubdir)
+                }
+              }
+            }
           }
         }
       }

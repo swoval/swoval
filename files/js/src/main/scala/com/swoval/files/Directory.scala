@@ -553,8 +553,7 @@ class Directory[T](val path: Path,
 
   private def addDirectory(currentDir: Directory[T], path: Path, updates: Updates[T]): Unit = {
     val dir: Directory[T] =
-      new Directory(path, path, converter, subdirectoryDepth(), pathFilter)
-        .init()
+      new Directory(path, path, converter, currentDir.subdirectoryDepth(), pathFilter).init()
     val oldEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
     val previous: Directory[T] =
       currentDir.subdirectories.put(path.getFileName.toString, dir)
@@ -590,7 +589,7 @@ class Directory[T](val path: Path,
       if (!it.hasNext) {
 // We will always return from this block
         currentDir.lock.synchronized {
-          if (((kind & Entry.FILE) != 0) || currentDir.depth == 0) {
+          if (((kind & Entry.FILE) != 0) || currentDir.depth <= 0) {
             val oldEntry: Entry[T] = currentDir.files.getByName(p)
             val newEntry: Entry[T] =
               new Entry[T](p, converter.apply(resolved), kind)

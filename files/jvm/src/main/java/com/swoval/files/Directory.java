@@ -241,7 +241,7 @@ public class Directory<T> implements AutoCloseable {
   private void addDirectory(
       final Directory<T> currentDir, final Path path, final Updates<T> updates) throws IOException {
     final Directory<T> dir =
-        new Directory<>(path, path, converter, subdirectoryDepth(), pathFilter).init();
+        new Directory<>(path, path, converter, currentDir.subdirectoryDepth(), pathFilter).init();
     final Map<Path, Entry<T>> oldEntries = new HashMap<>();
     final Directory<T> previous = currentDir.subdirectories.put(path.getFileName().toString(), dir);
     if (previous != null) {
@@ -274,7 +274,7 @@ public class Directory<T> implements AutoCloseable {
       if (!it.hasNext()) {
         // We will always return from this block
         synchronized (currentDir.lock) {
-          if (((kind & Entry.FILE) != 0) || currentDir.depth == 0) {
+          if (((kind & Entry.FILE) != 0) || currentDir.depth <= 0) {
             final Entry<T> oldEntry = currentDir.files.getByName(p);
             final Entry<T> newEntry = new Entry<>(p, converter.apply(resolved), kind);
             currentDir.files.put(p.toString(), newEntry);
