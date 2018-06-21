@@ -163,7 +163,7 @@ object NioDirectoryWatcherTest extends TestSuite {
                 events
                   .poll(100.milliseconds) { _ =>
                     throw new IllegalStateException(
-                      "Event triggered for file that shouldn't be monitored")
+                      s"Event triggered for file $file that shouldn't be monitored")
                   }
                   .recoverWith {
                     case _: TimeoutException =>
@@ -202,7 +202,7 @@ object NioDirectoryWatcherTest extends TestSuite {
                 events
                   .poll(100.milliseconds) { _ =>
                     throw new IllegalStateException(
-                      "Event triggered for file that shouldn't be monitored")
+                      s"Event triggered for file $file that shouldn't be monitored")
                   }
                   .recoverWith {
                     case _: TimeoutException =>
