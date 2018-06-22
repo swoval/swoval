@@ -31,9 +31,10 @@ import scalajscrossproject.ScalaJSCrossPlugin.autoImport.JSCrossProjectOps
 
 import scala.collection.JavaConverters._
 import scala.io.Source
+import scala.reflect.internal.util.ScalaClassLoader.URLClassLoader
 import scala.tools.nsc
 import scala.tools.nsc.reporters.StoreReporter
-import scala.util.Properties
+import scala.util.{ Properties, Try }
 
 object Build {
   val scalaCrossVersions @ Seq(scala210, scala211, scala212) = Seq("2.10.7", "2.11.12", "2.12.6")
@@ -41,9 +42,12 @@ object Build {
     .get("SonatypeSnapshot")
     .orElse(sys.props.get("SonatypeRelease"))
     .fold(false)(_ == "true")
+
   def baseVersion: String = "1.3.2"
+
   def settings(args: Def.Setting[_]*): SettingsDefinition =
     Def.SettingsDefinition.wrapSettingsDefinition(args)
+
   def commonSettings: SettingsDefinition =
     settings(
       scalaVersion in ThisBuild := scala212,
@@ -109,6 +113,7 @@ object Build {
       releaseSigned := {},
       releaseLocal := {}
     ) ++ (if (Properties.isMac) Nil else settings(publish := {}, publishSigned := {}))
+
   lazy val releaseSnapshot = taskKey[Unit]("Release a project snapshot.")
   lazy val releaseLocal = taskKey[Unit]("Release local project")
   lazy val releaseSigned = taskKey[Unit]("Release signed project")
@@ -118,6 +123,7 @@ object Build {
   lazy val travisQuickListReflectionTest =
     taskKey[Unit]("Check that reflection works for quick list")
   lazy val quickListReflectionTest = inputKey[Unit]("Check that reflection works for quick list")
+  lazy val allTests = inputKey[Unit]("Run all tests")
   lazy val setProp = inputKey[Unit]("Set a system property")
 
   def projects: Seq[ProjectReference] = Seq[ProjectReference](
@@ -157,6 +163,7 @@ object Build {
       }
     }
   }
+
   lazy val javafmtProj = project
     .in(file("javafmt"))
     .settings(
@@ -209,6 +216,7 @@ object Build {
     }
     dir
   }
+
   def nodeNativeLibs: SettingsDefinition = settings(
     (npmUpdate in Compile) := addLib((npmUpdate in Compile).value),
     (npmUpdate in Test) := addLib((npmUpdate in Test).value)
@@ -220,12 +228,14 @@ object Build {
     Files.write(file.data.toPath, content.getBytes)
     file
   }
+
   def cleanAllGlobals: SettingsDefinition = settings(
     (fastOptJS in Compile) := cleanGlobals((fastOptJS in Compile).value),
     (fastOptJS in Test) := cleanGlobals((fastOptJS in Test).value),
     (fullOptJS in Compile) := cleanGlobals((fullOptJS in Compile).value),
     (fullOptJS in Test) := cleanGlobals((fullOptJS in Test).value)
   )
+
   def createCrossLinks(projectName: String): SettingsDefinition = {
     def createLinks(conf: Configuration): Def.Setting[Task[Seq[File]]] =
       sources in conf := {
@@ -280,8 +290,10 @@ object Build {
           .map(_.toPath)
           .filterNot(_.startsWith(shared)) ++ links.map(_.toAbsolutePath())).distinct.map(_.toFile)
       }
+
     settings(createLinks(Compile), createLinks(Test))
   }
+
   lazy val files: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("files"))
     .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
@@ -333,13 +345,16 @@ object Build {
       compile in Compile := {
         val log = state.value.log
         val npm = baseDirectory.value.toPath.resolve("npm")
+
         def is(path: JPath) =
           if (Files.exists(path)) Files.newInputStream(path)
           else new ByteArrayInputStream(Array.empty[Byte])
+
         def append(l: InputStream, r: InputStream*): InputStream = r match {
           case Seq(h)            => new SequenceInputStream(l, h)
           case Seq(h, rest @ _*) => append(new SequenceInputStream(l, h), rest: _*)
         }
+
         def digest: String = {
           val inputStream = append(
             is(npm.resolve("src/swoval_apple_file_system.hpp")),
@@ -347,8 +362,11 @@ object Build {
             is(npm.resolve("lib/swoval_apple_file_system.node"))
           )
           try DigestUtils.md5Hex(inputStream)
-          catch { case _: IOException => "" } finally inputStream.close()
+          catch {
+            case _: IOException => ""
+          } finally inputStream.close()
         }
+
         if (digest != swovalNodeMD5Sum) {
           val proc =
             new java.lang.ProcessBuilder("node", "install.js").directory(npm.toFile).start()
@@ -369,6 +387,7 @@ object Build {
         .sequential(
           Def.taskDyn {
             val base = baseDirectory.value.toPath
+
             def convertSources(pkg: String, sources: String*) = Def.taskDyn {
               val javaSourceDir: JPath =
                 base.relativize((javaSource in Compile).value.toPath.resolve(pkg))
@@ -381,6 +400,7 @@ object Build {
                   .value
               }
             }
+
             Def.task {
               convertSources(
                 "com/swoval/files",
@@ -462,6 +482,28 @@ object Build {
         quickListReflectionTest
           .toTask(" com.swoval.files.NioQuickLister com.swoval.files.NativeQuickLister")
           .value
+      },
+      allTests := {
+        val count = Def
+          .spaceDelimited("<arg>")
+          .parsed
+          .headOption
+          .flatMap(a => Try(a.toInt).toOption)
+          .getOrElse(1)
+        val cp = (fullClasspath in Test).value
+          .map(_.data)
+          .filterNot(_.toString.contains("jacoco"))
+          .map(s => Paths.get(s.toString).toUri.toURL)
+          .toArray
+        val process: java.lang.Process =
+          new java.lang.ProcessBuilder("java",
+                                       "-cp",
+                                       cp.mkString(":"),
+                                       "com.swoval.files.AllTests",
+                                       count.toString)
+            .inheritIO()
+            .start()
+        process.waitFor()
       },
       quickListReflectionTest := {
         ("" +: Def.spaceDelimited("<arg>").parsed) foreach {
@@ -612,6 +654,7 @@ object Build {
       else Nil
     }
   }
+
   lazy val testing: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("testing"))
     .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
