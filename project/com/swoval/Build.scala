@@ -466,22 +466,17 @@ object Build {
         Seq("-Xlint:unchecked"),
       jacocoReportSettings in Test := JacocoReportSettings()
         .withThresholds(
-          JacocoThresholds(instruction = 85,
+          JacocoThresholds(instruction = 82,
                            branch = 75,
-                           line = 88,
+                           line = 84,
                            clazz = 95,
                            complexity = 70,
-                           method = 85)),
+                           method = 84)),
       jacocoExcludes in Test := Seq(
-        "*NativeLoader*",
-        "*QuickFileImpl$PathWithFileTypeImpl*"
-      ) ++ (if (!Properties.isMac) Seq("*apple*")
-            else
-              Seq(
-                "com.swoval.files.apple.Event*",
-                "com.swoval.files.apple.Flag*",
-                "com.swoval.files.apple.Native*"
-              )),
+        "com.swoval.files.NativeLoader*",
+        "com.swoval.files.apple.Event*",
+        "com.swoval.files.apple.Flag*",
+        "com.swoval.files.apple.Native*") ++ (if (!Properties.isMac) Seq("*apple*") else Nil),
       javacOptions in (Compile, doc) := Nil,
       crossScalaVersions := scalaCrossVersions,
       crossPaths := false,

@@ -4,7 +4,7 @@ val bundlerVersion = Option(System.getProperty("bundler.version")).getOrElse("0.
 val crossprojectVersion = "0.4.0"
 val scalaJSVersion = Option(System.getProperty("scala.js.version")).getOrElse("0.6.23")
 
-addSbtPlugin("com.github.sbt" % "sbt-jacoco" % "3.0.3")
+addSbtPlugin("com.github.sbt" % "sbt-jacoco" % "3.1.0")
 
 addSbtPlugin("org.foundweekends" % "sbt-bintray" % "0.5.3")
 
