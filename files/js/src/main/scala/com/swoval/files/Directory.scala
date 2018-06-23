@@ -155,6 +155,13 @@ object Directory {
       getKind(path,
               Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS))
 
+    private def getKindOrUnknown(path: Path): Int =
+      try getKind(path)
+      catch {
+        case e: IOException => UNKNOWN
+
+      }
+
   }
 
   /**
@@ -238,7 +245,8 @@ object Directory {
      * @param path The path to which this entry corresponds
      * @param value The {@code path} derived value for this entry
      */
-    def this(path: Path, value: T) = this(path, value, Entry.getKind(path))
+    def this(path: Path, value: T) =
+      this(path, value, Entry.getKindOrUnknown(path))
 
     /**
      * Resolve a Entry for a relative {@code path}

@@ -603,6 +603,14 @@ public class Directory<T> implements AutoCloseable {
           path, Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS));
     }
 
+    private static int getKindOrUnknown(final Path path) {
+      try {
+        return getKind(path);
+      } catch (final IOException e) {
+        return UNKNOWN;
+      }
+    }
+
     /** @return true if the underlying path is a directory */
     public final boolean isDirectory() {
       return is(Entry.DIRECTORY) || (is(Entry.UNKNOWN) && Files.isDirectory(path));
@@ -688,8 +696,8 @@ public class Directory<T> implements AutoCloseable {
      * @param value The {@code path} derived value for this entry
      * @throws IOException if the path can't be opened
      */
-    public Entry(final Path path, final T value) throws IOException {
-      this(path, value, Entry.getKind(path));
+    public Entry(final Path path, final T value) {
+      this(path, value, Entry.getKindOrUnknown(path));
     }
 
     /**
