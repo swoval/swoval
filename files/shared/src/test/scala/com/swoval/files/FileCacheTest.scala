@@ -44,9 +44,9 @@ trait FileCacheTest extends TestSuite {
             c.register(dir)
             withTempDirectory(dir) { subdir =>
               withTempFile(subdir) { f =>
-                events.poll(DEFAULT_TIMEOUT)(_ ==> subdir).flatMap { _ =>
+                events.poll(DEFAULT_TIMEOUT)(e => assert(e == subdir || e == f)).flatMap { _ =>
                   events.poll(DEFAULT_TIMEOUT) { e =>
-                    e ==> f
+                    assert(e == subdir || e == f)
                     c.ls(dir).map(_.path).toSet === Set(subdir, f)
                     ()
                   }
