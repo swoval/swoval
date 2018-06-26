@@ -20,11 +20,12 @@ import scala.util.Try
  */
 private[files] class NioDirectoryWatcherImpl(callback: Consumer[Event],
                                              callbackExecutor: Executor,
-                                             internalExecutor: Executor)
+                                             internalExecutor: Executor,
+                                             options: DirectoryWatcher.Option*)
     extends {
   private[this] val l: AtomicReference[Consumer[Event]] = new AtomicReference(null)
   private[this] val io = new NioDirectoryWatcherImpl.IOImpl(l)
-} with NioDirectoryWatcher(io, callbackExecutor, internalExecutor) {
+} with NioDirectoryWatcher(io, callbackExecutor, internalExecutor, options: _*) {
   l.set(new Consumer[Event] {
     override def accept(e: Event) = handleEvent(callback, e.path, e.kind)
   })

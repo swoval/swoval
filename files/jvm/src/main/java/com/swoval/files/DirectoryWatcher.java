@@ -1,11 +1,9 @@
 package com.swoval.files;
 
-import com.swoval.files.apple.Flags;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Watches directories for file changes. The api permits recursive watching of directories unlike
@@ -75,12 +73,10 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   /**
    * Create a DirectoryWatcher for the runtime platform.
    *
-   * @param latency The latency used by the {@link AppleDirectoryWatcher} on
-   *     osx
-   * @param timeUnit The TimeUnit or the latency parameter
-   * @param flags Flags used by the apple directory watcher
    * @param callback {@link com.swoval.functional.Consumer} to run on file events
    * @param executor provides a single threaded context to manage state
+   * @param options Runtime {@link DirectoryWatcher.Option} instances for the watcher. This is only
+   *     relevant for the {@link NioDirectoryWatcher} that is used on linux and windows.
    * @return DirectoryWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
@@ -88,37 +84,13 @@ public abstract class DirectoryWatcher implements AutoCloseable {
    *     initialization
    */
   static DirectoryWatcher defaultWatcher(
-      final long latency,
-      final TimeUnit timeUnit,
-      final Flags.Create flags,
       final Consumer<DirectoryWatcher.Event> callback,
-      final Executor executor)
+      final Executor executor,
+      final Option... options)
       throws IOException, InterruptedException {
     return Platform.isMac()
-        ? new AppleDirectoryWatcher(timeUnit.toNanos(latency) / 1.0e9, flags, callback, executor)
-        : PlatformWatcher.make(callback, executor);
-  }
-
-  /**
-   * Create a platform compatible DirectoryWatcher.
-   *
-   * @param callback {@link com.swoval.functional.Consumer} to run on file events
-   * @param executor The executor to run internal callbacks on
-   * @return DirectoryWatcher for the runtime platform
-   * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
-   *     initialized
-   * @throws InterruptedException when the {@link DirectoryWatcher} is interrupted during
-   *     initialization
-   */
-  public static DirectoryWatcher defaultWatcher(
-      final Consumer<DirectoryWatcher.Event> callback, final Executor executor)
-      throws IOException, InterruptedException {
-    return defaultWatcher(
-        10,
-        TimeUnit.MILLISECONDS,
-        new Flags.Create().setNoDefer().setFileEvents(),
-        callback,
-        executor);
+        ? new AppleDirectoryWatcher(callback, executor, options)
+        : PlatformWatcher.make(callback, executor, options);
   }
 
   /**
@@ -222,5 +194,40 @@ public abstract class DirectoryWatcher implements AutoCloseable {
         return Integer.compare(this.priority, that.priority);
       }
     }
+  }
+
+  /** Options for the DirectoryWatcher. */
+  public static class Option {
+    private final String name;
+
+    public Option(final String name) {
+      this.name = name;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return obj instanceof Option && ((Option) obj).name.equals(this.name);
+    }
+
+    @Override
+    public int hashCode() {
+      return name.hashCode();
+    }
+
+    @Override
+    public String toString() {
+      return name;
+    }
+  }
+
+  /** Container class for static options. */
+  public static final class Options {
+    /**
+     * Require that the DirectoryWatcher poll newly created directories for files contained therein.
+     * A creation event will be generated for any file found within the new directory. This is
+     * somewhat expensive and may be redundant in some cases, see {@link FileCache} which does its
+     * own polling for new directories.
+     */
+    public static final Option POLL_NEW_DIRECTORIES = new Option("POLL_NEW_DIRECTORIES");
   }
 }

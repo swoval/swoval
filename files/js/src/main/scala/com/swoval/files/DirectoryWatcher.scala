@@ -2,12 +2,10 @@
 
 package com.swoval.files
 
-import com.swoval.files.apple.Flags
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import java.io.IOException
 import java.nio.file.Path
-import java.util.concurrent.TimeUnit
 import DirectoryWatcher._
 
 object DirectoryWatcher {
@@ -15,41 +13,19 @@ object DirectoryWatcher {
   /**
    * Create a DirectoryWatcher for the runtime platform.
    *
-   * @param latency The latency used by the [[AppleDirectoryWatcher]] on
-   *     osx
-   * @param timeUnit The TimeUnit or the latency parameter
-   * @param flags Flags used by the apple directory watcher
    * @param callback [[com.swoval.functional.Consumer]] to run on file events
    * @param executor provides a single threaded context to manage state
-   * @return DirectoryWatcher for the runtime platform
-   *     initialized
-   *     initialization
-   */
-  def defaultWatcher(latency: Long,
-                     timeUnit: TimeUnit,
-                     flags: Flags.Create,
-                     callback: Consumer[DirectoryWatcher.Event],
-                     executor: Executor): DirectoryWatcher =
-    if (Platform.isMac)
-      new AppleDirectoryWatcher(timeUnit.toNanos(latency) / 1.0e9, flags, callback, executor)
-    else PlatformWatcher.make(callback, executor)
-
-  /**
-   * Create a platform compatible DirectoryWatcher.
-   *
-   * @param callback [[com.swoval.functional.Consumer]] to run on file events
-   * @param executor The executor to run internal callbacks on
+   * @param options Runtime [[DirectoryWatcher.Option]] instances for the watcher. This is only
+   *     relevant for the [[NioDirectoryWatcher]] that is used on linux and windows.
    * @return DirectoryWatcher for the runtime platform
    *     initialized
    *     initialization
    */
   def defaultWatcher(callback: Consumer[DirectoryWatcher.Event],
-                     executor: Executor): DirectoryWatcher =
-    defaultWatcher(10,
-                   TimeUnit.MILLISECONDS,
-                   new Flags.Create().setNoDefer().setFileEvents(),
-                   callback,
-                   executor)
+                     executor: Executor,
+                     options: Option*): DirectoryWatcher =
+    if (Platform.isMac) new AppleDirectoryWatcher(callback, executor, options: _*)
+    else PlatformWatcher.make(callback, executor, options: _*)
 
   /**
    * Instantiates new [[DirectoryWatcher]] instances with a [[com.swoval.functional.Consumer]]. This is primarily so that the [[DirectoryWatcher]] in
@@ -128,6 +104,35 @@ object DirectoryWatcher {
     override def hashCode(): Int = path.hashCode ^ kind.hashCode
 
     override def toString(): String = "Event(" + path + ", " + kind + ")"
+
+  }
+
+  /**
+ Options for the DirectoryWatcher.
+   */
+  class Option(private val name: String) {
+
+    override def equals(obj: Any): Boolean = obj match {
+      case obj: Option => obj.name == this.name
+      case _           => false
+
+    }
+
+    override def hashCode(): Int = name.hashCode
+
+    override def toString(): String = name
+
+  }
+
+  object Options {
+
+    /**
+     * Require that the DirectoryWatcher poll newly created directories for files contained therein.
+     * A creation event will be generated for any file found within the new directory. This is
+     * somewhat expensive and may be redundant in some cases, see [[FileCache]] which does its
+     * own polling for new directories.
+     */
+    val POLL_NEW_DIRECTORIES: Option = new Option("POLL_NEW_DIRECTORIES")
 
   }
 

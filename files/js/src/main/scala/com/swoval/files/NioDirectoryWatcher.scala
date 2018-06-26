@@ -7,15 +7,19 @@ import com.swoval.files.DirectoryWatcher.Event.Create
 import com.swoval.files.DirectoryWatcher.Event.Overflow
 import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.Directory.Converter
+import com.swoval.files.Directory.EntryFilter
 import com.swoval.files.Directory.Observer
 import com.swoval.functional.Consumer
 import com.swoval.functional.Filter
 import com.swoval.functional.IO
 import java.io.IOException
 import java.nio.file.FileSystemLoopException
+import java.nio.file.FileSystems
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import java.util.ArrayList
 import java.util.Collections
 import java.util.HashMap
 import java.util.HashSet
@@ -31,7 +35,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
                                    protected val callbackExecutor: Executor,
-                                   protected val executor: Executor)
+                                   protected val executor: Executor,
+                                   private val directoryRegistry: DirectoryRegistry,
+                                   options: DirectoryWatcher.Option*)
     extends DirectoryWatcher {
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
@@ -39,7 +45,8 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
   private val rootDirectories: Map[Path, Directory[WatchedDirectory]] =
     new HashMap()
 
-  private val directoryRegistry: DirectoryRegistry = new DirectoryRegistry()
+  private val pollNewDirectories: Boolean =
+    ArrayOps.contains(options, DirectoryWatcher.Options.POLL_NEW_DIRECTORIES)
 
   private val converter: Converter[WatchedDirectory] =
     new Converter[WatchedDirectory]() {
@@ -69,6 +76,20 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
     }
     result
   }
+
+  /**
+   * Instantiate a NioDirectoryWatcher.
+   *
+   * @param register IO task to register path
+   * @param callbackExecutor The Executor to invoke callbacks on
+   * @param executor The Executor to internally manage the watcher
+   * @param options The options for this watcher
+   */
+  def this(register: IO[Path, WatchedDirectory],
+           callbackExecutor: Executor,
+           executor: Executor,
+           options: DirectoryWatcher.Option*) =
+    this(register, callbackExecutor, executor, new DirectoryRegistry(), options: _*)
 
   /**
    * Register a path to monitor for file events
@@ -200,7 +221,7 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
         directoryRegistry.registeredDirectories().iterator()
       while (directoryIterator.hasNext) files.add(
         new QuickFileImpl(directoryIterator.next().toString, DIRECTORY))
-      poll(path, files)
+      maybePoll(path, files)
       val it: Iterator[QuickFile] = files.iterator()
       while (it.hasNext) {
         val file: QuickFile = it.next()
@@ -231,23 +252,25 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
     })
   }
 
-  private def poll(path: Path, files: Set[QuickFile]): Unit = {
-    var result: Boolean = false
-    do {
-      result = false
-      val it: Iterator[QuickFile] = QuickList
-        .list(
-          path,
-          0,
-          false,
-          new Filter[QuickFile]() {
-            override def accept(quickFile: QuickFile): Boolean =
-              !quickFile.isDirectory || directoryRegistry.accept(quickFile.toPath())
-          }
-        )
-        .iterator()
-      while (it.hasNext) result = files.add(it.next()) || result
-    } while (!Thread.currentThread().isInterrupted && result);
+  private def maybePoll(path: Path, files: Set[QuickFile]): Unit = {
+    if (pollNewDirectories) {
+      var result: Boolean = false
+      do {
+        result = false
+        val it: Iterator[QuickFile] = QuickList
+          .list(
+            path,
+            0,
+            false,
+            new Filter[QuickFile]() {
+              override def accept(quickFile: QuickFile): Boolean =
+                !quickFile.isDirectory || directoryRegistry.accept(quickFile.toPath())
+            }
+          )
+          .iterator()
+        while (it.hasNext) result = files.add(it.next()) || result
+      } while (!Thread.currentThread().isInterrupted && result);
+    }
   }
 
   /**
@@ -275,7 +298,7 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
           update(dir, path)
         }
       }
-      poll(path, newFiles)
+      maybePoll(path, newFiles)
     } catch {
       case e: IOException => result = false
 

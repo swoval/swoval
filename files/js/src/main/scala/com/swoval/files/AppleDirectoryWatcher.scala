@@ -12,6 +12,7 @@ import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException
 import com.swoval.files.apple.Flags
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
+import com.swoval.functional.Filter
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -25,6 +26,7 @@ import java.util.Map.Entry
 import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicBoolean
 import AppleDirectoryWatcher._
+import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
 object AppleDirectoryWatcher {
 
@@ -39,6 +41,25 @@ object AppleDirectoryWatcher {
   class DefaultOnStreamRemoved() extends Consumer[String] {
 
     override def accept(stream: String): Unit = {}
+
+  }
+
+  private def fromOptionsOrDefault(options: DirectoryWatcher.Option*): Flags.Create = {
+    val option: DirectoryWatcher.Option =
+      ArrayOps.find(options, new Filter[DirectoryWatcher.Option]() {
+        override def accept(option: DirectoryWatcher.Option): Boolean =
+          option.isInstanceOf[FlagOption]
+      })
+    if (option == null) new Flags.Create().setFileEvents().setNoDefer()
+    else option.asInstanceOf[FlagOption].getFlags
+  }
+
+  class FlagOption(@BeanProperty val flags: Flags.Create)
+      extends DirectoryWatcher.Option("FLAG_OPTION")
+
+  object Options {
+
+    def flags(flags: Flags.Create): FlagOption = new FlagOption(flags)
 
   }
 
@@ -63,7 +84,7 @@ class AppleDirectoryWatcher(private val latency: Double,
 
   private val internalExecutor: Executor =
     if (executor == null)
-      Executor.make("com.swoval.files.AppleDirectoryWatcher-internal-internalExecutor")
+      Executor.make("com.swoval.files.AppleDirectoryWatcher-internalExecutor")
     else executor
 
   private val fileEventsApi: FileEventsApi = FileEventsApi.apply(
@@ -240,62 +261,17 @@ class AppleDirectoryWatcher(private val latency: Double,
     }
   }
 
-  /**
-   * Creates a new AppleDirectoryWatcher which is a wrapper around [[FileEventsApi]], which in
-   * turn is a native wrapper around [[https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1
-   * Apple File System Events]]
-   *
-   * @param latency specified in fractional seconds
-   * @param flags Native flags
-   * @param onFileEvent [[com.swoval.functional.Consumer]] to run on file events
-   *     initialization
-   */
-  def this(latency: Double, flags: Flags.Create, onFileEvent: Consumer[DirectoryWatcher.Event]) =
-    this(latency,
-         flags,
-         Executor.make("com.swoval.files.AppleDirectoryWatcher.executorThread"),
-         onFileEvent,
-         DefaultOnStreamRemoved,
-         null)
-
-  /**
-   * Creates a new AppleDirectoryWatcher which is a wrapper around [[FileEventsApi]], which in
-   * turn is a native wrapper around [[https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1
-   * Apple File System Events]]
-   *
-   * @param latency specified in fractional seconds
-   * @param flags Native flags
-   * @param callbackExecutor Executor to run callbacks on
-   * @param onFileEvent [[com.swoval.functional.Consumer]] to run on file events
-   *     initialization
-   */
-  def this(latency: Double,
-           flags: Flags.Create,
-           callbackExecutor: Executor,
-           onFileEvent: Consumer[DirectoryWatcher.Event]) =
-    this(latency, flags, callbackExecutor, onFileEvent, DefaultOnStreamRemoved, null)
-
-  /**
-   * Creates a new AppleDirectoryWatcher which is a wrapper around [[FileEventsApi]], which in
-   * turn is a native wrapper around [[https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1
-   * Apple File System Events]]
-   *
-   * @param latency specified in fractional seconds
-   * @param flags Native flags
-   * @param onFileEvent [[com.swoval.functional.Consumer]] to run on file events
-   * @param internalExecutor The internal executor to manage the directory watcher state
-   *     initialization
-   */
-  def this(latency: Double,
-           flags: Flags.Create,
-           onFileEvent: Consumer[DirectoryWatcher.Event],
-           internalExecutor: Executor) =
-    this(latency,
-         flags,
-         Executor.make("com.swoval.files.AppleDirectoryWatcher.executorThread"),
-         onFileEvent,
-         DefaultOnStreamRemoved,
-         internalExecutor)
+  def this(onFileEvent: Consumer[DirectoryWatcher.Event],
+           executor: Executor,
+           options: DirectoryWatcher.Option*) =
+    this(
+      0.01,
+      fromOptionsOrDefault(options: _*),
+      Executor.make("com.swoval.files.AppleDirectoryWatcher-callback-executor"),
+      onFileEvent,
+      DefaultOnStreamRemoved,
+      executor
+    )
 
   private def find(path: Path): Entry[Path, Stream] = {
     val it: Iterator[Entry[Path, Stream]] = streams.entrySet().iterator()

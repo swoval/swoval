@@ -6,15 +6,19 @@ import static com.swoval.files.DirectoryWatcher.Event.Overflow;
 import static com.swoval.files.EntryFilters.AllPass;
 
 import com.swoval.files.Directory.Converter;
+import com.swoval.files.Directory.EntryFilter;
 import com.swoval.files.Directory.Observer;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Filter;
 import com.swoval.functional.IO;
 import java.io.IOException;
 import java.nio.file.FileSystemLoopException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,7 +35,8 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
   protected final Executor callbackExecutor;
   protected final Executor executor;
   private final Map<Path, Directory<WatchedDirectory>> rootDirectories = new HashMap<>();
-  private final DirectoryRegistry directoryRegistry = new DirectoryRegistry();
+  private final boolean pollNewDirectories;
+  private final DirectoryRegistry directoryRegistry;
   private final Converter<WatchedDirectory> converter;
 
   /**
@@ -40,11 +45,18 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
    * @param register IO task to register path
    * @param callbackExecutor The Executor to invoke callbacks on
    * @param executor The Executor to internally manage the watcher
+   * @param directoryRegistry Tracks the directories to watch
+   * @param options The options for this watcher
    */
   NioDirectoryWatcher(
       final IO<Path, WatchedDirectory> register,
       final Executor callbackExecutor,
-      final Executor executor) {
+      final Executor executor,
+      final DirectoryRegistry directoryRegistry,
+      final DirectoryWatcher.Option... options) {
+    this.directoryRegistry = directoryRegistry;
+    this.pollNewDirectories =
+        ArrayOps.contains(options, DirectoryWatcher.Options.POLL_NEW_DIRECTORIES);
     this.callbackExecutor = callbackExecutor;
     this.executor = executor;
     this.converter =
@@ -78,6 +90,22 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
       }
     }
     return result;
+  }
+
+  /**
+   * Instantiate a NioDirectoryWatcher.
+   *
+   * @param register IO task to register path
+   * @param callbackExecutor The Executor to invoke callbacks on
+   * @param executor The Executor to internally manage the watcher
+   * @param options The options for this watcher
+   */
+  NioDirectoryWatcher(
+      final IO<Path, WatchedDirectory> register,
+      final Executor callbackExecutor,
+      final Executor executor,
+      final DirectoryWatcher.Option... options) {
+    this(register, callbackExecutor, executor, new DirectoryRegistry(), options);
   }
 
   /**
@@ -228,7 +256,7 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
         while (directoryIterator.hasNext()) {
           files.add(new QuickFileImpl(directoryIterator.next().toString(), DIRECTORY));
         }
-        poll(path, files);
+        maybePoll(path, files);
         final Iterator<QuickFile> it = files.iterator();
         while (it.hasNext()) {
           final QuickFile file = it.next();
@@ -264,7 +292,8 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
         });
   }
 
-  private void poll(final Path path, final Set<QuickFile> files) throws IOException {
+  private void maybePoll(final Path path, final Set<QuickFile> files) throws IOException {
+    if (pollNewDirectories) {
       boolean result;
       do {
         result = false;
@@ -285,6 +314,7 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
           result = files.add(it.next()) || result;
         }
       } while (!Thread.currentThread().isInterrupted() && result);
+    }
   }
   /**
    * Similar to register, but tracks all of the new files found in the directory. It polls the
@@ -311,7 +341,7 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
           update(dir, path);
         }
       }
-      poll(path, newFiles);
+      maybePoll(path, newFiles);
     } catch (IOException e) {
       result = false;
     }

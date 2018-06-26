@@ -39,7 +39,8 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
       final Consumer<Event> callback,
       final Registerable watchService,
       final Executor callbackExecutor,
-      final Executor executor)
+      final Executor executor,
+      final DirectoryWatcher.Option... options)
       throws InterruptedException {
     super(
         new IO<Path, WatchedDirectory>() {
@@ -91,7 +92,8 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
           }
         },
         callbackExecutor,
-        executor);
+        executor,
+        options);
     this.watchService = watchService;
     final CountDownLatch latch = new CountDownLatch(1);
     loopThread =

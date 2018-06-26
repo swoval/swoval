@@ -11,6 +11,7 @@ import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
 import com.swoval.files.apple.Flags;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
+import com.swoval.functional.Filter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -185,82 +186,35 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     public void accept(String stream) {}
   }
 
-  /**
-   * Creates a new AppleDirectoryWatcher which is a wrapper around {@link FileEventsApi}, which in
-   * turn is a native wrapper around <a
-   * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
-   * Apple File System Events</a>
-   *
-   * @param latency specified in fractional seconds
-   * @param flags Native flags
-   * @param onFileEvent {@link com.swoval.functional.Consumer} to run on file events
-   * @throws InterruptedException if the native file events implementation is interrupted during
-   *     initialization
-   */
-  public AppleDirectoryWatcher(
-      final double latency,
-      final Flags.Create flags,
-      final Consumer<DirectoryWatcher.Event> onFileEvent)
-      throws InterruptedException {
-    this(
-        latency,
-        flags,
-        Executor.make("com.swoval.files.AppleDirectoryWatcher.executorThread"),
-        onFileEvent,
-        DefaultOnStreamRemoved,
-        null);
+  @SuppressWarnings("unchecked")
+  private static Flags.Create fromOptionsOrDefault(final DirectoryWatcher.Option... options) {
+    final DirectoryWatcher.Option option =
+        ArrayOps.find(
+            options,
+            new Filter<DirectoryWatcher.Option>() {
+              @Override
+              public boolean accept(DirectoryWatcher.Option option) {
+                return option instanceof FlagOption;
+              }
+            });
+    return option == null
+        ? new Flags.Create().setFileEvents().setNoDefer()
+        : ((FlagOption) option).getFlags();
   }
 
-  /**
-   * Creates a new AppleDirectoryWatcher which is a wrapper around {@link FileEventsApi}, which in
-   * turn is a native wrapper around <a
-   * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
-   * Apple File System Events</a>
-   *
-   * @param latency specified in fractional seconds
-   * @param flags Native flags
-   * @param callbackExecutor Executor to run callbacks on
-   * @param onFileEvent {@link com.swoval.functional.Consumer} to run on file events
-   * @throws InterruptedException if the native file events implementation is interrupted during
-   *     initialization
-   */
   public AppleDirectoryWatcher(
-      final double latency,
-      final Flags.Create flags,
-      final Executor callbackExecutor,
-      final Consumer<DirectoryWatcher.Event> onFileEvent)
-      throws InterruptedException {
-    this(latency, flags, callbackExecutor, onFileEvent, DefaultOnStreamRemoved, null);
-  }
-
-  /**
-   * Creates a new AppleDirectoryWatcher which is a wrapper around {@link FileEventsApi}, which in
-   * turn is a native wrapper around <a
-   * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
-   * Apple File System Events</a>
-   *
-   * @param latency specified in fractional seconds
-   * @param flags Native flags
-   * @param onFileEvent {@link com.swoval.functional.Consumer} to run on file events
-   * @param internalExecutor The internal executor to manage the directory watcher state
-   * @throws InterruptedException if the native file events implementation is interrupted during
-   *     initialization
-   */
-  public AppleDirectoryWatcher(
-      final double latency,
-      final Flags.Create flags,
       final Consumer<DirectoryWatcher.Event> onFileEvent,
-      final Executor internalExecutor)
+      final Executor executor,
+      final DirectoryWatcher.Option... options)
       throws InterruptedException {
     this(
-        latency,
-        flags,
-        Executor.make("com.swoval.files.AppleDirectoryWatcher.executorThread"),
+        0.01,
+        fromOptionsOrDefault(options),
+        Executor.make("com.swoval.files.AppleDirectoryWatcher-callback-executor"),
         onFileEvent,
         DefaultOnStreamRemoved,
-        internalExecutor);
+        executor);
   }
-
   /**
    * Creates a new AppleDirectoryWatcher which is a wrapper around {@link FileEventsApi}, which in
    * turn is a native wrapper around <a
@@ -290,8 +244,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     this.callbackExecutor = callbackExecutor;
     this.internalExecutor =
         executor == null
-            ? Executor.make(
-                "com.swoval.files.AppleDirectoryWatcher-internal-internalExecutor")
+            ? Executor.make("com.swoval.files.AppleDirectoryWatcher-internalExecutor")
             : executor;
     fileEventsApi =
         FileEventsApi.apply(
@@ -370,5 +323,24 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
       }
     }
     return result;
+  }
+
+  public static class FlagOption extends DirectoryWatcher.Option {
+    private final Flags.Create flags;
+
+    public FlagOption(final Flags.Create flags) {
+      super("FLAG_OPTION");
+      this.flags = flags;
+    }
+
+    public Flags.Create getFlags() {
+      return flags;
+    }
+  }
+
+  public static class Options {
+    public static FlagOption flags(final Flags.Create flags) {
+      return new FlagOption(flags);
+    }
   }
 }

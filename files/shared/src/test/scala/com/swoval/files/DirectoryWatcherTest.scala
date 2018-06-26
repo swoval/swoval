@@ -19,9 +19,8 @@ trait DirectoryWatcherTest extends TestSuite {
   type Event = DirectoryWatcher.Event
   val DEFAULT_LATENCY = 5.milliseconds
   val fileFlags = new Flags.Create().setNoDefer().setFileEvents()
-  def defaultWatcher(latency: FiniteDuration,
-                     flags: Flags.Create,
-                     callback: Consumer[DirectoryWatcher.Event]): DirectoryWatcher
+  def defaultWatcher(callback: Consumer[DirectoryWatcher.Event],
+                     options: DirectoryWatcher.Option*): DirectoryWatcher
   val testsImpl = Tests {
     val events = new ArrayBlockingQueue[DirectoryWatcher.Event](10)
     'files - {
@@ -30,7 +29,7 @@ trait DirectoryWatcherTest extends TestSuite {
           if (e.path.endsWith("foo")) events.add(e)
         }
 
-        usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
+        usingAsync(defaultWatcher(callback)) { w =>
           w.register(dir)
           val file = dir.resolve(Paths.get("foo")).createFile()
           events.poll(DEFAULT_TIMEOUT)(_.path ==> file)
@@ -39,7 +38,7 @@ trait DirectoryWatcherTest extends TestSuite {
       'onTouch - withTempFile { f =>
         val callback: Consumer[DirectoryWatcher.Event] =
           (e: DirectoryWatcher.Event) => if (e.path == f && e.kind != Create) events.add(e)
-        usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
+        usingAsync(defaultWatcher(callback)) { w =>
           w.register(f.getParent)
           f.setLastModifiedTime(0L)
           events.poll(DEFAULT_TIMEOUT)(_ ==> new Event(f, Modify))
@@ -48,7 +47,7 @@ trait DirectoryWatcherTest extends TestSuite {
       'onModify - withTempFile { f =>
         val callback: Consumer[DirectoryWatcher.Event] =
           (e: DirectoryWatcher.Event) => if (e.path == f && e.kind != Create) events.add(e)
-        usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
+        usingAsync(defaultWatcher(callback)) { w =>
           w.register(f.getParent)
           f.write("hello")
           events.poll(DEFAULT_TIMEOUT)(_.path ==> f)
@@ -59,7 +58,7 @@ trait DirectoryWatcherTest extends TestSuite {
           if (!e.path.exists && e.kind == Delete && e.path == f)
             events.add(e)
         }
-        usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
+        usingAsync(defaultWatcher(callback)) { w =>
           w.register(f.getParent)
           f.delete()
           events.poll(DEFAULT_TIMEOUT) { e =>
@@ -99,7 +98,7 @@ trait DirectoryWatcherTest extends TestSuite {
           }
         }
         import Implicits.executionContext
-        usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { c =>
+        usingAsync(defaultWatcher(callback)) { c =>
           c.register(dir)
           val file = dir.resolve("foo").createFile()
           firstLatch
@@ -128,7 +127,7 @@ trait DirectoryWatcherTest extends TestSuite {
           latch.countDown()
         }
 
-        usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
+        usingAsync(defaultWatcher(callback)) { w =>
           w.register(file)
           file.setLastModifiedTime(3000)
           latch.waitFor(DEFAULT_TIMEOUT) {
@@ -146,7 +145,7 @@ trait DirectoryWatcherTest extends TestSuite {
           else if (e.path == subfile) fileLatch.countDown()
         }
 
-        usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
+        usingAsync(defaultWatcher(callback, DirectoryWatcher.Options.POLL_NEW_DIRECTORIES)) { w =>
           w.register(file)
           file.setLastModifiedTime(3000)
           dirLatch
@@ -175,7 +174,7 @@ trait DirectoryWatcherTest extends TestSuite {
             else if (e.path == file && Files.exists(file)) fileLatch.countDown()
           }
 
-          usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
+          usingAsync(defaultWatcher(callback)) { w =>
             w.register(subdir)
             Files.createDirectory(subdir)
             dirLatch
@@ -198,7 +197,7 @@ trait DirectoryWatcherTest extends TestSuite {
         withTempDirectory(dir) { subdir =>
           val callback: Consumer[DirectoryWatcher.Event] =
             (e: DirectoryWatcher.Event) => if (e.path.endsWith("foo")) events.add(e)
-          usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
+          usingAsync(defaultWatcher(callback)) { w =>
             w.register(dir, 0)
             val file = subdir.resolve(Paths.get("foo")).createFile()
             events
@@ -229,7 +228,7 @@ trait DirectoryWatcherTest extends TestSuite {
                   if (e.path.endsWith("foo")) events.add(e)
                   if (e.path.endsWith("bar")) subdirEvents.add(e)
                 }
-                usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
+                usingAsync(defaultWatcher(callback)) { w =>
                   w.register(dir, 0)
                   w.register(secondSubdir, 0)
                   val file = thirdSubdir.resolve("foo").createFile()
@@ -268,7 +267,7 @@ trait DirectoryWatcherTest extends TestSuite {
                   if (e.path.endsWith("foo")) events.add(e)
                   if (e.path.endsWith("bar")) subdirEvents.add(e)
                 }
-                usingAsync(defaultWatcher(DEFAULT_LATENCY, fileFlags, callback)) { w =>
+                usingAsync(defaultWatcher(callback)) { w =>
                   w.register(dir, 0)
                   w.register(secondSubdir, 1)
                   val file = subdir.resolve("foo").createFile()
@@ -304,14 +303,11 @@ trait DirectoryWatcherTest extends TestSuite {
 }
 object DefaultDirectoryWatcherTest extends DirectoryWatcherTest {
   val tests = testsImpl
-  def defaultWatcher(latency: FiniteDuration,
-                     flags: Flags.Create,
-                     callback: Consumer[DirectoryWatcher.Event]): DirectoryWatcher =
-    DirectoryWatcher.defaultWatcher(latency.toNanos,
-                                    TimeUnit.NANOSECONDS,
-                                    flags,
-                                    callback,
-                                    Executor.make("foo"))
+  def defaultWatcher(callback: Consumer[DirectoryWatcher.Event],
+                     options: DirectoryWatcher.Option*): DirectoryWatcher =
+    DirectoryWatcher.defaultWatcher(callback,
+                                    Executor.make("DirectoryWatcherTestExecutor"),
+                                    options: _*)
 }
 object NioDirectoryWatcherTest extends DirectoryWatcherTest {
   val tests =
@@ -322,8 +318,7 @@ object NioDirectoryWatcherTest extends DirectoryWatcherTest {
           println("Not running NioDirectoryWatcherTest on platform other than osx on the jvm")
         }
       }
-  def defaultWatcher(latency: FiniteDuration,
-                     flags: Flags.Create,
-                     callback: Consumer[DirectoryWatcher.Event]): DirectoryWatcher =
-    PlatformWatcher.make(callback, Executor.make("NioDirectoryWatcherTestExecutor"))
+  def defaultWatcher(callback: Consumer[DirectoryWatcher.Event],
+                     options: DirectoryWatcher.Option*): DirectoryWatcher =
+    PlatformWatcher.make(callback, Executor.make("NioDirectoryWatcherTestExecutor"), options: _*)
 }

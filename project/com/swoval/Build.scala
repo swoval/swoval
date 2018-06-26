@@ -426,6 +426,7 @@ object Build {
             Def.task {
               convertSources(
                 "com/swoval/files",
+                "AppleDirectoryWatcher",
                 "Directory",
                 "AppleDirectoryWatcher",
                 "DirectoryRegistry",

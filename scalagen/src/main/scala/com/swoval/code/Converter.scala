@@ -65,9 +65,12 @@ object Converter {
     val lines = Files.readAllLines(path).asScala.flatMap { l =>
       if (l.include) Some(l.fixSynchronization.fixTypeParams) else None
     }
+    val varargsRegex = "(.*)options[)]".r
     val newLines = sanitize(lines)
     (if (path.toString.contains("DirectoryWatcher.scala")) {
-       newLines.filterNot(_.contains("import Event._"))
+       newLines
+         .filterNot(_.contains("import Event._"))
+         .map(varargsRegex.replaceAllIn(_, "$1options:_*)"))
      } else if (path.toString.contains("Directory.scala")) {
        val regex = "(apply|cached|class Directory)[\\[]T".r
        newLines.view
@@ -75,11 +78,10 @@ object Converter {
          .map(regex.replaceAllIn(_, "$1[T <: AnyRef"))
      } else if (path.toString.contains("FileCache.scala")) {
        val applyRegex = "(apply|class FileCache(?:Impl)?)[\\[]T".r
-       val newRegex = "(new FileCacheImpl.*)options".r
        newLines.view
          .filterNot(_.contains("import Entry._"))
          .map(applyRegex.replaceAllIn(_, "$1[T <: AnyRef"))
-         .map(newRegex.replaceAllIn(_, "$1options:_*"))
+         .map(varargsRegex.replaceAllIn(_, "$1options:_*)"))
      } else if (path.toString.contains("QuickLister.scala") || path.toString.contains("Filters")) {
        val regex = "\\[(_ <: )?(Any|_)\\]".r
        newLines.map(regex.replaceAllIn(_, "[$1AnyRef]"))
