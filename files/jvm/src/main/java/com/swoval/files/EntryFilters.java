@@ -8,7 +8,7 @@ class EntryFilters {
   public static EntryFilter<Object> AllPass =
       new EntryFilter<Object>() {
         @Override
-        public boolean accept(final Entry<?> entry) {
+        public boolean accept(final Entry<? extends Object> entry) {
           return true;
         }
 

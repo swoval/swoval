@@ -1,6 +1,5 @@
 package com.swoval.files;
 
-import com.swoval.files.apple.AppleDirectoryWatcher;
 import com.swoval.files.apple.Flags;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
@@ -76,7 +75,7 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   /**
    * Create a DirectoryWatcher for the runtime platform.
    *
-   * @param latency The latency used by the {@link com.swoval.files.apple.AppleDirectoryWatcher} on
+   * @param latency The latency used by the {@link AppleDirectoryWatcher} on
    *     osx
    * @param timeUnit The TimeUnit or the latency parameter
    * @param flags Flags used by the apple directory watcher
@@ -97,7 +96,7 @@ public abstract class DirectoryWatcher implements AutoCloseable {
       throws IOException, InterruptedException {
     return Platform.isMac()
         ? new AppleDirectoryWatcher(timeUnit.toNanos(latency) / 1.0e9, flags, callback, executor)
-        : new NioDirectoryWatcher(callback, executor);
+        : PlatformWatcher.make(callback, executor);
   }
 
   /**
@@ -159,10 +158,11 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   public static final class Event {
     public final Path path;
     public final Event.Kind kind;
-    public static final Kind Create = new Kind("Create");
-    public static final Kind Delete = new Kind("Delete");
-    public static final Kind Modify = new Kind("Modify");
-    public static final Kind Overflow = new Kind("Overflow");
+    public static final Kind Create = new Kind("Create", 1);
+    public static final Kind Delete = new Kind("Delete", 2);
+    public static final Kind Error = new Kind("Error", 4);
+    public static final Kind Modify = new Kind("Modify", 3);
+    public static final Kind Overflow = new Kind("Overflow", 0);
 
     public Event(final Path path, final Event.Kind kind) {
       this.path = path;
@@ -193,11 +193,13 @@ public abstract class DirectoryWatcher implements AutoCloseable {
      * An enum like class to indicate the type of file event. It isn't an actual enum because the
      * scala.js codegen has problems with enum types.
      */
-    public static class Kind {
+    public static class Kind implements Comparable<Kind> {
       private final String name;
+      private final int priority;
 
-      Kind(String name) {
+      Kind(final String name, final int priority) {
         this.name = name;
+        this.priority = priority;
       }
 
       @Override
@@ -206,13 +208,18 @@ public abstract class DirectoryWatcher implements AutoCloseable {
       }
 
       @Override
-      public boolean equals(Object other) {
+      public boolean equals(final Object other) {
         return other instanceof Kind && ((Kind) other).name.equals(this.name);
       }
 
       @Override
       public int hashCode() {
         return name.hashCode();
+      }
+
+      @Override
+      public int compareTo(final Kind that) {
+        return Integer.compare(this.priority, that.priority);
       }
     }
   }

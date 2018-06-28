@@ -2,7 +2,6 @@
 
 package com.swoval.files
 
-import com.swoval.files.apple.AppleDirectoryWatcher
 import com.swoval.files.apple.Flags
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
@@ -16,7 +15,7 @@ object DirectoryWatcher {
   /**
    * Create a DirectoryWatcher for the runtime platform.
    *
-   * @param latency The latency used by the [[com.swoval.files.apple.AppleDirectoryWatcher]] on
+   * @param latency The latency used by the [[AppleDirectoryWatcher]] on
    *     osx
    * @param timeUnit The TimeUnit or the latency parameter
    * @param flags Flags used by the apple directory watcher
@@ -33,7 +32,7 @@ object DirectoryWatcher {
                      executor: Executor): DirectoryWatcher =
     if (Platform.isMac)
       new AppleDirectoryWatcher(timeUnit.toNanos(latency) / 1.0e9, flags, callback, executor)
-    else new NioDirectoryWatcher(callback, executor)
+    else PlatformWatcher.make(callback, executor)
 
   /**
    * Create a platform compatible DirectoryWatcher.
@@ -79,19 +78,21 @@ object DirectoryWatcher {
 
   object Event {
 
-    val Create: Kind = new Kind("Create")
+    val Create: Kind = new Kind("Create", 1)
 
-    val Delete: Kind = new Kind("Delete")
+    val Delete: Kind = new Kind("Delete", 2)
 
-    val Modify: Kind = new Kind("Modify")
+    val Error: Kind = new Kind("Error", 4)
 
-    val Overflow: Kind = new Kind("Overflow")
+    val Modify: Kind = new Kind("Modify", 3)
+
+    val Overflow: Kind = new Kind("Overflow", 0)
 
     /**
      * An enum like class to indicate the type of file event. It isn't an actual enum because the
      * scala.js codegen has problems with enum types.
      */
-    class Kind(private val name: String) {
+    class Kind(private val name: String, private val priority: Int) extends Comparable[Kind] {
 
       override def toString(): String = name
 
@@ -102,6 +103,9 @@ object DirectoryWatcher {
       }
 
       override def hashCode(): Int = name.hashCode
+
+      override def compareTo(that: Kind): Int =
+        java.lang.Integer.compare(this.priority, that.priority)
 
     }
 

@@ -427,24 +427,29 @@ object Build {
               convertSources(
                 "com/swoval/files",
                 "Directory",
+                "AppleDirectoryWatcher",
+                "DirectoryRegistry",
                 "DirectoryWatcher",
                 "EntryFilters",
                 "FileCache",
                 "FileType",
                 "MapOps",
+                "NioDirectoryWatcher",
                 "NioQuickLister",
                 "Observers",
                 "QuickFile",
                 "QuickLister",
                 "Registerable",
-                "SymlinkWatcher"
+                "SymlinkWatcher",
+                "WatchedDirectory"
               ).value
-              convertSources("com/swoval/files/apple",
-                             "AppleDirectoryWatcher",
-                             "Event",
-                             "FileEvent",
-                             "Flags").value
-              convertSources("com/swoval/functional", "Consumer", "Either", "Filter", "Filters").value
+              convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
+              convertSources("com/swoval/functional",
+                             "Consumer",
+                             "Either",
+                             "Filter",
+                             "Filters",
+                             "IO").value
             }
           },
           scalafmt in Compile,
@@ -476,7 +481,8 @@ object Build {
         "com.swoval.files.NativeLoader*",
         "com.swoval.files.apple.Event*",
         "com.swoval.files.apple.Flag*",
-        "com.swoval.files.apple.Native*") ++ (if (!Properties.isMac) Seq("*apple*") else Nil),
+        "com.swoval.files.apple.Native*") ++ (if (!Properties.isMac) Seq("*apple*", "*Apple*")
+                                              else Nil),
       javacOptions in (Compile, doc) := Nil,
       crossScalaVersions := scalaCrossVersions,
       crossPaths := false,

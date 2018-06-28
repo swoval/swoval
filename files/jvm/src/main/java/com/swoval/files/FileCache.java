@@ -9,6 +9,7 @@ import com.swoval.files.Directory.Observer;
 import com.swoval.files.Directory.OnChange;
 import com.swoval.files.Directory.OnError;
 import com.swoval.files.DirectoryWatcher.Event;
+import com.swoval.files.DirectoryWatcher.Event.Kind;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import java.io.IOException;
@@ -383,6 +384,7 @@ class FileCacheImpl<T> extends FileCache<T> {
       }
       directories.clear();
       internalExecutor.close();
+      callbackExecutor.close();
     }
   }
 
@@ -595,11 +597,27 @@ class FileCacheImpl<T> extends FileCache<T> {
     }
   }
 
+  private abstract class Callback implements Runnable, Comparable<Callback> {
+    private final Kind kind;
+    private final Path path;
+
+    Callback(final Path path, final Kind kind) {
+      this.kind = kind;
+      this.path = path;
+    }
+
+    @Override
+    public int compareTo(final Callback that) {
+      final int kindComparision = this.kind.compareTo(that.kind);
+      return kindComparision == 0 ? this.path.compareTo(that.path) : kindComparision;
+    }
+  }
+
   @SuppressWarnings("EmptyCatchBlock")
   private void handleEvent(final Path path) {
     if (!closed.get()) {
       BasicFileAttributes attrs = null;
-      final List<Runnable> callbacks = new ArrayList<>();
+      final List<Callback> callbacks = new ArrayList<>();
       try {
         attrs = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
       } catch (IOException e) {
@@ -631,7 +649,7 @@ class FileCacheImpl<T> extends FileCache<T> {
               updates.observe(callbackObserver(callbacks));
             } catch (final IOException e) {
               callbacks.add(
-                  new Runnable() {
+                  new Callback(path, Event.Error) {
                     @Override
                     public void run() {
                       observers.onError(path, e);
@@ -655,7 +673,7 @@ class FileCacheImpl<T> extends FileCache<T> {
           while (removeIterator.hasNext()) {
             final Directory.Entry<T> entry = removeIterator.next();
             callbacks.add(
-                new Runnable() {
+                new Callback(entry.path, Event.Delete) {
                   @Override
                   public void run() {
                     observers.onDelete(entry);
@@ -672,9 +690,10 @@ class FileCacheImpl<T> extends FileCache<T> {
             new Runnable() {
               @Override
               public void run() {
-                final Iterator<Runnable> runnableIterator = callbacks.iterator();
-                while (runnableIterator.hasNext()) {
-                  runnableIterator.next().run();
+                Collections.sort(callbacks);
+                final Iterator<Callback> callbackIterator = callbacks.iterator();
+                while (callbackIterator.hasNext()) {
+                  callbackIterator.next().run();
                 }
               }
             });
@@ -682,12 +701,12 @@ class FileCacheImpl<T> extends FileCache<T> {
     }
   }
 
-  private Observer<T> callbackObserver(final List<Runnable> callbacks) {
+  private Observer<T> callbackObserver(final List<Callback> callbacks) {
     return new Observer<T>() {
       @Override
       public void onCreate(final Directory.Entry<T> newEntry) {
         callbacks.add(
-            new Runnable() {
+            new Callback(newEntry.path, Event.Create) {
               @Override
               public void run() {
                 observers.onCreate(newEntry);
@@ -698,7 +717,7 @@ class FileCacheImpl<T> extends FileCache<T> {
       @Override
       public void onDelete(final Directory.Entry<T> oldEntry) {
         callbacks.add(
-            new Runnable() {
+            new Callback(oldEntry.path, Event.Delete) {
               @Override
               public void run() {
                 observers.onDelete(oldEntry);
@@ -709,7 +728,7 @@ class FileCacheImpl<T> extends FileCache<T> {
       @Override
       public void onUpdate(final Directory.Entry<T> oldEntry, final Directory.Entry<T> newEntry) {
         callbacks.add(
-            new Runnable() {
+            new Callback(oldEntry.path, Event.Modify) {
               @Override
               public void run() {
                 observers.onUpdate(oldEntry, newEntry);
@@ -720,7 +739,7 @@ class FileCacheImpl<T> extends FileCache<T> {
       @Override
       public void onError(final Path path, final IOException exception) {
         callbacks.add(
-            new Runnable() {
+            new Callback(path, Event.Error) {
               @Override
               public void run() {
                 observers.onError(path, exception);

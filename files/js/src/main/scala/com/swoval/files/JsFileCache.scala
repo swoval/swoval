@@ -10,8 +10,8 @@ import scala.scalajs.js.JSConverters._
 import scala.scalajs.js.annotation.{ JSExport, JSExportTopLevel }
 
 @JSExportTopLevel("FileCache")
-class JsFileCache[T](converter: js.UndefOr[js.Function1[Path, T]],
-                     callback: js.UndefOr[js.Function1[JSEntry[T], Unit]])
+class JsFileCache[T <: AnyRef](converter: js.UndefOr[js.Function1[Path, T]],
+                               callback: js.UndefOr[js.Function1[JSEntry[T], Unit]])
     extends js.Object {
   private[this] val inner: FileCache[T] = FileCache.apply(
     converter.toOption

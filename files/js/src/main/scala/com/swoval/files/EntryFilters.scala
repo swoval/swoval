@@ -8,8 +8,8 @@ import java.io.FileFilter
 
 private[files] object EntryFilters {
 
-  var AllPass: EntryFilter[Any] = new EntryFilter[Any]() {
-    override def accept(entry: Entry[_]): Boolean = true
+  var AllPass: EntryFilter[AnyRef] = new EntryFilter[AnyRef]() {
+    override def accept(entry: Entry[_ <: AnyRef]): Boolean = true
 
     override def toString(): String = "AllPass"
   }

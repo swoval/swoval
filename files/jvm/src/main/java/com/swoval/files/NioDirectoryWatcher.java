@@ -1,28 +1,21 @@
 package com.swoval.files;
 
+import static com.swoval.files.Directory.Entry.DIRECTORY;
 import static com.swoval.files.DirectoryWatcher.Event.Create;
-import static com.swoval.files.DirectoryWatcher.Event.Delete;
-import static com.swoval.files.DirectoryWatcher.Event.Modify;
 import static com.swoval.files.DirectoryWatcher.Event.Overflow;
-import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
-import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
-import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
-import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
+import static com.swoval.files.EntryFilters.AllPass;
 
-import com.swoval.files.apple.MacOSXWatchService;
+import com.swoval.files.Directory.Converter;
+import com.swoval.files.Directory.Observer;
 import com.swoval.functional.Consumer;
-import com.swoval.functional.Either;
+import com.swoval.functional.Filter;
+import com.swoval.functional.IO;
 import java.io.IOException;
-import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.FileSystemLoopException;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.nio.file.WatchEvent;
-import java.nio.file.WatchKey;
-import java.nio.file.Watchable;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -30,413 +23,58 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /** Provides a DirectoryWatcher that is backed by a {@link java.nio.file.WatchService}. */
-public class NioDirectoryWatcher extends DirectoryWatcher {
-  private final Map<Watchable, WatchedDir> watchedDirs = new HashMap<>();
-  private final Registerable watchService;
-  private final Thread loopThread;
-  private final AtomicBoolean isStopped = new AtomicBoolean(false);
-  private final CountDownLatch shutdownLatch = new CountDownLatch(1);
-  private static final AtomicInteger threadId = new AtomicInteger(0);
-  private final Executor callbackExecutor;
-  private final Executor executor;
+abstract class NioDirectoryWatcher extends DirectoryWatcher {
+  private final AtomicBoolean closed = new AtomicBoolean(false);
+  protected final Executor callbackExecutor;
+  protected final Executor executor;
+  private final Map<Path, Directory<WatchedDirectory>> rootDirectories = new HashMap<>();
+  private final DirectoryRegistry directoryRegistry = new DirectoryRegistry();
+  private final Converter<WatchedDirectory> converter;
 
   /**
-   * Instantiate a NioDirectoryWatch using the default {@link Registerable}.
+   * Instantiate a NioDirectoryWatcher.
    *
-   * @param callback The callback to invoke on a created/deleted/modified path
-   * @param executor Internal executor to manage state
-   * @throws IOException when the WatchService can't be started
-   * @throws InterruptedException when the WatchService initialization is interrupted
-   */
-  NioDirectoryWatcher(final Consumer<Event> callback, final Executor executor)
-      throws IOException, InterruptedException {
-    this(
-        callback,
-        Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchService(),
-        Executor.make("NioDirectoryWatcher-callback-thread"),
-        executor);
-  }
-  /**
-   * Instantiate a NioDirectoryWatch using the default {@link Registerable}.
-   *
-   * @param callback The callback to invoke on a created/deleted/modified path
-   * @throws IOException when the WatchService can't be started
-   * @throws InterruptedException when the WatchService initialization is interrupted
-   */
-  public NioDirectoryWatcher(final Consumer<Event> callback)
-      throws IOException, InterruptedException {
-    this(callback, Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchService());
-  }
-
-  /**
-   * Instantiate a NioDirectoryWatch with a particular {@link Registerable}.
-   *
-   * @param callback The callback to invoke on a created/deleted/modified path
-   * @param watchService The underlying watchservice that is used to monitor directories for events
-   */
-  public NioDirectoryWatcher(final Consumer<Event> callback, final Registerable watchService) {
-    this(callback, watchService, Executor.make("NioDirectoryWatcher-callback-thread"), null);
-  }
-
-  /**
-   * Instantiate a NioDirectoryWatch with provided {@link Registerable} and a queue size limit.
-   *
-   * @param callback The callback to invoke on a created/deleted/modified path
-   * @param watchService The underlying watchservice that is used to monitor directories for events
+   * @param register IO task to register path
    * @param callbackExecutor The Executor to invoke callbacks on
    * @param executor The Executor to internally manage the watcher
    */
   NioDirectoryWatcher(
-      final Consumer<Event> callback,
-      final Registerable watchService,
+      final IO<Path, WatchedDirectory> register,
       final Executor callbackExecutor,
       final Executor executor) {
-    this.watchService = watchService;
     this.callbackExecutor = callbackExecutor;
-    this.executor =
-        executor == null
-            ? Executor.make("com.swoval.files.NioDirectoryWatcher-internal-executor")
-            : executor;
-    loopThread =
-        new Thread("NioDirectoryWatcher-loop-thread-" + threadId.incrementAndGet()) {
+    this.executor = executor;
+    this.converter =
+        new Converter<WatchedDirectory>() {
           @Override
-          public void run() {
-            while (!isStopped.get() && !Thread.currentThread().isInterrupted()) {
-              try {
-                final WatchKey key = watchService.take();
-                boolean submitted = false;
-                while (!submitted && !isStopped.get() && !Thread.currentThread().isInterrupted()) {
-                  try {
-                    NioDirectoryWatcher.this.executor.run(
-                        new Runnable() {
-                          @Override
-                          public void run() {
-                            onEvent(callback, key);
-                          }
-                        });
-                    submitted = true;
-                  } catch (RejectedExecutionException e) {
-                    Thread.sleep(2);
-                  }
-                }
-              } catch (ClosedWatchServiceException | InterruptedException e) {
-                isStopped.set(true);
-              }
-            }
-            shutdownLatch.countDown();
+          public WatchedDirectory apply(final Path path) {
+            return register.apply(path).getOrElse(WatchedDirectories.INVALID);
           }
         };
-    loopThread.setDaemon(true);
-    loopThread.start();
   }
 
-  @SuppressWarnings("EmptyCatchBlock")
-  @Override
-  public void close() {
-    if (isStopped.compareAndSet(false, true)) {
-      super.close();
-      executor.block(
-          new Runnable() {
-            @Override
-            public void run() {
-              try {
-                callbackExecutor.close();
-                loopThread.interrupt();
-                try {
-                  watchService.close();
-                } catch (IOException e) {
-                }
-                shutdownLatch.await(5, TimeUnit.SECONDS);
-                loopThread.join(5000);
-              } catch (InterruptedException e) {
-              }
-              final Iterator<WatchedDir> it = watchedDirs.values().iterator();
-              while (it.hasNext()) {
-                WatchKey key = it.next().key;
-                key.cancel();
-                key.reset();
-              }
-              watchedDirs.clear();
-            }
-          });
-      executor.close();
-    }
-  }
-
-  private class WatchedDir {
-    final WatchKey key;
-    final int maxDepth;
-    final int compMaxDepth;
-
-    WatchedDir(final WatchKey key, final int maxDepth) {
-      this.key = key;
-      this.maxDepth = maxDepth;
-      compMaxDepth = maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth + 1;
-    }
-
-    public boolean accept(final Path path) {
-      return path.startsWith((Path) key.watchable()) && path.equals(key.watchable())
-          || ((Path) key.watchable()).relativize(path).getNameCount() <= compMaxDepth;
-    }
-  }
-
-  private void runCallback(final Consumer<Event> callback, final DirectoryWatcher.Event event) {
-    callbackExecutor.run(
-        new Runnable() {
-          @Override
-          public void run() {
-            callback.accept(event);
-          }
-        });
-  }
-
-  private void onEvent(final Consumer<Event> callback, final WatchKey key) {
-    final Iterator<WatchEvent<?>> it = key.pollEvents().iterator();
-    while (it.hasNext()) {
-      final WatchEvent<?> e = it.next();
-      final WatchEvent.Kind<?> k = e.kind();
-      final Event.Kind kind =
-          k.equals(ENTRY_DELETE)
-              ? Delete
-              : k.equals(ENTRY_CREATE) ? Create : k.equals(OVERFLOW) ? Overflow : Modify;
-      if (!key.reset()) {
-        key.cancel();
-        watchedDirs.remove(key.watchable());
-      }
+  private Directory<WatchedDirectory> getRoot(final Path root) {
+    Directory<WatchedDirectory> result = rootDirectories.get(root);
+    if (result == null) {
       try {
-        if (!kind.equals(Overflow)) {
-          final Path path = ((Path) key.watchable()).resolve((Path) e.context());
-          handleEvent(callback, path, key, kind);
-        } else {
-          handleOverflow(callback, key);
-        }
-      } catch (RejectedExecutionException ex2) {
-        boolean result = false;
-        while (!result && !callbackExecutor.isClosed()) {
-          final Iterator<WatchedDir> itx = watchedDirs.values().iterator();
-          final List<Runnable> runnables = new ArrayList<>();
-          while (itx.hasNext()) {
-            final WatchedDir watchedDir = itx.next();
-            runnables.add(
-                new Runnable() {
-                  @Override
-                  public void run() {
-                    handleOverflow(callback, watchedDir.key);
-                  }
-                });
-          }
-          while (!result) {
-            try {
-              try {
-                callbackExecutor.run(
-                    new Runnable() {
+        result =
+            new Directory<>(
+                    root,
+                    root,
+                    converter,
+                    Integer.MAX_VALUE,
+                    new Filter<QuickFile>() {
                       @Override
-                      public void run() {
-                        final Iterator<Runnable> it = runnables.iterator();
-                        while (it.hasNext()) {
-                          it.next().run();
-                        }
+                      public boolean accept(QuickFile quickFile) {
+                        return directoryRegistry.accept(quickFile.toPath());
                       }
-                    });
-                result = true;
-              } catch (RejectedExecutionException ex) {
-                Thread.sleep(5);
-              }
-            } catch (InterruptedException ie) {
-              result = true;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  private void handleEvent(
-      final Consumer<Event> callback, final Path path, final WatchKey key, final Event.Kind kind) {
-    final Path keyPath = (Path) key.watchable();
-    final Set<Path> newFiles = new HashSet<>();
-    if (Files.isDirectory(path)) {
-      WatchedDir watchedDir = watchedDirs.get(keyPath);
-      if (watchedDir != null
-          && watchedDir.accept(path)
-          && !watchedDirs.containsKey(path)
-          && watchedDir.maxDepth > 0) {
-        add(
-            path,
-            watchedDir.maxDepth - (watchedDir.maxDepth == Integer.MAX_VALUE ? 0 : 1),
-            newFiles);
-      }
-    }
-    runCallback(callback, new DirectoryWatcher.Event(path, kind));
-    final Iterator<Path> it = newFiles.iterator();
-    while (it.hasNext()) {
-      runCallback(callback, new DirectoryWatcher.Event(it.next(), Event.Create));
-    }
-  }
-
-  private void handleOverflow(final Consumer<Event> callback, final WatchKey key) {
-    if (!key.reset()) {
-      key.cancel();
-      watchedDirs.remove(key.watchable());
-    }
-    final Path path = (Path) key.watchable();
-    final WatchedDir watchedDir = watchedDirs.get(path);
-    boolean stop = false;
-    while (!stop && watchedDir != null && watchedDir.maxDepth > 0) {
-      final Set<Watchable> initialKeys = new HashSet<>(watchedDirs.keySet());
-      try {
-        boolean registered = false;
-        final Iterator<QuickFile> it = QuickList.list(path, 0).iterator();
-        while (it.hasNext()) {
-          final QuickFile file = it.next();
-          if (file.isDirectory()) {
-            final Path p = file.toPath();
-            final WatchedDir dir = watchedDirs.get(p);
-            if (dir == null || dir.maxDepth < watchedDir.maxDepth - 1) {
-              final boolean result = registerImpl(p, watchedDir.maxDepth - 1);
-              registered = registered || result;
-            }
-          }
-        }
-        stop = !registered;
-      } catch (NoSuchFileException e) {
-        stop = false;
-      } catch (IOException e) {
-        stop = true;
-      }
-      final Set<Watchable> newKeys = new HashSet<>(watchedDirs.keySet());
-      stop = stop || !different(initialKeys, newKeys);
-    }
-    final Iterator<Watchable> pathIterator = watchedDirs.keySet().iterator();
-    final List<Watchable> toRemove = new ArrayList<>();
-    while (pathIterator.hasNext()) {
-      final Path p = (Path) pathIterator.next();
-      if (!Files.exists(p, LinkOption.NOFOLLOW_LINKS)) {
-        toRemove.add(p);
-      }
-    }
-    final Iterator<Watchable> toRemoveIterator = toRemove.iterator();
-    while (toRemoveIterator.hasNext()) {
-      unregister((Path) toRemoveIterator.next());
-    }
-    callbackExecutor.run(
-        new Runnable() {
-          @Override
-          public void run() {
-            callback.accept(new DirectoryWatcher.Event((Path) key.watchable(), Overflow));
-          }
-        });
-  }
-
-  private <T> boolean differentElements(final Set<T> left, final Set right) {
-    boolean result = false;
-    final Iterator<T> it = left.iterator();
-    while (!result && it.hasNext()) {
-      result = !right.contains(it.next());
-    }
-    return result;
-  }
-
-  private <T> boolean different(final Set<T> left, final Set<T> right) {
-    return left.size() != right.size() || differentElements(left, right);
-  }
-
-  /**
-   * Similar to register, but tracks all of the new files found in the directory. It polls the
-   * directory until the contents stop changing to ensure that a callback is fired for each path in
-   * the newly created directory (up to the maxDepth). The assumption is that once the callback is
-   * fired for the path, it is safe to assume that no event for a new file in the directory is
-   * missed. Without the polling, it would be possible that a new file was created in the directory
-   * before we registered it with the watch service. If this happened, then no callback would be
-   * invoked for that file.
-   *
-   * @param path The newly created directory to add
-   * @param maxDepth The maximum depth of the subdirectory traversal
-   * @param newFiles The set of files that are found for the newly created directory
-   * @return true if no exception is thrown
-   */
-  private boolean add(final Path path, final int maxDepth, final Set<Path> newFiles) {
-    boolean result = true;
-    final Set<Path> files = new HashSet<>();
-    try {
-      final WatchKey key = watchService.register(path, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE);
-      final WatchedDir watchedDir = new WatchedDir(key, maxDepth);
-      final WatchedDir previous = watchedDirs.put(path, watchedDir);
-      if (previous != null && !Platform.isMac()) previous.key.cancel();
-      newFiles.add(path);
-      do {
-        files.addAll(newFiles);
-        final Iterator<QuickFile> it = QuickList.list(path, 0, false).iterator();
-        while (result && it.hasNext()) {
-          final QuickFile quickFile = it.next();
-          final Path file = quickFile.toPath();
-          if (quickFile.isDirectory() && maxDepth > 0 && newFiles.add(file)) {
-            result = add(file, maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - 1, newFiles);
-          } else {
-            newFiles.add(file);
-          }
-        }
-      } while (result && different(files, newFiles));
-    } catch (IOException e) {
-      result = false;
-    }
-    return result;
-  }
-
-  private boolean registerImpl(final Path path, final int maxDepth, final boolean doReg) {
-    boolean result = true;
-    try {
-      if (doReg) {
-        final WatchKey key = watchService.register(path, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE);
-        final WatchedDir watchedDir = new WatchedDir(key, maxDepth);
-        final WatchedDir previous = watchedDirs.put(path, watchedDir);
-        if (previous != null && !Platform.isMac()) previous.key.cancel();
-      }
-      final Set<QuickFile> files = new HashSet<>();
-      final Set<QuickFile> newFiles = new HashSet<>();
-      do {
-        files.addAll(newFiles);
-        final Iterator<QuickFile> it = QuickList.list(path, 0, false).iterator();
-        while (result && it.hasNext()) {
-          final QuickFile quickFile = it.next();
-          if (quickFile.isDirectory() && maxDepth > 0 && newFiles.add(quickFile)) {
-            result =
-                registerImpl(
-                    quickFile.toPath(), maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - 1);
-          } else {
-            newFiles.add(quickFile);
-          }
-        }
-      } while (result && different(files, newFiles));
-    } catch (IOException e) {
-      result = false;
-    }
-    return result;
-  }
-
-  private boolean registerImpl(final Path path, final int maxDepth) throws IOException {
-    boolean result = true;
-    if (Files.exists(path)) {
-      final Path realPath = path.toRealPath();
-      final WatchedDir watchedDir = watchedDirs.get(realPath);
-      if (watchedDir == null) {
-        result = registerImpl(realPath, maxDepth, true);
-      } else if (!path.equals(realPath)) {
-        // Note that watchedDir is not null, which means that this path has been
-        // registered
-        // with a different alias.
-        throw new FileSystemLoopException(path.toString());
-      } else if (watchedDir.maxDepth < maxDepth) {
-        result = registerImpl(realPath, maxDepth, false);
-      } else {
-        result = false;
+                    })
+                .init();
+        rootDirectories.put(root, result);
+      } catch (final IOException e) {
       }
     }
     return result;
@@ -453,7 +91,8 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
    *     return false.
    */
   @Override
-  public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
+  public com.swoval.functional.Either<IOException, Boolean> register(
+      final Path path, final int maxDepth) {
     return executor
         .block(
             new Callable<Boolean>() {
@@ -472,23 +111,259 @@ public class NioDirectoryWatcher extends DirectoryWatcher {
   @Override
   @SuppressWarnings("EmptyCatchBlock")
   public void unregister(final Path path) {
-    Path rawRealPath = null;
-    try {
-      rawRealPath = path.toRealPath();
-    } catch (IOException e) {
-    }
-    final Path realPath = rawRealPath;
     executor.block(
         new Runnable() {
           @Override
           public void run() {
-            final WatchedDir watchedDir = watchedDirs.remove(realPath == null ? path : realPath);
-            if (watchedDir != null) {
-              WatchKey key = watchedDir.key;
-              key.cancel();
-              key.reset();
+            directoryRegistry.removeDirectory(path);
+            final Directory<WatchedDirectory> dir = getRoot(path.getRoot());
+            if (dir != null) {
+              List<Directory.Entry<WatchedDirectory>> entries = dir.list(true, AllPass);
+              Collections.sort(entries);
+              Collections.reverse(entries);
+              final Iterator<Directory.Entry<WatchedDirectory>> it = entries.iterator();
+              while (it.hasNext()) {
+                final Directory.Entry<WatchedDirectory> watchedDirectory = it.next();
+                if (!directoryRegistry.accept(watchedDirectory.path)) {
+                  final Iterator<Directory.Entry<WatchedDirectory>> toCancel =
+                      dir.remove(watchedDirectory.path).iterator();
+                  while (toCancel.hasNext()) {
+                    toCancel.next().getValue().close();
+                  }
+                }
+              }
             }
           }
         });
+  }
+
+  @SuppressWarnings("EmptyCatchBlock")
+  @Override
+  public void close() {
+    if (closed.compareAndSet(false, true)) {
+      super.close();
+      executor.block(
+          new Runnable() {
+            @Override
+            public void run() {
+              callbackExecutor.close();
+              final Iterator<Directory<WatchedDirectory>> it = rootDirectories.values().iterator();
+              while (it.hasNext()) {
+                final Directory<WatchedDirectory> dir = it.next();
+                dir.entry().getValue().close();
+                final Iterator<Directory.Entry<WatchedDirectory>> entries =
+                    dir.list(true, AllPass).iterator();
+                while (entries.hasNext()) {
+                  entries.next().getValue().close();
+                }
+              }
+            }
+          });
+      executor.close();
+    }
+  }
+
+  private void maybeRunCallback(
+      final Consumer<DirectoryWatcher.Event> callback, final DirectoryWatcher.Event event) {
+    if (directoryRegistry.accept(event.path)) {
+      callbackExecutor.run(
+          new Runnable() {
+            @Override
+            public void run() {
+              callback.accept(event);
+            }
+          });
+    }
+  }
+
+  private void processPath(
+      final Consumer<DirectoryWatcher.Event> callback,
+      final Path path,
+      final DirectoryWatcher.Event.Kind kind,
+      HashSet<QuickFile> processedDirs,
+      HashSet<Path> processedFiles) {
+    final Set<QuickFile> newFiles = new HashSet<>();
+    int maxDepth = directoryRegistry.maxDepthFor(path);
+    add(path, maxDepth - (maxDepth == Integer.MAX_VALUE ? 0 : 1), newFiles);
+    if (processedFiles.add(path)) {
+      maybeRunCallback(callback, new DirectoryWatcher.Event(path, kind));
+      final Iterator<QuickFile> it = newFiles.iterator();
+      while (it.hasNext()) {
+        final QuickFile file = it.next();
+        if (file.isDirectory() && processedDirs.add(file)) {
+          processPath(
+              callback,
+              file.toPath(),
+              DirectoryWatcher.Event.Create,
+              processedDirs,
+              processedFiles);
+        } else if (processedFiles.add(file.toPath())) {
+          maybeRunCallback(
+              callback, new DirectoryWatcher.Event(file.toPath(), DirectoryWatcher.Event.Create));
+        }
+      }
+    }
+  }
+
+  protected void handleEvent(
+      final Consumer<DirectoryWatcher.Event> callback,
+      final Path path,
+      final DirectoryWatcher.Event.Kind kind) {
+    if (Files.isDirectory(path)) {
+      processPath(callback, path, kind, new HashSet<QuickFile>(), new HashSet<Path>());
+    } else {
+      maybeRunCallback(callback, new DirectoryWatcher.Event(path, kind));
+    }
+  }
+
+  protected void handleOverflow(final Consumer<DirectoryWatcher.Event> callback, final Path path) {
+    final int maxDepth = directoryRegistry.maxDepthFor(path);
+    boolean stop = false;
+    while (!stop && maxDepth > 0) {
+      try {
+        boolean registered = false;
+        final Set<QuickFile> files = new HashSet<>();
+        final Iterator<Path> directoryIterator =
+            directoryRegistry.registeredDirectories().iterator();
+        while (directoryIterator.hasNext()) {
+          files.add(new QuickFileImpl(directoryIterator.next().toString(), DIRECTORY));
+        }
+        poll(path, files);
+        final Iterator<QuickFile> it = files.iterator();
+        while (it.hasNext()) {
+          final QuickFile file = it.next();
+          if (file.isDirectory()) {
+            boolean regResult =
+                registerImpl(
+                    file.toPath(),
+                    maxDepth == Integer.MAX_VALUE ? Integer.MAX_VALUE : maxDepth - 1);
+            registered = registered || regResult;
+            if (regResult)
+              callbackExecutor.run(
+                  new Runnable() {
+                    @Override
+                    public void run() {
+                      callback.accept(new DirectoryWatcher.Event(file.toPath(), Create));
+                    }
+                  });
+          }
+        }
+        stop = !registered;
+      } catch (NoSuchFileException e) {
+        stop = false;
+      } catch (IOException e) {
+        stop = true;
+      }
+    }
+    callbackExecutor.run(
+        new Runnable() {
+          @Override
+          public void run() {
+            callback.accept(new DirectoryWatcher.Event(path, Overflow));
+          }
+        });
+  }
+
+  private void poll(final Path path, final Set<QuickFile> files) throws IOException {
+      boolean result;
+      do {
+        result = false;
+        final Iterator<QuickFile> it =
+            QuickList.list(
+                    path,
+                    0,
+                    false,
+                    new Filter<QuickFile>() {
+                      @Override
+                      public boolean accept(QuickFile quickFile) {
+                        return !quickFile.isDirectory()
+                            || directoryRegistry.accept(quickFile.toPath());
+                      }
+                    })
+                .iterator();
+        while (it.hasNext()) {
+          result = files.add(it.next()) || result;
+        }
+      } while (!Thread.currentThread().isInterrupted() && result);
+  }
+  /**
+   * Similar to register, but tracks all of the new files found in the directory. It polls the
+   * directory until the contents stop changing to ensure that a callback is fired for each path in
+   * the newly created directory (up to the maxDepth). The assumption is that once the callback is
+   * fired for the path, it is safe to assume that no event for a new file in the directory is
+   * missed. Without the polling, it would be possible that a new file was created in the directory
+   * before we registered it with the watch service. If this happened, then no callback would be
+   * invoked for that file.
+   *
+   * @param path The newly created directory to add
+   * @param maxDepth The maximum depth of the subdirectory traversal
+   * @param newFiles The set of files that are found for the newly created directory
+   * @return true if no exception is thrown
+   */
+  private boolean add(final Path path, final int maxDepth, final Set<QuickFile> newFiles) {
+    boolean result = true;
+    try {
+      if (directoryRegistry.maxDepthFor(path) < 0) {
+        directoryRegistry.addDirectory(path, maxDepth);
+      } else {
+        final Directory<WatchedDirectory> dir = getRoot(path.getRoot());
+        if (dir != null) {
+          update(dir, path);
+        }
+      }
+      poll(path, newFiles);
+    } catch (IOException e) {
+      result = false;
+    }
+    return result;
+  }
+
+  private final Directory.Observer<WatchedDirectory> updateObserver =
+      new Observer<WatchedDirectory>() {
+        @Override
+        public void onCreate(final Directory.Entry<WatchedDirectory> newEntry) {}
+
+        @Override
+        public void onDelete(final Directory.Entry<WatchedDirectory> oldEntry) {
+          oldEntry.getValue().close();
+        }
+
+        @Override
+        public void onUpdate(
+            Directory.Entry<WatchedDirectory> oldEntry,
+            Directory.Entry<WatchedDirectory> newEntry) {}
+
+        @Override
+        public void onError(Path path, IOException exception) {}
+      };
+
+  private void update(final Directory<WatchedDirectory> dir, final Path path) throws IOException {
+    dir.update(path, DIRECTORY).observe(updateObserver);
+  }
+
+  private boolean registerImpl(final Path path, final int maxDepth) throws IOException {
+    final int existingMaxDepth = directoryRegistry.maxDepthFor(path);
+    boolean result = existingMaxDepth < maxDepth;
+    Path realPath;
+    try {
+      realPath = path.toRealPath();
+    } catch (IOException e) {
+      realPath = path;
+    }
+    if (result) {
+      directoryRegistry.addDirectory(path, maxDepth);
+    } else if (!path.equals(realPath)) {
+      /*
+       * Note that watchedDir is not null, which means that this path has been
+       * registered
+       * with a different alias.
+       */
+      throw new FileSystemLoopException(path.toString());
+    }
+    if (result) {
+      final Directory<WatchedDirectory> dir = getRoot(realPath.getRoot());
+      if (dir != null) update(dir, path);
+    }
+    return result;
   }
 }

@@ -92,7 +92,7 @@ object Directory {
    * @tparam T The cache value type
    * @return A directory with entries of type T
    */
-  def cached[T](path: Path, converter: Converter[T]): Directory[T] =
+  def cached[T <: AnyRef](path: Path, converter: Converter[T]): Directory[T] =
     new Directory(path, path, converter, java.lang.Integer.MAX_VALUE, Filters.AllPass).init()
 
   /**
@@ -104,7 +104,7 @@ object Directory {
    * @tparam T The cache value type
    * @return A directory with entries of type T
    */
-  def cached[T](path: Path, converter: Converter[T], recursive: Boolean): Directory[T] =
+  def cached[T <: AnyRef](path: Path, converter: Converter[T], recursive: Boolean): Directory[T] =
     new Directory(path,
                   path,
                   converter,
@@ -120,7 +120,7 @@ object Directory {
    * @tparam T The cache value type
    * @return A directory with entries of type T
    */
-  def cached[T](path: Path, converter: Converter[T], depth: Int): Directory[T] =
+  def cached[T <: AnyRef](path: Path, converter: Converter[T], depth: Int): Directory[T] =
     new Directory(path, path, converter, depth, Filters.AllPass).init()
 
   object Entry {
@@ -175,7 +175,8 @@ object Directory {
   class Entry[T] private (val path: Path,
                           private val value: T,
                           private val exception: IOException,
-                          @BeanProperty val kind: Int) {
+                          @BeanProperty val kind: Int)
+      extends Comparable[Entry[T]] {
 
     /**
  @return true if the underlying path is a directory
@@ -290,6 +291,9 @@ object Directory {
     override def toString(): String = "Entry(" + path + ", " + value + ")"
 
     private def is(kind: Int): Boolean = (kind & this.kind) != 0
+
+    override def compareTo(that: Entry[T]): Int =
+      this.path.compareTo(that.path)
 
   }
 
@@ -412,11 +416,11 @@ object Directory {
  *
  * @tparam T The cache value type
  */
-class Directory[T](val path: Path,
-                   val realPath: Path,
-                   private val converter: Converter[T],
-                   @BeanProperty val depth: Int,
-                   filter: Filter[_ >: QuickFile])
+class Directory[T <: AnyRef](val path: Path,
+                             val realPath: Path,
+                             private val converter: Converter[T],
+                             @BeanProperty val depth: Int,
+                             filter: Filter[_ >: QuickFile])
     extends AutoCloseable {
 
   private val _cacheEntry: AtomicReference[Entry[T]] = new AtomicReference(null)

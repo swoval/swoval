@@ -1,6 +1,7 @@
 package com.swoval.files.apple;
 
 import com.swoval.concurrent.ThreadFactory;
+import com.swoval.files.AppleDirectoryWatcher;
 import com.swoval.files.NativeLoader;
 import com.swoval.functional.Consumer;
 import java.io.IOException;

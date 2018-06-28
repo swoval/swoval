@@ -568,7 +568,7 @@ public class Directory<T> implements AutoCloseable {
    *
    * @param <T> The value wrapped in the Entry
    */
-  public static final class Entry<T> {
+  public static final class Entry<T> implements Comparable<Entry<T>> {
     public static final int DIRECTORY = 1;
     public static final int FILE = 2;
     public static final int LINK = 4;
@@ -750,6 +750,11 @@ public class Directory<T> implements AutoCloseable {
 
     private boolean is(final int kind) {
       return (kind & this.kind) != 0;
+    }
+
+    @Override
+    public int compareTo(Entry<T> that) {
+      return this.path.compareTo(that.path);
     }
   }
 

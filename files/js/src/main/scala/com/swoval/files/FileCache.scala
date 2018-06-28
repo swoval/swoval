@@ -10,6 +10,7 @@ import com.swoval.files.Directory.Observer
 import com.swoval.files.Directory.OnChange
 import com.swoval.files.Directory.OnError
 import com.swoval.files.DirectoryWatcher.Event
+import com.swoval.files.DirectoryWatcher.Event.Kind
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import java.io.IOException
@@ -43,7 +44,7 @@ object FileCache {
    * @tparam T The value type of the cache entries
    * @return A file cache
    */
-  def apply[T](converter: Converter[T], options: FileCache.Option*): FileCache[T] =
+  def apply[T <: AnyRef](converter: Converter[T], options: FileCache.Option*): FileCache[T] =
     new FileCacheImpl(converter, DEFAULT_FACTORY, null, options: _*)
 
   /**
@@ -55,9 +56,9 @@ object FileCache {
    * @tparam T The value type of the cache entries
    * @return A file cache
    */
-  def apply[T](converter: Converter[T],
-               factory: DirectoryWatcher.Factory,
-               options: FileCache.Option*): FileCache[T] =
+  def apply[T <: AnyRef](converter: Converter[T],
+                         factory: DirectoryWatcher.Factory,
+                         options: FileCache.Option*): FileCache[T] =
     new FileCacheImpl(converter, factory, null, options: _*)
 
   /**
@@ -69,9 +70,9 @@ object FileCache {
    * @tparam T The value type of the cache entries
    * @return A file cache
    */
-  def apply[T](converter: Converter[T],
-               observer: Observer[T],
-               options: FileCache.Option*): FileCache[T] = {
+  def apply[T <: AnyRef](converter: Converter[T],
+                         observer: Observer[T],
+                         options: FileCache.Option*): FileCache[T] = {
     val res: FileCache[T] =
       new FileCacheImpl[T](converter, DEFAULT_FACTORY, null, options: _*)
     res.addObserver(observer)
@@ -88,10 +89,10 @@ object FileCache {
    * @tparam T The value type of the cache entries
    * @return A file cache
    */
-  def apply[T](converter: Converter[T],
-               factory: DirectoryWatcher.Factory,
-               observer: Observer[T],
-               options: FileCache.Option*): FileCache[T] = {
+  def apply[T <: AnyRef](converter: Converter[T],
+                         factory: DirectoryWatcher.Factory,
+                         observer: Observer[T],
+                         options: FileCache.Option*): FileCache[T] = {
     val res: FileCache[T] =
       new FileCacheImpl[T](converter, factory, null, options: _*)
     res.addObserver(observer)
@@ -130,7 +131,7 @@ object FileCache {
  *
  * @tparam T The type of data stored in the [[Directory.Entry]] instances for the cache
  */
-abstract class FileCache[T] extends AutoCloseable {
+abstract class FileCache[T <: AnyRef] extends AutoCloseable {
 
   val observers: Observers[T] = new Observers()
 
@@ -303,10 +304,10 @@ private[files] object FileCacheImpl {
 
 }
 
-private[files] class FileCacheImpl[T](private val converter: Converter[T],
-                                      factory: DirectoryWatcher.Factory,
-                                      executor: Executor,
-                                      options: FileCache.Option*)
+private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter[T],
+                                                factory: DirectoryWatcher.Factory,
+                                                executor: Executor,
+                                                options: FileCache.Option*)
     extends FileCache[T] {
 
   private val directories: Map[Path, Directory[T]] = new HashMap()
@@ -370,6 +371,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       while (directoryIterator.hasNext) directoryIterator.next().close()
       directories.clear()
       internalExecutor.close()
+      callbackExecutor.close()
     }
   }
 
@@ -579,10 +581,22 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
     }
   }
 
+  private abstract class Callback(private val path: Path, private val kind: Kind)
+      extends Runnable
+      with Comparable[Callback] {
+
+    override def compareTo(that: Callback): Int = {
+      val kindComparision: Int = this.kind.compareTo(that.kind)
+      if (kindComparision == 0) this.path.compareTo(that.path)
+      else kindComparision
+    }
+
+  }
+
   private def handleEvent(path: Path): Unit = {
     if (!closed.get) {
       var attrs: BasicFileAttributes = null
-      val callbacks: List[Runnable] = new ArrayList[Runnable]()
+      val callbacks: List[Callback] = new ArrayList[Callback]()
       try attrs =
         Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS)
       catch {
@@ -612,7 +626,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
               updates.observe(callbackObserver(callbacks))
             } catch {
               case e: IOException =>
-                callbacks.add(new Runnable() {
+                callbacks.add(new Callback(path, Event.Error) {
                   override def run(): Unit = {
                     observers.onError(path, e)
                   }
@@ -638,7 +652,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
           val removeIterator: Iterator[Directory.Entry[T]] = it.next()
           while (removeIterator.hasNext) {
             val entry: Directory.Entry[T] = removeIterator.next()
-            callbacks.add(new Runnable() {
+            callbacks.add(new Callback(entry.path, Event.Delete) {
               override def run(): Unit = {
                 observers.onDelete(entry)
               }
@@ -652,18 +666,19 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       if (!callbacks.isEmpty) {
         callbackExecutor.run(new Runnable() {
           override def run(): Unit = {
-            val runnableIterator: Iterator[Runnable] = callbacks.iterator()
-            while (runnableIterator.hasNext) runnableIterator.next().run()
+            Collections.sort(callbacks)
+            val callbackIterator: Iterator[Callback] = callbacks.iterator()
+            while (callbackIterator.hasNext) callbackIterator.next().run()
           }
         })
       }
     }
   }
 
-  private def callbackObserver(callbacks: List[Runnable]): Observer[T] =
+  private def callbackObserver(callbacks: List[Callback]): Observer[T] =
     new Observer[T]() {
       override def onCreate(newEntry: Directory.Entry[T]): Unit = {
-        callbacks.add(new Runnable() {
+        callbacks.add(new Callback(newEntry.path, Event.Create) {
           override def run(): Unit = {
             observers.onCreate(newEntry)
           }
@@ -671,7 +686,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       }
 
       override def onDelete(oldEntry: Directory.Entry[T]): Unit = {
-        callbacks.add(new Runnable() {
+        callbacks.add(new Callback(oldEntry.path, Event.Delete) {
           override def run(): Unit = {
             observers.onDelete(oldEntry)
           }
@@ -679,7 +694,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       }
 
       override def onUpdate(oldEntry: Directory.Entry[T], newEntry: Directory.Entry[T]): Unit = {
-        callbacks.add(new Runnable() {
+        callbacks.add(new Callback(oldEntry.path, Event.Modify) {
           override def run(): Unit = {
             observers.onUpdate(oldEntry, newEntry)
           }
@@ -687,7 +702,7 @@ private[files] class FileCacheImpl[T](private val converter: Converter[T],
       }
 
       override def onError(path: Path, exception: IOException): Unit = {
-        callbacks.add(new Runnable() {
+        callbacks.add(new Callback(path, Event.Error) {
           override def run(): Unit = {
             observers.onError(path, exception)
           }

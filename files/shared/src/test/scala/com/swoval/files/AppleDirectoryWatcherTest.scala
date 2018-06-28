@@ -11,7 +11,7 @@ import scala.concurrent.duration._
 import utest._
 
 object AppleDirectoryWatcherTest extends TestSuite {
-  import DirectoryWatcherTest.defaultWatcher
+  import DefaultDirectoryWatcherTest.defaultWatcher
   val DEFAULT_LATENCY = 5.milliseconds
   val dirFlags = new Flags.Create().setNoDefer()
   val tests = testOn(MacOS) {
