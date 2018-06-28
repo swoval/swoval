@@ -400,12 +400,9 @@ object Directory {
 class Directory[T](val path: Path,
                    val realPath: Path,
                    private val converter: Converter[T],
-                   d: Int,
+                   @BeanProperty val depth: Int,
                    filter: Filter[_ >: QuickFile])
     extends AutoCloseable {
-
-  @BeanProperty
-  val depth: Int = if (d > 0) d else 0
 
   private val _cacheEntry: AtomicReference[Entry[T]] = new AtomicReference(null)
 
@@ -586,7 +583,7 @@ class Directory[T](val path: Path,
     val it: Iterator[Path] = parts.iterator()
     var currentDir: Directory[T] = this
     val result: Updates[T] = new Updates[T]()
-    while (it.hasNext && currentDir != null) {
+    while (it.hasNext && currentDir != null && currentDir.depth >= 0) {
       val p: Path = it.next()
       if (p.toString.isEmpty) result
       val resolved: Path = currentDir.path.resolve(p)

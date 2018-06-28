@@ -93,13 +93,13 @@ public class Directory<T> implements AutoCloseable {
       final Path path,
       final Path realPath,
       final Converter<T> converter,
-      final int d,
+      final int depth,
       final Filter<? super QuickFile> filter)
       throws IOException {
     this.path = path;
     this.realPath = realPath;
     this.converter = converter;
-    this.depth = d > 0 ? d : 0;
+    this.depth = depth;
     final int kind = Entry.getKind(path);
     this._cacheEntry = new AtomicReference<>(null);
     this.pathFilter =
@@ -267,7 +267,7 @@ public class Directory<T> implements AutoCloseable {
     final Iterator<Path> it = parts.iterator();
     Directory<T> currentDir = this;
     final Updates<T> result = new Updates<>();
-    while (it.hasNext() && currentDir != null) {
+    while (it.hasNext() && currentDir != null && currentDir.depth >= 0) {
       final Path p = it.next();
       if (p.toString().isEmpty()) return result;
       final Path resolved = currentDir.path.resolve(p);

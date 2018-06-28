@@ -192,6 +192,18 @@ object DirectoryTest extends TestSuite {
           }
         }
       }
+      'depth - withTempDirectory { dir =>
+        val directory = Directory.of(dir, 0)
+        withTempDirectory(dir) { subdir =>
+          withTempDirectorySync(subdir) { nestedSubdir =>
+            directory.ls(recursive = true, AllPass) === Seq.empty[Path]
+            directory.update(subdir, Directory.Entry.DIRECTORY)
+            directory.ls(recursive = true, AllPass) === Seq(subdir)
+            directory.update(nestedSubdir, Directory.Entry.DIRECTORY)
+            directory.ls(recursive = true, AllPass) === Seq(subdir)
+          }
+        }
+      }
     }
     'remove - {
       'direct - withTempDirectory { dir =>
