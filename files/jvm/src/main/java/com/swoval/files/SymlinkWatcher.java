@@ -54,6 +54,33 @@ class SymlinkWatcher implements AutoCloseable {
     }
   }
 
+  private boolean hasLoop(final Path path) {
+    boolean result = false;
+    final Path parent = path.getParent();
+    Path realPath;
+    try {
+      realPath = parent.toRealPath();
+      result = parent.startsWith(realPath) && !parent.equals(realPath);
+    } catch (final IOException e) {
+      realPath = path;
+    }
+    if (!result) {
+      Path loop = path.getRoot();
+      final Iterator<Path> it = path.getParent().iterator();
+      while (!result && it.hasNext()) {
+        loop = loop.resolve(it.next());
+        if (loop.endsWith(path.getFileName())) {
+          try {
+            final Path loopRealPath = loop.toRealPath();
+            result = loopRealPath.equals(realPath);
+          } catch (final IOException e) {
+          }
+        }
+      }
+    }
+    return result;
+  }
+
   SymlinkWatcher(
       final Consumer<Path> handleEvent,
       final DirectoryWatcher.Factory factory,
@@ -83,14 +110,16 @@ class SymlinkWatcher implements AutoCloseable {
                         final Path relativized = registeredPath.path.relativize(path);
                         final Iterator<Path> it = registeredPath.paths.iterator();
                         while (it.hasNext()) {
-                          final Path p = it.next();
-                          callbacks.add(
-                              new Runnable() {
-                                @Override
-                                public void run() {
-                                  handleEvent.accept(p.resolve(relativized));
-                                }
-                              });
+                          final Path rawPath = it.next().resolve(relativized);
+                          if (!hasLoop(rawPath)) {
+                            callbacks.add(
+                                new Runnable() {
+                                  @Override
+                                  public void run() {
+                                    handleEvent.accept(rawPath);
+                                  }
+                                });
+                          }
                         }
                       }
                     }
@@ -124,7 +153,7 @@ class SymlinkWatcher implements AutoCloseable {
 
   @Override
   public void close() {
-    internalExecutor.run(
+    internalExecutor.block(
         new Runnable() {
           @Override
           public void run() {
@@ -148,6 +177,7 @@ class SymlinkWatcher implements AutoCloseable {
    */
   @SuppressWarnings("EmptyCatchBlock")
   void addSymlink(final Path path, final boolean isDirectory, final int maxDepth) {
+    if (path.toString().endsWith("other/dir/other")) new Exception().printStackTrace();
     internalExecutor.run(
         new Runnable() {
           @Override
@@ -160,6 +190,9 @@ class SymlinkWatcher implements AutoCloseable {
             if (!isClosed.get()) {
               try {
                 final Path realPath = path.toRealPath();
+                if (path.startsWith(realPath) && !path.equals(realPath)) {
+                  throw new FileSystemLoopException(path.toString());
+                }
                 final RegisteredPath targetRegistrationPath = watchedSymlinksByTarget.get(realPath);
                 if (targetRegistrationPath == null) {
                   final Path registrationPath = isDirectory ? realPath : realPath.getParent();

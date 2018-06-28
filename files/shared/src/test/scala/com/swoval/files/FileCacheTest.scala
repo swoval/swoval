@@ -317,7 +317,7 @@ trait FileCacheTest extends TestSuite {
               using(simpleCache((_: Entry[Path]) => {})) { c =>
                 c.reg(dir)
                 c.ls(dir) === Set(subdir, f)
-                c.reg(dir, recursive = false)
+                c.register(dir, false)
                 c.ls(dir) === Set(subdir, f)
               }
             }
@@ -416,7 +416,8 @@ trait FileCacheTest extends TestSuite {
               Files.createSymbolicLink(dir.resolve("other"), otherDir)
               val link = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
               using(simpleCache((_: Entry[Path]) => {})) { c =>
-                assert(c.reg(dir).left.getValue.isInstanceOf[FileSystemLoopException])
+                c.reg(dir)
+                c.ls(dir) == Set(dir.resolve("other"), dir.resolve("other").resolve("dir"))
               }
             }
           }
@@ -424,16 +425,16 @@ trait FileCacheTest extends TestSuite {
             'original - {
               withTempDirectory { dir =>
                 withTempDirectory { otherDir =>
-                  Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+                  val otherLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
                   val latch = new CountDownLatch(1)
-                  val observer = new LoopObserver(latch)
-                  usingAsync(FileCache.apply(((p: Path) => p): Converter[Path], factory, observer)) {
-                    c =>
-                      c.reg(dir)
-                      Files.createSymbolicLink(dir.resolve("other"), otherDir)
-                      latch.waitFor(DEFAULT_TIMEOUT) {
-                        c.ls(dir) === Seq.empty[Path]
-                      }
+                  usingAsync(simpleCache((e: Entry[Path]) => {
+                    if (e.path.endsWith("other")) latch.countDown()
+                  })) { c =>
+                    c.reg(dir)
+                    val loopLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
+                    latch.waitFor(DEFAULT_TIMEOUT) {
+                      c.ls(dir) === Set(loopLink, loopLink.resolve("dir"))
+                    }
                   }
                 }
               }
@@ -443,14 +444,14 @@ trait FileCacheTest extends TestSuite {
                 withTempDirectory { otherDir =>
                   val link = Files.createSymbolicLink(dir.resolve("other"), otherDir)
                   val latch = new CountDownLatch(1)
-                  val observer = new LoopObserver(latch)
-                  usingAsync(FileCache.apply(((p: Path) => p): Converter[Path], factory, observer)) {
-                    c =>
-                      c.reg(dir)
-                      Files.createSymbolicLink(otherDir.resolve("dir"), dir)
-                      latch.waitFor(DEFAULT_TIMEOUT) {
-                        c.ls(dir) === Seq(link)
-                      }
+                  usingAsync(simpleCache((e: Entry[Path]) => {
+                    if (e.path.endsWith("dir")) latch.countDown()
+                  })) { c =>
+                    c.reg(dir)
+                    val loopLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+                    latch.waitFor(DEFAULT_TIMEOUT) {
+                      c.ls(dir) === Set(link, link.resolve("dir"))
+                    }
                   }
                 }
               }
@@ -694,14 +695,20 @@ trait FileCacheTest extends TestSuite {
 }
 
 object FileCacheTest {
+
   implicit class FileCacheOps[T <: AnyRef](val fileCache: FileCache[T]) extends AnyVal {
     def ls(dir: Path,
            recursive: Boolean = true,
            filter: EntryFilter[_ >: T] = EntryFilters.AllPass): Seq[Entry[T]] =
       fileCache.list(dir, recursive, filter).asScala
-    def reg(dir: Path, recursive: Boolean = true): SEither[IOException, Bool] =
-      fileCache.register(dir, recursive)
+
+    def reg(dir: Path, recursive: Boolean = true): SEither[IOException, Bool] = {
+      val res = fileCache.register(dir, recursive)
+      assert(res.getOrElse(false))
+      res
+    }
   }
+
 }
 
 object DefaultFileCacheTest extends FileCacheTest {

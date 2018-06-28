@@ -68,6 +68,36 @@ class SymlinkWatcher(handleEvent: Consumer[Path],
     }
   }
 
+  private def hasLoop(path: Path): Boolean = {
+    var result: Boolean = false
+    val parent: Path = path.getParent
+    var realPath: Path = null
+    try {
+      realPath = parent.toRealPath()
+      result = parent.startsWith(realPath) && parent != realPath
+    } catch {
+      case e: IOException => realPath = path
+
+    }
+    if (!result) {
+      var loop: Path = path.getRoot
+      val it: Iterator[Path] = path.getParent.iterator()
+      while (!result && it.hasNext) {
+        loop = loop.resolve(it.next())
+        if (loop.endsWith(path.getFileName)) {
+          try {
+            val loopRealPath: Path = loop.toRealPath()
+            result = loopRealPath == realPath
+          } catch {
+            case e: IOException => {}
+
+          }
+        }
+      }
+    }
+    result
+  }
+
   val callback: Consumer[Event] = new Consumer[Event]() {
     override def accept(event: Event): Unit = {
       SymlinkWatcher.this.internalExecutor.run(new Runnable() {
@@ -80,12 +110,14 @@ class SymlinkWatcher(handleEvent: Consumer[Path],
             val relativized: Path = registeredPath.path.relativize(path)
             val it: Iterator[Path] = registeredPath.paths.iterator()
             while (it.hasNext) {
-              val p: Path = it.next()
-              callbacks.add(new Runnable() {
-                override def run(): Unit = {
-                  handleEvent.accept(p.resolve(relativized))
-                }
-              })
+              val rawPath: Path = it.next().resolve(relativized)
+              if (!hasLoop(rawPath)) {
+                callbacks.add(new Runnable() {
+                  override def run(): Unit = {
+                    handleEvent.accept(rawPath)
+                  }
+                })
+              }
             }
           }
           if (!Files.exists(event.path)) {
@@ -116,7 +148,7 @@ class SymlinkWatcher(handleEvent: Consumer[Path],
     factory.create(callback, internalExecutor.copy())
 
   override def close(): Unit = {
-    internalExecutor.run(new Runnable() {
+    internalExecutor.block(new Runnable() {
       override def run(): Unit = {
         if (isClosed.compareAndSet(false, true)) {
           watcher.close()
@@ -137,6 +169,8 @@ class SymlinkWatcher(handleEvent: Consumer[Path],
    * @param path The symlink base file.
    */
   def addSymlink(path: Path, isDirectory: Boolean, maxDepth: Int): Unit = {
+    if (path.toString.endsWith("other/dir/other"))
+      new Exception().printStackTrace()
     internalExecutor.run(new Runnable() {
       override def toString(): String = "Add symlink " + path
 
@@ -144,6 +178,9 @@ class SymlinkWatcher(handleEvent: Consumer[Path],
         if (!isClosed.get) {
           try {
             val realPath: Path = path.toRealPath()
+            if (path.startsWith(realPath) && path != realPath) {
+              throw new FileSystemLoopException(path.toString)
+            }
             val targetRegistrationPath: RegisteredPath =
               watchedSymlinksByTarget.get(realPath)
             if (targetRegistrationPath == null) {
