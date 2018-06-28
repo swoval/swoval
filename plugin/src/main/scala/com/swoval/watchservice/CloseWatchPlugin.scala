@@ -5,6 +5,7 @@ import java.nio.file.{ Path, Paths }
 
 import com.swoval.files.Directory.{ Converter, Entry, EntryFilter }
 import com.swoval.files._
+import com.swoval.runtime.ShutdownHooks
 import sbt.Keys._
 import sbt._
 import sbt.complete.{ DefaultParsers, Parser }
@@ -248,6 +249,12 @@ object CloseWatchPlugin extends AutoPlugin {
     onLoad := { state =>
       val extracted = Project.extract(state)
       _internalFileCache = extracted.runTask(closeWatchFileCache, state)._2
+      ShutdownHooks.addHook(1, {
+        val cache = Option(_internalFileCache)
+        new Runnable() {
+          override def run(): Unit = cache.foreach(_.close())
+        }
+      })
       val session = extracted.session
       val useDefault = extracted.structure.data.data.exists(_._2.entries.exists(e =>
         e.key.label == "closeWatchUseDefaultWatchService" && e.value == true))
