@@ -18,8 +18,11 @@ package object platform {
   def createTempFile(dir: String, prefix: String): String =
     deleteOnExit(Files.createTempFile(Paths.get(dir), prefix, "").toRealPath())
 
-  def createTempDirectory(): String =
-    deleteOnExit(Files.createTempDirectory("dir").toRealPath())
+  def createTempDirectory(): String = {
+    val base = Paths.get(System.getProperty("java.io.tmpdir")).resolve("swoval")
+    Files.createDirectories(base)
+    deleteOnExit(Files.createTempDirectory(base, "dir").toRealPath())
+  }
 
   def createTempSubdirectory(dir: String): String =
     deleteOnExit(Files.createTempDirectory(Paths.get(dir), "subdir").toRealPath())
