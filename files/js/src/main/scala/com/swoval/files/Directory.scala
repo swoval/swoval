@@ -1,10 +1,10 @@
 package com.swoval.files
 
+import com.swoval.files.EntryFilters.AllPass
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
 import com.swoval.functional.Filters
 import java.io.IOException
-import java.nio.file.FileSystemLoopException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -12,11 +12,9 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.util.ArrayList
 import java.util.Collection
 import java.util.HashMap
-import java.util.HashSet
 import java.util.Iterator
 import java.util.List
 import java.util.Map
-import java.util.Set
 import java.util.concurrent.atomic.AtomicReference
 import Directory._
 import scala.beans.{ BeanProperty, BooleanBeanProperty }
@@ -392,8 +390,15 @@ object Directory {
  * Provides a mutable in-memory cache of files and subdirectories with basic CRUD functionality. The
  * Directory can be fully recursive as the subdirectories are themselves stored as recursive (when
  * the Directory is initialized without the recursive toggle, the subdirectories are stored as
- * [[Directory.Entry]] instances. The primary use case is the implementation of [[FileCache]]. Directly handling Directory instances is discouraged because it is inherently mutable
- * so it's better to let the FileCache manage it and query the cache rather than Directory directly.
+ * [[Directory.Entry]] instances. The primary use case is the implementation of [[FileCache]] and [[NioDirectoryWatcher]]. Directly handling Directory instances is discouraged
+ * because it is inherently mutable so it's better to let the FileCache manage it and query the
+ * cache rather than Directory directly.
+ *
+ * <p>The Directory should cache all of the files and subdirectories up the maximum depth. A maximum
+ * depth of zero means that the Directory should cache the subdirectories, but not traverse them. A
+ * depth {@code < 0} means that it should not cache any files or subdirectories within the
+ * directory. In the event that a loop is created by symlinks, the Directory will include the
+ * symlink that completes the loop, but will not descend further (inducing a loop).
  *
  * @tparam T The cache value type
  */
@@ -559,9 +564,8 @@ class Directory[T](val path: Path,
       currentDir.subdirectories.put(path.getFileName.toString, dir)
     if (previous != null) {
       oldEntries.put(previous.realPath, previous.entry())
-      val entryIterator: Iterator[Entry[T]] = previous
-        .list(java.lang.Integer.MAX_VALUE, EntryFilters.AllPass)
-        .iterator()
+      val entryIterator: Iterator[Entry[T]] =
+        previous.list(java.lang.Integer.MAX_VALUE, AllPass).iterator()
       while (entryIterator.hasNext) {
         val entry: Entry[T] = entryIterator.next()
         oldEntries.put(entry.path, entry)
@@ -570,7 +574,7 @@ class Directory[T](val path: Path,
     val newEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
     newEntries.put(dir.realPath, dir.entry())
     val it: Iterator[Entry[T]] =
-      dir.list(java.lang.Integer.MAX_VALUE, EntryFilters.AllPass).iterator()
+      dir.list(java.lang.Integer.MAX_VALUE, AllPass).iterator()
     while (it.hasNext) {
       val entry: Entry[T] = it.next()
       newEntries.put(entry.path, entry)
@@ -578,44 +582,65 @@ class Directory[T](val path: Path,
     MapOps.diffDirectoryEntries(oldEntries, newEntries, updates)
   }
 
+  private def isLoop(path: Path, realPath: Path): Boolean =
+    path.startsWith(realPath) && path != realPath
+
   private def updateImpl(parts: List[Path], kind: Int): Updates[T] = {
-    val it: Iterator[Path] = parts.iterator()
-    var currentDir: Directory[T] = this
     val result: Updates[T] = new Updates[T]()
-    while (it.hasNext && currentDir != null && currentDir.depth >= 0) {
-      val p: Path = it.next()
-      if (p.toString.isEmpty) result
-      val resolved: Path = currentDir.path.resolve(p)
-      if (!it.hasNext) {
+    if (!parts.isEmpty) {
+      val it: Iterator[Path] = parts.iterator()
+      var currentDir: Directory[T] = this
+      while (it.hasNext && currentDir != null && currentDir.depth >= 0) {
+        val p: Path = it.next()
+        if (p.toString.isEmpty) result
+        val resolved: Path = currentDir.path.resolve(p)
+        val realPath: Path = toRealPath(resolved)
+        if (!it.hasNext) {
 // We will always return from this block
-        currentDir.lock.synchronized {
-          if (((kind & Entry.FILE) != 0) || currentDir.depth <= 0) {
-            val oldEntry: Entry[T] = currentDir.files.getByName(p)
-            val newEntry: Entry[T] =
-              new Entry[T](p, converter.apply(resolved), kind)
-            currentDir.files.put(p.toString, newEntry)
-            val oldResolvedEntry: Entry[T] =
-              if (oldEntry == null) null
-              else oldEntry.resolvedFrom(currentDir.path)
-            if (oldResolvedEntry == null) {
-              result.onCreate(newEntry.resolvedFrom(currentDir.path))
+          currentDir.lock.synchronized {
+            val isDirectory: Boolean = (kind & Entry.DIRECTORY) != 0
+            if (!isDirectory || currentDir.depth <= 0 || isLoop(resolved, realPath)) {
+              val previousDirectory: Directory[T] =
+                if (isDirectory) currentDir.subdirectories.getByName(p)
+                else null
+              val oldEntry: Entry[T] =
+                if (previousDirectory != null) previousDirectory.entry()
+                else currentDir.files.getByName(p)
+              val newEntry: Entry[T] =
+                new Entry[T](p, converter.apply(resolved), kind)
+              if (isDirectory) {
+                currentDir.subdirectories
+                  .put(p.toString, new Directory(resolved, realPath, converter, -1, pathFilter))
+              } else {
+                currentDir.files.put(p.toString, newEntry)
+              }
+              val oldResolvedEntry: Entry[T] =
+                if (oldEntry == null) null
+                else oldEntry.resolvedFrom(currentDir.path)
+              if (oldResolvedEntry == null) {
+                result.onCreate(newEntry.resolvedFrom(currentDir.path))
+              } else {
+                result.onUpdate(oldResolvedEntry, newEntry.resolvedFrom(currentDir.path))
+              }
+              result
             } else {
-              result.onUpdate(oldResolvedEntry, newEntry.resolvedFrom(currentDir.path))
+              addDirectory(currentDir, resolved, result)
             }
-            result
-          } else {
-            addDirectory(currentDir, resolved, result)
           }
-        }
-      } else {
-        currentDir.lock.synchronized {
-          val dir: Directory[T] = currentDir.subdirectories.getByName(p)
-          if (dir == null && currentDir.depth > 0) {
-            addDirectory(currentDir, currentDir.path.resolve(p), result)
+        } else {
+          currentDir.lock.synchronized {
+            val dir: Directory[T] = currentDir.subdirectories.getByName(p)
+            if (dir == null && currentDir.depth > 0) {
+              addDirectory(currentDir, currentDir.path.resolve(p), result)
+            }
+            currentDir = dir
           }
-          currentDir = dir
         }
       }
+    } else if (kind == Entry.DIRECTORY) {
+      val oldEntries: List[Entry[T]] = list(true, AllPass)
+      init()
+      MapOps.diffDirectoryEntries(oldEntries, list(true, AllPass), result)
     }
     result
   }
@@ -694,7 +719,7 @@ class Directory[T](val path: Path,
           } else {
             val dir: Directory[T] = currentDir.subdirectories.removeByName(p)
             if (dir != null) {
-              result.addAll(dir.list(java.lang.Integer.MAX_VALUE, EntryFilters.AllPass))
+              result.addAll(dir.list(java.lang.Integer.MAX_VALUE, AllPass))
               result.add(dir.entry())
             }
           }
@@ -708,53 +733,48 @@ class Directory[T](val path: Path,
     result
   }
 
-  private def init(): Directory[T] = init(new ArrayList[Path]())
+  private def toRealPath(path: Path): Path =
+    try path.toRealPath()
+    catch {
+      case e: IOException => path
 
-  private def init(parents: List[Path]): Directory[T] = {
-    parents.add(this.realPath)
-    if (Files.exists(path)) {
-      lock.synchronized {
-        val it: Iterator[QuickFile] = QuickList.list(path, 0, true).iterator()
-        while (it.hasNext) {
-          val file: QuickFile = it.next()
-          if (pathFilter.accept(file)) {
-            val kind: Int = (if (file.isSymbolicLink) Entry.LINK else 0) |
-              (if (file.isDirectory) Entry.DIRECTORY else Entry.FILE)
-            val p: Path = file.toPath()
-            val key: Path = path.relativize(p).getFileName
-            if (file.isDirectory) {
-              if (depth > 0) {
-                var realPath: Path = p
-                if (file.isSymbolicLink) {
-                  val parentIt: Iterator[Path] = parents.iterator()
-                  realPath = p.toRealPath()
-                  while (parentIt.hasNext) {
-                    val parent: Path = parentIt.next()
-                    if (parent == realPath)
-                      throw new FileSystemLoopException(p.toString)
-                  }
-                }
-                subdirectories.put(key.toString,
-                                   new Directory(p,
-                                                 realPath,
-                                                 converter,
-                                                 subdirectoryDepth(),
-                                                 pathFilter).init(parents))
+    }
+
+  def init(): Directory[T] = {
+    lock.synchronized {
+      val it: Iterator[QuickFile] = QuickList.list(path, 0, true).iterator()
+      while (it.hasNext) {
+        val file: QuickFile = it.next()
+        if (pathFilter.accept(file)) {
+          val kind: Int = (if (file.isSymbolicLink) Entry.LINK else 0) |
+            (if (file.isDirectory) Entry.DIRECTORY else Entry.FILE)
+          val path: Path = file.toPath()
+          val key: Path = this.path.relativize(path).getFileName
+          if (file.isDirectory) {
+            if (depth > 0) {
+              val realPath: Path = toRealPath(path)
+              if (!file.isSymbolicLink || !isLoop(path, realPath)) {
+                subdirectories.put(
+                  key.toString,
+                  new Directory(path, realPath, converter, subdirectoryDepth(), pathFilter).init())
               } else {
-                try files.put(key.toString, new Entry(key, converter.apply(p), kind))
-                catch {
-                  case e: IOException =>
-                    files.put(key.toString, new Entry[T](key, e, kind))
-
-                }
+                subdirectories.put(key.toString,
+                                   new Directory(path, realPath, converter, -1, pathFilter))
               }
             } else {
-              try files.put(key.toString, new Entry(key, converter.apply(p), kind))
+              try files.put(key.toString, new Entry(key, converter.apply(path), kind))
               catch {
                 case e: IOException =>
                   files.put(key.toString, new Entry[T](key, e, kind))
 
               }
+            }
+          } else {
+            try files.put(key.toString, new Entry(key, converter.apply(path), kind))
+            catch {
+              case e: IOException =>
+                files.put(key.toString, new Entry[T](key, e, kind))
+
             }
           }
         }

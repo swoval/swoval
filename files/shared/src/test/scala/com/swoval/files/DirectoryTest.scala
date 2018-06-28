@@ -14,7 +14,7 @@ import utest._
 import scala.collection.JavaConverters._
 
 object DirectoryTest extends TestSuite {
-  implicit class DirectoryOps[T](val d: Directory[T]) {
+  implicit class DirectoryOps[T <: AnyRef](val d: Directory[T]) {
     def ls(recursive: Boolean, filter: EntryFilter[_ >: T]): Seq[Entry[T]] =
       d.list(recursive, filter).asScala
     def ls(path: Path, recursive: Boolean, filter: EntryFilter[_ >: T]): Seq[Entry[T]] =
@@ -341,6 +341,80 @@ object DirectoryTest extends TestSuite {
           dir
             .ls(recursive = true, AllPass)
             .map(e => e.path -> e.getValueOrDefault(3)) === Seq(file -> 3)
+        }
+      }
+    }
+    'symlinks - {
+      'file - withTempFileSync { file =>
+        val parent = file.getParent
+        val link = Files.createSymbolicLink(parent.resolve("link"), file)
+        Directory.of(parent).ls(true, AllPass) === Set(file, link)
+      }
+      'directory - withTempDirectory { dir =>
+        withTempDirectorySync { otherDir =>
+          val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
+          val file = otherDir.resolve("file").createFile()
+          val dirFile = dir.resolve("link").resolve("file")
+          Directory.of(dir).ls(true, AllPass) === Set(link, dirFile)
+        }
+      }
+      'loop - {
+        'initial - withTempDirectory { dir =>
+          withTempDirectorySync { otherDir =>
+            val dirToOtherDirLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
+            val otherDirToDirLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+            Directory.of(dir).ls(true, AllPass) === Set(dirToOtherDirLink,
+                                                        dirToOtherDirLink.resolve("dir"))
+          }
+        }
+        'updated - {
+          'indirect - {
+            'remoteLink - withTempDirectory { dir =>
+              withTempDirectorySync { otherDir =>
+                val dirToOtherDirLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
+                val otherDirToDirLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+                val directory = Directory.of(dir)
+                directory.ls(true, AllPass) === Set(dirToOtherDirLink,
+                                                    dirToOtherDirLink.resolve("dir"))
+                otherDirToDirLink.delete()
+                Files.createDirectory(otherDirToDirLink)
+                val nestedFile = otherDirToDirLink.resolve("file").createFile()
+                val file = dirToOtherDirLink.resolve("dir").resolve("file")
+                directory.update(dir, Entry.DIRECTORY)
+                directory.ls(true, AllPass) === Set(dirToOtherDirLink, file.getParent, file)
+              }
+            }
+            'localLink - withTempDirectory { dir =>
+              withTempDirectorySync { otherDir =>
+                val dirToOtherDirLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
+                val otherDirToDirLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+                val directory = Directory.of(dir)
+                directory.ls(true, AllPass) === Set(dirToOtherDirLink,
+                                                    dirToOtherDirLink.resolve("dir"))
+                dirToOtherDirLink.delete()
+                Files.createDirectory(dirToOtherDirLink)
+                val nestedFile = dirToOtherDirLink.resolve("file").createFile()
+                directory.update(dir, Entry.DIRECTORY)
+                directory.ls(true, AllPass) === Set(dirToOtherDirLink, nestedFile)
+              }
+            }
+          }
+          // This test is different from those above because it calls update with dirToOtherDirLink
+          // rather than with dir
+          'direct - withTempDirectory { dir =>
+            withTempDirectorySync { otherDir =>
+              val dirToOtherDirLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
+              val otherDirToDirLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+              val directory = Directory.of(dir)
+              directory.ls(true, AllPass) === Set(dirToOtherDirLink,
+                                                  dirToOtherDirLink.resolve("dir"))
+              dirToOtherDirLink.delete()
+              Files.createDirectory(dirToOtherDirLink)
+              val nestedFile = dirToOtherDirLink.resolve("file").createFile()
+              directory.update(dirToOtherDirLink, Entry.DIRECTORY)
+              directory.ls(true, AllPass) === Set(dirToOtherDirLink, nestedFile)
+            }
+          }
         }
       }
     }

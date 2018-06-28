@@ -1,10 +1,11 @@
 package com.swoval.files;
 
+import static com.swoval.files.EntryFilters.AllPass;
+
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
 import com.swoval.functional.Filters;
 import java.io.IOException;
-import java.nio.file.FileSystemLoopException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -12,11 +13,9 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -24,8 +23,15 @@ import java.util.concurrent.atomic.AtomicReference;
  * Directory can be fully recursive as the subdirectories are themselves stored as recursive (when
  * the Directory is initialized without the recursive toggle, the subdirectories are stored as
  * {@link Directory.Entry} instances. The primary use case is the implementation of {@link
- * FileCache}. Directly handling Directory instances is discouraged because it is inherently mutable
- * so it's better to let the FileCache manage it and query the cache rather than Directory directly.
+ * FileCache} and {@link NioDirectoryWatcher}. Directly handling Directory instances is discouraged
+ * because it is inherently mutable so it's better to let the FileCache manage it and query the
+ * cache rather than Directory directly.
+ *
+ * <p>The Directory should cache all of the files and subdirectories up the maximum depth. A maximum
+ * depth of zero means that the Directory should cache the subdirectories, but not traverse them. A
+ * depth {@code < 0} means that it should not cache any files or subdirectories within the
+ * directory. In the event that a loop is created by symlinks, the Directory will include the
+ * symlink that completes the loop, but will not descend further (inducing a loop).
  *
  * @param <T> The cache value type
  */
@@ -246,8 +252,7 @@ public class Directory<T> implements AutoCloseable {
     final Directory<T> previous = currentDir.subdirectories.put(path.getFileName().toString(), dir);
     if (previous != null) {
       oldEntries.put(previous.realPath, previous.entry());
-      final Iterator<Entry<T>> entryIterator =
-          previous.list(Integer.MAX_VALUE, EntryFilters.AllPass).iterator();
+      final Iterator<Entry<T>> entryIterator = previous.list(Integer.MAX_VALUE, AllPass).iterator();
       while (entryIterator.hasNext()) {
         final Entry<T> entry = entryIterator.next();
         oldEntries.put(entry.path, entry);
@@ -255,7 +260,7 @@ public class Directory<T> implements AutoCloseable {
     }
     final Map<Path, Entry<T>> newEntries = new HashMap<>();
     newEntries.put(dir.realPath, dir.entry());
-    final Iterator<Entry<T>> it = dir.list(Integer.MAX_VALUE, EntryFilters.AllPass).iterator();
+    final Iterator<Entry<T>> it = dir.list(Integer.MAX_VALUE, AllPass).iterator();
     while (it.hasNext()) {
       final Entry<T> entry = it.next();
       newEntries.put(entry.path, entry);
@@ -263,42 +268,64 @@ public class Directory<T> implements AutoCloseable {
     MapOps.diffDirectoryEntries(oldEntries, newEntries, updates);
   }
 
+  private boolean isLoop(final Path path, final Path realPath) {
+    return path.startsWith(realPath) && !path.equals(realPath);
+  }
+
   private Updates<T> updateImpl(final List<Path> parts, final int kind) throws IOException {
-    final Iterator<Path> it = parts.iterator();
-    Directory<T> currentDir = this;
     final Updates<T> result = new Updates<>();
-    while (it.hasNext() && currentDir != null && currentDir.depth >= 0) {
-      final Path p = it.next();
-      if (p.toString().isEmpty()) return result;
-      final Path resolved = currentDir.path.resolve(p);
-      if (!it.hasNext()) {
-        // We will always return from this block
-        synchronized (currentDir.lock) {
-          if (((kind & Entry.FILE) != 0) || currentDir.depth <= 0) {
-            final Entry<T> oldEntry = currentDir.files.getByName(p);
-            final Entry<T> newEntry = new Entry<>(p, converter.apply(resolved), kind);
-            currentDir.files.put(p.toString(), newEntry);
-            final Entry<T> oldResolvedEntry =
-                oldEntry == null ? null : oldEntry.resolvedFrom(currentDir.path);
-            if (oldResolvedEntry == null) {
-              result.onCreate(newEntry.resolvedFrom(currentDir.path));
+    if (!parts.isEmpty()) {
+      final Iterator<Path> it = parts.iterator();
+      Directory<T> currentDir = this;
+      while (it.hasNext() && currentDir != null && currentDir.depth >= 0) {
+        final Path p = it.next();
+        if (p.toString().isEmpty()) return result;
+        final Path resolved = currentDir.path.resolve(p);
+        final Path realPath = toRealPath(resolved);
+        if (!it.hasNext()) {
+          // We will always return from this block
+          synchronized (currentDir.lock) {
+            final boolean isDirectory = (kind & Entry.DIRECTORY) != 0;
+            if (!isDirectory || currentDir.depth <= 0 || isLoop(resolved, realPath)) {
+              final Directory<T> previousDirectory =
+                  isDirectory ? currentDir.subdirectories.getByName(p) : null;
+              final Entry<T> oldEntry =
+                  previousDirectory != null
+                      ? previousDirectory.entry()
+                      : currentDir.files.getByName(p);
+              final Entry<T> newEntry = new Entry<>(p, converter.apply(resolved), kind);
+              if (isDirectory) {
+                currentDir.subdirectories.put(
+                    p.toString(), new Directory<>(resolved, realPath, converter, -1, pathFilter));
+              } else {
+                currentDir.files.put(p.toString(), newEntry);
+              }
+              final Entry<T> oldResolvedEntry =
+                  oldEntry == null ? null : oldEntry.resolvedFrom(currentDir.path);
+              if (oldResolvedEntry == null) {
+                result.onCreate(newEntry.resolvedFrom(currentDir.path));
+              } else {
+                result.onUpdate(oldResolvedEntry, newEntry.resolvedFrom(currentDir.path));
+              }
+              return result;
             } else {
-              result.onUpdate(oldResolvedEntry, newEntry.resolvedFrom(currentDir.path));
+              addDirectory(currentDir, resolved, result);
             }
-            return result;
-          } else {
-            addDirectory(currentDir, resolved, result);
           }
-        }
-      } else {
-        synchronized (currentDir.lock) {
-          final Directory<T> dir = currentDir.subdirectories.getByName(p);
-          if (dir == null && currentDir.depth > 0) {
-            addDirectory(currentDir, currentDir.path.resolve(p), result);
+        } else {
+          synchronized (currentDir.lock) {
+            final Directory<T> dir = currentDir.subdirectories.getByName(p);
+            if (dir == null && currentDir.depth > 0) {
+              addDirectory(currentDir, currentDir.path.resolve(p), result);
+            }
+            currentDir = dir;
           }
-          currentDir = dir;
         }
       }
+    } else if (kind == Entry.DIRECTORY) {
+      final List<Entry<T>> oldEntries = list(true, AllPass);
+      init();
+      MapOps.diffDirectoryEntries(oldEntries, list(true, AllPass), result);
     }
     return result;
   }
@@ -379,7 +406,7 @@ public class Directory<T> implements AutoCloseable {
           } else {
             final Directory<T> dir = currentDir.subdirectories.removeByName(p);
             if (dir != null) {
-              result.addAll(dir.list(Integer.MAX_VALUE, EntryFilters.AllPass));
+              result.addAll(dir.list(Integer.MAX_VALUE, AllPass));
               result.add(dir.entry());
             }
           }
@@ -393,51 +420,49 @@ public class Directory<T> implements AutoCloseable {
     return result;
   }
 
-  private Directory<T> init() throws IOException {
-    return init(new ArrayList<Path>());
+  private Path toRealPath(final Path path) {
+    try {
+      return path.toRealPath();
+    } catch (final IOException e) {
+      return path;
+    }
   }
 
-  private Directory<T> init(List<Path> parents) throws IOException {
-    parents.add(this.realPath);
-    if (Files.exists(path)) {
-      synchronized (lock) {
-        final Iterator<QuickFile> it = QuickList.list(path, 0, true).iterator();
-        while (it.hasNext()) {
-          final QuickFile file = it.next();
-          if (pathFilter.accept(file)) {
-            final int kind =
-                (file.isSymbolicLink() ? Entry.LINK : 0)
-                    | (file.isDirectory() ? Entry.DIRECTORY : Entry.FILE);
-            final Path p = file.toPath();
-            final Path key = path.relativize(p).getFileName();
-            if (file.isDirectory()) {
-              if (depth > 0) {
-                Path realPath = p;
-                if (file.isSymbolicLink()) {
-                  final Iterator<Path> parentIt = parents.iterator();
-                  realPath = p.toRealPath();
-                  while (parentIt.hasNext()) {
-                    final Path parent = parentIt.next();
-                    if (parent.equals(realPath)) throw new FileSystemLoopException(p.toString());
-                  }
-                }
+  Directory<T> init() throws IOException {
+    synchronized (lock) {
+      final Iterator<QuickFile> it = QuickList.list(path, 0, true).iterator();
+      while (it.hasNext()) {
+        final QuickFile file = it.next();
+        if (pathFilter.accept(file)) {
+          final int kind =
+              (file.isSymbolicLink() ? Entry.LINK : 0)
+                  | (file.isDirectory() ? Entry.DIRECTORY : Entry.FILE);
+          final Path path = file.toPath();
+          final Path key = this.path.relativize(path).getFileName();
+          if (file.isDirectory()) {
+            if (depth > 0) {
+              final Path realPath = toRealPath(path);
+              if (!file.isSymbolicLink() || !isLoop(path, realPath)) {
                 subdirectories.put(
                     key.toString(),
-                    new Directory<>(p, realPath, converter, subdirectoryDepth(), pathFilter)
-                        .init(parents));
+                    new Directory<>(path, realPath, converter, subdirectoryDepth(), pathFilter)
+                        .init());
               } else {
-                try {
-                  files.put(key.toString(), new Entry<>(key, converter.apply(p), kind));
-                } catch (final IOException e) {
-                  files.put(key.toString(), new Entry<T>(key, e, kind));
-                }
+                subdirectories.put(
+                    key.toString(), new Directory<>(path, realPath, converter, -1, pathFilter));
               }
             } else {
               try {
-                files.put(key.toString(), new Entry<>(key, converter.apply(p), kind));
+                files.put(key.toString(), new Entry<>(key, converter.apply(path), kind));
               } catch (final IOException e) {
                 files.put(key.toString(), new Entry<T>(key, e, kind));
               }
+            }
+          } else {
+            try {
+              files.put(key.toString(), new Entry<>(key, converter.apply(path), kind));
+            } catch (final IOException e) {
+              files.put(key.toString(), new Entry<T>(key, e, kind));
             }
           }
         }

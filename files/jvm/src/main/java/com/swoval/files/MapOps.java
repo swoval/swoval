@@ -1,7 +1,10 @@
 package com.swoval.files;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import static java.util.Map.Entry;
 
@@ -11,6 +14,25 @@ import static java.util.Map.Entry;
  * that breaks code-gen.
  */
 class MapOps {
+  static <T> void diffDirectoryEntries(
+      final List<Directory.Entry<T>> oldEntries,
+      final List<Directory.Entry<T>> newEntries,
+      final Directory.Observer<T> observer) {
+    final Map<Path, Directory.Entry<T>> oldMap = new HashMap<>();
+    final Iterator<Directory.Entry<T>> oldIterator = oldEntries.iterator();
+    while (oldIterator.hasNext()) {
+      final Directory.Entry<T> entry = oldIterator.next();
+      oldMap.put(entry.path, entry);
+    }
+    final Map<Path, Directory.Entry<T>> newMap = new HashMap<>();
+    final Iterator<Directory.Entry<T>> newIterator = newEntries.iterator();
+    while (newIterator.hasNext()) {
+      final Directory.Entry<T> entry = newIterator.next();
+      newMap.put(entry.path, entry);
+    }
+    diffDirectoryEntries(oldMap, newMap, observer);
+  }
+
   static <K, V> void diffDirectoryEntries(
       final Map<K, Directory.Entry<V>> oldMap,
       final Map<K, Directory.Entry<V>> newMap,
