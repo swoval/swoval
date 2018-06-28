@@ -12,6 +12,7 @@ import com.swoval.files.DirectoryWatcher.Event;
 import com.swoval.files.DirectoryWatcher.Event.Kind;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
+import com.swoval.runtime.ShutdownHooks;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -345,6 +346,14 @@ class FileCacheImpl<T> extends FileCache<T> {
       final Executor executor,
       FileCache.Option... options)
       throws InterruptedException, IOException {
+    ShutdownHooks.addHook(
+        1,
+        new Runnable() {
+          @Override
+          public void run() {
+            close();
+          }
+        });
     this.internalExecutor =
         executor == null
             ? Executor.make("com.swoval.files.FileCache-callback-internalExecutor")

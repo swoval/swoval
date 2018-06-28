@@ -13,6 +13,7 @@ import com.swoval.files.DirectoryWatcher.Event
 import com.swoval.files.DirectoryWatcher.Event.Kind
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
+import com.swoval.runtime.ShutdownHooks
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -358,6 +359,12 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
 
   private val watcher: DirectoryWatcher =
     factory.create(callback(this.internalExecutor.copy()), this.internalExecutor.copy())
+
+  ShutdownHooks.addHook(1, new Runnable() {
+    override def run(): Unit = {
+      close()
+    }
+  })
 
   /**
  Cleans up the directory watcher and clears the directory cache.

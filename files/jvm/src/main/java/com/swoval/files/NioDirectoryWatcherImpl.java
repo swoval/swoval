@@ -12,6 +12,7 @@ import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import com.swoval.functional.IO;
+import com.swoval.runtime.ShutdownHooks;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.Files;
@@ -95,6 +96,14 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
         executor,
         options);
     this.watchService = watchService;
+    ShutdownHooks.addHook(
+        1,
+        new Runnable() {
+          @Override
+          public void run() {
+            close();
+          }
+        });
     final CountDownLatch latch = new CountDownLatch(1);
     loopThread =
         new Thread("NioDirectoryWatcher-loop-thread-" + threadId.incrementAndGet()) {
