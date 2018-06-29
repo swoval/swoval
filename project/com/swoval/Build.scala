@@ -518,16 +518,13 @@ object Build {
         val cp = (fullClasspath in Test).value
           .map(_.data)
           .filterNot(_.toString.contains("jacoco"))
-          .map(s => Paths.get(s.toString).toUri.toURL)
-          .toArray
-        val process: java.lang.Process =
-          new java.lang.ProcessBuilder("java",
-                                       "-cp",
-                                       cp.mkString(":"),
-                                       "com.swoval.files.AllTests",
-                                       count.toString)
-            .inheritIO()
-            .start()
+          .mkString(File.pathSeparator)
+        val pb = new java.lang.ProcessBuilder("java",
+                                              "-classpath",
+                                              cp,
+                                              "com.swoval.files.AllTests",
+                                              count.toString)
+        val process = pb.inheritIO().start()
         process.waitFor()
       },
       quickListReflectionTest := {
