@@ -641,21 +641,22 @@ trait FileCacheTest extends TestSuite {
     }
     'callbacks - {
       'add - withTempDirectory { dir =>
+        val file = dir.resolve("file")
         usingAsync(simpleCache((_: Entry[Path]) => {})) { c =>
           val creationLatch = new CountDownLatch(1)
           val updateLatch = new CountDownLatch(1)
           val deletionLatch = new CountDownLatch(1)
-          c.addCallback(new OnChange[Path] {
-            override def apply(entry: Entry[Path]): Unit = {
-              creationLatch.countDown()
-              if (entry.path.endsWith("file") && !Files.exists(entry.path))
-                deletionLatch.countDown()
-              else if (Files.getLastModifiedTime(entry.path).toMillis == 3000)
-                updateLatch.countDown()
-            }
-          })
+          c.addObserver(new Observer[Path] {
+                  override def onCreate(newEntry: Entry[Path]): Unit = creationLatch.countDown()
+                  override def onDelete(oldEntry: Entry[Path]): Unit =
+                    if (oldEntry.path == file) deletionLatch.countDown
+                  override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
+                    if (newEntry.path.lastModified == 3000) updateLatch.countDown()
+                  }
+                  override def onError(path: Path, exception: IOException): Unit = {}
+                })
           c.reg(dir)
-          val file = Files.createFile(dir.resolve("file"))
+          file.createFile()
           creationLatch
             .waitFor(DEFAULT_TIMEOUT) {
               c.ls(dir) === Seq(file)
