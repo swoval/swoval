@@ -25,14 +25,33 @@ object DirectoryWatcher {
   def defaultWatcher(callback: Consumer[DirectoryWatcher.Event],
                      executor: Executor,
                      options: Option*): DirectoryWatcher =
-    if (Platform.isMac) new AppleDirectoryWatcher(callback, executor, options: _*)
-    else PlatformWatcher.make(callback, executor, options: _*)
+    defaultWatcher(callback, executor, new DirectoryRegistry(), options: _*)
+
+  /**
+   * Create a DirectoryWatcher for the runtime platform.
+   *
+   * @param callback [[com.swoval.functional.Consumer]] to run on file events
+   * @param executor provides a single threaded context to manage state
+   * @param registry The registry of directories to monitor
+   * @param options Runtime [[DirectoryWatcher.Option]] instances for the watcher. This is only
+   *     relevant for the [[NioDirectoryWatcher]] that is used on linux and windows.
+   * @return DirectoryWatcher for the runtime platform
+   *     initialized
+   *     initialization
+   */
+  def defaultWatcher(callback: Consumer[DirectoryWatcher.Event],
+                     executor: Executor,
+                     registry: DirectoryRegistry,
+                     options: Option*): DirectoryWatcher =
+    if (Platform.isMac)
+      new AppleDirectoryWatcher(callback, executor, registry, options: _*)
+    else PlatformWatcher.make(callback, executor, registry, options: _*)
 
   /**
    * Instantiates new [[DirectoryWatcher]] instances with a [[com.swoval.functional.Consumer]]. This is primarily so that the [[DirectoryWatcher]] in
    * [[FileCache]] may be changed in testing.
    */
-  trait Factory {
+  abstract class Factory {
 
     /**
      * Creates a new DirectoryWatcher
@@ -43,14 +62,30 @@ object DirectoryWatcher {
      *     this can occur on mac
      *     and windows
      */
-    def create(callback: Consumer[DirectoryWatcher.Event], executor: Executor): DirectoryWatcher
+    def create(callback: Consumer[DirectoryWatcher.Event], executor: Executor): DirectoryWatcher =
+      create(callback, executor, new DirectoryRegistry())
+
+    /**
+     * Creates a new DirectoryWatcher
+     *
+     * @param callback The callback to invoke on directory updates
+     * @param executor The executor on which internal updates are invoked
+     * @param directoryRegistry The registry of directories to monitor
+     * @return A DirectoryWatcher instance
+     *     this can occur on mac
+     *     and windows
+     */
+    def create(callback: Consumer[DirectoryWatcher.Event],
+               executor: Executor,
+               directoryRegistry: DirectoryRegistry): DirectoryWatcher
 
   }
 
   val DEFAULT_FACTORY: Factory = new Factory() {
     override def create(callback: Consumer[DirectoryWatcher.Event],
-                        executor: Executor): DirectoryWatcher =
-      defaultWatcher(callback, executor)
+                        executor: Executor,
+                        directoryRegistry: DirectoryRegistry): DirectoryWatcher =
+      defaultWatcher(callback, executor, directoryRegistry)
   }
 
   object Event {

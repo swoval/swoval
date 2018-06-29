@@ -41,6 +41,7 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
       final Registerable watchService,
       final Executor callbackExecutor,
       final Executor executor,
+      final DirectoryRegistry directoryRegistry,
       final DirectoryWatcher.Option... options)
       throws InterruptedException {
     super(
@@ -95,6 +96,7 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
         },
         callbackExecutor,
         executor,
+        directoryRegistry,
         options);
     this.watchService = watchService;
     ShutdownHooks.addHook(

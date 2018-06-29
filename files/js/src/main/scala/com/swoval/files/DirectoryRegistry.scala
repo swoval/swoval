@@ -50,7 +50,7 @@ class DirectoryRegistry extends Filter[Path] {
   }
 
   def maxDepthFor(path: Path): Int = {
-    var maxDepth: Int = -1
+    var maxDepth: Int = java.lang.Integer.MIN_VALUE
     val it: Iterator[RegisteredDirectory] =
       registeredDirectoriesByPath.values.iterator()
     while (it.hasNext) {

@@ -17,7 +17,7 @@ import utest._
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.concurrent.TimeoutException
+import scala.concurrent.{ Future, TimeoutException }
 import scala.concurrent.duration._
 import scala.util.{ Failure, Try }
 
@@ -380,7 +380,8 @@ trait FileCacheTest extends TestSuite {
         }
       }
       'directory - {
-        'base - withTempDirectory { dir =>
+        'base - withTempDirectory { root =>
+          val dir = Files.createDirectories(root.resolve("directory-base"));
           withTempDirectory { otherDir =>
             val file = Files.createFile(otherDir.resolve("file"))
             val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
@@ -459,7 +460,8 @@ trait FileCacheTest extends TestSuite {
             }
           }
         }
-        'added - withTempDirectory { dir =>
+        'added - withTempDirectory { root =>
+          val dir = Files.createDirectories(root.resolve("directory-added"))
           withTempFile { file =>
             val linkLatch = new CountDownLatch(1)
             val fileLatch = new CountDownLatch(1)
@@ -640,6 +642,94 @@ trait FileCacheTest extends TestSuite {
         }
       }
     }
+    'registeredFiles - {
+      'exists - withTempFile { file =>
+        val latch = new CountDownLatch(1)
+        usingAsync(simpleCache((e: Entry[Path]) => {
+          if (e.path.lastModified == 3000) latch.countDown()
+        })) { c =>
+          c.reg(file)
+          file.setLastModifiedTime(3000)
+          latch.waitFor(DEFAULT_TIMEOUT) {
+            file.lastModified ==> 3000
+          }
+        }
+      }
+      'absent - withTempDirectory { dir =>
+        val file = dir.resolve("file")
+        val latch = new CountDownLatch(1)
+        usingAsync(simpleCache((e: Entry[Path]) => {
+          if (e.path == file) latch.countDown()
+        })) { c =>
+          c.reg(file)
+          file.createFile()
+          latch.waitFor(DEFAULT_TIMEOUT) {
+            c.ls(file) === Seq(file)
+          }
+        }
+      }
+      'replaced - withTempFile { file =>
+        val dir = file.getParent
+        val deletionLatch = new CountDownLatch(1)
+        val newFileLatch = new CountDownLatch(1)
+        val newFile = dir.resolve("new-file")
+        val observer = new Observer[Path] {
+          override def onCreate(newEntry: Entry[Path]): Unit = {
+            if (newEntry.path == newFile) newFileLatch.countDown()
+          }
+          override def onDelete(oldEntry: Entry[Path]): Unit =
+            if (oldEntry.path == dir) deletionLatch.countDown()
+          override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
+          override def onError(path: Path, exception: IOException): Unit = {}
+        }
+        usingAsync(FileCache.apply(((p: Path) => p): Converter[Path], factory, observer)) { c =>
+          c.reg(dir)
+          c.ls(dir) === Seq(file)
+          dir.deleteRecursive()
+          deletionLatch
+            .waitFor(DEFAULT_TIMEOUT) {
+              c.ls(dir) === Seq.empty[Path]
+              Files.createDirectories(dir)
+              newFile.createFile()
+            }
+            .flatMap { _ =>
+              newFileLatch.waitFor(DEFAULT_TIMEOUT) {
+                c.ls(dir) === Seq(newFile)
+              }
+            }
+        }
+      }
+    }
+    'list - {
+      'file - withTempFile { file =>
+        using(simpleCache((_: Entry[Path]) => {})) { c =>
+          c.reg(file)
+          c.ls(file) === Seq(file)
+        }
+      }
+      'directory - {
+        'empty - withTempDirectory { dir =>
+          using(simpleCache((_: Entry[Path]) => {})) { c =>
+            c.reg(dir)
+            c.ls(dir) === Seq.empty[Path]
+          }
+        }
+        'nonEmpty - withTempFile { file =>
+          val dir = file.getParent
+          using(simpleCache((_: Entry[Path]) => {})) { c =>
+            c.reg(dir)
+            c.ls(dir) === Seq(file)
+          }
+        }
+        'limit - withTempFile { file =>
+          val dir = file.getParent
+          using(simpleCache((_: Entry[Path]) => {})) { c =>
+            c.register(dir, -1)
+            c.ls(dir) === Seq(dir)
+          }
+        }
+      }
+    }
     'callbacks - {
       'add - withTempDirectory { dir =>
         val file = dir.resolve("file")
@@ -648,14 +738,14 @@ trait FileCacheTest extends TestSuite {
           val updateLatch = new CountDownLatch(1)
           val deletionLatch = new CountDownLatch(1)
           c.addObserver(new Observer[Path] {
-                  override def onCreate(newEntry: Entry[Path]): Unit = creationLatch.countDown()
-                  override def onDelete(oldEntry: Entry[Path]): Unit =
-                    if (oldEntry.path == file) deletionLatch.countDown
-                  override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
-                    if (newEntry.path.lastModified == 3000) updateLatch.countDown()
-                  }
-                  override def onError(path: Path, exception: IOException): Unit = {}
-                })
+            override def onCreate(newEntry: Entry[Path]): Unit = creationLatch.countDown()
+            override def onDelete(oldEntry: Entry[Path]): Unit =
+              if (oldEntry.path == file) deletionLatch.countDown
+            override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
+              if (newEntry.path.lastModified == 3000) updateLatch.countDown()
+            }
+            override def onError(path: Path, exception: IOException): Unit = {}
+          })
           c.reg(dir)
           file.createFile()
           creationLatch
@@ -722,15 +812,18 @@ object DefaultFileCacheTest extends FileCacheTest {
 object NioFileCacheTest extends FileCacheTest {
   val factory = new DirectoryWatcher.Factory {
     override def create(callback: Consumer[DirectoryWatcher.Event],
-                        executor: Executor): DirectoryWatcher =
-      PlatformWatcher.make(callback, WatchService.newWatchService, executor);
+                        executor: Executor,
+                        directoryRegistry: DirectoryRegistry): DirectoryWatcher =
+      PlatformWatcher.make(callback, WatchService.newWatchService, executor, directoryRegistry)
   }
   val boundedFactory = new DirectoryWatcher.Factory {
     override def create(callback: Consumer[DirectoryWatcher.Event],
-                        executor: Executor): DirectoryWatcher =
+                        executor: Executor,
+                        directoryRegistry: DirectoryRegistry): DirectoryWatcher =
       PlatformWatcher.make(callback,
                            new BoundedWatchService(4, WatchService.newWatchService()),
-                           executor);
+                           executor,
+                           directoryRegistry)
   }
   val tests =
     if (Platform.isJVM && Platform.isMac) testsImpl

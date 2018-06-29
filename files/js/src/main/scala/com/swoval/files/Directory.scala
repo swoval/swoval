@@ -637,6 +637,7 @@ class Directory[T <: AnyRef](val path: Path,
               result
             } else {
               addDirectory(currentDir, resolved, result)
+              result
             }
           }
         } else {
@@ -768,8 +769,8 @@ class Directory[T <: AnyRef](val path: Path,
     }
 
   def init(): Directory[T] = {
-    if (depth >= 0) {
-      lock.synchronized {
+    lock.synchronized {
+      if (depth >= 0) {
         val it: Iterator[QuickFile] = QuickList.list(path, 0, true).iterator()
         while (it.hasNext) {
           val file: QuickFile = it.next()

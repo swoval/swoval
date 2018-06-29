@@ -72,12 +72,15 @@ trait DirectoryWatcherTest extends TestSuite {
           val events = new ArrayBlockingQueue[String](10)
           val callback: Consumer[String] = (stream: String) => events.add(stream)
           withTempDirectory(dir) { subdir =>
-            val watcher = new AppleDirectoryWatcher(DEFAULT_LATENCY.toNanos / 1.0e9,
-                                                    fileFlags,
-                                                    Executor.make("apple-directory-watcher-test"),
-                                                    (_: DirectoryWatcher.Event) => {},
-                                                    callback,
-                                                    null)
+            val watcher = new AppleDirectoryWatcher(
+              DEFAULT_LATENCY.toNanos / 1.0e9,
+              fileFlags,
+              Executor.make("apple-directory-watcher-test"),
+              (_: DirectoryWatcher.Event) => {},
+              callback,
+              null,
+              new DirectoryRegistry
+            )
             usingAsync(watcher) { w =>
               w.register(subdir)
               w.register(dir)
@@ -321,5 +324,8 @@ object NioDirectoryWatcherTest extends DirectoryWatcherTest {
       }
   def defaultWatcher(callback: Consumer[DirectoryWatcher.Event],
                      options: DirectoryWatcher.Option*): DirectoryWatcher =
-    PlatformWatcher.make(callback, Executor.make("NioDirectoryWatcherTestExecutor"), options: _*)
+    PlatformWatcher.make(callback,
+                         Executor.make("NioDirectoryWatcherTestExecutor"),
+                         new DirectoryRegistry(),
+                         options: _*)
 }

@@ -74,20 +74,6 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
   }
 
   /**
-   * Instantiate a NioDirectoryWatcher.
-   *
-   * @param register IO task to register path
-   * @param callbackExecutor The Executor to invoke callbacks on
-   * @param executor The Executor to internally manage the watcher
-   * @param options The options for this watcher
-   */
-  def this(register: IO[Path, WatchedDirectory],
-           callbackExecutor: Executor,
-           executor: Executor,
-           options: DirectoryWatcher.Option*) =
-    this(register, callbackExecutor, executor, new DirectoryRegistry(), options: _*)
-
-  /**
    * Register a path to monitor for file events
    *
    * @param path The directory to watch for file events
@@ -299,9 +285,7 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
   private def add(path: Path, maxDepth: Int, newFiles: Set[QuickFile]): Boolean = {
     var result: Boolean = true
     try {
-      if (directoryRegistry.maxDepthFor(path) < 0) {
-        directoryRegistry.addDirectory(path, maxDepth)
-      } else {
+      if (directoryRegistry.maxDepthFor(path) >= 0) {
         val dir: Directory[WatchedDirectory] = getRoot(path.getRoot)
         if (dir != null) {
           update(dir, path)
@@ -347,15 +331,16 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
     } else if (path != realPath) {
       /*
        * Note that watchedDir is not null, which means that this path has been
-       * registered
-       * with a different alias.
+       * registered with a different alias.
        */
 
       throw new FileSystemLoopException(path.toString)
     }
     if (result) {
       val dir: Directory[WatchedDirectory] = getRoot(realPath.getRoot)
-      if (dir != null) update(dir, path)
+      var toUpdate: Path = path
+      while (toUpdate != null && !Files.isDirectory(toUpdate)) toUpdate = toUpdate.getParent
+      if (dir != null && toUpdate != null) update(dir, toUpdate)
     }
     result
   }

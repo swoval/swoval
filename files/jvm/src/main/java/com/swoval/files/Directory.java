@@ -309,6 +309,7 @@ public class Directory<T> implements AutoCloseable {
               return result;
             } else {
               addDirectory(currentDir, resolved, result);
+              return result;
             }
           }
         } else {
@@ -707,7 +708,6 @@ public class Directory<T> implements AutoCloseable {
      *
      * @param path The path to which this entry corresponds
      * @param value The {@code path} derived value for this entry
-     * @throws IOException if the path can't be opened
      */
     public Entry(final Path path, final T value) {
       this(path, value, Entry.getKindOrUnknown(path));

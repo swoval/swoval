@@ -89,22 +89,6 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
   }
 
   /**
-   * Instantiate a NioDirectoryWatcher.
-   *
-   * @param register IO task to register path
-   * @param callbackExecutor The Executor to invoke callbacks on
-   * @param executor The Executor to internally manage the watcher
-   * @param options The options for this watcher
-   */
-  NioDirectoryWatcher(
-      final IO<Path, WatchedDirectory> register,
-      final Executor callbackExecutor,
-      final Executor executor,
-      final DirectoryWatcher.Option... options) {
-    this(register, callbackExecutor, executor, new DirectoryRegistry(), options);
-  }
-
-  /**
    * Register a path to monitor for file events
    *
    * @param path The directory to watch for file events
@@ -391,14 +375,17 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
     } else if (!path.equals(realPath)) {
       /*
        * Note that watchedDir is not null, which means that this path has been
-       * registered
-       * with a different alias.
+       * registered with a different alias.
        */
       throw new FileSystemLoopException(path.toString());
     }
     if (result) {
       final Directory<WatchedDirectory> dir = getRoot(realPath.getRoot());
-      if (dir != null) update(dir, path);
+      Path toUpdate = path;
+      while (toUpdate != null && !Files.isDirectory(toUpdate)) {
+        toUpdate = toUpdate.getParent();
+      }
+      if (dir != null && toUpdate != null) update(dir, toUpdate);
     }
     return result;
   }

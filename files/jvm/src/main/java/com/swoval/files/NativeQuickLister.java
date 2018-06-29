@@ -50,8 +50,8 @@ class NativeQuickLister extends QuickListerImpl {
   private native String getName(long fileHandle);
 
   @SuppressWarnings("EmptyCatchBlock")
-  private QuickListerImpl.ListResults fillResults(final String dir, final boolean followLinks, final int attempt)
-      throws IOException {
+  private QuickListerImpl.ListResults fillResults(
+      final String dir, final boolean followLinks, final int attempt) throws IOException {
     final QuickListerImpl.ListResults results = new QuickListerImpl.ListResults();
     final long handle = Platform.isWin() ? openDir(dir + "\\*") : openDir(dir);
     final int err = errno(handle);

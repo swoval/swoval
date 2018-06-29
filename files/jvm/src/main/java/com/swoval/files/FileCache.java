@@ -1,6 +1,9 @@
 package com.swoval.files;
 
 import static com.swoval.files.DirectoryWatcher.DEFAULT_FACTORY;
+import static com.swoval.files.DirectoryWatcher.Event.Create;
+import static com.swoval.files.DirectoryWatcher.Event.Delete;
+import static com.swoval.files.DirectoryWatcher.Event.Modify;
 import static com.swoval.files.DirectoryWatcher.Event.Overflow;
 import static com.swoval.files.EntryFilters.AllPass;
 
@@ -15,6 +18,8 @@ import com.swoval.functional.Either;
 import com.swoval.runtime.ShutdownHooks;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
@@ -309,12 +314,14 @@ public abstract class FileCache<T> implements AutoCloseable {
 
 class FileCacheImpl<T> extends FileCache<T> {
   private final Map<Path, Directory<T>> directories = new HashMap<>();
+  private final Set<Path> pendingFiles = new HashSet<>();
   private final Converter<T> converter;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final Executor internalExecutor;
   private final Executor callbackExecutor =
       Executor.make("com.swoval.files.FileCache-callback-executor");
   private final SymlinkWatcher symlinkWatcher;
+  private final DirectoryRegistry registry = new DirectoryRegistry();
 
   private Consumer<Event> callback(final Executor executor) {
     return new Consumer<Event>() {
@@ -358,7 +365,8 @@ class FileCacheImpl<T> extends FileCache<T> {
             ? Executor.make("com.swoval.files.FileCache-callback-internalExecutor")
             : executor;
     this.watcher =
-        factory.create(callback(this.internalExecutor.copy()), this.internalExecutor.copy());
+        factory.create(
+            callback(this.internalExecutor.copy()), this.internalExecutor.copy(), registry);
     this.converter = converter;
     symlinkWatcher =
         !ArrayOps.contains(options, FileCache.Option.NOFOLLOW_LINKS)
@@ -399,8 +407,26 @@ class FileCacheImpl<T> extends FileCache<T> {
   @Override
   public List<Directory.Entry<T>> list(
       final Path path, final int maxDepth, final Directory.EntryFilter<? super T> filter) {
-    Pair<Directory<T>, List<Directory.Entry<T>>> pair = listImpl(path, maxDepth, filter);
-    return pair == null ? new ArrayList<Directory.Entry<T>>() : pair.second;
+    return internalExecutor
+        .block(
+            new Callable<List<Directory.Entry<T>>>() {
+              @Override
+              public List<Directory.Entry<T>> call() {
+                final Directory<T> dir = find(path);
+                if (dir == null) {
+                  return new ArrayList<>();
+                } else {
+                  if (dir.path.equals(path) && dir.getDepth() == -1) {
+                    List<Directory.Entry<T>> result = new ArrayList<>();
+                    result.add(dir.entry());
+                    return result;
+                  } else {
+                    return dir.list(path, maxDepth, filter);
+                  }
+                }
+              }
+            })
+        .get();
   }
 
   @Override
@@ -423,6 +449,7 @@ class FileCacheImpl<T> extends FileCache<T> {
 
   private boolean doReg(final Path path, final int maxDepth) throws IOException {
     boolean result = false;
+    registry.addDirectory(path, maxDepth);
     final List<Directory<T>> dirs = new ArrayList<>(directories.values());
     Collections.sort(
         dirs,
@@ -460,25 +487,33 @@ class FileCacheImpl<T> extends FileCache<T> {
       }
     }
     if (existing == null) {
-      final Directory<T> dir = Directory.cached(path, converter, maxDepth);
-      directories.put(path, dir);
-      final Iterator<Directory.Entry<T>> entryIterator =
-          dir.list(true, EntryFilters.AllPass).iterator();
-      if (symlinkWatcher != null) {
-        while (entryIterator.hasNext()) {
-          final Directory.Entry<T> entry = entryIterator.next();
-          if (entry.isSymbolicLink()) {
-            symlinkWatcher.addSymlink(entry.path, entry.isDirectory(), maxDepth - 1);
+      try {
+        Directory<T> dir;
+        try {
+          dir = Directory.cached(path, converter, maxDepth);
+        } catch (final NotDirectoryException e) {
+          dir = Directory.cached(path, converter, -1);
+        }
+        directories.put(path, dir);
+        final Iterator<Directory.Entry<T>> entryIterator =
+            dir.list(true, EntryFilters.AllPass).iterator();
+        if (symlinkWatcher != null) {
+          while (entryIterator.hasNext()) {
+            final Directory.Entry<T> entry = entryIterator.next();
+            if (entry.isSymbolicLink()) {
+              symlinkWatcher.addSymlink(entry.path, entry.isDirectory(), maxDepth - 1);
+            }
           }
         }
+        result = true;
+      } catch (final NoSuchFileException e) {
+        result = pendingFiles.add(path);
       }
-      result = true;
     }
     return result;
   }
 
-  private Pair<Directory<T>, List<Directory.Entry<T>>> listImpl(
-      final Path path, final int maxDepth, final Directory.EntryFilter<? super T> filter) {
+  private Directory<T> find(final Path path) {
     Directory<T> foundDir = null;
     final Iterator<Directory<T>> it = directories.values().iterator();
     while (it.hasNext()) {
@@ -487,11 +522,7 @@ class FileCacheImpl<T> extends FileCache<T> {
         foundDir = dir;
       }
     }
-    if (foundDir != null) {
-      return new Pair<>(foundDir, foundDir.list(path, maxDepth, filter));
-    } else {
-      return null;
-    }
+    return foundDir;
   }
 
   private boolean diff(Directory<T> left, Directory<T> right) {
@@ -621,6 +652,30 @@ class FileCacheImpl<T> extends FileCache<T> {
     }
   }
 
+  private void addCallback(
+      final List<Callback> callbacks,
+      final Path path,
+      final Directory.Entry<T> oldEntry,
+      final Directory.Entry<T> newEntry,
+      final Kind kind,
+      final IOException ioException) {
+    callbacks.add(
+        new Callback(path, kind) {
+          @Override
+          public void run() {
+            if (ioException != null) {
+              observers.onError(path, ioException);
+            } else if (kind.equals(Create)) {
+              observers.onCreate(newEntry);
+            } else if (kind.equals(Delete)) {
+              observers.onDelete(oldEntry);
+            } else if (kind.equals(Modify)) {
+              observers.onUpdate(oldEntry, newEntry);
+            }
+          }
+        });
+  }
+
   @SuppressWarnings("EmptyCatchBlock")
   private void handleEvent(final Path path) {
     if (!closed.get()) {
@@ -631,19 +686,18 @@ class FileCacheImpl<T> extends FileCache<T> {
       } catch (IOException e) {
       }
       if (attrs != null) {
-        final Pair<Directory<T>, List<Directory.Entry<T>>> pair =
-            listImpl(
-                path,
-                0,
-                new Directory.EntryFilter<T>() {
-                  @Override
-                  public boolean accept(Directory.Entry<? extends T> entry) {
-                    return path.equals(entry.path);
-                  }
-                });
-        if (pair != null) {
-          final Directory<T> dir = pair.first;
-          final List<Directory.Entry<T>> paths = pair.second;
+        final Directory<T> dir = find(path);
+        if (dir != null) {
+          final List<Directory.Entry<T>> paths =
+              dir.list(
+                  path,
+                  0,
+                  new Directory.EntryFilter<T>() {
+                    @Override
+                    public boolean accept(Directory.Entry<? extends T> entry) {
+                      return path.equals(entry.path);
+                    }
+                  });
           if (!paths.isEmpty() || !path.equals(dir.path)) {
             final Path toUpdate = paths.isEmpty() ? path : paths.get(0).path;
             try {
@@ -656,23 +710,42 @@ class FileCacheImpl<T> extends FileCache<T> {
                   dir.update(toUpdate, Directory.Entry.getKind(toUpdate, attrs));
               updates.observe(callbackObserver(callbacks));
             } catch (final IOException e) {
-              callbacks.add(
-                  new Callback(path, Event.Error) {
-                    @Override
-                    public void run() {
-                      observers.onError(path, e);
-                    }
-                  });
+              addCallback(callbacks, path, null, null, Event.Error, e);
             }
+          }
+        } else if (pendingFiles.remove(path)) {
+          try {
+            Directory<T> directory;
+            try {
+              directory = Directory.cached(path, converter, registry.maxDepthFor(path));
+            } catch (final NotDirectoryException nde) {
+              directory = Directory.cached(path, converter, -1);
+            }
+            directories.put(path, directory);
+            addCallback(callbacks, path, null, directory.entry(), Create, null);
+            final Iterator<Directory.Entry<T>> it = directory.list(true, AllPass).iterator();
+            while (it.hasNext()) {
+              final Directory.Entry<T> entry = it.next();
+              addCallback(callbacks, entry.path, null, entry, Create, null);
+            }
+          } catch (final IOException e) {
+            pendingFiles.add(path);
           }
         }
       } else {
         final List<Iterator<Directory.Entry<T>>> removeIterators = new ArrayList<>();
-        final Iterator<Directory<T>> directoryIterator = directories.values().iterator();
+        final Iterator<Directory<T>> directoryIterator =
+            new ArrayList<>(directories.values()).iterator();
         while (directoryIterator.hasNext()) {
           final Directory<T> dir = directoryIterator.next();
           if (path.startsWith(dir.path)) {
-            removeIterators.add(dir.remove(path).iterator());
+            List<Directory.Entry<T>> updates = dir.remove(path);
+            if (dir.path.equals(path)) {
+              pendingFiles.add(path);
+              updates.add(dir.entry());
+              directories.remove(path);
+            }
+            removeIterators.add(updates.iterator());
           }
         }
         final Iterator<Iterator<Directory.Entry<T>>> it = removeIterators.iterator();
@@ -680,13 +753,7 @@ class FileCacheImpl<T> extends FileCache<T> {
           final Iterator<Directory.Entry<T>> removeIterator = it.next();
           while (removeIterator.hasNext()) {
             final Directory.Entry<T> entry = removeIterator.next();
-            callbacks.add(
-                new Callback(entry.path, Event.Delete) {
-                  @Override
-                  public void run() {
-                    observers.onDelete(entry);
-                  }
-                });
+            addCallback(callbacks, entry.path, entry, null, Delete, null);
             if (symlinkWatcher != null) {
               symlinkWatcher.remove(entry.path);
             }
@@ -713,62 +780,23 @@ class FileCacheImpl<T> extends FileCache<T> {
     return new Observer<T>() {
       @Override
       public void onCreate(final Directory.Entry<T> newEntry) {
-        callbacks.add(
-            new Callback(newEntry.path, Event.Create) {
-              @Override
-              public void run() {
-                observers.onCreate(newEntry);
-              }
-            });
+        addCallback(callbacks, newEntry.path, null, newEntry, Create, null);
       }
 
       @Override
       public void onDelete(final Directory.Entry<T> oldEntry) {
-        callbacks.add(
-            new Callback(oldEntry.path, Event.Delete) {
-              @Override
-              public void run() {
-                observers.onDelete(oldEntry);
-              }
-            });
+        addCallback(callbacks, oldEntry.path, oldEntry, null, Delete, null);
       }
 
       @Override
       public void onUpdate(final Directory.Entry<T> oldEntry, final Directory.Entry<T> newEntry) {
-        callbacks.add(
-            new Callback(oldEntry.path, Event.Modify) {
-              @Override
-              public void run() {
-                observers.onUpdate(oldEntry, newEntry);
-              }
-            });
+        addCallback(callbacks, oldEntry.path, oldEntry, newEntry, Modify, null);
       }
 
       @Override
       public void onError(final Path path, final IOException exception) {
-        callbacks.add(
-            new Callback(path, Event.Error) {
-              @Override
-              public void run() {
-                observers.onError(path, exception);
-              }
-            });
+        addCallback(callbacks, path, null, null, Event.Error, exception);
       }
     };
-  }
-
-  private static class Pair<A, B> {
-    final A first;
-    final B second;
-
-    Pair(A first, B second) {
-      this.first = first;
-      this.second = second;
-    }
-
-    @Override
-    public String toString() {
-      return "Pair(" + first + ", " + second + ")";
-    }
   }
 }
