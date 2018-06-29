@@ -2,10 +2,10 @@ package com.swoval.code
 
 import java.io.File
 import java.nio.file.{ Files, Path, Paths }
-import java.util.regex.Pattern
+
+import com.mysema.scalagen.{ Converter => SConverter }
 
 import scala.collection.JavaConverters._
-import com.mysema.scalagen.{ Converter => SConverter }
 
 object Converter {
   import scala.language.implicitConversions
@@ -13,6 +13,8 @@ object Converter {
   private val Link = link.r
   private val StripArgs =
     "(.+?)\\[\\[([^#(\\]]+)?(?=[#(])[#(\\]]((?:[^(]+)?(?=[(])|(?:[^\\]]+)(?=[\\]]))[^\\]]*\\]\\](.*)".r
+  private val syncRegex = "synchronized\\(([^)]+)\\)".r
+  private val paramRegex = "@param [<]([^>]+)[>]".r
   implicit class LineOps(val line: String) extends AnyVal {
     def include: Boolean = {
       line != "//remove if not needed" &&
@@ -20,27 +22,31 @@ object Converter {
       !line.contains("* @throws")
     }
     def fixSynchronization: String =
-      line.replaceAll("synchronized\\(([^)]+)\\)", "$1.synchronized")
+      syncRegex.replaceAllIn(line, "$1.synchronized")
 
     def fixRefs: String = line match {
       case Link(prefix, name, params, suffix) => s"$prefix[[$name]]$suffix"
       case l                                  => l
     }
-    def fixTypeParams: String = line.replaceAll("@param [<]([^>]+)[>]", "@tparam $1")
+    def fixTypeParams: String = paramRegex.replaceAllIn(line, "@tparam $1")
   }
+  def applyAll(content: String, mods: (String => String)*): String = mods.foldLeft(content) {
+    (c, mod) =>
+      mod(c)
+  }
+  private val mods = Seq[String => String](
+    Link.replaceAllIn(_, "$1[[$2]]"),
+    "(?s)^(.*class[^\n]+(?= \\/\\*\\*))(.+?)(?=\\*\\/)\\*\\/".r.replaceAllIn(_: String, "$1"),
+    "\\[\\[\\.".r.replaceAllIn(_: String, "[["),
+    "(?s)([ ]*\\/\\*\\*.+?\\*\\/)(.*)\\1".r.replaceAllIn(_: String, "$1"),
+    "(?s)(.+?import[^\n]+?)\n\nimport".r.replaceAllIn(_: String, "$1\nimport"),
+    "(?s)(.+?import[^\n]+?)\n\nimport".r.replaceAllIn(_: String, "$1\nimport"),
+    """(?s)(.+?)<a.+?href=["]([^"]+)["][^>]*>""".r.replaceAllIn(_: String, "$1[[$2 "),
+    "</a>".r.replaceAllIn(_: String, "]]"),
+    "java.lang.Boolean".r.replaceAllIn(_: String, "Boolean")
+  )
   def sanitize(lines: Seq[String]): Seq[String] = {
-    var original = Link
-      .replaceAllIn(lines.mkString("\n"), "$1[[$2]]")
-      .replaceAll("(?s)^(.*class[^\n]+(?= \\/\\*\\*))(.+?)(?=\\*\\/)\\*\\/", "$1")
-      .replaceAll("\\[\\[\\.", "[[")
-      .replaceAll("(?s)([ ]*\\/\\*\\*.+?\\*\\/)(.*)\\1", "$1")
-      .replaceAll("(?s)(.+?import[^\n]+?)\n\nimport", "$1\nimport")
-      .replaceAll("(?s)(.+?import[^\n]+?)\n\nimport", "$1\nimport")
-      .replaceAll("""(?s)(.+?)<a.+?href=["]([^"]+)["][^>]*>""", "$1[[$2 ")
-      .replaceAll("</a>", "]]")
-      .replaceAll("java.lang.Boolean", "Boolean")
-      .lines
-      .toIndexedSeq
+    var original = applyAll(lines.mkString("\n"), mods: _*).lines.toIndexedSeq
 
     var next = original
     do {
@@ -52,24 +58,33 @@ object Converter {
         case l                                          => l
       }
     } while (original != next)
-    next.map(
-      l =>
-        l.replaceAll("(class|object) (\\w+Impl|Observers|FileOps|EntryFilters)",
-                     "private[files] $1 $2"))
+    val regex = "(class|object) (\\w+Impl|Observers|FileOps|EntryFilters)".r
+    next.view.map(l => regex.replaceAllIn(l, "private[files] $1 $2"))
   }
   def sanitize(path: Path): String = {
     val lines = Files.readAllLines(path).asScala.flatMap { l =>
       if (l.include) Some(l.fixSynchronization.fixTypeParams) else None
     }
+    val varargsRegex = "(.*)options[)]".r
     val newLines = sanitize(lines)
     (if (path.toString.contains("DirectoryWatcher.scala")) {
-       newLines.filterNot(_.contains("import Event._"))
+       newLines
+         .filterNot(_.contains("import Event._"))
+         .map(varargsRegex.replaceAllIn(_, "$1options:_*)"))
      } else if (path.toString.contains("Directory.scala")) {
-       newLines.filterNot(_.contains("import Entry._"))
+       val regex = "(apply|cached|class Directory)[\\[]T".r
+       newLines.view
+         .filterNot(_.contains("import Entry._"))
+         .map(regex.replaceAllIn(_, "$1[T <: AnyRef"))
      } else if (path.toString.contains("FileCache.scala")) {
-       newLines.map(_.replaceAll("(new FileCacheImpl.*)options", "$1options:_*"))
-     } else if (path.toString.contains("QuickLister.scala")) {
-       newLines.map(_.replaceAll("\\[Any\\]", "[AnyRef]"))
+       val applyRegex = "(apply|class FileCache(?:Impl)?)[\\[]T".r
+       newLines.view
+         .filterNot(_.contains("import Entry._"))
+         .map(applyRegex.replaceAllIn(_, "$1[T <: AnyRef"))
+         .map(varargsRegex.replaceAllIn(_, "$1options:_*)"))
+     } else if (path.toString.contains("QuickLister.scala") || path.toString.contains("Filters")) {
+       val regex = "\\[(_ <: )?(Any|_)\\]".r
+       newLines.map(regex.replaceAllIn(_, "[$1AnyRef]"))
      } else {
        newLines
      }).mkString("\n")
@@ -82,7 +97,10 @@ object Converter {
       val target = targetDir.resolve(converted).toFile
       print(s"Converting $f to $target...")
       SConverter.instance211.convertFile(f, target)
-      Files.write(target.toPath, sanitize(target.toPath).getBytes)
+      println("done")
+      print(s"Sanitizing $target ...")
+      val warning = "// Do not edit this file manually. It is autogenerated."
+      Files.write(target.toPath, s"$warning\n\n${sanitize(target.toPath)}".getBytes)
       println("done.")
     }
   }

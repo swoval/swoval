@@ -6,8 +6,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -50,23 +50,23 @@ public abstract class Executor implements AutoCloseable {
    * @param <T> The result type of the Callable
    * @return The result evaluated by the Callable
    */
-  public <T> Either<T, Exception> block(final Callable<T> callable) {
-    final ArrayBlockingQueue<Either<T, Exception>> queue = new ArrayBlockingQueue<>(1);
+  public <T> Either<Exception, T> block(final Callable<T> callable) {
+    final ArrayBlockingQueue<Either<Exception, T>> queue = new ArrayBlockingQueue<>(1);
     run(
         new Runnable() {
           @Override
           public void run() {
             try {
-              queue.add(Either.<T, Exception, T>left(callable.call()));
+              queue.add(Either.<Exception, T, T>right(callable.call()));
             } catch (Exception e) {
-              queue.add(Either.<T, Exception, Exception>right(e));
+              queue.add(Either.<Exception, T, Exception>left(e));
             }
           }
         });
     try {
       return queue.take();
     } catch (InterruptedException e) {
-      return Either.right(e);
+      return Either.left(e);
     }
   }
 
@@ -104,6 +104,51 @@ public abstract class Executor implements AutoCloseable {
     return closed.get();
   }
 
+  static class ExecutorImpl extends Executor {
+    final ThreadFactory factory;
+    final ExecutorService service;
+
+    ExecutorImpl(final ThreadFactory factory, final ExecutorService service) {
+      this.factory = factory;
+      this.service = service;
+    }
+
+    @SuppressWarnings("EmptyCatchBlock")
+    @Override
+    public void close() {
+      if (closed.compareAndSet(false, true)) {
+        super.close();
+        service.shutdownNow();
+        try {
+          if (!service.awaitTermination(5, TimeUnit.SECONDS)) {
+            System.err.println("Couldn't close executor");
+          }
+        } catch (InterruptedException e) {
+        }
+        factory.close();
+      }
+    }
+
+    @Override
+    public void run(final Runnable runnable) {
+      if (factory.created(Thread.currentThread())) runnable.run();
+      else {
+        boolean submitted = false;
+        while (!submitted && !closed.get() && !Thread.currentThread().isInterrupted()) {
+          try {
+            service.submit(runnable);
+            submitted = true;
+          } catch (final RejectedExecutionException e) {
+            try {
+              Thread.sleep(2);
+            } catch (final InterruptedException ie) {
+              submitted = true;
+            }
+          }
+        }
+      }
+    }
+  }
   /**
    * Make a new instance of an Executor
    *
@@ -111,52 +156,23 @@ public abstract class Executor implements AutoCloseable {
    * @return Executor
    */
   public static Executor make(final String name) {
-    return new Executor() {
-      final ThreadFactory factory = new ThreadFactory(name);
-      final ExecutorService service =
-          new ThreadPoolExecutor(
-              1,
-              1,
-              0,
-              TimeUnit.SECONDS,
-              new LinkedBlockingQueue<Runnable>(),
-              factory) {
-            protected void finalize() {
-              shutdown();
-            }
-            @Override
-            protected void afterExecute(Runnable r, Throwable t) {
-              super.afterExecute(r, t);
-              if (t != null) {
-                System.err.println("Error running: " + r + "\n" + t);
-                for (final StackTraceElement el : t.getStackTrace()) {
-                  System.err.println(el);
-                }
-              }
-            }
-          };
-
-      @SuppressWarnings("EmptyCatchBlock")
-      @Override
-      public void close() {
-        if (closed.compareAndSet(false, true)) {
-          super.close();
-          service.shutdownNow();
-          try {
-            if (!service.awaitTermination(5, TimeUnit.SECONDS)) {
-              System.err.println("Couldn't close executor");
-            }
-          } catch (InterruptedException e) {
+    final ThreadFactory factory = new ThreadFactory(name);
+    final ExecutorService service =
+        new ThreadPoolExecutor(
+            1, 1, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(), factory) {
+          protected void finalize() {
+            shutdown();
           }
-          factory.close();
-        }
-      }
 
-      @Override
-      public void run(final Runnable runnable) {
-        if (factory.created(Thread.currentThread())) runnable.run();
-        else service.submit(runnable);
-      }
-    };
+          @Override
+          protected void afterExecute(Runnable r, Throwable t) {
+            super.afterExecute(r, t);
+            if (t != null) {
+              System.err.println("Error running: " + r + "\n" + t);
+              t.printStackTrace(System.err);
+            }
+          }
+        };
+    return new ExecutorImpl(factory, service);
   }
 }

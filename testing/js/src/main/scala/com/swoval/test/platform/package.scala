@@ -27,7 +27,10 @@ package object platform {
     path
   }
 
-  def createTempDirectory(): String = Fs.realpathSync(Fs.mkdtempSync("/tmp/"))
+  def createTempDirectory(): String = {
+    if (!Fs.existsSync("/tmp/swoval")) util.Try(Fs.mkdirSync("/tmp/swoval"))
+    Fs.realpathSync(Fs.mkdtempSync("/tmp/swoval/"))
+  }
 
   def createTempSubdirectory(dir: String): String = Fs.realpathSync(Fs.mkdtempSync(s"$dir$sep"))
 

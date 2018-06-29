@@ -1,5 +1,6 @@
-package com.swoval.files;
+package com.swoval.runtime;
 
+import com.swoval.files.QuickLister;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -10,6 +11,7 @@ import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Iterator;
 import java.util.Vector;
@@ -23,19 +25,12 @@ import java.util.Vector;
 public class NativeLoader {
   private static final String NATIVE_LIBRARY = "swoval-files0";
   private static final String lib = System.mapLibraryName(NATIVE_LIBRARY);
-  private static final Field usrPathsField;
-
-  static {
-    try {
-      usrPathsField = ClassLoader.class.getDeclaredField("usr_paths");
-      usrPathsField.setAccessible(true);
-    } catch (NoSuchFieldException e) {
-      throw new ExceptionInInitializerError(e);
-    }
-  }
 
   private static void loadPackaged(final String arch) throws IOException {
-    final Path temp = Files.createTempDirectory("jni-").toRealPath();
+    final Path swoval =
+        Files.createDirectories(
+            Paths.get(System.getProperty("java.io.tmpdir", "/tmp")).resolve("swoval-jni"));
+    final Path temp = Files.createTempDirectory(swoval, "native-lib").toRealPath();
     final String resourcePath = "/native/" + arch + "/" + lib;
     final InputStream resourceStream = NativeLoader.class.getResourceAsStream(resourcePath);
     if (resourceStream == null) {
@@ -60,19 +55,19 @@ public class NativeLoader {
 
     try {
       System.load(extractedPath.toString());
-      Runtime.getRuntime()
-          .addShutdownHook(
-              new Thread() {
-                public void run() {
-                  unloadNativeLibs();
-                  try {
-                    Files.deleteIfExists(extractedPath);
-                    Files.deleteIfExists(temp);
-                  } catch (IOException e) {
-                    System.err.println("Error deleting temporary directory " + temp);
-                  }
-                }
-              });
+      ShutdownHooks.addHook(
+          2,
+          new Runnable() {
+            public void run() {
+              unloadNativeLibs();
+              try {
+                Files.deleteIfExists(extractedPath);
+                Files.deleteIfExists(temp);
+              } catch (IOException e) {
+                System.err.println("Error deleting temporary directory " + temp);
+              }
+            }
+          });
 
     } catch (UnsatisfiedLinkError e) {
       deleteRecursive(temp);

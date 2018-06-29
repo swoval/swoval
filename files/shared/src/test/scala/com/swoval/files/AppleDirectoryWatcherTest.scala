@@ -11,11 +11,12 @@ import scala.concurrent.duration._
 import utest._
 
 object AppleDirectoryWatcherTest extends TestSuite {
-  import DirectoryWatcherTest.defaultWatcher
+  import DefaultDirectoryWatcherTest.defaultWatcher
   val DEFAULT_LATENCY = 5.milliseconds
   val dirFlags = new Flags.Create().setNoDefer()
   val tests = testOn(MacOS) {
     val events = new ArrayBlockingQueue[DirectoryWatcher.Event](10)
+    val dirFlags = AppleDirectoryWatcher.Options.flags(new Flags.Create().setNoDefer());
     "directories" - {
       'onCreate - {
         withTempDirectory { dir =>
@@ -23,7 +24,7 @@ object AppleDirectoryWatcherTest extends TestSuite {
           val callback: Consumer[DirectoryWatcher.Event] =
             (e: DirectoryWatcher.Event) => events.add(e)
 
-          usingAsync(defaultWatcher(DEFAULT_LATENCY, dirFlags, callback)) { w =>
+          usingAsync(defaultWatcher(callback, dirFlags)) { w =>
             w.register(dir)
             val f = dir.resolve(Paths.get("foo")).createFile()
             events.poll(DEFAULT_TIMEOUT)(_.path === dir)
@@ -34,7 +35,7 @@ object AppleDirectoryWatcherTest extends TestSuite {
         val callback: Consumer[DirectoryWatcher.Event] =
           (e: DirectoryWatcher.Event) => events.add(e)
 
-        usingAsync(defaultWatcher(DEFAULT_LATENCY, dirFlags, callback)) { w =>
+        usingAsync(defaultWatcher(callback, dirFlags)) { w =>
           val f = dir.resolve(Paths.get("foo")).createFile()
           w.register(dir)
           f.setLastModifiedTime(0L)
@@ -47,7 +48,7 @@ object AppleDirectoryWatcherTest extends TestSuite {
         val callback: Consumer[DirectoryWatcher.Event] =
           (e: DirectoryWatcher.Event) => events.add(e)
 
-        usingAsync(defaultWatcher(DEFAULT_LATENCY, dirFlags, callback)) { w =>
+        usingAsync(defaultWatcher(callback, dirFlags)) { w =>
           val f = dir.resolve(Paths.get("foo")).createFile()
           w.register(dir)
           f.delete()
@@ -60,7 +61,7 @@ object AppleDirectoryWatcherTest extends TestSuite {
             val callback: Consumer[DirectoryWatcher.Event] =
               (e: DirectoryWatcher.Event) => if (e.path != dir) events.add(e)
 
-            usingAsync(defaultWatcher(DEFAULT_LATENCY, dirFlags, callback)) { w =>
+            usingAsync(defaultWatcher(callback, dirFlags)) { w =>
               w.register(dir)
               subdir.resolve(Paths.get("foo")).createFile()
               events.poll(DEFAULT_TIMEOUT)(_.path ==> subdir)

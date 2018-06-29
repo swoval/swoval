@@ -109,6 +109,11 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
       if (open.compareAndSet(true, false)) {
         watcher.close();
         executor.shutdownNow();
+        final Iterator<Path> it = new ArrayList<>(registered.keySet()).iterator();
+        while (it.hasNext()) {
+          unregisterImpl(it.next());
+        }
+        registered.clear();
         try {
           executor.awaitTermination(5, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -146,7 +151,7 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
 
   private void createEvent(
       final MacOSXWatchKey key, final WatchEvent.Kind<Path> kind, final Path file) {
-    Event<Path> event = new Event<>(kind, 1, file);
+    Event<Path> event = new Event<>(kind, 1, key.watchable.relativize(file));
     key.addEvent(event);
     if (!readyKeys.contains(key)) {
       readyKeys.offer(key);
@@ -193,16 +198,19 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
     }
   }
 
-  public void unregister(final Path path) {
-    if (isOpen())
-      synchronized (registered) {
-        final MacOSXWatchKey key = registered.get(path);
-        if (key != null) {
-          registered.remove(path);
-          key.setStreamId(-1);
-          if (key.getStreamId() != -1) watcher.stopStream(key.getStreamId());
-        }
+  private void unregisterImpl(final Path path) {
+    synchronized (registered) {
+      final MacOSXWatchKey key = registered.get(path);
+      if (key != null) {
+        registered.remove(path);
+        key.setStreamId(-1);
+        if (key.getStreamId() != -1) watcher.stopStream(key.getStreamId());
       }
+    }
+  }
+
+  public void unregister(final Path path) {
+    if (isOpen()) unregisterImpl(path);
     else {
       throw new ClosedWatchServiceException();
     }

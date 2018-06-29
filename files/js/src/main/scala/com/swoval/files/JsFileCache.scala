@@ -10,8 +10,8 @@ import scala.scalajs.js.JSConverters._
 import scala.scalajs.js.annotation.{ JSExport, JSExportTopLevel }
 
 @JSExportTopLevel("FileCache")
-class JsFileCache[T](converter: js.UndefOr[js.Function1[Path, T]],
-                     callback: js.UndefOr[js.Function1[JSEntry[T], Unit]])
+class JsFileCache[T <: AnyRef](converter: js.UndefOr[js.Function1[Path, T]],
+                               callback: js.UndefOr[js.Function1[JSEntry[T], Unit]])
     extends js.Object {
   private[this] val inner: FileCache[T] = FileCache.apply(
     converter.toOption
@@ -32,11 +32,11 @@ class JsFileCache[T](converter: js.UndefOr[js.Function1[Path, T]],
         recursive.toOption.getOrElse(false),
         new EntryFilter[T] {
           override def accept(entry: Entry[_ <: T]): Boolean =
-            filter.fold(true)(_.apply(new JSEntry[T](entry.path.toString, entry.value)))
+            filter.fold(true)(_.apply(new JSEntry[T](entry.path.toString, entry.getValue)))
         }
       )
       .asScala
-      .map(e => new JSEntry[T](e.path.toString, e.value))
+      .map(e => new JSEntry[T](e.path.toString, e.getValue))
       .toJSArray
   }
   def register(path: String,
@@ -47,7 +47,7 @@ class JsFileCache[T](converter: js.UndefOr[js.Function1[Path, T]],
   def addCallback(callback: js.Function1[JSEntry[T], Unit]): Int =
     inner.addCallback(new OnChange[T] {
       override def apply(entry: Entry[T]) =
-        callback.apply(new JSEntry[T](entry.path.toString, entry.value))
+        callback.apply(new JSEntry[T](entry.path.toString, entry.getValue))
     })
   def removeCallback(handle: Int): Unit = inner.removeObserver(handle)
   def close(): Unit = inner.close()

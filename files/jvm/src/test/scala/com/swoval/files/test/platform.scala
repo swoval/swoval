@@ -7,6 +7,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.util.{ Failure, Try }
 
 object platform {
+  type Bool = java.lang.Boolean
   def newTimedPromise[T](p: Promise[T], timeout: FiniteDuration): TimedPromise[T] =
     new TimedPromise[T] {
       val timer = Executors.newSingleThreadScheduledExecutor()

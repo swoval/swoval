@@ -32,7 +32,7 @@ private class BoundedWatchKey(val queueSize: Int, underlying: WatchKey) extends 
     val raw = underlying.pollEvents
     if (raw.size() > queueSize) {
       val result = raw.asScala
-        .drop(queueSize)
+        .take(queueSize)
         .asJava
       result.add(new OverflowWatchEvent)
       result

@@ -1,8 +1,10 @@
 package com.swoval.files.apple;
 
 import com.swoval.concurrent.ThreadFactory;
-import com.swoval.files.NativeLoader;
+import com.swoval.files.AppleDirectoryWatcher;
+import com.swoval.runtime.NativeLoader;
 import com.swoval.functional.Consumer;
+import com.swoval.runtime.ShutdownHooks;
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -45,6 +47,14 @@ public class FileEventsApi implements AutoCloseable {
   private FileEventsApi(final Consumer<FileEvent> c, final Consumer<String> pc)
       throws InterruptedException {
     final CountDownLatch latch = new CountDownLatch(1);
+    ShutdownHooks.addHook(
+        1,
+        new Runnable() {
+          @Override
+          public void run() {
+            close();
+          }
+        });
     executor.submit(
         new Runnable() {
           @Override
