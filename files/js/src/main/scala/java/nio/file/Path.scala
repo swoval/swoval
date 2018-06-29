@@ -60,7 +60,7 @@ class JSPath(val rawPath: String) extends Path {
   }
   override def endsWith(other: Path): Boolean = endsWith(other.toString);
   override def endsWith(other: String): Boolean = this.file.getAbsolutePath.endsWith(other)
-  override def getRoot(): Path = new JSPath(File.separator)
+  override def getRoot(): Path = new JSPath(root)
   override def getFileName(): Path = new JSPath(file.getName)
   override def getFileSystem: FileSystem = ???
   override def getParent(): Path = this.file.getParent match {

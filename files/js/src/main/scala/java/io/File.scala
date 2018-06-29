@@ -34,8 +34,9 @@ class File(pathname: String) {
   def createNewFile(): Boolean =
     !exists &&
       Try(Fs.closeSync(Fs.openSync(pathname, "w"))).isSuccess
-  def delete(): Boolean =
-    Try(if (isDirectory) Fs.rmdirSync(pathname) else Fs.unlinkSync(pathname)).isSuccess
+  def delete(): Boolean = {
+    Try(Fs.unlinkSync(pathname)).recoverWith { case _ => Try(Fs.rmdirSync(pathname)) }.isSuccess
+  }
   def deleteOnExit(): Unit = ???
   def list(): Array[String] = listFiles().map(_.toString())
   def list(filter: FilenameFilter): Array[String] = listFiles(filter).map(_.toString)

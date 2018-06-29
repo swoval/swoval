@@ -48,7 +48,10 @@ object Files {
     new JSPath(path)
   }
   def delete(path: Path): Unit = path.toFile.delete()
-  def deleteIfExists(path: Path): Boolean = path.toFile.exists && path.toFile.delete
+  def deleteIfExists(path: Path): Boolean =
+    try {
+      path.toFile.delete()
+    } catch { case e: Exception => false }
   def exists(path: Path, options: LinkOption*): Boolean = exists(path, options.toArray)
   def exists(path: Path, options: Array[LinkOption] = Array.empty): Boolean = path.toFile.exists
   def isDirectory(path: Path, linkOptions: Array[LinkOption] = Array.empty): Boolean = {
@@ -105,37 +108,39 @@ object Files {
     files.foreach { f =>
       val p = path.resolve(f)
       try {
-        val attrs = readAttributes(p, classOf[BasicFileAttributes], linkOptions)
-        if (attrs.isDirectory) {
-          var ioException: IOException = null
+        Try(readAttributes(p, classOf[BasicFileAttributes], linkOptions)) foreach { attrs =>
+          if (attrs.isDirectory) {
+            var ioException: IOException = null
 
-          fileVisitor.preVisitDirectory(p, attrs) match {
-            case FileVisitResult.TERMINATE | FileVisitResult.SKIP_SIBLINGS => return path
-            case FileVisitResult.CONTINUE =>
-              try {
-                if (depth > 1) {
-                  walkFileTree(p, options, depth - 1, fileVisitor)
-                } else {
-                  fileVisitor.visitFile(p, attrs)
-                }
-              } catch {
-                case e: IOException => ioException = e
-              }
-            case _ =>
-          }
-          fileVisitor.postVisitDirectory(p, ioException)
-        } else {
-          try {
-            fileVisitor.visitFile(p, attrs) match {
+            fileVisitor.preVisitDirectory(p, attrs) match {
               case FileVisitResult.TERMINATE | FileVisitResult.SKIP_SIBLINGS => return path
-              case _                                                         =>
+              case FileVisitResult.CONTINUE =>
+                try {
+                  if (depth > 1) {
+                    walkFileTree(p, options, depth - 1, fileVisitor)
+                  } else {
+                    fileVisitor.visitFile(p, attrs)
+                  }
+                } catch {
+                  case e: IOException => ioException = e
+                }
+              case _ =>
             }
-          } catch {
-            case e: IOException => fileVisitor.visitFileFailed(p, e)
+            fileVisitor.postVisitDirectory(p, ioException)
+          } else {
+            try {
+              fileVisitor.visitFile(p, attrs) match {
+                case FileVisitResult.TERMINATE | FileVisitResult.SKIP_SIBLINGS => return path
+                case _                                                         =>
+              }
+            } catch {
+              case e: IOException => fileVisitor.visitFileFailed(p, e)
+            }
           }
         }
       } catch {
-        case e: IOException => fileVisitor.visitFileFailed(p, e)
+        case e: IOException =>
+          fileVisitor.visitFileFailed(p, e)
       }
     }
     path
