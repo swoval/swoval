@@ -63,36 +63,6 @@ package object files extends PlatformFiles {
       def ===(r: Set[Path]): Unit = new RichTraversable(l.map(_.path).toSet) === r
     }
   }
-  implicit class PathOps(val path: Path) {
-    def getBytes: Array[Byte] = Files.readAllBytes(path)
-    def createFile(): Path = Files.createFile(path)
-    def delete(): Boolean = Files.deleteIfExists(path)
-    def deleteRecursive(): Unit = {
-      if (Files.isDirectory(path)) {
-        try FileOps
-          .list(path, true)
-          .asScala
-          .foreach(p => new PathOps(p.toPath).deleteRecursive())
-        catch { case _: NoSuchFileException => }
-      }
-      Files.deleteIfExists(path)
-    }
-    def exists: Boolean = Files.exists(path)
-    def isDirectory: Boolean = Files.isDirectory(path)
-    def lastModified: Long = Files.getLastModifiedTime(path).toMillis
-    def list(recursive: Boolean, filter: FileFilter = FileOps.AllPass): Seq[Path] =
-      FileOps.list(path, recursive, filter).asScala.map(_.toPath)
-    def mkdir(): Path = Files.createDirectory(path)
-    def mkdirs(): Path = Files.createDirectories(path)
-    def name: String = path.getFileName.toString
-    def renameTo(target: Path): Path = Files.move(path, target)
-    def parts: Seq[Path] = FileOps.parts(path).asScala.toIndexedSeq
-    def setLastModifiedTime(lastModified: Long): Unit =
-      Files.setLastModifiedTime(path, FileTime.fromMillis(lastModified))
-    def write(bytes: Array[Byte]): Path = Files.write(path, bytes)
-    def write(content: String, charset: Charset = Charset.defaultCharset()): Path =
-      Files.write(path, content.getBytes(charset))
-  }
 
   implicit class TestPathOps(val path: java.nio.file.Path) extends AnyVal {
     def ===(other: java.nio.file.Path): Unit = {

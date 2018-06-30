@@ -2,6 +2,7 @@ package com.swoval.files
 
 import java.nio.file.{ Path, Paths }
 
+import com.swoval.runtime.Platform
 import com.swoval.test._
 import utest._
 

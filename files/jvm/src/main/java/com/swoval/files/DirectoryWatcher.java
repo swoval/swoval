@@ -2,6 +2,7 @@ package com.swoval.files;
 
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
+import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.Path;
 

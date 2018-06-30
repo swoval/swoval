@@ -1,4 +1,4 @@
-package com.swoval.files
+package com.swoval.runtime
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation.JSImport

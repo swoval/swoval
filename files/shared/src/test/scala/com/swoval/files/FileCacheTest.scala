@@ -12,6 +12,7 @@ import com.swoval.functional.{ Consumer, Either => SEither }
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
 import com.swoval.files.test.platform.Bool
+import com.swoval.runtime.Platform
 import utest._
 
 import scala.collection.JavaConverters._

@@ -2,38 +2,21 @@
 
 package com.swoval.files
 
-import com.swoval.files.DirectoryWatcher.DEFAULT_FACTORY
-import com.swoval.files.DirectoryWatcher.Event.Overflow
-import com.swoval.files.EntryFilters.AllPass
-import com.swoval.files.Directory.Converter
-import com.swoval.files.Directory.Observer
-import com.swoval.files.Directory.OnChange
-import com.swoval.files.Directory.OnError
-import com.swoval.files.DirectoryWatcher.Event
-import com.swoval.files.DirectoryWatcher.Event.Kind
-import com.swoval.functional.Consumer
-import com.swoval.functional.Either
-import com.swoval.runtime.ShutdownHooks
 import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Path
+import java.nio.file.{ Files, Path }
 import java.nio.file.attribute.BasicFileAttributes
-import java.util.ArrayList
-import java.util.Collections
-import java.util.Comparator
-import java.util.HashMap
-import java.util.HashSet
-import java.util.Iterator
-import java.util.List
-import java.util.Map
 import java.util.Map.Entry
-import java.util.Set
+import java.util.{ ArrayList, Collections, Comparator, HashMap, HashSet, Iterator, List, Map, Set }
 import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicBoolean
-import Option._
-import FileCache._
-import FileCacheImpl._
+
+import com.swoval.files.Directory.{ Converter, Observer, OnChange, OnError }
+import com.swoval.files.DirectoryWatcher.{ DEFAULT_FACTORY, Event }
+import com.swoval.files.DirectoryWatcher.Event.{ Kind, Overflow }
+import com.swoval.files.EntryFilters.AllPass
+import com.swoval.files.FileCacheImpl._
+import com.swoval.functional.{ Consumer, Either }
+import com.swoval.runtime.ShutdownHooks
 
 object FileCache {
 
@@ -604,8 +587,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
     if (!closed.get) {
       var attrs: BasicFileAttributes = null
       val callbacks: List[Callback] = new ArrayList[Callback]()
-      try attrs =
-        Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS)
+      try attrs = NioWrappers.readAttributes(path, LinkOption.NOFOLLOW_LINKS)
       catch {
         case e: IOException => {}
 

@@ -1,7 +1,8 @@
 package java.nio.file.attribute
 
-import java.nio.file.{ LinkOption, Path }
+import java.nio.file.Path
 
+import com.swoval.files.LinkOption
 import io.scalajs.nodejs.fs.Fs
 
 trait BasicFileAttributes {
@@ -16,7 +17,7 @@ trait BasicFileAttributes {
   def size(): Long
 }
 
-class BasicFileAttributesImpl(p: Path, options: Array[LinkOption]) extends BasicFileAttributes {
+class BasicFileAttributesImpl(p: Path, options: Seq[LinkOption]) extends BasicFileAttributes {
   private[this] val stat = try {
     if (options.contains(LinkOption.NOFOLLOW_LINKS)) Fs.lstatSync(p.toString)
     else Fs.statSync(p.toString)

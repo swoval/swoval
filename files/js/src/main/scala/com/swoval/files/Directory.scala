@@ -8,7 +8,6 @@ import com.swoval.functional.Filter
 import com.swoval.functional.Filters
 import java.io.IOException
 import java.nio.file.Files
-import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.ArrayList
@@ -154,8 +153,7 @@ object Directory {
      * @return The file type of the path
      */
     def getKind(path: Path): Int =
-      getKind(path,
-              Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS))
+      getKind(path, NioWrappers.readAttributes(path, LinkOption.NOFOLLOW_LINKS))
 
     private def getKindOrUnknown(path: Path): Int =
       try getKind(path)

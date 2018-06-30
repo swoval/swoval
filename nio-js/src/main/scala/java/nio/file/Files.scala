@@ -9,7 +9,9 @@ import java.nio.file.attribute.{
 }
 import java.util
 
-import com.swoval.files.Platform
+import com.swoval.files.LinkOption.NOFOLLOW_LINKS
+import com.swoval.runtime.Platform
+import com.swoval.files.{ NioWrappers, LinkOption => SLinkOption }
 import io.scalajs.nodejs.fs.Fs
 
 import scala.util.Try
@@ -62,7 +64,7 @@ object Files {
   }
   def isSymbolicLink(path: Path): Boolean = {
     Try(
-      readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS).isSymbolicLink)
+      NioWrappers.readAttributes(path, com.swoval.files.LinkOption.NOFOLLOW_LINKS).isSymbolicLink())
       .getOrElse(false)
   }
 
@@ -80,11 +82,10 @@ object Files {
   def readAttributes[T <: BasicFileAttributes](path: Path,
                                                clazz: Class[T],
                                                options: Array[LinkOption]): T = {
-    clazz match {
-      case c if classOf[BasicFileAttributes].isAssignableFrom(c) =>
-        new BasicFileAttributesImpl(path, options).asInstanceOf[T]
-      case _ => ???
-    }
+    NioWrappers.readAttributes[T](
+      path,
+      clazz,
+      options.toSeq.map(_.asInstanceOf[com.swoval.files.LinkOption]): _*)
   }
   def readAllBytes(path: Path): Array[Byte] = {
     val buf = Fs.readFileSync(path.toRealPath().toString)
@@ -101,14 +102,13 @@ object Files {
                    options: java.util.Set[FileVisitOption],
                    depth: Int,
                    fileVisitor: FileVisitor[_ >: Path]): Path = {
-    val linkOptions = Array[LinkOption](LinkOption.NOFOLLOW_LINKS)
     val files = try {
       Fs.readdirSync(path.toAbsolutePath.toString())
     } catch { case ex: Exception => Errors.rethrow(path, ex) }
     files.foreach { f =>
       val p = path.resolve(f)
       try {
-        Try(readAttributes(p, classOf[BasicFileAttributes], linkOptions)) foreach { attrs =>
+        Try(NioWrappers.readAttributes(p, NOFOLLOW_LINKS)) foreach { attrs =>
           if (attrs.isDirectory) {
             var ioException: IOException = null
 

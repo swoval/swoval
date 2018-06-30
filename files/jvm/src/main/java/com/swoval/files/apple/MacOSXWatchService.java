@@ -6,13 +6,13 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
 import com.swoval.concurrent.ThreadFactory;
+import com.swoval.files.LinkOption;
 import com.swoval.files.Registerable;
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
 import com.swoval.functional.Consumer;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.WatchEvent;

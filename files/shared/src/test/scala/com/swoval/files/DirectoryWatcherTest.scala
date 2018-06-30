@@ -1,13 +1,14 @@
 package com.swoval.files
 
 import java.nio.file.attribute.FileTime
-import java.nio.file.{ Paths, Files }
+import java.nio.file.{ Files, Paths }
 import java.util.concurrent.{ TimeUnit, TimeoutException }
 
 import com.swoval.files.DirectoryWatcher.Event.{ Create, Delete, Modify }
 import com.swoval.files.apple.Flags
 import com.swoval.files.test.{ ArrayBlockingQueue, _ }
 import com.swoval.functional.Consumer
+import com.swoval.runtime.Platform
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
 import utest._

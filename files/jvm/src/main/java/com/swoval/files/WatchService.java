@@ -1,6 +1,7 @@
 package com.swoval.files;
 
 import com.swoval.files.apple.MacOSXWatchService;
+import com.swoval.runtime.Platform;
 import java.io.IOException;
 
 /**

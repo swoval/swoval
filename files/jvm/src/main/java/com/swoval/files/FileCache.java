@@ -15,7 +15,6 @@ import com.swoval.functional.Either;
 import com.swoval.runtime.ShutdownHooks;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
@@ -628,7 +627,7 @@ class FileCacheImpl<T> extends FileCache<T> {
       BasicFileAttributes attrs = null;
       final List<Callback> callbacks = new ArrayList<>();
       try {
-        attrs = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        attrs = NioWrappers.readAttributes(path, LinkOption.NOFOLLOW_LINKS);
       } catch (IOException e) {
       }
       if (attrs != null) {

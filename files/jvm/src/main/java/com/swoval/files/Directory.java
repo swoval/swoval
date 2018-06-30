@@ -7,7 +7,6 @@ import com.swoval.functional.Filter;
 import com.swoval.functional.Filters;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
@@ -599,8 +598,7 @@ public class Directory<T> implements AutoCloseable {
      * @throws IOException if the path can't be opened
      */
     public static int getKind(final Path path) throws IOException {
-      return getKind(
-          path, Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS));
+      return getKind(path, NioWrappers.readAttributes(path, LinkOption.NOFOLLOW_LINKS));
     }
 
     private static int getKindOrUnknown(final Path path) {

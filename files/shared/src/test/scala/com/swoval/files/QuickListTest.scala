@@ -18,6 +18,7 @@ import com.swoval.files.test._
 import scala.collection.JavaConverters._
 import QuickListTest.QuickListOps
 import com.swoval.functional.Filter
+import com.swoval.runtime.Platform
 
 object QuickListTest {
   implicit class QuickListOps(val ql: QuickLister) extends AnyVal {
