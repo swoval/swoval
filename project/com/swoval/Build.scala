@@ -492,11 +492,12 @@ object Build {
                            complexity = 70,
                            method = 84)),
       jacocoExcludes in Test := Seq(
-        "com.swoval.files.NativeLoader*",
+        "com.swoval.runtime.*",
         "com.swoval.files.apple.Event*",
         "com.swoval.files.apple.Flag*",
-        "com.swoval.files.apple.Native*") ++ (if (!Properties.isMac) Seq("*apple*", "*Apple*")
-                                              else Nil),
+        "com.swoval.files.apple.Native*"
+      ) ++ (if (!Properties.isMac) Seq("*apple*", "*Apple*")
+            else Nil),
       javacOptions in (Compile, doc) := Nil,
       crossScalaVersions := scalaCrossVersions,
       crossPaths := false,
