@@ -1,32 +1,42 @@
 package java.nio.file
 
-import java.io.{ File, IOException }
-import java.nio.file.attribute.{
-  BasicFileAttributes,
-  BasicFileAttributesImpl,
-  FileAttribute,
-  FileTime
-}
+import java.io.{File, IOException}
+import java.nio.file.attribute.{BasicFileAttributes, FileAttribute, FileTime}
 import java.util
 
 import com.swoval.files.LinkOption.NOFOLLOW_LINKS
+import com.swoval.files.NioWrappers
 import com.swoval.runtime.Platform
-import com.swoval.files.{ NioWrappers, LinkOption => SLinkOption }
 import io.scalajs.nodejs.fs.Fs
 
 import scala.util.Try
 
 object Files {
+  private[this] val maxRepeatAttempts = if (Platform.isWin()) 1000 else 1
+  private def repeat(f: => Boolean): Boolean = {
+    var attempt = 0
+    var result = false
+    while (attempt < maxRepeatAttempts && { result = f; !result }) {
+      attempt += 1
+    }
+    result
+  }
   def createDirectory(path: Path, attrs: Array[FileAttribute[_]] = Array.empty): Path = {
-    if (!path.toFile().mkdir()) throw new IOException(s"Couldn't create path $path")
+    if (!repeat(path.toFile.mkdir())) {
+      throw new IOException(s"Couldn't create directory $path")
+    }
     path
   }
   def createDirectories(path: Path, attrs: Array[FileAttribute[_]] = Array.empty): Path = {
-    path.toFile().mkdirs()
+    if (!repeat(path.toFile.mkdirs())) {
+      throw new IOException(s"Couldn't create directory $path")
+    }
     path
   }
   def createFile(path: Path, attrs: Array[FileAttribute[_]] = Array.empty): Path = {
-    if (!path.toFile().createNewFile()) throw new IOException(s"Couldn't create file $path")
+    if (!repeat(path.toFile.createNewFile())) {
+      throw new IOException(s"Couldn't create file $path")
+    }
     path
   }
   def createSymbolicLink(path: Path,
@@ -39,13 +49,13 @@ object Files {
   def createTempDirectory(path: Path,
                           prefix: String,
                           attrs: Array[FileAttribute[_]] = Array.empty): Path =
-    new JSPath(Fs.realpathSync(Fs.mkdtempSync(path.resolve(prefix).toString())))
+    new JSPath(Fs.realpathSync(Fs.mkdtempSync(path.resolve(prefix).toString)))
   def createTempFile(dir: Path,
                      prefix: String,
                      suffix: String,
                      attrs: Array[FileAttribute[_]] = Array.empty): Path = {
     val random = new scala.util.Random().alphanumeric.take(10).mkString
-    val path = s"$dir${File.separator}$prefix${random}${Option(suffix).getOrElse("")}"
+    val path = s"$dir${File.separator}$prefix$random${Option(suffix).getOrElse("")}"
     Fs.closeSync(Fs.openSync(path, "w"))
     new JSPath(path)
   }
@@ -69,7 +79,7 @@ object Files {
   }
 
   def move(src: Path, target: Path, options: Array[CopyOption] = Array.empty): Path = {
-    if (!src.toFile.renameTo(target.toFile()))
+    if (!src.toFile.renameTo(target.toFile))
       throw new IOException(s"Couldn't move $src to $target")
     target
   }
@@ -95,7 +105,7 @@ object Files {
     Paths.get(Fs.readlinkSync(path.toString()))
   }
   def setLastModifiedTime(path: Path, fileTime: FileTime): Path = {
-    path.toFile.setLastModified(fileTime.toMillis)
+    path.toFile.setLastModified(fileTime.toMillis())
     path
   }
   def walkFileTree(path: Path,
@@ -109,7 +119,7 @@ object Files {
       val p = path.resolve(f)
       try {
         Try(NioWrappers.readAttributes(p, NOFOLLOW_LINKS)) foreach { attrs =>
-          if (attrs.isDirectory) {
+          if (attrs.isDirectory()) {
             var ioException: IOException = null
 
             fileVisitor.preVisitDirectory(p, attrs) match {

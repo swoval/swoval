@@ -23,28 +23,53 @@ package object test {
   implicit class PathOps(val path: Path) {
     def getBytes: Array[Byte] = Files.readAllBytes(path)
     def createFile(): Path = Files.createFile(path)
-    def delete(): Boolean = Files.deleteIfExists(path)
-    def deleteRecursive(): Unit = {
-      if (Files.isDirectory(path)) {
-        Files.walkFileTree(
-          path,
-          new FileVisitor[Path] {
-            override def preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult =
-              FileVisitResult.CONTINUE;
-            override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult = {
-              Files.deleteIfExists(file)
-              FileVisitResult.CONTINUE
-            }
-            override def visitFileFailed(file: Path, exc: IOException): FileVisitResult =
-              FileVisitResult.CONTINUE
-            override def postVisitDirectory(dir: Path, exc: IOException): FileVisitResult = {
-              Files.deleteIfExists(dir)
-              FileVisitResult.CONTINUE
-            }
-          }
-        )
+    def delete(): Boolean = deleteImpl(path)
+    private def deleteImpl(path: Path) = {
+      var attempt = 0
+      var result = false
+      while (!result && attempt < 10) {
+        try {
+          Files.deleteIfExists(path)
+          result = true
+        } catch {
+          case _: IOException =>
+            platform.sleep(2.milliseconds)
+            attempt += 1
+        }
       }
-      Files.deleteIfExists(path)
+      result
+    }
+    def deleteRecursive(): Unit = {
+      var deleted = false
+      while (!deleted && Files.isDirectory(path)) {
+        try {
+          Files.walkFileTree(
+            path,
+            new FileVisitor[Path] {
+              override def preVisitDirectory(dir: Path,
+                                             attrs: BasicFileAttributes): FileVisitResult =
+                FileVisitResult.CONTINUE;
+
+              override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult = {
+                deleteImpl(file)
+                FileVisitResult.CONTINUE
+              }
+
+              override def visitFileFailed(file: Path, exc: IOException): FileVisitResult =
+                FileVisitResult.CONTINUE
+
+              override def postVisitDirectory(dir: Path, exc: IOException): FileVisitResult = {
+                deleteImpl(dir)
+                FileVisitResult.CONTINUE
+              }
+            }
+          )
+          deleted = true
+        } catch {
+          case _: AccessDeniedException =>
+        }
+      }
+      deleteImpl(path)
     }
     def exists: Boolean = Files.exists(path)
     def isDirectory: Boolean = Files.isDirectory(path)

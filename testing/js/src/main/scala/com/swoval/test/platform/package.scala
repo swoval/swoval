@@ -5,9 +5,11 @@ import io.scalajs.nodejs.path.Path.sep
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 import scala.scalajs.js.timers._
 
 package object platform {
+  def sleep(duration: FiniteDuration): Unit = {}
   object executionContext extends ExecutionContext {
     val callbacks: mutable.Queue[Runnable] = mutable.Queue.empty
     override def execute(runnable: Runnable): Unit = {

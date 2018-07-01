@@ -12,8 +12,10 @@ import java.nio.file.{
 }
 
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
 package object platform {
+  def sleep(duration: FiniteDuration) = Thread.sleep(duration.toMillis)
   def executionContext: ExecutionContext = ExecutionContext.global
   def createTempFile(dir: String, prefix: String): String =
     deleteOnExit(Files.createTempFile(Paths.get(dir), prefix, "").toRealPath())

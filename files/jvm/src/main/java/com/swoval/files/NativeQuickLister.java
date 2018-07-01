@@ -32,7 +32,7 @@ class NativeQuickLister extends QuickListerImpl {
   @Override
   protected QuickListerImpl.ListResults listDir(final String dir, final boolean followLinks)
       throws IOException {
-    return fillResults(dir, followLinks);
+    return fillResults(dir, followLinks, 0);
   }
 
   private native int errno(long handle);
@@ -49,7 +49,8 @@ class NativeQuickLister extends QuickListerImpl {
 
   private native String getName(long fileHandle);
 
-  private QuickListerImpl.ListResults fillResults(final String dir, final boolean followLinks)
+  @SuppressWarnings("EmptyCatchBlock")
+  private QuickListerImpl.ListResults fillResults(final String dir, final boolean followLinks, final int attempt)
       throws IOException {
     final QuickListerImpl.ListResults results = new QuickListerImpl.ListResults();
     final long handle = Platform.isWin() ? openDir(dir + "\\*") : openDir(dir);
@@ -67,7 +68,13 @@ class NativeQuickLister extends QuickListerImpl {
       case 0:
         break;
       default:
-        System.out.println(err);
+        if (Platform.isWin() && attempt < 10) {
+          try {
+            Thread.sleep(2);
+            return fillResults(dir, followLinks, attempt + 1);
+          } catch (final InterruptedException e) {
+          }
+        }
         throw new UnixException(err);
     }
     try {
