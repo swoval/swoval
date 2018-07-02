@@ -204,7 +204,7 @@ trait DirectoryWatcherTest extends TestSuite {
             events
               .poll(100.milliseconds) { _ =>
                 throw new IllegalStateException(
-                  "Event triggered for file that shouldn't be monitored")
+                  s"Event triggered for file that shouldn't be monitored $file")
               }
               .recoverWith {
                 case _: TimeoutException =>
@@ -236,7 +236,7 @@ trait DirectoryWatcherTest extends TestSuite {
                   events
                     .poll(100.milliseconds) { _ =>
                       throw new IllegalStateException(
-                        "Event triggered for file that shouldn't be monitored")
+                        s"Event triggered for file that shouldn't be monitored $file")
                     }
                     .recoverWith {
                       case _: TimeoutException =>
@@ -275,7 +275,7 @@ trait DirectoryWatcherTest extends TestSuite {
                   events
                     .poll(100.milliseconds) { _ =>
                       throw new IllegalStateException(
-                        "Event triggered for file that shouldn't be monitored")
+                        s"Event triggered for file that shouldn't be monitored $file")
                     }
                     .recoverWith {
                       case _: TimeoutException =>
