@@ -233,6 +233,18 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
       final Consumer<DirectoryWatcher.Event> callback,
       final Path path,
       final DirectoryWatcher.Event.Kind kind) {
+    if (!Files.exists(path)) {
+      final Directory<WatchedDirectory> root = rootDirectories.get(path.getRoot());
+      if (root != null) {
+        final Iterator<Directory.Entry<WatchedDirectory>> it = root.remove(path).iterator();
+        while (it.hasNext()) {
+          final WatchedDirectory watchedDirectory = it.next().getValue();
+          if (watchedDirectory != null) {
+            watchedDirectory.close();
+          }
+        }
+      }
+    }
     if (Files.isDirectory(path)) {
       processPath(callback, path, kind, new HashSet<QuickFile>(), new HashSet<Path>());
     } else {

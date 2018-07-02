@@ -200,6 +200,19 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
   protected def handleEvent(callback: Consumer[DirectoryWatcher.Event],
                             path: Path,
                             kind: DirectoryWatcher.Event.Kind): Unit = {
+    if (!Files.exists(path)) {
+      val root: Directory[WatchedDirectory] = rootDirectories.get(path.getRoot)
+      if (root != null) {
+        val it: Iterator[Directory.Entry[WatchedDirectory]] =
+          root.remove(path).iterator()
+        while (it.hasNext) {
+          val watchedDirectory: WatchedDirectory = it.next().getValue
+          if (watchedDirectory != null) {
+            watchedDirectory.close()
+          }
+        }
+      }
+    }
     if (Files.isDirectory(path)) {
       processPath(callback, path, kind, new HashSet[QuickFile](), new HashSet[Path]())
     } else {

@@ -74,8 +74,9 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
                       @Override
                       public void close() {
                         if (closed.compareAndSet(false, true)) {
-                          key.cancel();
+                          watchedDirectoriesByPath.remove(path);
                           key.reset();
+                          key.cancel();
                         }
                       }
                     };
