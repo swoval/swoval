@@ -341,9 +341,7 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
   private boolean add(final Path path, final int maxDepth, final Set<QuickFile> newFiles) {
     boolean result = true;
     try {
-      if (directoryRegistry.maxDepthFor(path) < 0) {
-        directoryRegistry.addDirectory(path, maxDepth);
-      } else {
+      if (directoryRegistry.maxDepthFor(path) >= 0) {
         final Directory<WatchedDirectory> dir = getRoot(path.getRoot());
         if (dir != null) {
           update(dir, path);
