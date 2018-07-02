@@ -143,7 +143,7 @@ class SymlinkWatcher implements AutoCloseable {
                 });
           }
         };
-    this.watcher = factory.create(callback, internalExecutor.copy());
+    this.watcher = factory.create(callback, internalExecutor.copy(), new DirectoryRegistry());
   }
 
   /*

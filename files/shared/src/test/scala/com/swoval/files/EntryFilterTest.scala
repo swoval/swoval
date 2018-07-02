@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.file.Path
 
 import com.swoval.files.Directory.{ Entry, EntryFilter }
+import com.swoval.test._
 import com.swoval.files.test._
 import com.swoval.files.test.FileBytes
 import utest._

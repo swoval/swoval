@@ -21,13 +21,15 @@ import scala.util.Try
 private[files] class NioDirectoryWatcherImpl(callback: Consumer[Event],
                                              callbackExecutor: Executor,
                                              internalExecutor: Executor,
+                                             directoryRegistry: DirectoryRegistry,
                                              options: DirectoryWatcher.Option*)
     extends {
   private[this] val l: AtomicReference[Consumer[Event]] = new AtomicReference(null)
   private[this] val io = new NioDirectoryWatcherImpl.IOImpl(l)
-} with NioDirectoryWatcher(io, callbackExecutor, internalExecutor, options: _*) {
+} with NioDirectoryWatcher(io, callbackExecutor, internalExecutor, directoryRegistry, options: _*) {
   l.set(new Consumer[Event] {
-    override def accept(e: Event) = handleEvent(callback, e.path, e.kind)
+    override def accept(e: Event) =
+      if (directoryRegistry.accept(e.path)) handleEvent(callback, e.path, e.kind)
   })
 
   override def close(): Unit = {
@@ -63,7 +65,7 @@ object NioDirectoryWatcherImpl {
       try {
         functional.Either.right(watchedDirectoriesByPath get path match {
           case Some(w) if w.isValid() => w
-          case _ =>
+          case _ if Files.isDirectory(path) =>
             val cb: js.Function2[nodejs.EventType, String, Unit] =
               (tpe: nodejs.EventType, name: String) => {
                 val watchPath = path.resolve(Paths.get(name))
@@ -77,7 +79,12 @@ object NioDirectoryWatcherImpl {
 
             val closed = new AtomicBoolean(false)
             val watcher = Fs.watch(path.toString, options, cb)
-            watcher.onError(e => println(e))
+            watcher.onError { e =>
+              closed.set(true)
+              watcher.close()
+              watchedDirectoriesByPath += path -> WatchedDirectories.INVALID
+              l.get.accept(new Event(path, Event.Error))
+            }
             val watchedDirectory: WatchedDirectory = new WatchedDirectory {
 
               /**
@@ -96,11 +103,16 @@ object NioDirectoryWatcherImpl {
                * Cancel the watch on this directory. Handle all non-fatal exceptions.
                */
               override def close(): Unit = if (closed.compareAndSet(false, true)) {
+                watchedDirectoriesByPath -= path
                 watcher.close()
               }
             }
             watchedDirectoriesByPath += path -> watchedDirectory
             watchedDirectory
+          case w =>
+            w.foreach(_.close())
+            watchedDirectoriesByPath += path -> WatchedDirectories.INVALID
+            WatchedDirectories.INVALID
         })
       } catch {
         case e: IOException => functional.Either.left(e)

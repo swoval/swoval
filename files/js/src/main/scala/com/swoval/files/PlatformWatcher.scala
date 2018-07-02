@@ -7,18 +7,30 @@ object PlatformWatcher {
            registerable: Registerable,
            callbackExecutor: Executor,
            internalExecutor: Executor,
+           directoryRegistry: DirectoryRegistry,
            options: DirectoryWatcher.Option*): DirectoryWatcher = {
-    new NioDirectoryWatcherImpl(callback, callbackExecutor, internalExecutor, options: _*)
+    new NioDirectoryWatcherImpl(callback,
+                                callbackExecutor,
+                                internalExecutor,
+                                directoryRegistry,
+                                options: _*)
   }
   def make(callback: Consumer[Event],
            registerable: Registerable,
            internalExecutor: Executor,
+           directoryRegistry: DirectoryRegistry,
            options: DirectoryWatcher.Option*): DirectoryWatcher = {
-    make(callback, registerable, Executor.make("callback"), internalExecutor, options: _*)
+    make(callback,
+         registerable,
+         Executor.make("callback"),
+         internalExecutor,
+         directoryRegistry,
+         options: _*)
   }
   def make(callback: Consumer[Event],
            executor: Executor,
+           directoryRegistry: DirectoryRegistry,
            options: DirectoryWatcher.Option*): DirectoryWatcher = {
-    make(callback, null, executor, options: _*)
+    make(callback, null, executor, directoryRegistry, options: _*)
   }
 }

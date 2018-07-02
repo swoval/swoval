@@ -8,7 +8,6 @@ import com.swoval.functional.Filter
 import com.swoval.functional.Filters
 import java.io.IOException
 import java.nio.file.Files
-import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.ArrayList
@@ -154,8 +153,7 @@ object Directory {
      * @return The file type of the path
      */
     def getKind(path: Path): Int =
-      getKind(path,
-              Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS))
+      getKind(path, NioWrappers.readAttributes(path, LinkOption.NOFOLLOW_LINKS))
 
     private def getKindOrUnknown(path: Path): Int =
       try getKind(path)
@@ -639,6 +637,7 @@ class Directory[T <: AnyRef](val path: Path,
               result
             } else {
               addDirectory(currentDir, resolved, result)
+              result
             }
           }
         } else {
@@ -655,6 +654,17 @@ class Directory[T <: AnyRef](val path: Path,
       val oldEntries: List[Entry[T]] = list(true, AllPass)
       init()
       MapOps.diffDirectoryEntries(oldEntries, list(true, AllPass), result)
+    } else {
+      val oldEntry: Entry[T] = entry()
+      try {
+        val newEntry: Entry[T] =
+          new Entry[T](realPath, converter.apply(this.realPath), kind)
+        _cacheEntry.set(newEntry)
+        result.onUpdate(oldEntry, entry())
+      } catch {
+        case e: IOException => result.onError(realPath, e)
+
+      }
     }
     result
   }
@@ -697,25 +707,29 @@ class Directory[T <: AnyRef](val path: Path,
     }
 
   private def listImpl(maxDepth: Int, filter: EntryFilter[_ >: T], result: List[Entry[T]]): Unit = {
-    var files: Collection[Entry[T]] = null
-    var subdirectories: Collection[Directory[T]] = null
-    this.lock.synchronized {
-      files = new ArrayList(this.files.values)
-      subdirectories = new ArrayList(this.subdirectories.values)
-    }
-    val filesIterator: Iterator[Entry[T]] = files.iterator()
-    while (filesIterator.hasNext) {
-      val entry: Entry[T] = filesIterator.next()
-      val resolved: Entry[T] = entry.resolvedFrom(this.path, entry.getKind)
-      if (filter.accept(resolved)) result.add(resolved)
-    }
-    val subdirIterator: Iterator[Directory[T]] = subdirectories.iterator()
-    while (subdirIterator.hasNext) {
-      val subdir: Directory[T] = subdirIterator.next()
-      val entry: Entry[T] = subdir.entry()
-      val resolved: Entry[T] = entry.resolvedFrom(this.path, entry.getKind)
-      if (filter.accept(resolved)) result.add(resolved)
-      if (maxDepth > 0) subdir.listImpl(maxDepth - 1, filter, result)
+    if (this.depth < 0) {
+      result.add(this.entry())
+    } else {
+      var files: Collection[Entry[T]] = null
+      var subdirectories: Collection[Directory[T]] = null
+      this.lock.synchronized {
+        files = new ArrayList(this.files.values)
+        subdirectories = new ArrayList(this.subdirectories.values)
+      }
+      val filesIterator: Iterator[Entry[T]] = files.iterator()
+      while (filesIterator.hasNext) {
+        val entry: Entry[T] = filesIterator.next()
+        val resolved: Entry[T] = entry.resolvedFrom(this.path, entry.getKind)
+        if (filter.accept(resolved)) result.add(resolved)
+      }
+      val subdirIterator: Iterator[Directory[T]] = subdirectories.iterator()
+      while (subdirIterator.hasNext) {
+        val subdir: Directory[T] = subdirIterator.next()
+        val entry: Entry[T] = subdir.entry()
+        val resolved: Entry[T] = entry.resolvedFrom(this.path, entry.getKind)
+        if (filter.accept(resolved)) result.add(resolved)
+        if (maxDepth > 0) subdir.listImpl(maxDepth - 1, filter, result)
+      }
     }
   }
 
@@ -756,24 +770,36 @@ class Directory[T <: AnyRef](val path: Path,
 
   def init(): Directory[T] = {
     lock.synchronized {
-      val it: Iterator[QuickFile] = QuickList.list(path, 0, true).iterator()
-      while (it.hasNext) {
-        val file: QuickFile = it.next()
-        if (pathFilter.accept(file)) {
-          val kind: Int = (if (file.isSymbolicLink) Entry.LINK else 0) |
-            (if (file.isDirectory) Entry.DIRECTORY else Entry.FILE)
-          val path: Path = file.toPath()
-          val key: Path = this.path.relativize(path).getFileName
-          if (file.isDirectory) {
-            if (depth > 0) {
-              val realPath: Path = toRealPath(path)
-              if (!file.isSymbolicLink || !isLoop(path, realPath)) {
-                subdirectories.put(
-                  key.toString,
-                  new Directory(path, realPath, converter, subdirectoryDepth(), pathFilter).init())
+      if (depth >= 0) {
+        val it: Iterator[QuickFile] = QuickList.list(path, 0, true).iterator()
+        while (it.hasNext) {
+          val file: QuickFile = it.next()
+          if (pathFilter.accept(file)) {
+            val kind: Int = (if (file.isSymbolicLink) Entry.LINK else 0) |
+              (if (file.isDirectory) Entry.DIRECTORY else Entry.FILE)
+            val path: Path = file.toPath()
+            val key: Path = this.path.relativize(path).getFileName
+            if (file.isDirectory) {
+              if (depth > 0) {
+                val realPath: Path = toRealPath(path)
+                if (!file.isSymbolicLink || !isLoop(path, realPath)) {
+                  subdirectories.put(key.toString,
+                                     new Directory(path,
+                                                   realPath,
+                                                   converter,
+                                                   subdirectoryDepth(),
+                                                   pathFilter).init())
+                } else {
+                  subdirectories.put(key.toString,
+                                     new Directory(path, realPath, converter, -1, pathFilter))
+                }
               } else {
-                subdirectories.put(key.toString,
-                                   new Directory(path, realPath, converter, -1, pathFilter))
+                try files.put(key.toString, new Entry(key, converter.apply(path), kind))
+                catch {
+                  case e: IOException =>
+                    files.put(key.toString, new Entry[T](key, e, kind))
+
+                }
               }
             } else {
               try files.put(key.toString, new Entry(key, converter.apply(path), kind))
@@ -782,13 +808,6 @@ class Directory[T <: AnyRef](val path: Path,
                   files.put(key.toString, new Entry[T](key, e, kind))
 
               }
-            }
-          } else {
-            try files.put(key.toString, new Entry(key, converter.apply(path), kind))
-            catch {
-              case e: IOException =>
-                files.put(key.toString, new Entry[T](key, e, kind))
-
             }
           }
         }

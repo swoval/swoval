@@ -1,6 +1,6 @@
-package java.nio.file
+package com.swoval.files
 
-class LinkOption {}
+class LinkOption
 object LinkOption {
   case object NOFOLLOW_LINKS extends LinkOption
 }

@@ -32,7 +32,6 @@ import scalajscrossproject.ScalaJSCrossPlugin.autoImport.JSCrossProjectOps
 
 import scala.collection.JavaConverters._
 import scala.io.Source
-import scala.reflect.internal.util.ScalaClassLoader.URLClassLoader
 import scala.tools.nsc
 import scala.tools.nsc.reporters.StoreReporter
 import scala.util.{ Properties, Try }
@@ -131,6 +130,7 @@ object Build {
   def projects: Seq[ProjectReference] = Seq[ProjectReference](
     files.js,
     files.jvm,
+    nio.js,
     plugin,
     reflect,
     testing.js,
@@ -153,6 +153,7 @@ object Build {
           case v =>
             Def.taskDyn {
               (key in reflect).value
+              (key in nio.js).value
               (key in files.js).value
               (key in testing.js).value
               if (v == scala212)
@@ -296,11 +297,24 @@ object Build {
     settings(createLinks(Compile), createLinks(Test))
   }
 
+  lazy val nio: CrossProject = crossProject(JSPlatform)
+    .crossType(CrossType.Pure)
+    .in(file("nio-js"))
+    .settings(
+      commonSettings,
+      ioScalaJS,
+      crossScalaVersions := scalaCrossVersions.drop(1),
+      scalacOptions += "-P:scalajs:sjsDefinedByDefault",
+      scalaJSModuleKind := ModuleKind.CommonJSModule,
+      webpackBundlingMode := BundlingMode.LibraryOnly(),
+      useYarn := false
+    )
+
   lazy val files: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("files"))
     .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .enablePlugins(GitVersioning)
-    .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
+    .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin).dependsOn(nio.js))
     .settings(
       commonSettings,
       name := "file-utilities",
@@ -458,7 +472,6 @@ object Build {
           doc in Compile
         )
         .value,
-      ioScalaJS
     )
     .jvmSettings(
       createCrossLinks("FILESJVM"),
@@ -479,11 +492,12 @@ object Build {
                            complexity = 70,
                            method = 84)),
       jacocoExcludes in Test := Seq(
-        "com.swoval.files.NativeLoader*",
+        "com.swoval.runtime.*",
         "com.swoval.files.apple.Event*",
         "com.swoval.files.apple.Flag*",
-        "com.swoval.files.apple.Native*") ++ (if (!Properties.isMac) Seq("*apple*", "*Apple*")
-                                              else Nil),
+        "com.swoval.files.apple.Native*"
+      ) ++ (if (!Properties.isMac) Seq("*apple*", "*Apple*")
+            else Nil),
       javacOptions in (Compile, doc) := Nil,
       crossScalaVersions := scalaCrossVersions,
       crossPaths := false,
@@ -518,16 +532,13 @@ object Build {
         val cp = (fullClasspath in Test).value
           .map(_.data)
           .filterNot(_.toString.contains("jacoco"))
-          .map(s => Paths.get(s.toString).toUri.toURL)
-          .toArray
-        val process: java.lang.Process =
-          new java.lang.ProcessBuilder("java",
-                                       "-cp",
-                                       cp.mkString(":"),
-                                       "com.swoval.files.AllTests",
-                                       count.toString)
-            .inheritIO()
-            .start()
+          .mkString(File.pathSeparator)
+        val pb = new java.lang.ProcessBuilder("java",
+                                              "-classpath",
+                                              cp,
+                                              "com.swoval.files.AllTests",
+                                              count.toString)
+        val process = pb.inheritIO().start()
         process.waitFor()
       },
       quickListReflectionTest := {
@@ -683,6 +694,7 @@ object Build {
   lazy val testing: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("testing"))
     .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
+    .jsConfigure(_.dependsOn(nio.js))
     .jsSettings(
       scalaJSModuleKind := ModuleKind.CommonJSModule,
       crossScalaVersions := scalaCrossVersions.drop(1),

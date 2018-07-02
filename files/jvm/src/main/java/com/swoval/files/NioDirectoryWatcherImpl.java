@@ -41,6 +41,7 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
       final Registerable watchService,
       final Executor callbackExecutor,
       final Executor executor,
+      final DirectoryRegistry directoryRegistry,
       final DirectoryWatcher.Option... options)
       throws InterruptedException {
     super(
@@ -74,8 +75,9 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
                       @Override
                       public void close() {
                         if (closed.compareAndSet(false, true)) {
-                          key.cancel();
+                          watchedDirectoriesByPath.remove(path);
                           key.reset();
+                          key.cancel();
                         }
                       }
                     };
@@ -94,6 +96,7 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
         },
         callbackExecutor,
         executor,
+        directoryRegistry,
         options);
     this.watchService = watchService;
     ShutdownHooks.addHook(
@@ -125,7 +128,6 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
                             final Iterator<WatchEvent<?>> it = events.iterator();
                             if (!key.reset()) {
                               key.cancel();
-                              // watchedDirs.remove((Path) key.watchable());
                             }
                             while (it.hasNext()) {
                               final WatchEvent<?> e = it.next();

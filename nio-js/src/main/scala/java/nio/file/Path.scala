@@ -116,6 +116,6 @@ class JSPath(val rawPath: String) extends Path {
   }
 }
 object JSPath {
-  val isWin = com.swoval.files.Platform.isWin
+  val isWin = com.swoval.runtime.Platform.isWin
   val regexSep = if (isWin) JPath.sep + JPath.sep else JPath.sep
 }

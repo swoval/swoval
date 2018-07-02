@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * target="_blank">Apple File System Events Api</a>
  */
 public class AppleDirectoryWatcher extends DirectoryWatcher {
-  private final DirectoryRegistry directoryRegistry = new DirectoryRegistry();
+  private final DirectoryRegistry directoryRegistry;
   private final Map<Path, Stream> streams = new HashMap<>();
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final double latency;
@@ -205,6 +205,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
   public AppleDirectoryWatcher(
       final Consumer<DirectoryWatcher.Event> onFileEvent,
       final Executor executor,
+      final DirectoryRegistry directoryRegistry,
       final DirectoryWatcher.Option... options)
       throws InterruptedException {
     this(
@@ -213,7 +214,8 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
         Executor.make("com.swoval.files.AppleDirectoryWatcher-callback-executor"),
         onFileEvent,
         DefaultOnStreamRemoved,
-        executor);
+        executor,
+        directoryRegistry);
   }
   /**
    * Creates a new AppleDirectoryWatcher which is a wrapper around {@link FileEventsApi}, which in
@@ -228,6 +230,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    * @param onStreamRemoved {@link com.swoval.functional.Consumer} to run when a redundant stream is
    *     removed from the underlying native file events implementation
    * @param executor The internal executor to manage the directory watcher state
+   * @param directoryRegistry The registry of directories to monitor
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
    */
@@ -237,7 +240,8 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
       final Executor callbackExecutor,
       final Consumer<DirectoryWatcher.Event> onFileEvent,
       final Consumer<String> onStreamRemoved,
-      final Executor executor)
+      final Executor executor,
+      final DirectoryRegistry directoryRegistry)
       throws InterruptedException {
     this.latency = latency;
     this.flags = flags;
@@ -246,6 +250,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
         executor == null
             ? Executor.make("com.swoval.files.AppleDirectoryWatcher-internalExecutor")
             : executor;
+    this.directoryRegistry = directoryRegistry;
     fileEventsApi =
         FileEventsApi.apply(
             new Consumer<FileEvent>() {

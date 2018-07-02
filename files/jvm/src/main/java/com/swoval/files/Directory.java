@@ -7,7 +7,6 @@ import com.swoval.functional.Filter;
 import com.swoval.functional.Filters;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
@@ -310,6 +309,7 @@ public class Directory<T> implements AutoCloseable {
               return result;
             } else {
               addDirectory(currentDir, resolved, result);
+              return result;
             }
           }
         } else {
@@ -326,6 +326,15 @@ public class Directory<T> implements AutoCloseable {
       final List<Entry<T>> oldEntries = list(true, AllPass);
       init();
       MapOps.diffDirectoryEntries(oldEntries, list(true, AllPass), result);
+    } else {
+      final Entry<T> oldEntry = entry();
+      try {
+        final Entry<T> newEntry = new Entry<>(realPath, converter.apply(this.realPath), kind);
+        _cacheEntry.set(newEntry);
+        result.onUpdate(oldEntry, entry());
+      } catch (final IOException e) {
+        result.onError(realPath, e);
+      }
     }
     return result;
   }
@@ -370,25 +379,29 @@ public class Directory<T> implements AutoCloseable {
 
   private void listImpl(
       final int maxDepth, final EntryFilter<? super T> filter, final List<Entry<T>> result) {
-    final Collection<Entry<T>> files;
-    final Collection<Directory<T>> subdirectories;
-    synchronized (this.lock) {
-      files = new ArrayList<>(this.files.values());
-      subdirectories = new ArrayList<>(this.subdirectories.values());
-    }
-    final Iterator<Entry<T>> filesIterator = files.iterator();
-    while (filesIterator.hasNext()) {
-      final Entry<T> entry = filesIterator.next();
-      final Entry<T> resolved = entry.resolvedFrom(this.path, entry.getKind());
-      if (filter.accept(resolved)) result.add(resolved);
-    }
-    final Iterator<Directory<T>> subdirIterator = subdirectories.iterator();
-    while (subdirIterator.hasNext()) {
-      final Directory<T> subdir = subdirIterator.next();
-      final Entry<T> entry = subdir.entry();
-      final Entry<T> resolved = entry.resolvedFrom(this.path, entry.getKind());
-      if (filter.accept(resolved)) result.add(resolved);
-      if (maxDepth > 0) subdir.listImpl(maxDepth - 1, filter, result);
+    if (this.depth < 0) {
+      result.add(this.entry());
+    } else {
+      final Collection<Entry<T>> files;
+      final Collection<Directory<T>> subdirectories;
+      synchronized (this.lock) {
+        files = new ArrayList<>(this.files.values());
+        subdirectories = new ArrayList<>(this.subdirectories.values());
+      }
+      final Iterator<Entry<T>> filesIterator = files.iterator();
+      while (filesIterator.hasNext()) {
+        final Entry<T> entry = filesIterator.next();
+        final Entry<T> resolved = entry.resolvedFrom(this.path, entry.getKind());
+        if (filter.accept(resolved)) result.add(resolved);
+      }
+      final Iterator<Directory<T>> subdirIterator = subdirectories.iterator();
+      while (subdirIterator.hasNext()) {
+        final Directory<T> subdir = subdirIterator.next();
+        final Entry<T> entry = subdir.entry();
+        final Entry<T> resolved = entry.resolvedFrom(this.path, entry.getKind());
+        if (filter.accept(resolved)) result.add(resolved);
+        if (maxDepth > 0) subdir.listImpl(maxDepth - 1, filter, result);
+      }
     }
   }
 
@@ -429,27 +442,35 @@ public class Directory<T> implements AutoCloseable {
   }
 
   Directory<T> init() throws IOException {
-    synchronized (lock) {
-      final Iterator<QuickFile> it = QuickList.list(path, 0, true).iterator();
-      while (it.hasNext()) {
-        final QuickFile file = it.next();
-        if (pathFilter.accept(file)) {
-          final int kind =
-              (file.isSymbolicLink() ? Entry.LINK : 0)
-                  | (file.isDirectory() ? Entry.DIRECTORY : Entry.FILE);
-          final Path path = file.toPath();
-          final Path key = this.path.relativize(path).getFileName();
-          if (file.isDirectory()) {
-            if (depth > 0) {
-              final Path realPath = toRealPath(path);
-              if (!file.isSymbolicLink() || !isLoop(path, realPath)) {
-                subdirectories.put(
-                    key.toString(),
-                    new Directory<>(path, realPath, converter, subdirectoryDepth(), pathFilter)
-                        .init());
+    if (depth >= 0) {
+      synchronized (lock) {
+        final Iterator<QuickFile> it = QuickList.list(path, 0, true).iterator();
+        while (it.hasNext()) {
+          final QuickFile file = it.next();
+          if (pathFilter.accept(file)) {
+            final int kind =
+                (file.isSymbolicLink() ? Entry.LINK : 0)
+                    | (file.isDirectory() ? Entry.DIRECTORY : Entry.FILE);
+            final Path path = file.toPath();
+            final Path key = this.path.relativize(path).getFileName();
+            if (file.isDirectory()) {
+              if (depth > 0) {
+                final Path realPath = toRealPath(path);
+                if (!file.isSymbolicLink() || !isLoop(path, realPath)) {
+                  subdirectories.put(
+                      key.toString(),
+                      new Directory<>(path, realPath, converter, subdirectoryDepth(), pathFilter)
+                          .init());
+                } else {
+                  subdirectories.put(
+                      key.toString(), new Directory<>(path, realPath, converter, -1, pathFilter));
+                }
               } else {
-                subdirectories.put(
-                    key.toString(), new Directory<>(path, realPath, converter, -1, pathFilter));
+                try {
+                  files.put(key.toString(), new Entry<>(key, converter.apply(path), kind));
+                } catch (final IOException e) {
+                  files.put(key.toString(), new Entry<T>(key, e, kind));
+                }
               }
             } else {
               try {
@@ -457,12 +478,6 @@ public class Directory<T> implements AutoCloseable {
               } catch (final IOException e) {
                 files.put(key.toString(), new Entry<T>(key, e, kind));
               }
-            }
-          } else {
-            try {
-              files.put(key.toString(), new Entry<>(key, converter.apply(path), kind));
-            } catch (final IOException e) {
-              files.put(key.toString(), new Entry<T>(key, e, kind));
             }
           }
         }
@@ -599,8 +614,7 @@ public class Directory<T> implements AutoCloseable {
      * @throws IOException if the path can't be opened
      */
     public static int getKind(final Path path) throws IOException {
-      return getKind(
-          path, Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS));
+      return getKind(path, NioWrappers.readAttributes(path, LinkOption.NOFOLLOW_LINKS));
     }
 
     private static int getKindOrUnknown(final Path path) {
@@ -694,7 +708,6 @@ public class Directory<T> implements AutoCloseable {
      *
      * @param path The path to which this entry corresponds
      * @param value The {@code path} derived value for this entry
-     * @throws IOException if the path can't be opened
      */
     public Entry(final Path path, final T value) {
       this(path, value, Entry.getKindOrUnknown(path));

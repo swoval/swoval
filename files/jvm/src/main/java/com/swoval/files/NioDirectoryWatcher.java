@@ -6,19 +6,15 @@ import static com.swoval.files.DirectoryWatcher.Event.Overflow;
 import static com.swoval.files.EntryFilters.AllPass;
 
 import com.swoval.files.Directory.Converter;
-import com.swoval.files.Directory.EntryFilter;
 import com.swoval.files.Directory.Observer;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Filter;
 import com.swoval.functional.IO;
 import java.io.IOException;
 import java.nio.file.FileSystemLoopException;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -90,22 +86,6 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
       }
     }
     return result;
-  }
-
-  /**
-   * Instantiate a NioDirectoryWatcher.
-   *
-   * @param register IO task to register path
-   * @param callbackExecutor The Executor to invoke callbacks on
-   * @param executor The Executor to internally manage the watcher
-   * @param options The options for this watcher
-   */
-  NioDirectoryWatcher(
-      final IO<Path, WatchedDirectory> register,
-      final Executor callbackExecutor,
-      final Executor executor,
-      final DirectoryWatcher.Option... options) {
-    this(register, callbackExecutor, executor, new DirectoryRegistry(), options);
   }
 
   /**
@@ -237,6 +217,18 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
       final Consumer<DirectoryWatcher.Event> callback,
       final Path path,
       final DirectoryWatcher.Event.Kind kind) {
+    if (!Files.exists(path)) {
+      final Directory<WatchedDirectory> root = rootDirectories.get(path.getRoot());
+      if (root != null) {
+        final Iterator<Directory.Entry<WatchedDirectory>> it = root.remove(path).iterator();
+        while (it.hasNext()) {
+          final WatchedDirectory watchedDirectory = it.next().getValue();
+          if (watchedDirectory != null) {
+            watchedDirectory.close();
+          }
+        }
+      }
+    }
     if (Files.isDirectory(path)) {
       processPath(callback, path, kind, new HashSet<QuickFile>(), new HashSet<Path>());
     } else {
@@ -333,9 +325,7 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
   private boolean add(final Path path, final int maxDepth, final Set<QuickFile> newFiles) {
     boolean result = true;
     try {
-      if (directoryRegistry.maxDepthFor(path) < 0) {
-        directoryRegistry.addDirectory(path, maxDepth);
-      } else {
+      if (directoryRegistry.maxDepthFor(path) >= 0) {
         final Directory<WatchedDirectory> dir = getRoot(path.getRoot());
         if (dir != null) {
           update(dir, path);
@@ -385,14 +375,17 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
     } else if (!path.equals(realPath)) {
       /*
        * Note that watchedDir is not null, which means that this path has been
-       * registered
-       * with a different alias.
+       * registered with a different alias.
        */
       throw new FileSystemLoopException(path.toString());
     }
     if (result) {
       final Directory<WatchedDirectory> dir = getRoot(realPath.getRoot());
-      if (dir != null) update(dir, path);
+      Path toUpdate = path;
+      while (toUpdate != null && !Files.isDirectory(toUpdate)) {
+        toUpdate = toUpdate.getParent();
+      }
+      if (dir != null && toUpdate != null) update(dir, toUpdate);
     }
     return result;
   }

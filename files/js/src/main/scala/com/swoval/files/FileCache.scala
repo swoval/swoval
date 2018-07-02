@@ -3,6 +3,9 @@
 package com.swoval.files
 
 import com.swoval.files.DirectoryWatcher.DEFAULT_FACTORY
+import com.swoval.files.DirectoryWatcher.Event.Create
+import com.swoval.files.DirectoryWatcher.Event.Delete
+import com.swoval.files.DirectoryWatcher.Event.Modify
 import com.swoval.files.DirectoryWatcher.Event.Overflow
 import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.Directory.Converter
@@ -16,7 +19,8 @@ import com.swoval.functional.Either
 import com.swoval.runtime.ShutdownHooks
 import java.io.IOException
 import java.nio.file.Files
-import java.nio.file.LinkOption
+import java.nio.file.NoSuchFileException
+import java.nio.file.NotDirectoryException
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.ArrayList
@@ -33,7 +37,6 @@ import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicBoolean
 import Option._
 import FileCache._
-import FileCacheImpl._
 
 object FileCache {
 
@@ -295,16 +298,6 @@ abstract class FileCache[T <: AnyRef] extends AutoCloseable {
 
 }
 
-private[files] object FileCacheImpl {
-
-  private class Pair[A, B](val first: A, val second: B) {
-
-    override def toString(): String = "Pair(" + first + ", " + second + ")"
-
-  }
-
-}
-
 private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter[T],
                                                 factory: DirectoryWatcher.Factory,
                                                 executor: Executor,
@@ -312,6 +305,8 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
     extends FileCache[T] {
 
   private val directories: Map[Path, Directory[T]] = new HashMap()
+
+  private val pendingFiles: Set[Path] = new HashSet()
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
 
@@ -341,6 +336,8 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
       )
     else null
 
+  private val registry: DirectoryRegistry = new DirectoryRegistry()
+
   private def callback(executor: Executor): Consumer[Event] =
     new Consumer[Event]() {
       override def accept(event: DirectoryWatcher.Event): Unit = {
@@ -358,7 +355,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
     }
 
   private val watcher: DirectoryWatcher =
-    factory.create(callback(this.internalExecutor.copy()), this.internalExecutor.copy())
+    factory.create(callback(this.internalExecutor.copy()), this.internalExecutor.copy(), registry)
 
   ShutdownHooks.addHook(1, new Runnable() {
     override def run(): Unit = {
@@ -384,11 +381,26 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
 
   override def list(path: Path,
                     maxDepth: Int,
-                    filter: Directory.EntryFilter[_ >: T]): List[Directory.Entry[T]] = {
-    val pair: Pair[Directory[T], List[Directory.Entry[T]]] =
-      listImpl(path, maxDepth, filter)
-    if (pair == null) new ArrayList[Directory.Entry[T]]() else pair.second
-  }
+                    filter: Directory.EntryFilter[_ >: T]): List[Directory.Entry[T]] =
+    internalExecutor
+      .block(new Callable[List[Directory.Entry[T]]]() {
+        override def call(): List[Directory.Entry[T]] = {
+          val dir: Directory[T] = find(path)
+          if (dir == null) {
+            new ArrayList()
+          } else {
+            if (dir.path == path && dir.getDepth == -1) {
+              val result: List[Directory.Entry[T]] =
+                new ArrayList[Directory.Entry[T]]()
+              result.add(dir.entry())
+              result
+            } else {
+              dir.list(path, maxDepth, filter)
+            }
+          }
+        }
+      })
+      .get
 
   override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] = {
     var result: Either[IOException, Boolean] = watcher.register(path, maxDepth)
@@ -404,6 +416,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
 
   private def doReg(path: Path, maxDepth: Int): Boolean = {
     var result: Boolean = false
+    registry.addDirectory(path, maxDepth)
     val dirs: List[Directory[T]] =
       new ArrayList[Directory[T]](directories.values)
     Collections.sort(dirs, new Comparator[Directory[T]]() {
@@ -438,27 +451,35 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
       }
     }
     if (existing == null) {
-      val dir: Directory[T] = Directory.cached(path, converter, maxDepth)
-      directories.put(path, dir)
-      val entryIterator: Iterator[Directory.Entry[T]] =
-        dir.list(true, EntryFilters.AllPass).iterator()
-      if (symlinkWatcher != null) {
-        while (entryIterator.hasNext) {
-          val entry: Directory.Entry[T] = entryIterator.next()
-          if (entry.isSymbolicLink) {
-            symlinkWatcher.addSymlink(entry.path, entry.isDirectory, maxDepth - 1)
+      try {
+        var dir: Directory[T] = null
+        try dir = Directory.cached(path, converter, maxDepth)
+        catch {
+          case e: NotDirectoryException =>
+            dir = Directory.cached(path.getParent, converter, 0)
+
+        }
+        directories.put(path, dir)
+        val entryIterator: Iterator[Directory.Entry[T]] =
+          dir.list(true, EntryFilters.AllPass).iterator()
+        if (symlinkWatcher != null) {
+          while (entryIterator.hasNext) {
+            val entry: Directory.Entry[T] = entryIterator.next()
+            if (entry.isSymbolicLink) {
+              symlinkWatcher.addSymlink(entry.path, entry.isDirectory, maxDepth - 1)
+            }
           }
         }
+        result = true
+      } catch {
+        case e: NoSuchFileException => result = pendingFiles.add(path)
+
       }
-      result = true
     }
     result
   }
 
-  private def listImpl(
-      path: Path,
-      maxDepth: Int,
-      filter: Directory.EntryFilter[_ >: T]): Pair[Directory[T], List[Directory.Entry[T]]] = {
+  private def find(path: Path): Directory[T] = {
     var foundDir: Directory[T] = null
     val it: Iterator[Directory[T]] = directories.values.iterator()
     while (it.hasNext) {
@@ -468,11 +489,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
         foundDir = dir
       }
     }
-    if (foundDir != null) {
-      new Pair(foundDir, foundDir.list(path, maxDepth, filter))
-    } else {
-      null
-    }
+    foundDir
   }
 
   private def diff(left: Directory[T], right: Directory[T]): Boolean = {
@@ -600,25 +617,45 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
 
   }
 
+  private def addCallback(callbacks: List[Callback],
+                          path: Path,
+                          oldEntry: Directory.Entry[T],
+                          newEntry: Directory.Entry[T],
+                          kind: Kind,
+                          ioException: IOException): Unit = {
+    callbacks.add(new Callback(path, kind) {
+      override def run(): Unit = {
+        if (ioException != null) {
+          observers.onError(path, ioException)
+        } else if (kind == Create) {
+          observers.onCreate(newEntry)
+        } else if (kind == Delete) {
+          observers.onDelete(oldEntry)
+        } else if (kind == Modify) {
+          observers.onUpdate(oldEntry, newEntry)
+        }
+      }
+    })
+  }
+
   private def handleEvent(path: Path): Unit = {
     if (!closed.get) {
       var attrs: BasicFileAttributes = null
       val callbacks: List[Callback] = new ArrayList[Callback]()
-      try attrs =
-        Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS)
+      try attrs = NioWrappers.readAttributes(path, LinkOption.NOFOLLOW_LINKS)
       catch {
         case e: IOException => {}
 
       }
       if (attrs != null) {
-        val pair: Pair[Directory[T], List[Directory.Entry[T]]] =
-          listImpl(path, 0, new Directory.EntryFilter[T]() {
-            override def accept(entry: Directory.Entry[_ <: T]): Boolean =
-              path == entry.path
-          })
-        if (pair != null) {
-          val dir: Directory[T] = pair.first
-          val paths: List[Directory.Entry[T]] = pair.second
+        val dir: Directory[T] = find(path)
+        if (dir != null) {
+          val paths: List[Directory.Entry[T]] =
+            dir.list(path, 0, new Directory.EntryFilter[T]() {
+              override def accept(entry: Directory.Entry[_ <: T]): Boolean =
+                path == entry.path
+            })
+          if (dir.getDepth == -1) paths.add(dir.entry())
           if (!paths.isEmpty || path != dir.path) {
             val toUpdate: Path = if (paths.isEmpty) path else paths.get(0).path
             try {
@@ -633,24 +670,47 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
               updates.observe(callbackObserver(callbacks))
             } catch {
               case e: IOException =>
-                callbacks.add(new Callback(path, Event.Error) {
-                  override def run(): Unit = {
-                    observers.onError(path, e)
-                  }
-                })
+                addCallback(callbacks, path, null, null, Event.Error, e)
 
             }
+          }
+        } else if (pendingFiles.remove(path)) {
+          try {
+            var directory: Directory[T] = null
+            try directory = Directory.cached(path, converter, registry.maxDepthFor(path))
+            catch {
+              case nde: NotDirectoryException =>
+                directory = Directory.cached(path, converter, -1)
+
+            }
+            directories.put(path, directory)
+            addCallback(callbacks, path, null, directory.entry(), Create, null)
+            val it: Iterator[Directory.Entry[T]] =
+              directory.list(true, AllPass).iterator()
+            while (it.hasNext) {
+              val entry: Directory.Entry[T] = it.next()
+              addCallback(callbacks, entry.path, null, entry, Create, null)
+            }
+          } catch {
+            case e: IOException => pendingFiles.add(path)
+
           }
         }
       } else {
         val removeIterators: List[Iterator[Directory.Entry[T]]] =
           new ArrayList[Iterator[Directory.Entry[T]]]()
         val directoryIterator: Iterator[Directory[T]] =
-          directories.values.iterator()
+          new ArrayList(directories.values).iterator()
         while (directoryIterator.hasNext) {
           val dir: Directory[T] = directoryIterator.next()
           if (path.startsWith(dir.path)) {
-            removeIterators.add(dir.remove(path).iterator())
+            val updates: List[Directory.Entry[T]] = dir.remove(path)
+            if (dir.path == path) {
+              pendingFiles.add(path)
+              updates.add(dir.entry())
+              directories.remove(path)
+            }
+            removeIterators.add(updates.iterator())
           }
         }
         val it: Iterator[Iterator[Directory.Entry[T]]] =
@@ -659,11 +719,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
           val removeIterator: Iterator[Directory.Entry[T]] = it.next()
           while (removeIterator.hasNext) {
             val entry: Directory.Entry[T] = removeIterator.next()
-            callbacks.add(new Callback(entry.path, Event.Delete) {
-              override def run(): Unit = {
-                observers.onDelete(entry)
-              }
-            })
+            addCallback(callbacks, entry.path, entry, null, Delete, null)
             if (symlinkWatcher != null) {
               symlinkWatcher.remove(entry.path)
             }
@@ -685,35 +741,19 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
   private def callbackObserver(callbacks: List[Callback]): Observer[T] =
     new Observer[T]() {
       override def onCreate(newEntry: Directory.Entry[T]): Unit = {
-        callbacks.add(new Callback(newEntry.path, Event.Create) {
-          override def run(): Unit = {
-            observers.onCreate(newEntry)
-          }
-        })
+        addCallback(callbacks, newEntry.path, null, newEntry, Create, null)
       }
 
       override def onDelete(oldEntry: Directory.Entry[T]): Unit = {
-        callbacks.add(new Callback(oldEntry.path, Event.Delete) {
-          override def run(): Unit = {
-            observers.onDelete(oldEntry)
-          }
-        })
+        addCallback(callbacks, oldEntry.path, oldEntry, null, Delete, null)
       }
 
       override def onUpdate(oldEntry: Directory.Entry[T], newEntry: Directory.Entry[T]): Unit = {
-        callbacks.add(new Callback(oldEntry.path, Event.Modify) {
-          override def run(): Unit = {
-            observers.onUpdate(oldEntry, newEntry)
-          }
-        })
+        addCallback(callbacks, oldEntry.path, oldEntry, newEntry, Modify, null)
       }
 
       override def onError(path: Path, exception: IOException): Unit = {
-        callbacks.add(new Callback(path, Event.Error) {
-          override def run(): Unit = {
-            observers.onError(path, exception)
-          }
-        })
+        addCallback(callbacks, path, null, null, Event.Error, exception)
       }
     }
 

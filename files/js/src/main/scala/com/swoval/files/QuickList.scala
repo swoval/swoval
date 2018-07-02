@@ -4,6 +4,7 @@ import java.nio.file.Path
 import java.util.List
 
 import com.swoval.functional.Filter
+import com.swoval.runtime.Platform
 
 /**
  * Provides a fast method [[QuickList.list]] for listing the files in a directory. The js

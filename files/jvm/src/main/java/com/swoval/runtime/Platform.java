@@ -1,4 +1,4 @@
-package com.swoval.files;
+package com.swoval.runtime;
 
 /** Provides some platform specific properties. */
 public class Platform {

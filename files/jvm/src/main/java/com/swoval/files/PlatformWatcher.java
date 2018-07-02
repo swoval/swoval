@@ -8,15 +8,17 @@ public class PlatformWatcher {
   static DirectoryWatcher make(
       final Consumer<Event> callback,
       final Executor executor,
+      final DirectoryRegistry directoryRegistry,
       final DirectoryWatcher.Option... options)
       throws IOException, InterruptedException {
-    return make(callback, WatchService.newWatchService(), executor, options);
+    return make(callback, WatchService.newWatchService(), executor, directoryRegistry, options);
   }
 
   static DirectoryWatcher make(
       final Consumer<Event> callback,
       final Registerable registerable,
       final Executor executor,
+      final DirectoryRegistry directoryRegistry,
       final DirectoryWatcher.Option... options)
       throws InterruptedException {
     return make(
@@ -24,6 +26,7 @@ public class PlatformWatcher {
         registerable,
         Executor.make("com.swoval.files.NioDirectoryWatcher-callback-thread"),
         executor,
+        directoryRegistry,
         options);
   }
 
@@ -32,9 +35,10 @@ public class PlatformWatcher {
       final Registerable registerable,
       final Executor callbackExecutor,
       final Executor internalExecutor,
+      final DirectoryRegistry directoryRegistry,
       final DirectoryWatcher.Option... options)
       throws InterruptedException {
     return new NioDirectoryWatcherImpl(
-        callback, registerable, callbackExecutor, internalExecutor, options);
+        callback, registerable, callbackExecutor, internalExecutor, directoryRegistry, options);
   }
 }

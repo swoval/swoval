@@ -24,7 +24,7 @@ class DirectoryRegistry implements Filter<Path> {
   }
 
   public int maxDepthFor(final Path path) {
-    int maxDepth = -1;
+    int maxDepth = Integer.MIN_VALUE;
     final Iterator<RegisteredDirectory> it = registeredDirectoriesByPath.values().iterator();
     while (it.hasNext()) {
       final RegisteredDirectory dir = it.next();

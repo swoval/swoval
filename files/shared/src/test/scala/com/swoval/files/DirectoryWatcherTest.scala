@@ -1,13 +1,14 @@
 package com.swoval.files
 
 import java.nio.file.attribute.FileTime
-import java.nio.file.{ Paths, Files }
+import java.nio.file.{ Files, Paths }
 import java.util.concurrent.{ TimeUnit, TimeoutException }
 
 import com.swoval.files.DirectoryWatcher.Event.{ Create, Delete, Modify }
 import com.swoval.files.apple.Flags
 import com.swoval.files.test.{ ArrayBlockingQueue, _ }
 import com.swoval.functional.Consumer
+import com.swoval.runtime.Platform
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
 import utest._
@@ -71,12 +72,15 @@ trait DirectoryWatcherTest extends TestSuite {
           val events = new ArrayBlockingQueue[String](10)
           val callback: Consumer[String] = (stream: String) => events.add(stream)
           withTempDirectory(dir) { subdir =>
-            val watcher = new AppleDirectoryWatcher(DEFAULT_LATENCY.toNanos / 1.0e9,
-                                                    fileFlags,
-                                                    Executor.make("apple-directory-watcher-test"),
-                                                    (_: DirectoryWatcher.Event) => {},
-                                                    callback,
-                                                    null)
+            val watcher = new AppleDirectoryWatcher(
+              DEFAULT_LATENCY.toNanos / 1.0e9,
+              fileFlags,
+              Executor.make("apple-directory-watcher-test"),
+              (_: DirectoryWatcher.Event) => {},
+              callback,
+              null,
+              new DirectoryRegistry
+            )
             usingAsync(watcher) { w =>
               w.register(subdir)
               w.register(dir)
@@ -203,7 +207,7 @@ trait DirectoryWatcherTest extends TestSuite {
             events
               .poll(100.milliseconds) { _ =>
                 throw new IllegalStateException(
-                  "Event triggered for file that shouldn't be monitored")
+                  s"Event triggered for file that shouldn't be monitored $file")
               }
               .recoverWith {
                 case _: TimeoutException =>
@@ -235,7 +239,7 @@ trait DirectoryWatcherTest extends TestSuite {
                   events
                     .poll(100.milliseconds) { _ =>
                       throw new IllegalStateException(
-                        "Event triggered for file that shouldn't be monitored")
+                        s"Event triggered for file that shouldn't be monitored $file")
                     }
                     .recoverWith {
                       case _: TimeoutException =>
@@ -274,7 +278,7 @@ trait DirectoryWatcherTest extends TestSuite {
                   events
                     .poll(100.milliseconds) { _ =>
                       throw new IllegalStateException(
-                        "Event triggered for file that shouldn't be monitored")
+                        s"Event triggered for file that shouldn't be monitored $file")
                     }
                     .recoverWith {
                       case _: TimeoutException =>
@@ -320,5 +324,8 @@ object NioDirectoryWatcherTest extends DirectoryWatcherTest {
       }
   def defaultWatcher(callback: Consumer[DirectoryWatcher.Event],
                      options: DirectoryWatcher.Option*): DirectoryWatcher =
-    PlatformWatcher.make(callback, Executor.make("NioDirectoryWatcherTestExecutor"), options: _*)
+    PlatformWatcher.make(callback,
+                         Executor.make("NioDirectoryWatcherTestExecutor"),
+                         new DirectoryRegistry(),
+                         options: _*)
 }

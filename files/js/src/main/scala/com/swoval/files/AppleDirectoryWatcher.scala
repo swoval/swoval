@@ -73,10 +73,9 @@ class AppleDirectoryWatcher(private val latency: Double,
                             private val callbackExecutor: Executor,
                             onFileEvent: Consumer[DirectoryWatcher.Event],
                             onStreamRemoved: Consumer[String],
-                            executor: Executor)
+                            executor: Executor,
+                            private val directoryRegistry: DirectoryRegistry)
     extends DirectoryWatcher {
-
-  private val directoryRegistry: DirectoryRegistry = new DirectoryRegistry()
 
   private val streams: Map[Path, Stream] = new HashMap()
 
@@ -263,6 +262,7 @@ class AppleDirectoryWatcher(private val latency: Double,
 
   def this(onFileEvent: Consumer[DirectoryWatcher.Event],
            executor: Executor,
+           directoryRegistry: DirectoryRegistry,
            options: DirectoryWatcher.Option*) =
     this(
       0.01,
@@ -270,7 +270,8 @@ class AppleDirectoryWatcher(private val latency: Double,
       Executor.make("com.swoval.files.AppleDirectoryWatcher-callback-executor"),
       onFileEvent,
       DefaultOnStreamRemoved,
-      executor
+      executor,
+      directoryRegistry
     )
 
   private def find(path: Path): Entry[Path, Stream] = {

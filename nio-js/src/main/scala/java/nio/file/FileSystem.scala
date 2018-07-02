@@ -2,7 +2,7 @@ package java.nio.file
 
 import java.io.Closeable
 
-import com.swoval.files.Platform
+import com.swoval.runtime.Platform
 import scala.collection.JavaConverters._
 
 trait FileSystem extends Closeable {

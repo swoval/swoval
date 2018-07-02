@@ -2,6 +2,7 @@ package com.swoval.files;
 
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
+import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.Path;
 
@@ -88,9 +89,31 @@ public abstract class DirectoryWatcher implements AutoCloseable {
       final Executor executor,
       final Option... options)
       throws IOException, InterruptedException {
+    return defaultWatcher(callback, executor, new DirectoryRegistry(), options);
+  }
+  /**
+   * Create a DirectoryWatcher for the runtime platform.
+   *
+   * @param callback {@link com.swoval.functional.Consumer} to run on file events
+   * @param executor provides a single threaded context to manage state
+   * @param registry The registry of directories to monitor
+   * @param options Runtime {@link DirectoryWatcher.Option} instances for the watcher. This is only
+   *     relevant for the {@link NioDirectoryWatcher} that is used on linux and windows.
+   * @return DirectoryWatcher for the runtime platform
+   * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
+   *     initialized
+   * @throws InterruptedException when the {@link DirectoryWatcher} is interrupted during
+   *     initialization
+   */
+  static DirectoryWatcher defaultWatcher(
+      final Consumer<DirectoryWatcher.Event> callback,
+      final Executor executor,
+      final DirectoryRegistry registry,
+      final Option... options)
+      throws IOException, InterruptedException {
     return Platform.isMac()
-        ? new AppleDirectoryWatcher(callback, executor, options)
-        : PlatformWatcher.make(callback, executor, options);
+        ? new AppleDirectoryWatcher(callback, executor, registry, options)
+        : PlatformWatcher.make(callback, executor, registry, options);
   }
 
   /**
@@ -98,7 +121,7 @@ public abstract class DirectoryWatcher implements AutoCloseable {
    * com.swoval.functional.Consumer}. This is primarily so that the {@link DirectoryWatcher} in
    * {@link FileCache} may be changed in testing.
    */
-  public interface Factory {
+  public abstract static class Factory {
 
     /**
      * Creates a new DirectoryWatcher
@@ -111,8 +134,28 @@ public abstract class DirectoryWatcher implements AutoCloseable {
      * @throws IOException if an IOException occurs during initialization -- this can occur on linux
      *     and windows
      */
-    DirectoryWatcher create(
+    public DirectoryWatcher create(
         final Consumer<DirectoryWatcher.Event> callback, final Executor executor)
+        throws InterruptedException, IOException {
+      return create(callback, executor, new DirectoryRegistry());
+    }
+
+    /**
+     * Creates a new DirectoryWatcher
+     *
+     * @param callback The callback to invoke on directory updates
+     * @param executor The executor on which internal updates are invoked
+     * @param directoryRegistry The registry of directories to monitor
+     * @return A DirectoryWatcher instance
+     * @throws InterruptedException if the DirectoryWatcher is interrupted during initialization --
+     *     this can occur on mac
+     * @throws IOException if an IOException occurs during initialization -- this can occur on linux
+     *     and windows
+     */
+    public abstract DirectoryWatcher create(
+        final Consumer<DirectoryWatcher.Event> callback,
+        final Executor executor,
+        final DirectoryRegistry directoryRegistry)
         throws InterruptedException, IOException;
   }
 
@@ -120,9 +163,11 @@ public abstract class DirectoryWatcher implements AutoCloseable {
       new Factory() {
         @Override
         public DirectoryWatcher create(
-            Consumer<DirectoryWatcher.Event> callback, final Executor executor)
+            Consumer<DirectoryWatcher.Event> callback,
+            final Executor executor,
+            final DirectoryRegistry directoryRegistry)
             throws InterruptedException, IOException {
-          return defaultWatcher(callback, executor);
+          return defaultWatcher(callback, executor, directoryRegistry);
         }
       };
 
