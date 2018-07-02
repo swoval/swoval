@@ -126,7 +126,6 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
                             final Iterator<WatchEvent<?>> it = events.iterator();
                             if (!key.reset()) {
                               key.cancel();
-                              // watchedDirs.remove((Path) key.watchable());
                             }
                             while (it.hasNext()) {
                               final WatchEvent<?> e = it.next();
