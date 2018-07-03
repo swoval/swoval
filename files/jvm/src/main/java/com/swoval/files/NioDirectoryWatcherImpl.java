@@ -140,7 +140,11 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
                                           : k.equals(OVERFLOW) ? Overflow : Modify;
                               final Path watchKey = (Path) key.watchable();
                               if (!kind.equals(Overflow) || !Files.exists(watchKey)) {
-                                handleEvent(callback, watchKey.resolve((Path) e.context()), kind);
+                                final Path path =
+                                    e.context() == null
+                                        ? watchKey
+                                        : watchKey.resolve((Path) e.context());
+                                handleEvent(callback, path, kind);
                               } else {
                                 handleOverflow(callback, watchKey);
                               }
