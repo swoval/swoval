@@ -119,45 +119,38 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
                 final WatchKey key = watchService.take();
                 boolean submitted = false;
                 while (!submitted) {
-                  try {
-                    executor.run(
-                        new Runnable() {
-                          @Override
-                          public void run() {
-                            final List<WatchEvent<?>> events = key.pollEvents();
-                            final Iterator<WatchEvent<?>> it = events.iterator();
-                            if (!key.reset()) {
-                              key.cancel();
-                            }
-                            while (it.hasNext()) {
-                              final WatchEvent<?> e = it.next();
-                              final WatchEvent.Kind<?> k = e.kind();
-                              final DirectoryWatcher.Event.Kind kind =
-                                  k.equals(ENTRY_DELETE)
-                                      ? Delete
-                                      : k.equals(ENTRY_CREATE)
-                                          ? Create
-                                          : k.equals(OVERFLOW) ? Overflow : Modify;
-                              final Path watchKey = (Path) key.watchable();
-                              if (!kind.equals(Overflow) || !Files.exists(watchKey)) {
-                                final Path path =
-                                    e.context() == null
-                                        ? watchKey
-                                        : watchKey.resolve((Path) e.context());
-                                handleEvent(callback, path, kind);
-                              } else {
-                                handleOverflow(callback, watchKey);
-                              }
+                  executor.run(
+                      new Runnable() {
+                        @Override
+                        public void run() {
+                          final List<WatchEvent<?>> events = key.pollEvents();
+                          final Iterator<WatchEvent<?>> it = events.iterator();
+                          if (!key.reset()) {
+                            key.cancel();
+                          }
+                          while (it.hasNext()) {
+                            final WatchEvent<?> e = it.next();
+                            final WatchEvent.Kind<?> k = e.kind();
+                            final DirectoryWatcher.Event.Kind kind =
+                                k.equals(ENTRY_DELETE)
+                                    ? Delete
+                                    : k.equals(ENTRY_CREATE)
+                                        ? Create
+                                        : k.equals(OVERFLOW) ? Overflow : Modify;
+                            final Path watchKey = (Path) key.watchable();
+                            if (!kind.equals(Overflow) || !Files.exists(watchKey)) {
+                              final Path path =
+                                  e.context() == null
+                                      ? watchKey
+                                      : watchKey.resolve((Path) e.context());
+                              handleEvent(callback, path, kind);
+                            } else {
+                              handleOverflow(callback, watchKey);
                             }
                           }
-                        });
-                    submitted = true;
-                  } catch (RejectedExecutionException e) {
-                    try {
-                      Thread.sleep(2);
-                    } catch (InterruptedException ex) {
-                    }
-                  }
+                        }
+                      });
+                  submitted = true;
                 }
               } catch (ClosedWatchServiceException | InterruptedException e) {
                 stop = true;
