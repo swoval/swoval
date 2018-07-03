@@ -1,9 +1,10 @@
 package com.swoval.runtime;
 
 import com.swoval.files.QuickLister;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.URISyntaxException;
-import java.net.URL;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
@@ -70,14 +71,27 @@ public class NativeLoader {
         Files.createDirectories(
             Paths.get(System.getProperty("java.io.tmpdir", "/tmp")).resolve("swoval-jni"));
     final String resourcePath = "/native/" + arch + "/" + lib;
-    final URL url = NativeLoader.class.getResource(resourcePath);
-    if (url == null) {
+    final InputStream resourceStream = NativeLoader.class.getResourceAsStream(resourcePath);
+    if (resourceStream == null) {
       String msg = "Native library " + lib + " (" + resourcePath + ") can't be loaded.";
       throw new UnsatisfiedLinkError(msg);
     }
     final Path extractedPath = Files.createTempFile(swoval, "", "-" + lib);
+    OutputStream out = new FileOutputStream(extractedPath.toFile());
     try {
-      Files.write(extractedPath, Files.readAllBytes(Paths.get(url.toURI())));
+      byte[] buf = new byte[1024];
+      int len;
+      while ((len = resourceStream.read(buf)) >= 0) {
+        out.write(buf, 0, len);
+      }
+    } catch (Exception e) {
+      throw new UnsatisfiedLinkError("Error while extracting native library: " + e);
+    } finally {
+      resourceStream.close();
+      out.close();
+    }
+
+    try {
       System.load(extractedPath.toString());
       ShutdownHooks.addHook(
           2,
@@ -91,11 +105,7 @@ public class NativeLoader {
               }
             }
           });
-
-    } catch (final URISyntaxException e) {
-      throw new RuntimeException(e); // Should be unreachable
     } catch (final UnsatisfiedLinkError e) {
-
       Files.deleteIfExists(extractedPath);
       throw e;
     }
