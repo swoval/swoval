@@ -1,12 +1,11 @@
 package com.swoval.runtime;
 
 import com.swoval.files.QuickLister;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
 import java.nio.file.Files;
@@ -32,28 +31,15 @@ public class NativeLoader {
             Paths.get(System.getProperty("java.io.tmpdir", "/tmp")).resolve("swoval-jni"));
     final Path temp = Files.createTempDirectory(swoval, "native-lib").toRealPath();
     final String resourcePath = "/native/" + arch + "/" + lib;
-    final InputStream resourceStream = NativeLoader.class.getResourceAsStream(resourcePath);
-    if (resourceStream == null) {
+    final URL url = NativeLoader.class.getResource(resourcePath);
+    if (url == null) {
       String msg = "Native library " + lib + " (" + resourcePath + ") can't be loaded.";
       deleteRecursive(temp);
       throw new UnsatisfiedLinkError(msg);
     }
     final Path extractedPath = temp.resolve(lib);
-    OutputStream out = new FileOutputStream(extractedPath.toFile());
     try {
-      byte[] buf = new byte[1024];
-      int len;
-      while ((len = resourceStream.read(buf)) >= 0) {
-        out.write(buf, 0, len);
-      }
-    } catch (Exception e) {
-      throw new UnsatisfiedLinkError("Error while extracting native library: " + e);
-    } finally {
-      resourceStream.close();
-      out.close();
-    }
-
-    try {
+      Files.write(extractedPath, Files.readAllBytes(Paths.get(url.toURI())));
       System.load(extractedPath.toString());
       ShutdownHooks.addHook(
           2,
@@ -69,7 +55,9 @@ public class NativeLoader {
             }
           });
 
-    } catch (UnsatisfiedLinkError e) {
+    } catch (final URISyntaxException e) {
+      throw new RuntimeException(e); // Should be unreachable
+    } catch (final UnsatisfiedLinkError e) {
       deleteRecursive(temp);
       throw e;
     }
