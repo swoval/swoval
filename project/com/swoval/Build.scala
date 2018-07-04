@@ -299,6 +299,7 @@ object Build {
 
   lazy val nio: CrossProject = crossProject(JSPlatform)
     .crossType(CrossType.Pure)
+    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .in(file("nio-js"))
     .settings(
       commonSettings,
