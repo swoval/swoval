@@ -26,7 +26,7 @@ object AllTests {
       test(FileEventApiTest),
       test(PathTest),
       test(NativeQuickListTest),
-      test(NioDirectoryWatcherTest),
+      test(NioPathWatcherTest),
       test(NioFileCacheTest),
       test(NioQuickListTest)
     )

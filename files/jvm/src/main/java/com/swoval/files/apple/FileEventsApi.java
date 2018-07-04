@@ -1,7 +1,8 @@
 package com.swoval.files.apple;
 
 import com.swoval.concurrent.ThreadFactory;
-import com.swoval.files.AppleDirectoryWatcher;
+import com.swoval.files.ApplePathWatcher;
+import com.swoval.files.PathWatcher;
 import com.swoval.runtime.NativeLoader;
 import com.swoval.functional.Consumer;
 import com.swoval.runtime.ShutdownHooks;
@@ -17,7 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Provides access to apple file system events. The class is created with two callbacks, one to run
  * when a file event is created and the other to run when the underlying native implementation
  * removes a redundant stream from monitoring. This class is low level and users should generally
- * prefer {@link com.swoval.files.DirectoryWatcher} or {@link AppleDirectoryWatcher} if the code is
+ * prefer {@link PathWatcher} or {@link ApplePathWatcher} if the code is
  * only ever run on OSX.
  *
  * @see <a href="https://developer.apple.com/documentation/coreservices/file_system_events"

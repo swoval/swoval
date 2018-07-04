@@ -3,7 +3,7 @@ package com.swoval.files;
 import static java.util.Map.Entry;
 
 import com.swoval.files.Directory.OnError;
-import com.swoval.files.DirectoryWatcher.Event;
+import com.swoval.files.PathWatcher.Event;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import java.io.IOException;
@@ -83,7 +83,7 @@ class SymlinkWatcher implements AutoCloseable {
 
   SymlinkWatcher(
       final Consumer<Path> handleEvent,
-      final DirectoryWatcher.Factory factory,
+      final PathWatcher.Factory factory,
       final OnError onError,
       final Executor executor)
       throws IOException, InterruptedException {
@@ -149,7 +149,7 @@ class SymlinkWatcher implements AutoCloseable {
   /*
    * This declaration must go below the constructor for javascript codegen.
    */
-  private final DirectoryWatcher watcher;
+  private final PathWatcher watcher;
 
   @Override
   public void close() {

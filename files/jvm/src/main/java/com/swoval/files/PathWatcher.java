@@ -13,10 +13,10 @@ import java.nio.file.Path;
  * fundamental differences in the underlying file event apis. For example, Linux doesn't support
  * recursive directory monitoring via inotify, so it's possible in rare cases to miss file events
  * for newly created files in newly created directories. On OSX, it is difficult to disambiguate
- * file creation and modify events, so the {@link DirectoryWatcher.Event.Kind} is best effort, but
+ * file creation and modify events, so the {@link PathWatcher.Event.Kind} is best effort, but
  * should not be relied upon to accurately reflect the state of the file.
  */
-public abstract class DirectoryWatcher implements AutoCloseable {
+public abstract class PathWatcher implements AutoCloseable {
 
   /**
    * Register a path to monitor for file events. The watcher will only watch child subdirectories up
@@ -72,109 +72,109 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   public void close() {}
 
   /**
-   * Create a DirectoryWatcher for the runtime platform.
+   * Create a PathWatcher for the runtime platform.
    *
    * @param callback {@link com.swoval.functional.Consumer} to run on file events
-   * @param options Runtime {@link DirectoryWatcher.Option} instances for the watcher. This is only
-   *     relevant for the {@link NioDirectoryWatcher} that is used on linux and windows.
-   * @return DirectoryWatcher for the runtime platform
+   * @param options Runtime {@link PathWatcher.Option} instances for the watcher. This is only
+   *     relevant for the {@link NioPathWatcher} that is used on linux and windows.
+   * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
-   * @throws InterruptedException when the {@link DirectoryWatcher} is interrupted during
+   * @throws InterruptedException when the {@link PathWatcher} is interrupted during
    *     initialization
    */
-  public static DirectoryWatcher defaultWatcher(
-      final Consumer<DirectoryWatcher.Event> callback, final Option... options)
+  public static PathWatcher defaultWatcher(
+      final Consumer<PathWatcher.Event> callback, final Option... options)
       throws IOException, InterruptedException {
     return defaultWatcher(
         callback,
-        Executor.make("com.swoval.files.DirectoryWatcher-internal-executor"),
+        Executor.make("com.swoval.files.PathWatcher-internal-executor"),
         new DirectoryRegistry(),
         options);
   }
   /**
-   * Create a DirectoryWatcher for the runtime platform.
+   * Create a PathWatcher for the runtime platform.
    *
    * @param callback {@link com.swoval.functional.Consumer} to run on file events
    * @param executor provides a single threaded context to manage state
-   * @param options Runtime {@link DirectoryWatcher.Option} instances for the watcher. This is only
-   *     relevant for the {@link NioDirectoryWatcher} that is used on linux and windows.
-   * @return DirectoryWatcher for the runtime platform
+   * @param options Runtime {@link PathWatcher.Option} instances for the watcher. This is only
+   *     relevant for the {@link NioPathWatcher} that is used on linux and windows.
+   * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
-   * @throws InterruptedException when the {@link DirectoryWatcher} is interrupted during
+   * @throws InterruptedException when the {@link PathWatcher} is interrupted during
    *     initialization
    */
-  static DirectoryWatcher defaultWatcher(
-      final Consumer<DirectoryWatcher.Event> callback,
+  static PathWatcher defaultWatcher(
+      final Consumer<PathWatcher.Event> callback,
       final Executor executor,
       final Option... options)
       throws IOException, InterruptedException {
     return defaultWatcher(callback, executor, new DirectoryRegistry(), options);
   }
   /**
-   * Create a DirectoryWatcher for the runtime platform.
+   * Create a PathWatcher for the runtime platform.
    *
    * @param callback {@link com.swoval.functional.Consumer} to run on file events
    * @param executor provides a single threaded context to manage state
    * @param registry The registry of directories to monitor
-   * @param options Runtime {@link DirectoryWatcher.Option} instances for the watcher. This is only
-   *     relevant for the {@link NioDirectoryWatcher} that is used on linux and windows.
-   * @return DirectoryWatcher for the runtime platform
+   * @param options Runtime {@link PathWatcher.Option} instances for the watcher. This is only
+   *     relevant for the {@link NioPathWatcher} that is used on linux and windows.
+   * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
-   * @throws InterruptedException when the {@link DirectoryWatcher} is interrupted during
+   * @throws InterruptedException when the {@link PathWatcher} is interrupted during
    *     initialization
    */
-  static DirectoryWatcher defaultWatcher(
-      final Consumer<DirectoryWatcher.Event> callback,
+  static PathWatcher defaultWatcher(
+      final Consumer<PathWatcher.Event> callback,
       final Executor executor,
       final DirectoryRegistry registry,
       final Option... options)
       throws IOException, InterruptedException {
     return Platform.isMac()
-        ? new AppleDirectoryWatcher(callback, executor, registry, options)
+        ? new ApplePathWatcher(callback, executor, registry, options)
         : PlatformWatcher.make(callback, executor, registry, options);
   }
 
   /**
-   * Instantiates new {@link DirectoryWatcher} instances with a {@link
-   * com.swoval.functional.Consumer}. This is primarily so that the {@link DirectoryWatcher} in
+   * Instantiates new {@link PathWatcher} instances with a {@link
+   * com.swoval.functional.Consumer}. This is primarily so that the {@link PathWatcher} in
    * {@link FileCache} may be changed in testing.
    */
   public abstract static class Factory {
 
     /**
-     * Creates a new DirectoryWatcher
+     * Creates a new PathWatcher
      *
      * @param callback The callback to invoke on directory updates
      * @param executor The executor on which internal updates are invoked
-     * @return A DirectoryWatcher instance
-     * @throws InterruptedException if the DirectoryWatcher is interrupted during initialization --
+     * @return A PathWatcher instance
+     * @throws InterruptedException if the PathWatcher is interrupted during initialization --
      *     this can occur on mac
      * @throws IOException if an IOException occurs during initialization -- this can occur on linux
      *     and windows
      */
-    public DirectoryWatcher create(
-        final Consumer<DirectoryWatcher.Event> callback, final Executor executor)
+    public PathWatcher create(
+        final Consumer<PathWatcher.Event> callback, final Executor executor)
         throws InterruptedException, IOException {
       return create(callback, executor, new DirectoryRegistry());
     }
 
     /**
-     * Creates a new DirectoryWatcher
+     * Creates a new PathWatcher
      *
      * @param callback The callback to invoke on directory updates
      * @param executor The executor on which internal updates are invoked
      * @param directoryRegistry The registry of directories to monitor
-     * @return A DirectoryWatcher instance
-     * @throws InterruptedException if the DirectoryWatcher is interrupted during initialization --
+     * @return A PathWatcher instance
+     * @throws InterruptedException if the PathWatcher is interrupted during initialization --
      *     this can occur on mac
      * @throws IOException if an IOException occurs during initialization -- this can occur on linux
      *     and windows
      */
-    public abstract DirectoryWatcher create(
-        final Consumer<DirectoryWatcher.Event> callback,
+    public abstract PathWatcher create(
+        final Consumer<PathWatcher.Event> callback,
         final Executor executor,
         final DirectoryRegistry directoryRegistry)
         throws InterruptedException, IOException;
@@ -183,8 +183,8 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   public static final Factory DEFAULT_FACTORY =
       new Factory() {
         @Override
-        public DirectoryWatcher create(
-            Consumer<DirectoryWatcher.Event> callback,
+        public PathWatcher create(
+            Consumer<PathWatcher.Event> callback,
             final Executor executor,
             final DirectoryRegistry directoryRegistry)
             throws InterruptedException, IOException {
@@ -192,7 +192,7 @@ public abstract class DirectoryWatcher implements AutoCloseable {
         }
       };
 
-  /** Container for {@link DirectoryWatcher} events */
+  /** Container for {@link PathWatcher} events */
   public static final class Event {
     public final Path path;
     public final Event.Kind kind;
@@ -262,7 +262,7 @@ public abstract class DirectoryWatcher implements AutoCloseable {
     }
   }
 
-  /** Options for the DirectoryWatcher. */
+  /** Options for the PathWatcher. */
   public static class Option {
     private final String name;
 
@@ -289,7 +289,7 @@ public abstract class DirectoryWatcher implements AutoCloseable {
   /** Container class for static options. */
   public static final class Options {
     /**
-     * Require that the DirectoryWatcher poll newly created directories for files contained therein.
+     * Require that the PathWatcher poll newly created directories for files contained therein.
      * A creation event will be generated for any file found within the new directory. This is
      * somewhat expensive and may be redundant in some cases, see {@link FileCache} which does its
      * own polling for new directories.

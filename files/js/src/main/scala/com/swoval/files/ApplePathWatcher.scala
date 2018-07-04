@@ -2,10 +2,10 @@
 
 package com.swoval.files
 
-import com.swoval.files.DirectoryWatcher.Event.Create
-import com.swoval.files.DirectoryWatcher.Event.Delete
-import com.swoval.files.DirectoryWatcher.Event.Modify
-import com.swoval.files.DirectoryWatcher.Event.Overflow
+import com.swoval.files.PathWatcher.Event.Create
+import com.swoval.files.PathWatcher.Event.Delete
+import com.swoval.files.PathWatcher.Event.Modify
+import com.swoval.files.PathWatcher.Event.Overflow
 import com.swoval.files.apple.FileEvent
 import com.swoval.files.apple.FileEventsApi
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException
@@ -25,10 +25,10 @@ import java.util.Map
 import java.util.Map.Entry
 import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicBoolean
-import AppleDirectoryWatcher._
+import ApplePathWatcher._
 import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
-object AppleDirectoryWatcher {
+object ApplePathWatcher {
 
   private val DefaultOnStreamRemoved: DefaultOnStreamRemoved =
     new DefaultOnStreamRemoved()
@@ -44,18 +44,17 @@ object AppleDirectoryWatcher {
 
   }
 
-  private def fromOptionsOrDefault(options: DirectoryWatcher.Option*): Flags.Create = {
-    val option: DirectoryWatcher.Option =
-      ArrayOps.find(options, new Filter[DirectoryWatcher.Option]() {
-        override def accept(option: DirectoryWatcher.Option): Boolean =
+  private def fromOptionsOrDefault(options: PathWatcher.Option*): Flags.Create = {
+    val option: PathWatcher.Option =
+      ArrayOps.find(options, new Filter[PathWatcher.Option]() {
+        override def accept(option: PathWatcher.Option): Boolean =
           option.isInstanceOf[FlagOption]
       })
     if (option == null) new Flags.Create().setFileEvents().setNoDefer()
     else option.asInstanceOf[FlagOption].getFlags
   }
 
-  class FlagOption(@BeanProperty val flags: Flags.Create)
-      extends DirectoryWatcher.Option("FLAG_OPTION")
+  class FlagOption(@BeanProperty val flags: Flags.Create) extends PathWatcher.Option("FLAG_OPTION")
 
   object Options {
 
@@ -66,16 +65,16 @@ object AppleDirectoryWatcher {
 }
 
 /**
- * Implements the DirectoryWatcher for Mac OSX using the [[https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/UsingtheFSEventsFramework/UsingtheFSEventsFramework.html Apple File System Events Api]]
+ * Implements the PathWatcher for Mac OSX using the [[https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/UsingtheFSEventsFramework/UsingtheFSEventsFramework.html Apple File System Events Api]]
  */
-class AppleDirectoryWatcher(private val latency: Double,
-                            private val flags: Flags.Create,
-                            private val callbackExecutor: Executor,
-                            onFileEvent: Consumer[DirectoryWatcher.Event],
-                            onStreamRemoved: Consumer[String],
-                            executor: Executor,
-                            private val directoryRegistry: DirectoryRegistry)
-    extends DirectoryWatcher {
+class ApplePathWatcher(private val latency: Double,
+                       private val flags: Flags.Create,
+                       private val callbackExecutor: Executor,
+                       onFileEvent: Consumer[PathWatcher.Event],
+                       onStreamRemoved: Consumer[String],
+                       executor: Executor,
+                       private val directoryRegistry: DirectoryRegistry)
+    extends PathWatcher {
 
   private val streams: Map[Path, Stream] = new HashMap()
 
@@ -83,7 +82,7 @@ class AppleDirectoryWatcher(private val latency: Double,
 
   private val internalExecutor: Executor =
     if (executor == null)
-      Executor.make("com.swoval.files.AppleDirectoryWatcher-internalExecutor")
+      Executor.make("com.swoval.files.ApplePathWatcher-internalExecutor")
     else executor
 
   private val fileEventsApi: FileEventsApi = FileEventsApi.apply(
@@ -94,20 +93,20 @@ class AppleDirectoryWatcher(private val latency: Double,
             val fileName: String = fileEvent.fileName
             val path: Path = Paths.get(fileName)
             if (directoryRegistry.accept(path)) {
-              var event: DirectoryWatcher.Event = null
+              var event: PathWatcher.Event = null
               event =
                 if (fileEvent.mustScanSubDirs())
-                  new DirectoryWatcher.Event(path, Overflow)
+                  new PathWatcher.Event(path, Overflow)
                 else if (fileEvent.itemIsFile())
                   if (fileEvent.isNewFile && Files.exists(path))
-                    new DirectoryWatcher.Event(path, Create)
+                    new PathWatcher.Event(path, Create)
                   else if (fileEvent.isRemoved || !Files.exists(path))
-                    new DirectoryWatcher.Event(path, Delete)
-                  else new DirectoryWatcher.Event(path, Modify)
+                    new PathWatcher.Event(path, Delete)
+                  else new PathWatcher.Event(path, Modify)
                 else if (Files.exists(path))
-                  new DirectoryWatcher.Event(path, Modify)
-                else new DirectoryWatcher.Event(path, Delete)
-              val callbackEvent: DirectoryWatcher.Event = event
+                  new PathWatcher.Event(path, Modify)
+                else new PathWatcher.Event(path, Delete)
+              val callbackEvent: PathWatcher.Event = event
               callbackExecutor.run(new Runnable() {
                 override def run(): Unit = {
                   onFileEvent.accept(callbackEvent)
@@ -260,14 +259,14 @@ class AppleDirectoryWatcher(private val latency: Double,
     }
   }
 
-  def this(onFileEvent: Consumer[DirectoryWatcher.Event],
+  def this(onFileEvent: Consumer[PathWatcher.Event],
            executor: Executor,
            directoryRegistry: DirectoryRegistry,
-           options: DirectoryWatcher.Option*) =
+           options: PathWatcher.Option*) =
     this(
       0.01,
       fromOptionsOrDefault(options: _*),
-      Executor.make("com.swoval.files.AppleDirectoryWatcher-callback-executor"),
+      Executor.make("com.swoval.files.ApplePathWatcher-callback-executor"),
       onFileEvent,
       DefaultOnStreamRemoved,
       executor,

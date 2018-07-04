@@ -6,8 +6,8 @@ import java.io.IOException
 import java.nio.file.{ FileSystemLoopException, Files, Path, Paths }
 import java.util.concurrent.atomic.{ AtomicBoolean, AtomicReference }
 
-import com.swoval.files.DirectoryWatcher.Event
-import com.swoval.files.DirectoryWatcher.Event.{ Delete, Modify }
+import com.swoval.files.PathWatcher.Event
+import com.swoval.files.PathWatcher.Event.{ Delete, Modify }
 import com.swoval.functional.{ Consumer, IO }
 import io.scalajs.nodejs
 import io.scalajs.nodejs.fs.{ FSWatcherOptions, Fs }
@@ -18,15 +18,15 @@ import scala.util.Try
 /**
  * Native directory watcher implementation for Linux and Windows
  */
-private[files] class NioDirectoryWatcherImpl(callback: Consumer[Event],
-                                             callbackExecutor: Executor,
-                                             internalExecutor: Executor,
-                                             directoryRegistry: DirectoryRegistry,
-                                             options: DirectoryWatcher.Option*)
+private[files] class NioPathWatcherImpl(callback: Consumer[Event],
+                                        callbackExecutor: Executor,
+                                        internalExecutor: Executor,
+                                        directoryRegistry: DirectoryRegistry,
+                                        options: PathWatcher.Option*)
     extends {
   private[this] val l: AtomicReference[Consumer[Event]] = new AtomicReference(null)
-  private[this] val io = new NioDirectoryWatcherImpl.IOImpl(l)
-} with NioDirectoryWatcher(io, callbackExecutor, internalExecutor, directoryRegistry, options: _*) {
+  private[this] val io = new NioPathWatcherImpl.IOImpl(l)
+} with NioPathWatcher(io, callbackExecutor, internalExecutor, directoryRegistry, options: _*) {
   l.set(new Consumer[Event] {
     override def accept(e: Event) =
       if (directoryRegistry.accept(e.path)) handleEvent(callback, e.path, e.kind)
@@ -37,7 +37,7 @@ private[files] class NioDirectoryWatcherImpl(callback: Consumer[Event],
     super.close()
   }
 }
-object NioDirectoryWatcherImpl {
+object NioPathWatcherImpl {
   object EmptyConsumer extends Consumer[Event] {
     override def accept(e: Event): Unit = {}
   }

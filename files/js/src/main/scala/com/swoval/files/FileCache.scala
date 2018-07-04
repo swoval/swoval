@@ -2,18 +2,18 @@
 
 package com.swoval.files
 
-import com.swoval.files.DirectoryWatcher.DEFAULT_FACTORY
-import com.swoval.files.DirectoryWatcher.Event.Create
-import com.swoval.files.DirectoryWatcher.Event.Delete
-import com.swoval.files.DirectoryWatcher.Event.Modify
-import com.swoval.files.DirectoryWatcher.Event.Overflow
+import com.swoval.files.PathWatcher.DEFAULT_FACTORY
+import com.swoval.files.PathWatcher.Event.Create
+import com.swoval.files.PathWatcher.Event.Delete
+import com.swoval.files.PathWatcher.Event.Modify
+import com.swoval.files.PathWatcher.Event.Overflow
 import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.Observer
 import com.swoval.files.Directory.OnChange
 import com.swoval.files.Directory.OnError
-import com.swoval.files.DirectoryWatcher.Event
-import com.swoval.files.DirectoryWatcher.Event.Kind
+import com.swoval.files.PathWatcher.Event
+import com.swoval.files.PathWatcher.Event.Kind
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import com.swoval.runtime.ShutdownHooks
@@ -52,7 +52,7 @@ object FileCache {
     new FileCacheImpl(converter, DEFAULT_FACTORY, null, options: _*)
 
   /**
-   * Create a file cache using a specific DirectoryWatcher created by the provided factory
+   * Create a file cache using a specific PathWatcher created by the provided factory
    *
    * @param converter Converts a path to the cached value type T
    * @param factory A factory to create a directory watcher
@@ -61,7 +61,7 @@ object FileCache {
    * @return A file cache
    */
   def apply[T <: AnyRef](converter: Converter[T],
-                         factory: DirectoryWatcher.Factory,
+                         factory: PathWatcher.Factory,
                          options: FileCache.Option*): FileCache[T] =
     new FileCacheImpl(converter, factory, null, options: _*)
 
@@ -94,7 +94,7 @@ object FileCache {
    * @return A file cache
    */
   def apply[T <: AnyRef](converter: Converter[T],
-                         factory: DirectoryWatcher.Factory,
+                         factory: PathWatcher.Factory,
                          observer: Observer[T],
                          options: FileCache.Option*): FileCache[T] = {
     val res: FileCache[T] =
@@ -299,7 +299,7 @@ abstract class FileCache[T <: AnyRef] extends AutoCloseable {
 }
 
 private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter[T],
-                                                factory: DirectoryWatcher.Factory,
+                                                factory: PathWatcher.Factory,
                                                 executor: Executor,
                                                 options: FileCache.Option*)
     extends FileCache[T] {
@@ -340,7 +340,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
 
   private def callback(executor: Executor): Consumer[Event] =
     new Consumer[Event]() {
-      override def accept(event: DirectoryWatcher.Event): Unit = {
+      override def accept(event: PathWatcher.Event): Unit = {
         executor.run(new Runnable() {
           override def run(): Unit = {
             val path: Path = event.path
@@ -354,7 +354,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
       }
     }
 
-  private val watcher: DirectoryWatcher =
+  private val watcher: PathWatcher =
     factory.create(callback(this.internalExecutor.copy()), this.internalExecutor.copy(), registry)
 
   ShutdownHooks.addHook(1, new Runnable() {

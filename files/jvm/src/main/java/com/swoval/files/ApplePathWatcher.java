@@ -1,9 +1,9 @@
 package com.swoval.files;
 
-import static com.swoval.files.DirectoryWatcher.Event.Create;
-import static com.swoval.files.DirectoryWatcher.Event.Delete;
-import static com.swoval.files.DirectoryWatcher.Event.Modify;
-import static com.swoval.files.DirectoryWatcher.Event.Overflow;
+import static com.swoval.files.PathWatcher.Event.Create;
+import static com.swoval.files.PathWatcher.Event.Delete;
+import static com.swoval.files.PathWatcher.Event.Modify;
+import static com.swoval.files.PathWatcher.Event.Overflow;
 
 import com.swoval.files.apple.FileEvent;
 import com.swoval.files.apple.FileEventsApi;
@@ -26,11 +26,11 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Implements the DirectoryWatcher for Mac OSX using the <a
+ * Implements the PathWatcher for Mac OSX using the <a
  * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/UsingtheFSEventsFramework/UsingtheFSEventsFramework.html"
  * target="_blank">Apple File System Events Api</a>
  */
-public class AppleDirectoryWatcher extends DirectoryWatcher {
+public class ApplePathWatcher extends PathWatcher {
   private final DirectoryRegistry directoryRegistry;
   private final Map<Path, Stream> streams = new HashMap<>();
   private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -187,13 +187,13 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
   }
 
   @SuppressWarnings("unchecked")
-  private static Flags.Create fromOptionsOrDefault(final DirectoryWatcher.Option... options) {
-    final DirectoryWatcher.Option option =
+  private static Flags.Create fromOptionsOrDefault(final PathWatcher.Option... options) {
+    final PathWatcher.Option option =
         ArrayOps.find(
             options,
-            new Filter<DirectoryWatcher.Option>() {
+            new Filter<PathWatcher.Option>() {
               @Override
-              public boolean accept(DirectoryWatcher.Option option) {
+              public boolean accept(PathWatcher.Option option) {
                 return option instanceof FlagOption;
               }
             });
@@ -202,23 +202,23 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
         : ((FlagOption) option).getFlags();
   }
 
-  public AppleDirectoryWatcher(
-      final Consumer<DirectoryWatcher.Event> onFileEvent,
+  public ApplePathWatcher(
+      final Consumer<PathWatcher.Event> onFileEvent,
       final Executor executor,
       final DirectoryRegistry directoryRegistry,
-      final DirectoryWatcher.Option... options)
+      final PathWatcher.Option... options)
       throws InterruptedException {
     this(
         0.01,
         fromOptionsOrDefault(options),
-        Executor.make("com.swoval.files.AppleDirectoryWatcher-callback-executor"),
+        Executor.make("com.swoval.files.ApplePathWatcher-callback-executor"),
         onFileEvent,
         DefaultOnStreamRemoved,
         executor,
         directoryRegistry);
   }
   /**
-   * Creates a new AppleDirectoryWatcher which is a wrapper around {@link FileEventsApi}, which in
+   * Creates a new ApplePathWatcher which is a wrapper around {@link FileEventsApi}, which in
    * turn is a native wrapper around <a
    * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
    * Apple File System Events</a>
@@ -234,11 +234,11 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
    */
-  public AppleDirectoryWatcher(
+  public ApplePathWatcher(
       final double latency,
       final Flags.Create flags,
       final Executor callbackExecutor,
-      final Consumer<DirectoryWatcher.Event> onFileEvent,
+      final Consumer<PathWatcher.Event> onFileEvent,
       final Consumer<String> onStreamRemoved,
       final Executor executor,
       final DirectoryRegistry directoryRegistry)
@@ -248,7 +248,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     this.callbackExecutor = callbackExecutor;
     this.internalExecutor =
         executor == null
-            ? Executor.make("com.swoval.files.AppleDirectoryWatcher-internalExecutor")
+            ? Executor.make("com.swoval.files.ApplePathWatcher-internalExecutor")
             : executor;
     this.directoryRegistry = directoryRegistry;
     fileEventsApi =
@@ -263,23 +263,23 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
                         final String fileName = fileEvent.fileName;
                         final Path path = Paths.get(fileName);
                         if (directoryRegistry.accept(path)) {
-                          DirectoryWatcher.Event event;
+                          PathWatcher.Event event;
                           if (fileEvent.mustScanSubDirs()) {
-                            event = new DirectoryWatcher.Event(path, Overflow);
+                            event = new PathWatcher.Event(path, Overflow);
                           } else if (fileEvent.itemIsFile()) {
                             if (fileEvent.isNewFile() && Files.exists(path)) {
-                              event = new DirectoryWatcher.Event(path, Create);
+                              event = new PathWatcher.Event(path, Create);
                             } else if (fileEvent.isRemoved() || !Files.exists(path)) {
-                              event = new DirectoryWatcher.Event(path, Delete);
+                              event = new PathWatcher.Event(path, Delete);
                             } else {
-                              event = new DirectoryWatcher.Event(path, Modify);
+                              event = new PathWatcher.Event(path, Modify);
                             }
                           } else if (Files.exists(path)) {
-                            event = new DirectoryWatcher.Event(path, Modify);
+                            event = new PathWatcher.Event(path, Modify);
                           } else {
-                            event = new DirectoryWatcher.Event(path, Delete);
+                            event = new PathWatcher.Event(path, Delete);
                           }
-                          final DirectoryWatcher.Event callbackEvent = event;
+                          final PathWatcher.Event callbackEvent = event;
                           callbackExecutor.run(
                               new Runnable() {
                                 @Override
@@ -330,7 +330,7 @@ public class AppleDirectoryWatcher extends DirectoryWatcher {
     return result;
   }
 
-  public static class FlagOption extends DirectoryWatcher.Option {
+  public static class FlagOption extends PathWatcher.Option {
     private final Flags.Create flags;
 
     public FlagOption(final Flags.Create flags) {

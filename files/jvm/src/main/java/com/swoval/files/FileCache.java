@@ -1,18 +1,18 @@
 package com.swoval.files;
 
-import static com.swoval.files.DirectoryWatcher.DEFAULT_FACTORY;
-import static com.swoval.files.DirectoryWatcher.Event.Create;
-import static com.swoval.files.DirectoryWatcher.Event.Delete;
-import static com.swoval.files.DirectoryWatcher.Event.Modify;
-import static com.swoval.files.DirectoryWatcher.Event.Overflow;
+import static com.swoval.files.PathWatcher.DEFAULT_FACTORY;
+import static com.swoval.files.PathWatcher.Event.Create;
+import static com.swoval.files.PathWatcher.Event.Delete;
+import static com.swoval.files.PathWatcher.Event.Modify;
+import static com.swoval.files.PathWatcher.Event.Overflow;
 import static com.swoval.files.EntryFilters.AllPass;
 
 import com.swoval.files.Directory.Converter;
 import com.swoval.files.Directory.Observer;
 import com.swoval.files.Directory.OnChange;
 import com.swoval.files.Directory.OnError;
-import com.swoval.files.DirectoryWatcher.Event;
-import com.swoval.files.DirectoryWatcher.Event.Kind;
+import com.swoval.files.PathWatcher.Event;
+import com.swoval.files.PathWatcher.Event.Kind;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import com.swoval.runtime.ShutdownHooks;
@@ -227,8 +227,8 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @param options Options for the cache.
    * @param <T> The value type of the cache entries
    * @return A file cache
-   * @throws IOException if the {@link DirectoryWatcher} cannot be initialized
-   * @throws InterruptedException if the {@link DirectoryWatcher} cannot be initialized
+   * @throws IOException if the {@link PathWatcher} cannot be initialized
+   * @throws InterruptedException if the {@link PathWatcher} cannot be initialized
    */
   public static <T> FileCache<T> apply(
       final Converter<T> converter, final FileCache.Option... options)
@@ -237,19 +237,19 @@ public abstract class FileCache<T> implements AutoCloseable {
   }
 
   /**
-   * Create a file cache using a specific DirectoryWatcher created by the provided factory
+   * Create a file cache using a specific PathWatcher created by the provided factory
    *
    * @param converter Converts a path to the cached value type T
    * @param factory A factory to create a directory watcher
    * @param options Options for the cache
    * @param <T> The value type of the cache entries
    * @return A file cache
-   * @throws IOException if the {@link DirectoryWatcher} cannot be initialized
-   * @throws InterruptedException if the {@link DirectoryWatcher} cannot be initialized
+   * @throws IOException if the {@link PathWatcher} cannot be initialized
+   * @throws InterruptedException if the {@link PathWatcher} cannot be initialized
    */
   public static <T> FileCache<T> apply(
       final Converter<T> converter,
-      final DirectoryWatcher.Factory factory,
+      final PathWatcher.Factory factory,
       final FileCache.Option... options)
       throws IOException, InterruptedException {
     return new FileCacheImpl<>(converter, factory, null, options);
@@ -263,8 +263,8 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @param options Options for the cache
    * @param <T> The value type of the cache entries
    * @return A file cache
-   * @throws IOException if the {@link DirectoryWatcher} cannot be initialized
-   * @throws InterruptedException if the {@link DirectoryWatcher} cannot be initialized
+   * @throws IOException if the {@link PathWatcher} cannot be initialized
+   * @throws InterruptedException if the {@link PathWatcher} cannot be initialized
    */
   public static <T> FileCache<T> apply(
       final Converter<T> converter, final Observer<T> observer, final FileCache.Option... options)
@@ -283,12 +283,12 @@ public abstract class FileCache<T> implements AutoCloseable {
    * @param options Options for the cache
    * @param <T> The value type of the cache entries
    * @return A file cache
-   * @throws IOException if the {@link DirectoryWatcher} cannot be initialized
-   * @throws InterruptedException if the {@link DirectoryWatcher} cannot be initialized
+   * @throws IOException if the {@link PathWatcher} cannot be initialized
+   * @throws InterruptedException if the {@link PathWatcher} cannot be initialized
    */
   public static <T> FileCache<T> apply(
       final Converter<T> converter,
-      final DirectoryWatcher.Factory factory,
+      final PathWatcher.Factory factory,
       final Observer<T> observer,
       final FileCache.Option... options)
       throws IOException, InterruptedException {
@@ -327,7 +327,7 @@ class FileCacheImpl<T> extends FileCache<T> {
     return new Consumer<Event>() {
       @SuppressWarnings("unchecked")
       @Override
-      public void accept(final DirectoryWatcher.Event event) {
+      public void accept(final PathWatcher.Event event) {
         executor.run(
             new Runnable() {
               @Override
@@ -344,11 +344,11 @@ class FileCacheImpl<T> extends FileCache<T> {
     };
   }
 
-  private final DirectoryWatcher watcher;
+  private final PathWatcher watcher;
 
   FileCacheImpl(
       final Converter<T> converter,
-      final DirectoryWatcher.Factory factory,
+      final PathWatcher.Factory factory,
       final Executor executor,
       FileCache.Option... options)
       throws InterruptedException, IOException {
