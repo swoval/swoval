@@ -4,13 +4,26 @@ import com.swoval.functional.Filter;
 import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.List;
 
 /**
  * Provides a fast method {@link QuickList#list(Path, int, boolean)} for listing the files in a
- * directory. The implementation may be controlled using the system property -Dswoval.quicklister.
- * For example, to make this class use the java nio based implementation, the application could be
+ * directory. The file list apis present in {@link java.io.File} and {@link java.nio.file.Files} can
+ * be slow for recursive directory listing because determining the type of file requires a stat. The
+ * three major platforms (Linux, Mac OS, Windows) all have native apis that allow the caller to list
+ * the files in the directory and include the types of the listed files. The {@link
+ * com.swoval.files.NativeQuickLister} uses these apis to speed up the performance. This can improve
+ * the performance of recursively listing a directory with many children by a large amount. For
+ * example, on a 2017 macbook pro, listing a directory with 5000 subdirectories containing one file
+ * takes roughly 25ms with QuickList, but roughly 100ms using {@link
+ * java.nio.file.Files#walkFileTree}. It also takes roughly 75ms to stat all of the files (via
+ * {@link java.nio.file.Files#readAttributes(Path, Class, LinkOption...)}) returned by the {@link
+ * QuickList#list}, explaining the difference in performance.
+ *
+ * <p>The implementation may be controlled using the system property -Dswoval.quicklister. For
+ * example, to make this class use the java nio based implementation, the application could be
  * started with -Dswoval.quicklister=com.swoval.files.NioQuickLister.
  */
 @SuppressWarnings({"unchecked", "EmptyCatchBlock"})
