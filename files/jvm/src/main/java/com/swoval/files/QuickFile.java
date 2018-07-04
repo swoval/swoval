@@ -6,12 +6,6 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-abstract class FileWithFileType extends File implements FileType {
-  public FileWithFileType(final String name) {
-    super(name);
-  }
-}
-
 /**
  * Represents a file that will be returned by {@link QuickList#list}. Provides fast {@link
  * QuickFile#isDirectory} and {@link QuickFile#isFile} methods that should not call stat (or the
@@ -50,17 +44,15 @@ public interface QuickFile {
   boolean isSymbolicLink();
 
   /**
-   * Returns an instance of {@link FileWithFileType}. Typically the implementation of {@link
-   * QuickFile} while extend {@link FileWithFileType}. This method will then just cast the instance
-   * to {@link java.io.File}. Because the {@link QuickFile#isDirectory} and {@link QuickFile#isFile}
-   * methods will generally cache the value of the native file result returned by readdir (posix) or
-   * FindNextFile (windows) and use this value to compute {@link QuickFile#isDirectory} and {@link
-   * QuickFile#isFile}, the returned {@link FileWithFileType} is generally unsuitable to be used as
-   * a persistent value. Instead, use {@link QuickFile#toFile}.
+   * Returns an instance of {@link java.io.File} with fast implementations of {@link
+   * java.io.File#isFile} and {@link File#isDirectory}. The {@link java.io.File#isFile} and {@link
+   * java.io.File#isDirectory} methods return the cached values returned by the native file result
+   * returned by readdir (posix) or FindNextFile (windows). This makes the result generically
+   * unsuitable for caching. Instead, use {@link QuickFile#toFile}.
    *
-   * @return An instance of FileWithFileType. This may just be a cast.
+   * @return An instance of {@link java.io.File}
    */
-  FileWithFileType asFile();
+  File asFile();
 
   /**
    * Returns an instance of {@link java.io.File}. The instance should not override {@link
@@ -78,7 +70,7 @@ public interface QuickFile {
   Path toPath();
 }
 
-class QuickFileImpl extends FileWithFileType implements QuickFile {
+class QuickFileImpl extends File implements QuickFile {
   private final int kind;
 
   QuickFileImpl(final String name, final int kind) {
@@ -107,7 +99,7 @@ class QuickFileImpl extends FileWithFileType implements QuickFile {
   }
 
   @Override
-  public FileWithFileType asFile() {
+  public File asFile() {
     return this;
   }
 

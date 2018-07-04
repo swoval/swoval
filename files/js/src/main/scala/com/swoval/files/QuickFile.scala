@@ -7,8 +7,6 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 
-abstract class FileWithFileType(name: String) extends File(name) with FileType
-
 /**
  * Represents a file that will be returned by [[QuickList.list]]. Provides fast [[QuickFile.isDirectory]] and [[QuickFile.isFile]] methods that should not call stat (or the
  * non-POSIX equivalent) on the * underlying file. Can be converted to a [[java.io.File]] or
@@ -48,15 +46,13 @@ trait QuickFile {
   def isSymbolicLink(): Boolean
 
   /**
-   * Returns an instance of [[FileWithFileType]]. Typically the implementation of [[QuickFile]] while extend [[FileWithFileType]]. This method will then just cast the instance
-   * to [[java.io.File]]. Because the [[QuickFile.isDirectory]] and [[QuickFile.isFile]]
-   * methods will generally cache the value of the native file result returned by readdir (posix) or
-   * FindNextFile (windows) and use this value to compute [[QuickFile.isDirectory]] and [[QuickFile.isFile]], the returned [[FileWithFileType]] is generally unsuitable to be used as
-   * a persistent value. Instead, use [[QuickFile.toFile]].
+   * Returns an instance of [[java.io.File]] with fast implementations of [[java.io.File.isFile]] and [[File.isDirectory]]. The [[java.io.File.isFile]] and [[java.io.File.isDirectory]] methods return the cached values returned by the native file result
+   * returned by readdir (posix) or FindNextFile (windows). This makes the result generically
+   * unsuitable for caching. Instead, use [[QuickFile.toFile]].
    *
-   * @return An instance of FileWithFileType. This may just be a cast.
+   * @return An instance of [[java.io.File]]
    */
-  def asFile(): FileWithFileType
+  def asFile(): File
 
   /**
    * Returns an instance of [[java.io.File]]. The instance should not override [[java.io.File.isDirectory]] or [[java.io.File.isFile]] which makes it safe to persist.
@@ -75,7 +71,7 @@ trait QuickFile {
 }
 
 private[files] class QuickFileImpl(name: String, private val kind: Int)
-    extends FileWithFileType(name)
+    extends File(name)
     with QuickFile {
 
   override def getFileName(): String = super.toString
@@ -90,7 +86,7 @@ private[files] class QuickFileImpl(name: String, private val kind: Int)
     if (is(QuickListerImpl.UNKNOWN)) Files.isSymbolicLink(toPath())
     else is(QuickListerImpl.LINK)
 
-  override def asFile(): FileWithFileType = this
+  override def asFile(): File = this
 
   override def toFile(): File = new File(getFileName)
 

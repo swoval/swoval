@@ -447,7 +447,6 @@ object Build {
                 "DirectoryWatcher",
                 "EntryFilters",
                 "FileCache",
-                "FileType",
                 "MapOps",
                 "NioDirectoryWatcher",
                 "NioQuickLister",
