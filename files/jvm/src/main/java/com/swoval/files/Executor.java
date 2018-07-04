@@ -2,12 +2,14 @@ package com.swoval.files;
 
 import com.swoval.concurrent.ThreadFactory;
 import com.swoval.functional.Either;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,7 +39,7 @@ public abstract class Executor implements AutoCloseable {
     final Executor self = this;
     return new Executor() {
       @Override
-      public void run(Runnable runnable) {
+      public void run(final Runnable runnable) {
         self.run(runnable);
       }
     };
@@ -107,10 +109,41 @@ public abstract class Executor implements AutoCloseable {
   static class ExecutorImpl extends Executor {
     final ThreadFactory factory;
     final ExecutorService service;
+    final LinkedBlockingQueue<Either<Integer, Runnable>> runnables = new LinkedBlockingQueue<>();
 
     ExecutorImpl(final ThreadFactory factory, final ExecutorService service) {
       this.factory = factory;
       this.service = service;
+      service.submit(
+          new Runnable() {
+            @Override
+            public void run() {
+              boolean stop = false;
+              while (!stop && !isClosed() && !Thread.currentThread().isInterrupted()) {
+                try {
+                  final List<Either<Integer, Runnable>> eithers = new ArrayList<>();
+                  eithers.add(runnables.take());
+                  synchronized (runnables) {
+                    runnables.drainTo(eithers);
+                  }
+                  final Iterator<Either<Integer, Runnable>> it = eithers.iterator();
+                  while (!stop && it.hasNext()) {
+                    final Either<Integer, Runnable> runnable = it.next();
+                    stop = runnable.isLeft();
+                    if (!stop) {
+                      try {
+                        runnable.get().run();
+                      } catch (final Exception e) {
+                        System.err.println("Error running callback " + e);
+                      }
+                    }
+                  }
+                } catch (final InterruptedException e) {
+                  stop = true;
+                }
+              }
+            }
+          });
     }
 
     @SuppressWarnings("EmptyCatchBlock")
@@ -118,6 +151,11 @@ public abstract class Executor implements AutoCloseable {
     public void close() {
       if (closed.compareAndSet(false, true)) {
         super.close();
+        final Either<Integer, Runnable> stop = Either.left(1);
+        synchronized (runnables) {
+          runnables.clear();
+          runnables.offer(stop);
+        }
         service.shutdownNow();
         try {
           if (!service.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -129,21 +167,15 @@ public abstract class Executor implements AutoCloseable {
       }
     }
 
-    @Override
     public void run(final Runnable runnable) {
-      if (factory.created(Thread.currentThread())) runnable.run();
-      else {
-        boolean submitted = false;
-        while (!submitted && !closed.get() && !Thread.currentThread().isInterrupted()) {
-          try {
-            service.submit(runnable);
-            submitted = true;
-          } catch (final RejectedExecutionException e) {
-            try {
-              Thread.sleep(2);
-            } catch (final InterruptedException ie) {
-              submitted = true;
-            }
+      if (factory.created(Thread.currentThread())) {
+        runnable.run();
+      } else {
+        synchronized (runnables) {
+          final Either<Integer, Runnable> either = Either.right(runnable);
+          if (!runnables.offer(either)) {
+            throw new IllegalStateException(
+                "Couldn't run task due to full queue (" + runnables.size() + ")");
           }
         }
       }

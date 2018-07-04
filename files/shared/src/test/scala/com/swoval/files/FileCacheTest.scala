@@ -129,7 +129,7 @@ trait FileCacheTest extends TestSuite {
               subdir.resolve(s"file-$j")
             }
           }
-          var allFiles = (subdirs ++ files).toSet
+          val allFiles = (subdirs ++ files).toSet
           val observer = Observers.apply[Path](
             (_: Entry[Path]) => creationLatch.countDown(),
             (_: Entry[Path], _: Entry[Path]) => {},
