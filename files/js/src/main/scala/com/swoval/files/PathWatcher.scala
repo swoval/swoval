@@ -19,7 +19,6 @@ object PathWatcher {
    *     relevant for the [[NioPathWatcher]] that is used on linux and windows.
    * @return PathWatcher for the runtime platform
    *     initialized
-   *     initialization
    */
   def defaultWatcher(callback: Consumer[PathWatcher.Event], options: Option*): PathWatcher =
     defaultWatcher(callback,
@@ -36,7 +35,6 @@ object PathWatcher {
    *     relevant for the [[NioPathWatcher]] that is used on linux and windows.
    * @return PathWatcher for the runtime platform
    *     initialized
-   *     initialization
    */
   def defaultWatcher(callback: Consumer[PathWatcher.Event],
                      executor: Executor,
@@ -53,7 +51,6 @@ object PathWatcher {
    *     relevant for the [[NioPathWatcher]] that is used on linux and windows.
    * @return PathWatcher for the runtime platform
    *     initialized
-   *     initialization
    */
   def defaultWatcher(callback: Consumer[PathWatcher.Event],
                      executor: Executor,
@@ -64,8 +61,9 @@ object PathWatcher {
     else PlatformWatcher.make(callback, executor, registry, options: _*)
 
   /**
-   * Instantiates new [[PathWatcher]] instances with a [[com.swoval.functional.Consumer]]. This is primarily so that the [[PathWatcher]] in
-   * [[FileCache]] may be changed in testing.
+   * Instantiates new [[PathWatcher]] instances with a [[com.swoval.functional.Consumer]].
+   * This is primarily so that the [[PathWatcher]] in [[FileCache]] may be changed in
+   * testing.
    */
   abstract class Factory {
 
@@ -75,7 +73,7 @@ object PathWatcher {
      * @param callback The callback to invoke on directory updates
      * @param executor The executor on which internal updates are invoked
      * @return A PathWatcher instance
-     *     this can occur on mac
+     *     can occur on mac
      *     and windows
      */
     def create(callback: Consumer[PathWatcher.Event], executor: Executor): PathWatcher =
@@ -88,7 +86,7 @@ object PathWatcher {
      * @param executor The executor on which internal updates are invoked
      * @param directoryRegistry The registry of directories to monitor
      * @return A PathWatcher instance
-     *     this can occur on mac
+     *     can occur on mac
      *     and windows
      */
     def create(callback: Consumer[PathWatcher.Event],
@@ -179,8 +177,8 @@ object PathWatcher {
   object Options {
 
     /**
-     * Require that the PathWatcher poll newly created directories for files contained therein.
-     * A creation event will be generated for any file found within the new directory. This is
+     * Require that the PathWatcher poll newly created directories for files contained therein. A
+     * creation event will be generated for any file found within the new directory. This is
      * somewhat expensive and may be redundant in some cases, see [[FileCache]] which does its
      * own polling for new directories.
      */
@@ -196,8 +194,8 @@ object PathWatcher {
  * fundamental differences in the underlying file event apis. For example, Linux doesn't support
  * recursive directory monitoring via inotify, so it's possible in rare cases to miss file events
  * for newly created files in newly created directories. On OSX, it is difficult to disambiguate
- * file creation and modify events, so the [[PathWatcher.Event.Kind]] is best effort, but
- * should not be relied upon to accurately reflect the state of the file.
+ * file creation and modify events, so the [[PathWatcher.Event.Kind]] is best effort, but should
+ * not be relied upon to accurately reflect the state of the file.
  */
 abstract class PathWatcher extends AutoCloseable {
 

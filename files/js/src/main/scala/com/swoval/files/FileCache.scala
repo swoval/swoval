@@ -2,12 +2,12 @@
 
 package com.swoval.files
 
+import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.PathWatcher.DEFAULT_FACTORY
 import com.swoval.files.PathWatcher.Event.Create
 import com.swoval.files.PathWatcher.Event.Delete
 import com.swoval.files.PathWatcher.Event.Modify
 import com.swoval.files.PathWatcher.Event.Overflow
-import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.Observer
 import com.swoval.files.Directory.OnChange

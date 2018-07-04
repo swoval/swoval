@@ -22,8 +22,8 @@ import java.nio.file.attribute.BasicFileAttributes;
  * the extracted library for deletion. It will generally be deleted the next time a different jvm
  * loads the library.
  *
- * This class is not intended to be used outside of com.swoval.files, but it doesn't belong in that
- * package, so it has to be public here.
+ * <p>This class is not intended to be used outside of com.swoval.files, but it doesn't belong in
+ * that package, so it has to be public here.
  */
 public class NativeLoader {
   private static final String NATIVE_LIBRARY = "swoval-files0";

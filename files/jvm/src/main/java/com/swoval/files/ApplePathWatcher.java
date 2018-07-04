@@ -218,8 +218,8 @@ public class ApplePathWatcher extends PathWatcher {
         directoryRegistry);
   }
   /**
-   * Creates a new ApplePathWatcher which is a wrapper around {@link FileEventsApi}, which in
-   * turn is a native wrapper around <a
+   * Creates a new ApplePathWatcher which is a wrapper around {@link FileEventsApi}, which in turn
+   * is a native wrapper around <a
    * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
    * Apple File System Events</a>
    *

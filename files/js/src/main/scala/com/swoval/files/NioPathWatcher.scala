@@ -3,9 +3,9 @@
 package com.swoval.files
 
 import com.swoval.files.Directory.Entry.DIRECTORY
+import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.PathWatcher.Event.Create
 import com.swoval.files.PathWatcher.Event.Overflow
-import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.Observer
 import com.swoval.functional.Consumer

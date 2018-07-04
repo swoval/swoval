@@ -47,6 +47,7 @@ public class ShutdownHooks {
 
   /**
    * Add a hook to run at shutdown.
+   *
    * @param priority Controls the ordering of this hook. Lower values run first.
    * @param runnable The shutdown task to run
    */

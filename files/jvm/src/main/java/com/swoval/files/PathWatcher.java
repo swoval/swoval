@@ -13,8 +13,8 @@ import java.nio.file.Path;
  * fundamental differences in the underlying file event apis. For example, Linux doesn't support
  * recursive directory monitoring via inotify, so it's possible in rare cases to miss file events
  * for newly created files in newly created directories. On OSX, it is difficult to disambiguate
- * file creation and modify events, so the {@link PathWatcher.Event.Kind} is best effort, but
- * should not be relied upon to accurately reflect the state of the file.
+ * file creation and modify events, so the {@link PathWatcher.Event.Kind} is best effort, but should
+ * not be relied upon to accurately reflect the state of the file.
  */
 public abstract class PathWatcher implements AutoCloseable {
 
@@ -80,8 +80,7 @@ public abstract class PathWatcher implements AutoCloseable {
    * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
-   * @throws InterruptedException when the {@link PathWatcher} is interrupted during
-   *     initialization
+   * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
   public static PathWatcher defaultWatcher(
       final Consumer<PathWatcher.Event> callback, final Option... options)
@@ -102,13 +101,10 @@ public abstract class PathWatcher implements AutoCloseable {
    * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
-   * @throws InterruptedException when the {@link PathWatcher} is interrupted during
-   *     initialization
+   * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
   static PathWatcher defaultWatcher(
-      final Consumer<PathWatcher.Event> callback,
-      final Executor executor,
-      final Option... options)
+      final Consumer<PathWatcher.Event> callback, final Executor executor, final Option... options)
       throws IOException, InterruptedException {
     return defaultWatcher(callback, executor, new DirectoryRegistry(), options);
   }
@@ -123,8 +119,7 @@ public abstract class PathWatcher implements AutoCloseable {
    * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
-   * @throws InterruptedException when the {@link PathWatcher} is interrupted during
-   *     initialization
+   * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
   static PathWatcher defaultWatcher(
       final Consumer<PathWatcher.Event> callback,
@@ -138,9 +133,9 @@ public abstract class PathWatcher implements AutoCloseable {
   }
 
   /**
-   * Instantiates new {@link PathWatcher} instances with a {@link
-   * com.swoval.functional.Consumer}. This is primarily so that the {@link PathWatcher} in
-   * {@link FileCache} may be changed in testing.
+   * Instantiates new {@link PathWatcher} instances with a {@link com.swoval.functional.Consumer}.
+   * This is primarily so that the {@link PathWatcher} in {@link FileCache} may be changed in
+   * testing.
    */
   public abstract static class Factory {
 
@@ -150,13 +145,12 @@ public abstract class PathWatcher implements AutoCloseable {
      * @param callback The callback to invoke on directory updates
      * @param executor The executor on which internal updates are invoked
      * @return A PathWatcher instance
-     * @throws InterruptedException if the PathWatcher is interrupted during initialization --
-     *     this can occur on mac
+     * @throws InterruptedException if the PathWatcher is interrupted during initialization -- this
+     *     can occur on mac
      * @throws IOException if an IOException occurs during initialization -- this can occur on linux
      *     and windows
      */
-    public PathWatcher create(
-        final Consumer<PathWatcher.Event> callback, final Executor executor)
+    public PathWatcher create(final Consumer<PathWatcher.Event> callback, final Executor executor)
         throws InterruptedException, IOException {
       return create(callback, executor, new DirectoryRegistry());
     }
@@ -168,8 +162,8 @@ public abstract class PathWatcher implements AutoCloseable {
      * @param executor The executor on which internal updates are invoked
      * @param directoryRegistry The registry of directories to monitor
      * @return A PathWatcher instance
-     * @throws InterruptedException if the PathWatcher is interrupted during initialization --
-     *     this can occur on mac
+     * @throws InterruptedException if the PathWatcher is interrupted during initialization -- this
+     *     can occur on mac
      * @throws IOException if an IOException occurs during initialization -- this can occur on linux
      *     and windows
      */
@@ -289,8 +283,8 @@ public abstract class PathWatcher implements AutoCloseable {
   /** Container class for static options. */
   public static final class Options {
     /**
-     * Require that the PathWatcher poll newly created directories for files contained therein.
-     * A creation event will be generated for any file found within the new directory. This is
+     * Require that the PathWatcher poll newly created directories for files contained therein. A
+     * creation event will be generated for any file found within the new directory. This is
      * somewhat expensive and may be redundant in some cases, see {@link FileCache} which does its
      * own polling for new directories.
      */

@@ -51,8 +51,7 @@ abstract class NioPathWatcher extends PathWatcher {
       final DirectoryRegistry directoryRegistry,
       final PathWatcher.Option... options) {
     this.directoryRegistry = directoryRegistry;
-    this.pollNewDirectories =
-        ArrayOps.contains(options, PathWatcher.Options.POLL_NEW_DIRECTORIES);
+    this.pollNewDirectories = ArrayOps.contains(options, PathWatcher.Options.POLL_NEW_DIRECTORIES);
     this.callbackExecutor = callbackExecutor;
     this.executor = executor;
     this.converter =
@@ -200,11 +199,7 @@ abstract class NioPathWatcher extends PathWatcher {
         final QuickFile file = it.next();
         if (file.isDirectory() && processedDirs.add(file)) {
           processPath(
-              callback,
-              file.toPath(),
-              PathWatcher.Event.Create,
-              processedDirs,
-              processedFiles);
+              callback, file.toPath(), PathWatcher.Event.Create, processedDirs, processedFiles);
         } else if (processedFiles.add(file.toPath())) {
           maybeRunCallback(
               callback, new PathWatcher.Event(file.toPath(), PathWatcher.Event.Create));

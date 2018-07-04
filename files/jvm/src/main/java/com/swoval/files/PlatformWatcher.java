@@ -11,7 +11,8 @@ public class PlatformWatcher {
       final DirectoryRegistry directoryRegistry,
       final PathWatcher.Option... options)
       throws IOException, InterruptedException {
-    return make(callback, RegisterableWatchService.newWatchService(), executor, directoryRegistry, options);
+    return make(
+        callback, RegisterableWatchService.newWatchService(), executor, directoryRegistry, options);
   }
 
   static PathWatcher make(
