@@ -19,7 +19,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.{ Future, TimeoutException }
 import scala.concurrent.duration._
-import scala.util.{ Failure, Try }
+import scala.util.{ Failure, Success, Try }
 
 trait FileCacheTest extends TestSuite {
   def factory: PathWatcher.Factory
@@ -779,6 +779,77 @@ trait FileCacheTest extends TestSuite {
           latch.waitFor(DEFAULT_TIMEOUT) {
             assert(!secondObserverFired)
             c.ls(dir) === Seq(file)
+          }
+        }
+      }
+    }
+    'unregister - {
+      'noop - withTempDirectory { dir =>
+        using(simpleCache((_: Entry[Path]) => {})) { c =>
+          c.unregister(dir)
+          c.ls(dir) === Seq.empty[Path]
+        }
+      }
+      'simple - withTempFile { file =>
+        val latch = new CountDownLatch(1)
+        usingAsync(simpleCache((e: Entry[Path]) =>
+          if (e.path == file && Try(e.path.lastModified) == Success(3000)) latch.countDown())) {
+          c =>
+            c.register(file)
+            c.ls(file) === Seq(file)
+            c.unregister(file)
+            c.ls(file) === Seq.empty[Path]
+            file.setLastModifiedTime(3000)
+            latch
+              .waitFor(100.millis) {
+                throw new IllegalStateException(
+                  s"Cache triggered for file that shouldn't be monitored: $file")
+              }
+              .recover {
+                case _: TimeoutException => file.lastModified ==> 3000
+              }
+        }
+      }
+      'covered - withTempDirectory { dir =>
+        withTempDirectory(dir) { subdir =>
+          withTempFile(subdir) { file =>
+            val latch = new CountDownLatch(1)
+            val secondLatch = new CountDownLatch(1)
+            usingAsync(simpleCache((e: Entry[Path]) => {
+              e.path.lastModified match {
+                case 3000 => latch.countDown()
+                case 4000 => secondLatch.countDown()
+                case _    =>
+              }
+            })) { c =>
+              c.register(dir)
+              c.register(file)
+              c.ls(dir) === Set(subdir, file)
+              // This should have no visible impact to the cache since file's parent is recursively
+              // registered.
+              c.unregister(file)
+              c.ls(file) === Seq(file)
+              c.ls(subdir) === Seq(file)
+              file.setLastModifiedTime(3000)
+              latch
+                .waitFor(DEFAULT_TIMEOUT) {
+                  file.lastModified ==> 3000
+                  c.unregister(dir)
+                  c.ls(dir) === Seq.empty[Path]
+                  file.setLastModifiedTime(4000)
+                }
+                .flatMap { _ =>
+                  // This will actually flush the entries from the cache.
+                  secondLatch
+                    .waitFor(100.millis) {
+                      throw new IllegalStateException(
+                        s"Cache triggered for file that shouldn't be monitored: $file")
+                    }
+                    .recover {
+                      case _: TimeoutException => file.lastModified ==> 4000
+                    }
+                }
+            }
           }
         }
       }

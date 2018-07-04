@@ -215,6 +215,20 @@ public abstract class FileCache<T> implements AutoCloseable {
     return register(path, Integer.MAX_VALUE);
   }
 
+  /**
+   * Unregister a path from the cache. This removes the path from monitoring and from the cache so
+   * long as the path isn't covered by another registered path. For example, if the path /foo was
+   * previously registered, after removal, no changes to /foo or files in /foo should be detected by
+   * the cache. Moreover, calling {@link com.swoval.files.FileCache#list(Path)} for /foo should
+   * return an empty list. If, however, we register both /foo recursively and /foo/bar (recursively
+   * or not), after unregistering /foo/bar, changes to /foo/bar should continue to be detected and
+   * /foo/bar should be included in the list returned by {@link
+   * com.swoval.files.FileCache#list(Path)}.
+   *
+   * @param path The path to unregister
+   */
+  public abstract void unregister(final Path path);
+
   /** Handle all exceptions in close. */
   @Override
   public void close() {}
@@ -444,6 +458,28 @@ class FileCacheImpl<T> extends FileCache<T> {
               .castLeft(IOException.class);
     }
     return result;
+  }
+
+  @Override
+  public void unregister(final Path path) {
+    internalExecutor.block(
+        new Runnable() {
+          @Override
+          public void run() {
+            registry.removeDirectory(path);
+            watcher.unregister(path);
+            if (!registry.accept(path)) {
+              final Directory<T> dir = find(path);
+              if (dir != null) {
+                if (dir.path.equals(path)) {
+                  directories.remove(path);
+                } else {
+                  dir.remove(path);
+                }
+              }
+            }
+          }
+        });
   }
 
   private boolean doReg(final Path path, final int maxDepth) throws IOException {

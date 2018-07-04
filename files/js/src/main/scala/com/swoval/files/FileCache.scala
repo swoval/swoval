@@ -55,7 +55,7 @@ object FileCache {
    * Create a file cache using a specific PathWatcher created by the provided factory
    *
    * @param converter Converts a path to the cached value type T
-   * @param factory A factory to create a directory watcher
+   * @param factory A factory to create a path watcher
    * @param options Options for the cache
    * @tparam T The value type of the cache entries
    * @return A file cache
@@ -87,7 +87,7 @@ object FileCache {
    * Create a file cache with an Observer of events
    *
    * @param converter Converts a path to the cached value type T
-   * @param factory A factory to create a directory watcher
+   * @param factory A factory to create a path watcher
    * @param observer Observer of events for this cache
    * @param options Options for the cache
    * @tparam T The value type of the cache entries
@@ -106,10 +106,10 @@ object FileCache {
   object Option {
 
     /**
-     * When the FileCache encounters a symbolic link with a directory as target, treat the symbolic
-     * link like a directory. Note that it is possible to create a loop if two directories mutually
-     * link to each other symbolically. When this happens, the FileCache will throw a [[java.nio.file.FileSystemLoopException]] when attempting to register one of these directories
-     * or if the link that completes the loop is added to a registered directory.
+     * When the FileCache encounters a symbolic link with a path as target, treat the symbolic link
+     * like a path. Note that it is possible to create a loop if two directories mutually link to
+     * each other symbolically. When this happens, the FileCache will throw a [[java.nio.file.FileSystemLoopException]] when attempting to register one of these directories
+     * or if the link that completes the loop is added to a registered path.
      */
     val NOFOLLOW_LINKS: FileCache.Option = new Option()
 
@@ -124,10 +124,9 @@ object FileCache {
 
 /**
  * Provides an in memory cache of portions of the file system. Directories are added to the cache
- * using the [[FileCache.register]] method. Once a directory is added the cache,
- * its contents may be retrieved using the [[FileCache#list(Path, boolean,
- * Directory.EntryFilter)]] method. The cache stores the path information in [[Directory.Entry]]
- * instances.
+ * using the [[FileCache.register]] method. Once a Path is added the cache, its
+ * contents may be retrieved using the [[FileCache.list]]
+ * method. The cache stores the path information in [[Directory.Entry]] instances.
  *
  * <p>A default implementation is provided by [[FileCache.apply]]. The user may cache arbitrary
  * information in the cache by customizing the [[Directory.Converter]] that is passed into the
@@ -255,41 +254,54 @@ abstract class FileCache[T <: AnyRef] extends AutoCloseable {
     list(path, java.lang.Integer.MAX_VALUE, AllPass)
 
   /**
-   * Register the directory for monitoring.
+   * Register the path for monitoring.
    *
    * @param path The path to monitor
    * @param maxDepth The maximum depth of subdirectories to include
    * @return an instance of [[com.swoval.functional.Either]] that contains a boolean flag
-   *     indicating whether registration succeeds. If an IOException is thrown registering the
-   *     directory, it is returned as a [[com.swoval.functional.Either.Left]]. This method
-   *     should be idempotent and returns false if the call was a no-op.
+   *     indicating whether registration succeeds. If an IOException is thrown registering the path,
+   *     it is returned as a [[com.swoval.functional.Either.Left]]. This method should be
+   *     idempotent and returns false if the call was a no-op.
    */
   def register(path: Path, maxDepth: Int): Either[IOException, Boolean]
 
   /**
-   * Register the directory for monitoring.
+   * Register the path for monitoring.
    *
    * @param path The path to monitor
    * @param recursive Recursively monitor the path if true
    * @return an instance of [[com.swoval.functional.Either]] that contains a boolean flag
-   *     indicating whether registration succeeds. If an IOException is thrown registering the
-   *     directory, it is returned as a [[com.swoval.functional.Either.Left]]. This method
-   *     should be idempotent and returns false if the call was a no-op.
+   *     indicating whether registration succeeds. If an IOException is thrown registering the path,
+   *     it is returned as a [[com.swoval.functional.Either.Left]]. This method should be
+   *     idempotent and returns false if the call was a no-op.
    */
   def register(path: Path, recursive: Boolean): Either[IOException, Boolean] =
     register(path, if (recursive) java.lang.Integer.MAX_VALUE else 0)
 
   /**
-   * Register the directory for monitoring recursively.
+   * Register the path for monitoring recursively.
    *
    * @param path The path to monitor
    * @return an instance of [[com.swoval.functional.Either]] that contains a boolean flag
-   *     indicating whether registration succeeds. If an IOException is thrown registering the
-   *     directory, it is returned as a [[com.swoval.functional.Either.Left]]. This method
-   *     should be idempotent and returns false if the call was a no-op.
+   *     indicating whether registration succeeds. If an IOException is thrown registering the path,
+   *     it is returned as a [[com.swoval.functional.Either.Left]]. This method should be
+   *     idempotent and returns false if the call was a no-op.
    */
   def register(path: Path): Either[IOException, Boolean] =
     register(path, java.lang.Integer.MAX_VALUE)
+
+  /**
+   * Unregister a path from the cache. This removes the path from monitoring and from the cache so
+   * long as the path isn't covered by another registered path. For example, if the path /foo was
+   * previously registered, after removal, no changes to /foo or files in /foo should be detected by
+   * the cache. Moreover, calling [[com.swoval.files.FileCache.list]] for /foo should
+   * return an empty list. If, however, we register both /foo recursively and /foo/bar (recursively
+   * or not), after unregistering /foo/bar, changes to /foo/bar should continue to be detected and
+   * /foo/bar should be included in the list returned by [[com.swoval.files.FileCache.list]].
+   *
+   * @param path The path to unregister
+   */
+  def unregister(path: Path): Unit
 
   /**
  Handle all exceptions in close.
@@ -364,7 +376,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
   })
 
   /**
- Cleans up the directory watcher and clears the directory cache.
+ Cleans up the path watcher and clears the directory cache.
    */
   override def close(): Unit = {
     if (closed.compareAndSet(false, true)) {
@@ -412,6 +424,25 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
         .castLeft(classOf[IOException])
     }
     result
+  }
+
+  override def unregister(path: Path): Unit = {
+    internalExecutor.block(new Runnable() {
+      override def run(): Unit = {
+        registry.removeDirectory(path)
+        watcher.unregister(path)
+        if (!registry.accept(path)) {
+          val dir: Directory[T] = find(path)
+          if (dir != null) {
+            if (dir.path == path) {
+              directories.remove(path)
+            } else {
+              dir.remove(path)
+            }
+          }
+        }
+      }
+    })
   }
 
   private def doReg(path: Path, maxDepth: Int): Boolean = {
