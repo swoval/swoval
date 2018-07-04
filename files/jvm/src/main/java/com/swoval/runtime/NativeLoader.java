@@ -14,10 +14,16 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 
 /**
- * Provides a static method for loading the swoval-files0 native library. This library provides a
- * native implementation of {@link QuickLister}. On OSX, it also provides a native interface to the
- * apple file system api. The loader extracts the packaged library (.so, .dll or .dylib) to a
- * temporary directory and loads it from there. On jvm shutdown, it unloads the library
+ * Manages the loading of the swoval-files0 library. This library provides the native implementation
+ * of {@link QuickLister}. On OSX, it also provides a native interface to the apple file system api.
+ * The loader will first try to load the library using System.loadLibrary, which will succeed if the
+ * library is present in the (DY)LD_LIBRARY_PATH. Otherwise the loader extracts the packaged library
+ * (.so, .dll or .dylib) to a temporary directory and loads it from there. On jvm shutdown, it marks
+ * the extracted library for deletion. It will generally be deleted the next time a different jvm
+ * loads the library.
+ *
+ * This class is not intended to be used outside of com.swoval.files, but it doesn't belong in that
+ * package, so it has to be public here.
  */
 public class NativeLoader {
   private static final String NATIVE_LIBRARY = "swoval-files0";
