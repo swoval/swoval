@@ -9,7 +9,7 @@ import java.nio.file.Path;
 /**
  * Represents a file that will be returned by {@link QuickList#list}. Provides fast {@link
  * QuickFile#isDirectory} and {@link QuickFile#isFile} methods that should not call stat (or the
- * non-POSIX equivalent) on the * underlying file. Can be converted to a {@link java.io.File} or
+ * non-POSIX equivalent) on the underlying file. Can be converted to a {@link java.io.File} or
  * {@link java.nio.file.Path} with {@link QuickFile#toFile} and {@link QuickFile#toPath}.
  */
 public interface QuickFile {

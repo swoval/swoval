@@ -9,7 +9,7 @@ import java.nio.file.Path
 
 /**
  * Represents a file that will be returned by [[QuickList.list]]. Provides fast [[QuickFile.isDirectory]] and [[QuickFile.isFile]] methods that should not call stat (or the
- * non-POSIX equivalent) on the * underlying file. Can be converted to a [[java.io.File]] or
+ * non-POSIX equivalent) on the underlying file. Can be converted to a [[java.io.File]] or
  * [[java.nio.file.Path]] with [[QuickFile.toFile]] and [[QuickFile.toPath]].
  */
 trait QuickFile {

@@ -8,7 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Provides a fast method #{@link QuickList#list(Path, int, boolean)} for listing the files in a
+ * Provides a fast method {@link QuickList#list(Path, int, boolean)} for listing the files in a
  * directory. The implementation may be controlled using the system property -Dswoval.quicklister.
  * For example, to make this class use the java nio based implementation, the application could be
  * started with -Dswoval.quicklister=com.swoval.files.NioQuickLister.
