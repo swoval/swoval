@@ -10,10 +10,14 @@ public class ShutdownHooks {
         .addShutdownHook(
             new Thread() {
               @Override
+              @SuppressWarnings("EmptyCatchBlock")
               public void run() {
                 Collections.sort(hooks);
                 for (final Hook hook : hooks) {
-                  hook.runnable.run();
+                  try {
+                    hook.runnable.run();
+                  } catch (final NoClassDefFoundError e) {
+                  }
                 }
               }
             });
