@@ -177,7 +177,6 @@ class SymlinkWatcher implements AutoCloseable {
    */
   @SuppressWarnings("EmptyCatchBlock")
   void addSymlink(final Path path, final boolean isDirectory, final int maxDepth) {
-    if (path.toString().endsWith("other/dir/other")) new Exception().printStackTrace();
     internalExecutor.run(
         new Runnable() {
           @Override
