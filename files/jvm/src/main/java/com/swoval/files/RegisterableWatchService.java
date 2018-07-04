@@ -1,5 +1,7 @@
 package com.swoval.files;
 
+import com.swoval.files.apple.MacOSXWatchService;
+import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
@@ -18,6 +20,10 @@ public class RegisterableWatchService implements WatchService, Registerable {
 
   public RegisterableWatchService() throws IOException {
     this(FileSystems.getDefault().newWatchService());
+  }
+
+  public static Registerable newWatchService() throws IOException, InterruptedException {
+    return Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchService();
   }
 
   @Override
