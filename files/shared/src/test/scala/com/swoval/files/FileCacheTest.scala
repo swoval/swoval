@@ -379,6 +379,19 @@ trait FileCacheTest extends TestSuite {
           }
         }
       }
+      'file - withTempDirectory { dir =>
+        withTempFile { file =>
+          val latch = new CountDownLatch(1)
+          val link = Files.createSymbolicLink(dir.resolve("link"), file)
+          usingAsync(simpleCache((_: Entry[Path]) => latch.countDown())) { c =>
+            c.reg(link)
+            Files.write(file, "foo".getBytes)
+            latch.waitFor(DEFAULT_TIMEOUT) {
+              new String(Files.readAllBytes(file)) ==> "foo"
+            }
+          }
+        }
+      }
       'directory - {
         'base - withTempDirectory { root =>
           val dir = Files.createDirectories(root.resolve("directory-base"));
@@ -515,23 +528,51 @@ trait FileCacheTest extends TestSuite {
           }
         }
       }
-      'removed - withTempDirectory { dir =>
-        withTempFile { file =>
-          val linkLatch = new CountDownLatch(1)
-          val contentLatch = new CountDownLatch(1)
-          usingAsync(simpleCache((e: Entry[Path]) => {
-            if (linkLatch.getCount == 1) linkLatch.countDown() else contentLatch.countDown()
-          })) { c =>
-            val link = Files.createSymbolicLink(dir.resolve("link"), file)
-            c.reg(dir)
-            c.ls(dir) === Seq(link)
-            assert(Files.isRegularFile(link))
-            Files.deleteIfExists(file)
-            linkLatch
-              .waitFor(DEFAULT_TIMEOUT) {
-                c.ls(dir) === Seq(link)
-                assert(!Files.isRegularFile(link))
+      'removed - {
+        'file - withTempDirectory { dir =>
+          withTempFile { file =>
+            val linkLatch = new CountDownLatch(1)
+            usingAsync(simpleCache((e: Entry[Path]) => {
+              if (linkLatch.getCount == 1) linkLatch.countDown()
+            })) { c =>
+              val link = Files.createSymbolicLink(dir.resolve("link"), file)
+              c.reg(dir)
+              c.ls(dir) === Seq(link)
+              assert(Files.isRegularFile(link))
+              Files.deleteIfExists(file)
+              linkLatch
+                .waitFor(DEFAULT_TIMEOUT) {
+                  c.ls(dir) === Seq(link)
+                  assert(!Files.isRegularFile(link))
+                }
+            }
+          }
+        }
+        'link - withTempDirectory { dir =>
+          withTempFile { file =>
+            val linkLatch = new CountDownLatch(1)
+            val link = dir.resolve("link")
+            usingAsync(FileCache.apply[Path](
+              identity,
+              new Observer[Path] {
+                override def onCreate(newEntry: Entry[Path]): Unit = {}
+                override def onDelete(oldEntry: Entry[Path]): Unit =
+                  if (oldEntry.path == link) linkLatch.countDown()
+                override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
+                override def onError(path: Path, exception: IOException): Unit = {}
               }
+            )) { c =>
+              Files.createSymbolicLink(link, file)
+              c.reg(dir)
+              c.ls(dir) === Seq(link)
+              assert(Files.isRegularFile(link))
+              Files.deleteIfExists(file)
+              Files.deleteIfExists(link)
+              linkLatch
+                .waitFor(DEFAULT_TIMEOUT) {
+                  c.ls(dir) === Seq.empty[Path]
+                }
+            }
           }
         }
       }

@@ -536,7 +536,8 @@ class FileCacheImpl<T> extends FileCache<T> {
           while (entryIterator.hasNext()) {
             final Directory.Entry<T> entry = entryIterator.next();
             if (entry.isSymbolicLink()) {
-              symlinkWatcher.addSymlink(entry.path, entry.isDirectory(), maxDepth - 1);
+              symlinkWatcher.addSymlink(
+                  entry.path, maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - 1);
             }
           }
         }
@@ -739,7 +740,6 @@ class FileCacheImpl<T> extends FileCache<T> {
               if (attrs.isSymbolicLink() && symlinkWatcher != null)
                 symlinkWatcher.addSymlink(
                     path,
-                    Files.isDirectory(path),
                     dir.getDepth() == Integer.MAX_VALUE ? Integer.MAX_VALUE : dir.getDepth() - 1);
               final Directory.Updates<T> updates =
                   dir.update(toUpdate, Directory.Entry.getKind(toUpdate, attrs));

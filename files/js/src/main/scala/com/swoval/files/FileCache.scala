@@ -497,7 +497,9 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
           while (entryIterator.hasNext) {
             val entry: Directory.Entry[T] = entryIterator.next()
             if (entry.isSymbolicLink) {
-              symlinkWatcher.addSymlink(entry.path, entry.isDirectory, maxDepth - 1)
+              symlinkWatcher.addSymlink(entry.path,
+                                        if (maxDepth == java.lang.Integer.MAX_VALUE) maxDepth
+                                        else maxDepth - 1)
             }
           }
         }
@@ -691,7 +693,6 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
             try {
               if (attrs.isSymbolicLink && symlinkWatcher != null)
                 symlinkWatcher.addSymlink(path,
-                                          Files.isDirectory(path),
                                           if (dir.getDepth == java.lang.Integer.MAX_VALUE)
                                             java.lang.Integer.MAX_VALUE
                                           else dir.getDepth - 1)
