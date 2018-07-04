@@ -39,7 +39,8 @@ object Continuously {
       antiEntropy: Duration,
       onTrigger: State => Unit
   ) {
-    def waitForEvents(state: sbt.State): sbt.State = {
+    @tailrec
+    final def waitForEvents(state: sbt.State): sbt.State = {
       lazy val nextState =
         (ClearOnFailure :: command :: FailureWall :: State.repeat(command) :: state)
           .put(closeWatchState, this)
@@ -49,8 +50,10 @@ object Continuously {
       } else {
         println(s"$count. Waiting for source changes... (press enter to interrupt)")
         events.take match {
+          case Init => waitForEvents(state)
           case Exit =>
             // The executor thread has already been cleaned up in signalExit
+            debug("Received exit")
             state.remove(closeWatchState)
           case e =>
             debug(s"Build triggered by $e")
@@ -74,11 +77,12 @@ object Continuously {
     private[this] val events: BlockingQueue[TriggerEvent] = new ArrayBlockingQueue(1)
     private[this] val executor: ExecutorService = Executors.newSingleThreadExecutor(
       new ThreadFactory("com.swoval.watchservice.Continuously.InputThread"))
-    private[this] var lastTriggerEvent: TriggerEvent = Exit
+    private[this] var lastTriggerEvent: TriggerEvent = Init
     private[this] var count = -1
 
     private[this] def debug(msg: => String): Unit = logger.debug(s"$tag $msg")
     private[this] def init(): Unit = {
+      while (System.in.available > 0) System.in.read(new Array[Byte](System.in.available()))
       def sanitized(p: SourcePath) = p.base match {
         case dir if Files.isDirectory(dir) => dir -> p.recursive
         case f                             => f.getParent -> p.recursive
@@ -107,16 +111,24 @@ object Continuously {
     private[this] final def signalExit(): Unit = {
       val signalled = try { shouldExit() } catch { case _: InterruptedException => true }
       if (signalled) {
-        while (!offer(Exit)) {
-          events.poll()
-        }
         cache.removeObserver(callbackHandle)
+        while (!offer(Exit)) {
+          events.clear()
+        }
         executor.shutdownNow()
       } else signalExit()
     }
-    private[this] def shouldExit(): Boolean = System.in.read match {
-      case 10 | 13 => true
-      case _       => false
+    @tailrec
+    private[this] def shouldExit(): Boolean = {
+      System.in.available match {
+        case i if i > 0 => System.in.read match {
+            case 10 | 13 => true
+            case _       => false
+          }
+        case _ =>
+          Thread.sleep(5)
+          shouldExit()
+      }
     }
     init()
   }
@@ -129,6 +141,7 @@ object Continuously {
         case _ => true
       }
   }
+  private[this] case object Init extends TriggerEvent
   private[this] case object Exit extends TriggerEvent
   private[this] case class Triggered(path: Path, triggeredAtMs: Long = currentTimeMillis)
       extends TriggerEvent
