@@ -37,10 +37,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Provides an in memory cache of portions of the file system. Directories are added to the cache
- * using the {@link FileCache#register(Path, boolean)} method. Once a directory is added the cache,
- * its contents may be retrieved using the {@link FileCache#list(Path, boolean,
- * Directory.EntryFilter)} method. The cache stores the path information in {@link Directory.Entry}
- * instances.
+ * using the {@link FileCache#register(Path, boolean)} method. Once a Path is added the cache, its
+ * contents may be retrieved using the {@link FileCache#list(Path, boolean, Directory.EntryFilter)}
+ * method. The cache stores the path information in {@link Directory.Entry} instances.
  *
  * <p>A default implementation is provided by {@link FileCache#apply}. The user may cache arbitrary
  * information in the cache by customizing the {@link Directory.Converter} that is passed into the
@@ -179,38 +178,38 @@ public abstract class FileCache<T> implements AutoCloseable {
     return list(path, Integer.MAX_VALUE, AllPass);
   }
   /**
-   * Register the directory for monitoring.
+   * Register the path for monitoring.
    *
    * @param path The path to monitor
    * @param maxDepth The maximum depth of subdirectories to include
    * @return an instance of {@link com.swoval.functional.Either} that contains a boolean flag
-   *     indicating whether registration succeeds. If an IOException is thrown registering the
-   *     directory, it is returned as a {@link com.swoval.functional.Either.Left}. This method
-   *     should be idempotent and returns false if the call was a no-op.
+   *     indicating whether registration succeeds. If an IOException is thrown registering the path,
+   *     it is returned as a {@link com.swoval.functional.Either.Left}. This method should be
+   *     idempotent and returns false if the call was a no-op.
    */
   public abstract Either<IOException, Boolean> register(final Path path, final int maxDepth);
   /**
-   * Register the directory for monitoring.
+   * Register the path for monitoring.
    *
    * @param path The path to monitor
    * @param recursive Recursively monitor the path if true
    * @return an instance of {@link com.swoval.functional.Either} that contains a boolean flag
-   *     indicating whether registration succeeds. If an IOException is thrown registering the
-   *     directory, it is returned as a {@link com.swoval.functional.Either.Left}. This method
-   *     should be idempotent and returns false if the call was a no-op.
+   *     indicating whether registration succeeds. If an IOException is thrown registering the path,
+   *     it is returned as a {@link com.swoval.functional.Either.Left}. This method should be
+   *     idempotent and returns false if the call was a no-op.
    */
   public Either<IOException, Boolean> register(final Path path, final boolean recursive) {
     return register(path, recursive ? Integer.MAX_VALUE : 0);
   }
 
   /**
-   * Register the directory for monitoring recursively.
+   * Register the path for monitoring recursively.
    *
    * @param path The path to monitor
    * @return an instance of {@link com.swoval.functional.Either} that contains a boolean flag
-   *     indicating whether registration succeeds. If an IOException is thrown registering the
-   *     directory, it is returned as a {@link com.swoval.functional.Either.Left}. This method
-   *     should be idempotent and returns false if the call was a no-op.
+   *     indicating whether registration succeeds. If an IOException is thrown registering the path,
+   *     it is returned as a {@link com.swoval.functional.Either.Left}. This method should be
+   *     idempotent and returns false if the call was a no-op.
    */
   public Either<IOException, Boolean> register(final Path path) {
     return register(path, Integer.MAX_VALUE);
@@ -240,7 +239,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    * Create a file cache using a specific PathWatcher created by the provided factory
    *
    * @param converter Converts a path to the cached value type T
-   * @param factory A factory to create a directory watcher
+   * @param factory A factory to create a path watcher
    * @param options Options for the cache
    * @param <T> The value type of the cache entries
    * @return A file cache
@@ -278,7 +277,7 @@ public abstract class FileCache<T> implements AutoCloseable {
    * Create a file cache with an Observer of events
    *
    * @param converter Converts a path to the cached value type T
-   * @param factory A factory to create a directory watcher
+   * @param factory A factory to create a path watcher
    * @param observer Observer of events for this cache
    * @param options Options for the cache
    * @param <T> The value type of the cache entries
@@ -302,11 +301,11 @@ public abstract class FileCache<T> implements AutoCloseable {
     /** This constructor is needed for code gen. Otherwise only the companion is generated */
     Option() {}
     /**
-     * When the FileCache encounters a symbolic link with a directory as target, treat the symbolic
-     * link like a directory. Note that it is possible to create a loop if two directories mutually
-     * link to each other symbolically. When this happens, the FileCache will throw a {@link
+     * When the FileCache encounters a symbolic link with a path as target, treat the symbolic link
+     * like a path. Note that it is possible to create a loop if two directories mutually link to
+     * each other symbolically. When this happens, the FileCache will throw a {@link
      * java.nio.file.FileSystemLoopException} when attempting to register one of these directories
-     * or if the link that completes the loop is added to a registered directory.
+     * or if the link that completes the loop is added to a registered path.
      */
     public static final FileCache.Option NOFOLLOW_LINKS = new Option();
   }
@@ -388,7 +387,7 @@ class FileCacheImpl<T> extends FileCache<T> {
             : null;
   }
 
-  /** Cleans up the directory watcher and clears the directory cache. */
+  /** Cleans up the path watcher and clears the directory cache. */
   @Override
   public void close() {
     if (closed.compareAndSet(false, true)) {
