@@ -4,7 +4,7 @@ import java.io.{ File, IOException }
 import java.nio.file.{ Files, Path, Paths }
 
 import com.swoval.files.Directory.{ Entry, EntryFilter }
-import com.swoval.files.DirectoryWatcher.Event
+import PathWatcher.Event
 import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.EntryOps._
 import com.swoval.files.test._

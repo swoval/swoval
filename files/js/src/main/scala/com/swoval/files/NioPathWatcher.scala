@@ -3,8 +3,8 @@
 package com.swoval.files
 
 import com.swoval.files.Directory.Entry.DIRECTORY
-import com.swoval.files.DirectoryWatcher.Event.Create
-import com.swoval.files.DirectoryWatcher.Event.Overflow
+import com.swoval.files.PathWatcher.Event.Create
+import com.swoval.files.PathWatcher.Event.Overflow
 import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.Observer
@@ -27,14 +27,14 @@ import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- Provides a DirectoryWatcher that is backed by a [[java.nio.file.WatchService]].
+ Provides a PathWatcher that is backed by a [[java.nio.file.WatchService]].
  */
-abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
-                                   protected val callbackExecutor: Executor,
-                                   protected val executor: Executor,
-                                   private val directoryRegistry: DirectoryRegistry,
-                                   options: DirectoryWatcher.Option*)
-    extends DirectoryWatcher {
+abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
+                              protected val callbackExecutor: Executor,
+                              protected val executor: Executor,
+                              private val directoryRegistry: DirectoryRegistry,
+                              options: PathWatcher.Option*)
+    extends PathWatcher {
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
 
@@ -42,7 +42,7 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
     new HashMap()
 
   private val pollNewDirectories: Boolean =
-    ArrayOps.contains(options, DirectoryWatcher.Options.POLL_NEW_DIRECTORIES)
+    ArrayOps.contains(options, PathWatcher.Options.POLL_NEW_DIRECTORIES)
 
   private val converter: Converter[WatchedDirectory] =
     new Converter[WatchedDirectory]() {
@@ -142,8 +142,8 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
     }
   }
 
-  private def maybeRunCallback(callback: Consumer[DirectoryWatcher.Event],
-                               event: DirectoryWatcher.Event): Unit = {
+  private def maybeRunCallback(callback: Consumer[PathWatcher.Event],
+                               event: PathWatcher.Event): Unit = {
     if (directoryRegistry.accept(event.path)) {
       callbackExecutor.run(new Runnable() {
         override def run(): Unit = {
@@ -153,9 +153,9 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
     }
   }
 
-  private def processPath(callback: Consumer[DirectoryWatcher.Event],
+  private def processPath(callback: Consumer[PathWatcher.Event],
                           path: Path,
-                          kind: DirectoryWatcher.Event.Kind,
+                          kind: PathWatcher.Event.Kind,
                           processedDirs: HashSet[QuickFile],
                           processedFiles: HashSet[Path]): Unit = {
     val newFiles: Set[QuickFile] = new HashSet[QuickFile]()
@@ -165,27 +165,26 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
           (if (maxDepth == java.lang.Integer.MAX_VALUE) 0 else 1),
         newFiles)
     if (processedFiles.add(path)) {
-      maybeRunCallback(callback, new DirectoryWatcher.Event(path, kind))
+      maybeRunCallback(callback, new PathWatcher.Event(path, kind))
       val it: Iterator[QuickFile] = newFiles.iterator()
       while (it.hasNext) {
         val file: QuickFile = it.next()
         if (file.isDirectory && processedDirs.add(file)) {
           processPath(callback,
                       file.toPath(),
-                      DirectoryWatcher.Event.Create,
+                      PathWatcher.Event.Create,
                       processedDirs,
                       processedFiles)
         } else if (processedFiles.add(file.toPath())) {
-          maybeRunCallback(callback,
-                           new DirectoryWatcher.Event(file.toPath(), DirectoryWatcher.Event.Create))
+          maybeRunCallback(callback, new PathWatcher.Event(file.toPath(), PathWatcher.Event.Create))
         }
       }
     }
   }
 
-  protected def handleEvent(callback: Consumer[DirectoryWatcher.Event],
+  protected def handleEvent(callback: Consumer[PathWatcher.Event],
                             path: Path,
-                            kind: DirectoryWatcher.Event.Kind): Unit = {
+                            kind: PathWatcher.Event.Kind): Unit = {
     if (!Files.exists(path)) {
       val root: Directory[WatchedDirectory] = rootDirectories.get(path.getRoot)
       if (root != null) {
@@ -202,11 +201,11 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
     if (Files.isDirectory(path)) {
       processPath(callback, path, kind, new HashSet[QuickFile](), new HashSet[Path]())
     } else {
-      maybeRunCallback(callback, new DirectoryWatcher.Event(path, kind))
+      maybeRunCallback(callback, new PathWatcher.Event(path, kind))
     }
   }
 
-  protected def handleOverflow(callback: Consumer[DirectoryWatcher.Event], path: Path): Unit = {
+  protected def handleOverflow(callback: Consumer[PathWatcher.Event], path: Path): Unit = {
     val maxDepth: Int = directoryRegistry.maxDepthFor(path)
     var stop: Boolean = false
     while (!stop && maxDepth > 0) try {
@@ -228,7 +227,7 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
           registered = registered || regResult
           if (regResult) callbackExecutor.run(new Runnable() {
             override def run(): Unit = {
-              callback.accept(new DirectoryWatcher.Event(file.toPath(), Create))
+              callback.accept(new PathWatcher.Event(file.toPath(), Create))
             }
           })
         }
@@ -242,7 +241,7 @@ abstract class NioDirectoryWatcher(register: IO[Path, WatchedDirectory],
     }
     callbackExecutor.run(new Runnable() {
       override def run(): Unit = {
-        callback.accept(new DirectoryWatcher.Event(path, Overflow))
+        callback.accept(new PathWatcher.Event(path, Overflow))
       }
     })
   }

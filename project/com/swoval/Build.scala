@@ -440,15 +440,14 @@ object Build {
             Def.task {
               convertSources(
                 "com/swoval/files",
-                "AppleDirectoryWatcher",
+                "ApplePathWatcher",
                 "Directory",
-                "AppleDirectoryWatcher",
                 "DirectoryRegistry",
-                "DirectoryWatcher",
+                "PathWatcher",
                 "EntryFilters",
                 "FileCache",
                 "MapOps",
-                "NioDirectoryWatcher",
+                "NioPathWatcher",
                 "NioQuickLister",
                 "Observers",
                 "QuickFile",

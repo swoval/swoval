@@ -1,9 +1,9 @@
 package com.swoval.files;
 
-import static com.swoval.files.DirectoryWatcher.Event.Create;
-import static com.swoval.files.DirectoryWatcher.Event.Delete;
-import static com.swoval.files.DirectoryWatcher.Event.Modify;
-import static com.swoval.files.DirectoryWatcher.Event.Overflow;
+import static com.swoval.files.PathWatcher.Event.Create;
+import static com.swoval.files.PathWatcher.Event.Delete;
+import static com.swoval.files.PathWatcher.Event.Modify;
+import static com.swoval.files.PathWatcher.Event.Overflow;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
@@ -24,25 +24,24 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
+class NioPathWatcherImpl extends NioPathWatcher {
   private final Thread loopThread;
   private final AtomicBoolean isStopped = new AtomicBoolean(false);
   private static final AtomicInteger threadId = new AtomicInteger(0);
   private final CountDownLatch shutdownLatch = new CountDownLatch(1);
   private final Registerable watchService;
 
-  NioDirectoryWatcherImpl(
+  NioPathWatcherImpl(
       final Consumer<Event> callback,
       final Registerable watchService,
       final Executor callbackExecutor,
       final Executor executor,
       final DirectoryRegistry directoryRegistry,
-      final DirectoryWatcher.Option... options)
+      final PathWatcher.Option... options)
       throws InterruptedException {
     super(
         new IO<Path, WatchedDirectory>() {
@@ -109,7 +108,7 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
         });
     final CountDownLatch latch = new CountDownLatch(1);
     loopThread =
-        new Thread("NioDirectoryWatcher-loop-thread-" + threadId.incrementAndGet()) {
+        new Thread("NioPathWatcher-loop-thread-" + threadId.incrementAndGet()) {
           @Override
           public void run() {
             latch.countDown();
@@ -131,7 +130,7 @@ class NioDirectoryWatcherImpl extends NioDirectoryWatcher {
                           while (it.hasNext()) {
                             final WatchEvent<?> e = it.next();
                             final WatchEvent.Kind<?> k = e.kind();
-                            final DirectoryWatcher.Event.Kind kind =
+                            final PathWatcher.Event.Kind kind =
                                 k.equals(ENTRY_DELETE)
                                     ? Delete
                                     : k.equals(ENTRY_CREATE)

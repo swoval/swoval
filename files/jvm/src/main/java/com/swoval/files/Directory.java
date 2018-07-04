@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * Directory can be fully recursive as the subdirectories are themselves stored as recursive (when
  * the Directory is initialized without the recursive toggle, the subdirectories are stored as
  * {@link Directory.Entry} instances. The primary use case is the implementation of {@link
- * FileCache} and {@link NioDirectoryWatcher}. Directly handling Directory instances is discouraged
+ * FileCache} and {@link NioPathWatcher}. Directly handling Directory instances is discouraged
  * because it is inherently mutable so it's better to let the FileCache manage it and query the
  * cache rather than Directory directly.
  *

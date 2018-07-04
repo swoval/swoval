@@ -22,8 +22,8 @@ import scala.concurrent.duration._
 import scala.util.{ Failure, Try }
 
 trait FileCacheTest extends TestSuite {
-  def factory: DirectoryWatcher.Factory
-  def boundedFactory: DirectoryWatcher.Factory
+  def factory: PathWatcher.Factory
+  def boundedFactory: PathWatcher.Factory
   def identity: Converter[Path] = (p: Path) => p
   def simpleCache(f: Entry[Path] => Unit): FileCache[Path] =
     FileCache.apply(((p: Path) => p): Converter[Path], factory, Observers.apply(f: OnChange[Path]))
@@ -804,25 +804,25 @@ object FileCacheTest {
 }
 
 object DefaultFileCacheTest extends FileCacheTest {
-  val factory = DirectoryWatcher.DEFAULT_FACTORY
+  val factory = PathWatcher.DEFAULT_FACTORY
   val boundedFactory = if (Platform.isMac) factory else NioFileCacheTest.boundedFactory
   val tests = testsImpl
 }
 
 object NioFileCacheTest extends FileCacheTest {
-  val factory = new DirectoryWatcher.Factory {
-    override def create(callback: Consumer[DirectoryWatcher.Event],
+  val factory = new PathWatcher.Factory {
+    override def create(callback: Consumer[PathWatcher.Event],
                         executor: Executor,
-                        directoryRegistry: DirectoryRegistry): DirectoryWatcher =
+                        directoryRegistry: DirectoryRegistry): PathWatcher =
       PlatformWatcher.make(callback,
                            RegisterableWatchService.newWatchService,
                            executor,
                            directoryRegistry)
   }
-  val boundedFactory = new DirectoryWatcher.Factory {
-    override def create(callback: Consumer[DirectoryWatcher.Event],
+  val boundedFactory = new PathWatcher.Factory {
+    override def create(callback: Consumer[PathWatcher.Event],
                         executor: Executor,
-                        directoryRegistry: DirectoryRegistry): DirectoryWatcher =
+                        directoryRegistry: DirectoryRegistry): PathWatcher =
       PlatformWatcher.make(callback,
                            new BoundedWatchService(4, RegisterableWatchService.newWatchService()),
                            executor,

@@ -1,7 +1,7 @@
 package java.nio.file
 
-import java.io.{File, IOException}
-import java.nio.file.attribute.{BasicFileAttributes, FileAttribute, FileTime}
+import java.io.{ File, IOException }
+import java.nio.file.attribute.{ BasicFileAttributes, FileAttribute, FileTime }
 import java.util
 
 import com.swoval.files.LinkOption.NOFOLLOW_LINKS

@@ -4,7 +4,7 @@ package com.swoval.files
 
 import java.util.Map.Entry
 import com.swoval.files.Directory.OnError
-import com.swoval.files.DirectoryWatcher.Event
+import com.swoval.files.PathWatcher.Event
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import java.io.IOException
@@ -39,7 +39,7 @@ object SymlinkWatcher {
  * provided [[com.swoval.functional.Consumer]] for the symlink.
  */
 class SymlinkWatcher(handleEvent: Consumer[Path],
-                     factory: DirectoryWatcher.Factory,
+                     factory: PathWatcher.Factory,
                      private val onError: OnError,
                      executor: Executor)
     extends AutoCloseable {
@@ -144,7 +144,7 @@ class SymlinkWatcher(handleEvent: Consumer[Path],
    * This declaration must go below the constructor for javascript codegen.
    */
 
-  private val watcher: DirectoryWatcher =
+  private val watcher: PathWatcher =
     factory.create(callback, internalExecutor.copy(), new DirectoryRegistry())
 
   override def close(): Unit = {

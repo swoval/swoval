@@ -1,9 +1,9 @@
 package com.swoval.files;
 
 import static com.swoval.files.Directory.Entry.DIRECTORY;
-import static com.swoval.files.DirectoryWatcher.Event.Create;
-import static com.swoval.files.DirectoryWatcher.Event.Overflow;
 import static com.swoval.files.EntryFilters.AllPass;
+import static com.swoval.files.PathWatcher.Event.Create;
+import static com.swoval.files.PathWatcher.Event.Overflow;
 
 import com.swoval.files.Directory.Converter;
 import com.swoval.files.Directory.Observer;
@@ -25,8 +25,8 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Provides a DirectoryWatcher that is backed by a {@link java.nio.file.WatchService}. */
-abstract class NioDirectoryWatcher extends DirectoryWatcher {
+/** Provides a PathWatcher that is backed by a {@link java.nio.file.WatchService}. */
+abstract class NioPathWatcher extends PathWatcher {
   private final AtomicBoolean closed = new AtomicBoolean(false);
   protected final Executor callbackExecutor;
   protected final Executor executor;
@@ -36,7 +36,7 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
   private final Converter<WatchedDirectory> converter;
 
   /**
-   * Instantiate a NioDirectoryWatcher.
+   * Instantiate a NioPathWatcher.
    *
    * @param register IO task to register path
    * @param callbackExecutor The Executor to invoke callbacks on
@@ -44,15 +44,15 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
    * @param directoryRegistry Tracks the directories to watch
    * @param options The options for this watcher
    */
-  NioDirectoryWatcher(
+  NioPathWatcher(
       final IO<Path, WatchedDirectory> register,
       final Executor callbackExecutor,
       final Executor executor,
       final DirectoryRegistry directoryRegistry,
-      final DirectoryWatcher.Option... options) {
+      final PathWatcher.Option... options) {
     this.directoryRegistry = directoryRegistry;
     this.pollNewDirectories =
-        ArrayOps.contains(options, DirectoryWatcher.Options.POLL_NEW_DIRECTORIES);
+        ArrayOps.contains(options, PathWatcher.Options.POLL_NEW_DIRECTORIES);
     this.callbackExecutor = callbackExecutor;
     this.executor = executor;
     this.converter =
@@ -172,7 +172,7 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
   }
 
   private void maybeRunCallback(
-      final Consumer<DirectoryWatcher.Event> callback, final DirectoryWatcher.Event event) {
+      final Consumer<PathWatcher.Event> callback, final PathWatcher.Event event) {
     if (directoryRegistry.accept(event.path)) {
       callbackExecutor.run(
           new Runnable() {
@@ -185,16 +185,16 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
   }
 
   private void processPath(
-      final Consumer<DirectoryWatcher.Event> callback,
+      final Consumer<PathWatcher.Event> callback,
       final Path path,
-      final DirectoryWatcher.Event.Kind kind,
+      final PathWatcher.Event.Kind kind,
       HashSet<QuickFile> processedDirs,
       HashSet<Path> processedFiles) {
     final Set<QuickFile> newFiles = new HashSet<>();
     int maxDepth = directoryRegistry.maxDepthFor(path);
     add(path, maxDepth - (maxDepth == Integer.MAX_VALUE ? 0 : 1), newFiles);
     if (processedFiles.add(path)) {
-      maybeRunCallback(callback, new DirectoryWatcher.Event(path, kind));
+      maybeRunCallback(callback, new PathWatcher.Event(path, kind));
       final Iterator<QuickFile> it = newFiles.iterator();
       while (it.hasNext()) {
         final QuickFile file = it.next();
@@ -202,21 +202,21 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
           processPath(
               callback,
               file.toPath(),
-              DirectoryWatcher.Event.Create,
+              PathWatcher.Event.Create,
               processedDirs,
               processedFiles);
         } else if (processedFiles.add(file.toPath())) {
           maybeRunCallback(
-              callback, new DirectoryWatcher.Event(file.toPath(), DirectoryWatcher.Event.Create));
+              callback, new PathWatcher.Event(file.toPath(), PathWatcher.Event.Create));
         }
       }
     }
   }
 
   protected void handleEvent(
-      final Consumer<DirectoryWatcher.Event> callback,
+      final Consumer<PathWatcher.Event> callback,
       final Path path,
-      final DirectoryWatcher.Event.Kind kind) {
+      final PathWatcher.Event.Kind kind) {
     if (!Files.exists(path)) {
       final Directory<WatchedDirectory> root = rootDirectories.get(path.getRoot());
       if (root != null) {
@@ -232,11 +232,11 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
     if (Files.isDirectory(path)) {
       processPath(callback, path, kind, new HashSet<QuickFile>(), new HashSet<Path>());
     } else {
-      maybeRunCallback(callback, new DirectoryWatcher.Event(path, kind));
+      maybeRunCallback(callback, new PathWatcher.Event(path, kind));
     }
   }
 
-  protected void handleOverflow(final Consumer<DirectoryWatcher.Event> callback, final Path path) {
+  protected void handleOverflow(final Consumer<PathWatcher.Event> callback, final Path path) {
     final int maxDepth = directoryRegistry.maxDepthFor(path);
     boolean stop = false;
     while (!stop && maxDepth > 0) {
@@ -263,7 +263,7 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
                   new Runnable() {
                     @Override
                     public void run() {
-                      callback.accept(new DirectoryWatcher.Event(file.toPath(), Create));
+                      callback.accept(new PathWatcher.Event(file.toPath(), Create));
                     }
                   });
           }
@@ -279,7 +279,7 @@ abstract class NioDirectoryWatcher extends DirectoryWatcher {
         new Runnable() {
           @Override
           public void run() {
-            callback.accept(new DirectoryWatcher.Event(path, Overflow));
+            callback.accept(new PathWatcher.Event(path, Overflow));
           }
         });
   }
