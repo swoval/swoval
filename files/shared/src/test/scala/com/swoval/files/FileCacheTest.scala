@@ -814,14 +814,17 @@ object NioFileCacheTest extends FileCacheTest {
     override def create(callback: Consumer[DirectoryWatcher.Event],
                         executor: Executor,
                         directoryRegistry: DirectoryRegistry): DirectoryWatcher =
-      PlatformWatcher.make(callback, WatchService.newWatchService, executor, directoryRegistry)
+      PlatformWatcher.make(callback,
+                           RegisterableWatchService.newWatchService,
+                           executor,
+                           directoryRegistry)
   }
   val boundedFactory = new DirectoryWatcher.Factory {
     override def create(callback: Consumer[DirectoryWatcher.Event],
                         executor: Executor,
                         directoryRegistry: DirectoryRegistry): DirectoryWatcher =
       PlatformWatcher.make(callback,
-                           new BoundedWatchService(4, WatchService.newWatchService()),
+                           new BoundedWatchService(4, RegisterableWatchService.newWatchService()),
                            executor,
                            directoryRegistry)
   }

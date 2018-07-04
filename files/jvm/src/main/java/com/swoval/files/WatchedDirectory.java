@@ -1,6 +1,6 @@
 package com.swoval.files;
 
-public interface WatchedDirectory extends AutoCloseable {
+interface WatchedDirectory extends AutoCloseable {
 
   /**
    * Is the underlying directory watcher valid?
@@ -18,7 +18,7 @@ public interface WatchedDirectory extends AutoCloseable {
 }
 
 class WatchedDirectories {
-  public static WatchedDirectory INVALID =
+  static WatchedDirectory INVALID =
       new WatchedDirectory() {
         @Override
         public boolean isValid() {

@@ -15,6 +15,23 @@ object DirectoryWatcher {
    * Create a DirectoryWatcher for the runtime platform.
    *
    * @param callback [[com.swoval.functional.Consumer]] to run on file events
+   * @param options Runtime [[DirectoryWatcher.Option]] instances for the watcher. This is only
+   *     relevant for the [[NioDirectoryWatcher]] that is used on linux and windows.
+   * @return DirectoryWatcher for the runtime platform
+   *     initialized
+   *     initialization
+   */
+  def defaultWatcher(callback: Consumer[DirectoryWatcher.Event],
+                     options: Option*): DirectoryWatcher =
+    defaultWatcher(callback,
+                   Executor.make("com.swoval.files.DirectoryWatcher-internal-executor"),
+                   new DirectoryRegistry(),
+                   options: _*)
+
+  /**
+   * Create a DirectoryWatcher for the runtime platform.
+   *
+   * @param callback [[com.swoval.functional.Consumer]] to run on file events
    * @param executor provides a single threaded context to manage state
    * @param options Runtime [[DirectoryWatcher.Option]] instances for the watcher. This is only
    *     relevant for the [[NioDirectoryWatcher]] that is used on linux and windows.
