@@ -1,11 +1,11 @@
 package com.swoval.files;
 
+import static com.swoval.files.EntryFilters.AllPass;
 import static com.swoval.files.PathWatcher.DEFAULT_FACTORY;
 import static com.swoval.files.PathWatcher.Event.Create;
 import static com.swoval.files.PathWatcher.Event.Delete;
 import static com.swoval.files.PathWatcher.Event.Modify;
 import static com.swoval.files.PathWatcher.Event.Overflow;
-import static com.swoval.files.EntryFilters.AllPass;
 
 import com.swoval.files.Directory.Converter;
 import com.swoval.files.Directory.Observer;

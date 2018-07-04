@@ -1,9 +1,9 @@
 package com.swoval.files;
 
 import static com.swoval.files.Directory.Entry.DIRECTORY;
+import static com.swoval.files.EntryFilters.AllPass;
 import static com.swoval.files.PathWatcher.Event.Create;
 import static com.swoval.files.PathWatcher.Event.Overflow;
-import static com.swoval.files.EntryFilters.AllPass;
 
 import com.swoval.files.Directory.Converter;
 import com.swoval.files.Directory.Observer;

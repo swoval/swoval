@@ -1,12 +1,13 @@
 package com.swoval.files;
 
+import static java.util.Map.Entry;
+
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import static java.util.Map.Entry;
 
 /**
  * Provides a utility method for diffing two maps of directory entries. It is not in {@link
