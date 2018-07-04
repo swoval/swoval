@@ -75,6 +75,27 @@ public abstract class DirectoryWatcher implements AutoCloseable {
    * Create a DirectoryWatcher for the runtime platform.
    *
    * @param callback {@link com.swoval.functional.Consumer} to run on file events
+   * @param options Runtime {@link DirectoryWatcher.Option} instances for the watcher. This is only
+   *     relevant for the {@link NioDirectoryWatcher} that is used on linux and windows.
+   * @return DirectoryWatcher for the runtime platform
+   * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
+   *     initialized
+   * @throws InterruptedException when the {@link DirectoryWatcher} is interrupted during
+   *     initialization
+   */
+  public static DirectoryWatcher defaultWatcher(
+      final Consumer<DirectoryWatcher.Event> callback, final Option... options)
+      throws IOException, InterruptedException {
+    return defaultWatcher(
+        callback,
+        Executor.make("com.swoval.files.DirectoryWatcher-internal-executor"),
+        new DirectoryRegistry(),
+        options);
+  }
+  /**
+   * Create a DirectoryWatcher for the runtime platform.
+   *
+   * @param callback {@link com.swoval.functional.Consumer} to run on file events
    * @param executor provides a single threaded context to manage state
    * @param options Runtime {@link DirectoryWatcher.Option} instances for the watcher. This is only
    *     relevant for the {@link NioDirectoryWatcher} that is used on linux and windows.
