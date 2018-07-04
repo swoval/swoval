@@ -456,7 +456,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
         try dir = Directory.cached(path, converter, maxDepth)
         catch {
           case e: NotDirectoryException =>
-            dir = Directory.cached(path.getParent, converter, 0)
+            dir = Directory.cached(path, converter, -1)
 
         }
         directories.put(path, dir)
@@ -655,7 +655,6 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
               override def accept(entry: Directory.Entry[_ <: T]): Boolean =
                 path == entry.path
             })
-          if (dir.getDepth == -1) paths.add(dir.entry())
           if (!paths.isEmpty || path != dir.path) {
             val toUpdate: Path = if (paths.isEmpty) path else paths.get(0).path
             try {
