@@ -771,7 +771,7 @@ public class Directory<T> implements AutoCloseable {
     }
   }
 
-  public static class Updates<T> implements Observer<T> {
+  static class Updates<T> implements Observer<T> {
 
     private final List<Entry<T>> creations = new ArrayList<>();
     private final List<Entry<T>> deletions = new ArrayList<>();
