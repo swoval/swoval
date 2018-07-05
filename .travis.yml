@@ -9,9 +9,17 @@ matrix:
    - scala: 2.12.6
      os: osx
      env:
-       CMD="filesJVM/jacoco filesJS/test reflect/jacoco plugin/compile filesJVM/travisQuickListReflectionTest"
+       CMD="checkFormat filesJVM/jacoco filesJS/test reflect/jacoco plugin/compile filesJVM/travisQuickListReflectionTest"
        TRAVIS_SCALA_VERSION=2.12.6
      osx_image: xcode9.3
+     before_install:
+       - unset _JAVA_OPTIONS;
+       - wget https://github.com/sbt/sbt/releases/download/v1.1.4/sbt-1.1.4.tgz
+       - tar -xvf sbt-1.1.4.tgz
+       - rm sbt-1.1.4.tgz
+       - mv sbt /tmp/sbt
+       - npm install -g cmake-js;
+       - brew install clang-format
 
    - scala: 2.12.6
      os: osx
@@ -49,13 +57,15 @@ matrix:
        CMD="filesJVM/jacoco plugin/compile"
        TRAVIS_SCALA_VERSION=2.10.7
 
-script: ./sbt/bin/sbt -Dsbt.version=$SBT_VER -Dswoval.skip.native=true -Dswoval.fork.tests=true ++$TRAVIS_SCALA_VERSION $CMD
+script: /tmp/sbt/bin/sbt -Dsbt.version=$SBT_VER -Dswoval.skip.native=true -Dswoval.fork.tests=true ++$TRAVIS_SCALA_VERSION $CMD
 
 before_install:
   # https://github.com/travis-ci/travis-ci/issues/8408
   - unset _JAVA_OPTIONS;
   - wget https://github.com/sbt/sbt/releases/download/v1.1.4/sbt-1.1.4.tgz
   - tar -xvf sbt-1.1.4.tgz
+  - rm sbt-1.1.4.tgz
+  - mv sbt /tmp/sbt
   - npm install -g cmake-js;
 
 cache:

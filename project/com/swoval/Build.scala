@@ -126,6 +126,7 @@ object Build {
   lazy val quickListReflectionTest = inputKey[Unit]("Check that reflection works for quick list")
   lazy val allTests = inputKey[Unit]("Run all tests")
   lazy val setProp = inputKey[Unit]("Set a system property")
+  lazy val checkFormat = inputKey[Boolean]("Check that the source code is formatted correctly")
 
   def projects: Seq[ProjectReference] = Seq[ProjectReference](
     files.js,
@@ -139,12 +140,8 @@ object Build {
   )
 
   def releaseTask(key: TaskKey[Unit]) = Def.taskDyn {
-    import sys.process._
-    javafmt.value
-    clangfmt.value
-    if (!Seq("git", "status").!!.contains("working tree clean"))
-      throw new IllegalStateException("There are local diffs")
-    else {
+    val valid = checkFormat.toTask(" silent").value
+    if (valid) {
       Def.taskDyn {
         (key in testing.jvm).value
         (key in util).value
@@ -164,6 +161,8 @@ object Build {
             }
         }
       }
+    } else {
+      throw new IllegalStateException("There are local diffs.")
     }
   }
 
@@ -184,6 +183,18 @@ object Build {
       publishSigned := {},
       publish := {},
       publishLocal := {},
+      checkFormat := {
+        import sys.process._
+        javafmt.value
+        clangfmt.value
+        (scalafmt in Compile).value
+        val output = Seq("git", "status").!!
+        println(output)
+        val result = output.contains("working tree clean")
+        if (!result && !Def.spaceDelimited("<arg>").parsed.headOption.contains("silent"))
+          throw new IllegalStateException("There are local diffs")
+        result
+      },
       releaseLocal := releaseTask(publishLocal).value,
       releaseSigned := releaseTask(publishSigned).value,
       releaseSnapshot := releaseTask(publish).value,
