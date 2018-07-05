@@ -121,6 +121,7 @@ trait FileCacheTest extends TestSuite {
           val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
           val creationLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
           val deletionLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
+          val updateLatch = new CountDownLatch(subdirsToAdd)
           val subdirs = (1 to subdirsToAdd).map { i =>
             dir.resolve(s"subdir-$i")
           }
@@ -132,7 +133,11 @@ trait FileCacheTest extends TestSuite {
           val allFiles = (subdirs ++ files).toSet
           val observer = Observers.apply[Path](
             (_: Entry[Path]) => creationLatch.countDown(),
-            (_: Entry[Path], _: Entry[Path]) => {},
+            (_: Entry[Path], e: Entry[Path]) =>
+              if (Try(e.path.lastModified) == Success(3000)) {
+                e.path.setLastModifiedTime(4000)
+                updateLatch.countDown()
+            },
             (_: Entry[Path]) => deletionLatch.countDown(),
             (_: Path, _: IOException) => {}
           )
@@ -153,13 +158,27 @@ trait FileCacheTest extends TestSuite {
               .flatMap { _ =>
                 executor.run(new Runnable {
                   override def run(): Unit = {
-                    files.foreach(Files.deleteIfExists(_))
-                    subdirs.foreach(Files.deleteIfExists(_))
+                    files
+                      .filter(_.getFileName == Paths.get("file-1"))
+                      .foreach(_.setLastModifiedTime(3000))
                   }
                 })
-                deletionLatch
+                updateLatch
                   .waitFor(timeout) {
-                    c.ls(dir) === Seq.empty
+                    val found = c.ls(dir).map(_.path).toSet
+                    allFiles.synchronized { found === allFiles }
+                  }
+                  .flatMap { _ =>
+                    executor.run(new Runnable {
+                      override def run(): Unit = {
+                        files.foreach(Files.deleteIfExists)
+                        subdirs.foreach(Files.deleteIfExists)
+                      }
+                    })
+                    deletionLatch
+                      .waitFor(timeout) {
+                        c.ls(dir) === Seq.empty
+                      }
                   }
               }
               .andThen {
@@ -174,6 +193,16 @@ trait FileCacheTest extends TestSuite {
                     else
                       println(
                         s"$this Creation latch not triggered, but still being decremented $newCount")
+                  }
+                  if (updateLatch.getCount > 0) {
+                    val count = updateLatch.getCount
+                    10.milliseconds.sleep
+                    val newCount = updateLatch.getCount
+                    if (newCount == count)
+                      println(s"$this Update latch not triggered ($count)")
+                    else
+                      println(
+                        s"$this Update latch not triggered, but still being decremented $newCount")
                   }
                   if (deletionLatch.getCount > 0) {
                     val count = deletionLatch.getCount

@@ -79,6 +79,11 @@ class NioPathWatcherImpl extends NioPathWatcher {
                           key.cancel();
                         }
                       }
+
+                      @Override
+                      public String toString() {
+                        return "WatchedDirectory(" + path + ")";
+                      }
                     };
                 watchedDirectoriesByPath.put(path, watchedDirectory);
                 result = Either.right(watchedDirectory);

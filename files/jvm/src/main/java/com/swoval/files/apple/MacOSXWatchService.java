@@ -13,6 +13,7 @@ import com.swoval.functional.Consumer;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.Files;
+import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.WatchEvent;
@@ -167,6 +168,7 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
       if (isOpen()) {
         synchronized (registered) {
           final Path realPath = path.toRealPath();
+          if (!Files.isDirectory(realPath)) throw new NotDirectoryException(realPath.toString());
           final MacOSXWatchKey key = registered.get(realPath);
           final MacOSXWatchKey result;
           if (key == null) {

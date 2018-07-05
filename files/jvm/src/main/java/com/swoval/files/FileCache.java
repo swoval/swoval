@@ -633,6 +633,7 @@ class FileCacheImpl<T> extends FileCache<T> {
             final Entry<Path, Directory.Entry<T>> mapEntry = oldIterator.next();
             if (!newEntries.containsKey(mapEntry.getKey())) {
               deletions.add(mapEntry.getValue());
+              watcher.unregister(mapEntry.getKey());
             }
           }
           final Iterator<Entry<Path, Directory.Entry<T>>> newIterator =
@@ -641,6 +642,13 @@ class FileCacheImpl<T> extends FileCache<T> {
             final Entry<Path, Directory.Entry<T>> mapEntry = newIterator.next();
             final Directory.Entry<T> oldEntry = oldEntries.get(mapEntry.getKey());
             if (oldEntry == null) {
+              if (registry.accept(mapEntry.getKey()) && mapEntry.getValue().isDirectory()) {
+                /*
+                 * Using Integer.MIN_VALUE will ensure that we update the directory without changing
+                 * the depth of the registration.
+                 */
+                watcher.register(mapEntry.getKey(), Integer.MIN_VALUE);
+              }
               creations.add(mapEntry.getValue());
             } else if (!oldEntry.equals(mapEntry.getValue())) {
               updates.add(new Directory.Entry[] {oldEntry, mapEntry.getValue()});

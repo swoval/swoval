@@ -134,7 +134,7 @@ public abstract class Executor implements AutoCloseable {
                       try {
                         runnable.get().run();
                       } catch (final Exception e) {
-                        System.err.println("Error running callback " + e);
+                        e.printStackTrace();
                       }
                     }
                   }

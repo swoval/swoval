@@ -335,12 +335,10 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
 
       throw new FileSystemLoopException(path.toString)
     }
-    if (result) {
-      val dir: Directory[WatchedDirectory] = getRoot(realPath.getRoot)
-      var toUpdate: Path = path
-      while (toUpdate != null && !Files.isDirectory(toUpdate)) toUpdate = toUpdate.getParent
-      if (dir != null && toUpdate != null) update(dir, toUpdate)
-    }
+    val dir: Directory[WatchedDirectory] = getRoot(realPath.getRoot)
+    var toUpdate: Path = path
+    while (toUpdate != null && !Files.isDirectory(toUpdate)) toUpdate = toUpdate.getParent
+    if (dir != null && toUpdate != null) update(dir, toUpdate)
     result
   }
 

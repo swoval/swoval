@@ -125,7 +125,7 @@ abstract class NioPathWatcher extends PathWatcher {
             directoryRegistry.removeDirectory(path);
             final Directory<WatchedDirectory> dir = getRoot(path.getRoot());
             if (dir != null) {
-              List<Directory.Entry<WatchedDirectory>> entries = dir.list(true, AllPass);
+              List<Directory.Entry<WatchedDirectory>> entries = dir.list(path, true, AllPass);
               Collections.sort(entries);
               Collections.reverse(entries);
               final Iterator<Directory.Entry<WatchedDirectory>> it = entries.iterator();
@@ -374,7 +374,7 @@ abstract class NioPathWatcher extends PathWatcher {
        */
       throw new FileSystemLoopException(path.toString());
     }
-    if (result) {
+    if (result || maxDepth == Integer.MIN_VALUE) {
       final Directory<WatchedDirectory> dir = getRoot(realPath.getRoot());
       Path toUpdate = path;
       while (toUpdate != null && !Files.isDirectory(toUpdate)) {

@@ -598,6 +598,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
             val mapEntry: Entry[Path, Directory.Entry[T]] = oldIterator.next()
             if (!newEntries.containsKey(mapEntry.getKey)) {
               deletions.add(mapEntry.getValue)
+              watcher.unregister(mapEntry.getKey)
             }
           }
           val newIterator: Iterator[Entry[Path, Directory.Entry[T]]] =
@@ -606,6 +607,14 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
             val mapEntry: Entry[Path, Directory.Entry[T]] = newIterator.next()
             val oldEntry: Directory.Entry[T] = oldEntries.get(mapEntry.getKey)
             if (oldEntry == null) {
+              if (registry.accept(mapEntry.getKey) && mapEntry.getValue.isDirectory) {
+                /*
+                 * Using Integer.MIN_VALUE will ensure that we update the directory without changing
+                 * the depth of the registration.
+                 */
+
+                watcher.register(mapEntry.getKey, java.lang.Integer.MIN_VALUE)
+              }
               creations.add(mapEntry.getValue)
             } else if (oldEntry != mapEntry.getValue) {
               updates.add(Array(oldEntry, mapEntry.getValue))
