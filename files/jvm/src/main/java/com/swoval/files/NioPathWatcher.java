@@ -28,8 +28,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** Provides a PathWatcher that is backed by a {@link java.nio.file.WatchService}. */
 abstract class NioPathWatcher extends PathWatcher {
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  protected final Executor callbackExecutor;
-  protected final Executor executor;
+  private final Executor callbackExecutor;
+  private final Executor executor;
   private final Map<Path, Directory<WatchedDirectory>> rootDirectories = new HashMap<>();
   private final boolean pollNewDirectories;
   private final DirectoryRegistry directoryRegistry;
@@ -208,7 +208,7 @@ abstract class NioPathWatcher extends PathWatcher {
     }
   }
 
-  protected void handleEvent(
+  void handleEvent(
       final Consumer<PathWatcher.Event> callback,
       final Path path,
       final PathWatcher.Event.Kind kind) {
@@ -231,7 +231,7 @@ abstract class NioPathWatcher extends PathWatcher {
     }
   }
 
-  protected void handleOverflow(final Consumer<PathWatcher.Event> callback, final Path path) {
+  void handleOverflow(final Consumer<PathWatcher.Event> callback, final Path path) {
     final int maxDepth = directoryRegistry.maxDepthFor(path);
     boolean stop = false;
     while (!stop && maxDepth > 0) {

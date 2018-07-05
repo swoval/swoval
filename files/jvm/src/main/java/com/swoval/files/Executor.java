@@ -18,8 +18,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Provides an execution context to run tasks. Exists to allow source interoperability with scala.js
  */
 public abstract class Executor implements AutoCloseable {
-  protected final AtomicBoolean closed = new AtomicBoolean(false);
-
   Executor() {}
 
   /**
@@ -102,11 +100,9 @@ public abstract class Executor implements AutoCloseable {
   @Override
   public void close() {}
 
-  public boolean isClosed() {
-    return closed.get();
-  }
-
   static class ExecutorImpl extends Executor {
+    private final AtomicBoolean closed = new AtomicBoolean(false);
+
     final ThreadFactory factory;
     final ExecutorService service;
     final LinkedBlockingQueue<Either<Integer, Runnable>> runnables = new LinkedBlockingQueue<>();
@@ -119,7 +115,7 @@ public abstract class Executor implements AutoCloseable {
             @Override
             public void run() {
               boolean stop = false;
-              while (!stop && !isClosed() && !Thread.currentThread().isInterrupted()) {
+              while (!stop && !closed.get() && !Thread.currentThread().isInterrupted()) {
                 try {
                   final List<Either<Integer, Runnable>> eithers = new ArrayList<>();
                   eithers.add(runnables.take());

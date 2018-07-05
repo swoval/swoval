@@ -30,8 +30,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  Provides a PathWatcher that is backed by a [[java.nio.file.WatchService]].
  */
 abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
-                              protected val callbackExecutor: Executor,
-                              protected val executor: Executor,
+                              private val callbackExecutor: Executor,
+                              private val executor: Executor,
                               private val directoryRegistry: DirectoryRegistry,
                               options: PathWatcher.Option*)
     extends PathWatcher {
@@ -182,9 +182,9 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
     }
   }
 
-  protected def handleEvent(callback: Consumer[PathWatcher.Event],
-                            path: Path,
-                            kind: PathWatcher.Event.Kind): Unit = {
+  def handleEvent(callback: Consumer[PathWatcher.Event],
+                  path: Path,
+                  kind: PathWatcher.Event.Kind): Unit = {
     if (!Files.exists(path)) {
       val root: Directory[WatchedDirectory] = rootDirectories.get(path.getRoot)
       if (root != null) {
@@ -205,7 +205,7 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
     }
   }
 
-  protected def handleOverflow(callback: Consumer[PathWatcher.Event], path: Path): Unit = {
+  def handleOverflow(callback: Consumer[PathWatcher.Event], path: Path): Unit = {
     val maxDepth: Int = directoryRegistry.maxDepthFor(path)
     var stop: Boolean = false
     while (!stop && maxDepth > 0) try {
