@@ -20,7 +20,9 @@ object platform {
         future.cancel(false)
         timer.shutdownNow()
         p.tryComplete(r)
-        timer.awaitTermination(5, TimeUnit.SECONDS)
+        try {
+          timer.awaitTermination(5, TimeUnit.SECONDS)
+        } catch { case _: InterruptedException => }
       }
     }
 }
