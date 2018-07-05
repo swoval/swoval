@@ -4,6 +4,7 @@ import java.io.FileFilter
 import java.nio.file.{ Path, Paths }
 
 import com.swoval.files.Directory.{ Converter, Entry, EntryFilter }
+import com.swoval.files.FileCaches.get
 import com.swoval.files._
 import com.swoval.runtime.ShutdownHooks
 import sbt.Keys._
@@ -228,7 +229,7 @@ object CloseWatchPlugin extends AutoPlugin {
     parsed.fold(_ => commands(taskDef.mkString(" ").trim), paths)
   }
   override lazy val globalSettings: Seq[Def.Setting[_]] = super.globalSettings ++ Seq(
-    closeWatchFileCache := FileCache.apply(new Converter[Path] {
+    closeWatchFileCache := FileCaches.get(new Converter[Path] {
       override def apply(path: Path): Path = path
     }),
     closeWatchUseDefaultWatchService := false,

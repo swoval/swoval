@@ -76,8 +76,8 @@ object Converter {
        newLines.view
          .filterNot(_.contains("import Entry._"))
          .map(regex.replaceAllIn(_, "$1[T <: AnyRef"))
-     } else if (path.toString.contains("FileCache.scala")) {
-       val applyRegex = "(apply|class FileCache(?:Impl)?)[\\[]T".r
+     } else if (path.toString.contains("FileCache")) {
+       val applyRegex = "(get|class FileCache(?:Impl)?)[\\[]T".r
        newLines.view
          .filterNot(_.contains("import Entry._"))
          .map(applyRegex.replaceAllIn(_, "$1[T <: AnyRef"))

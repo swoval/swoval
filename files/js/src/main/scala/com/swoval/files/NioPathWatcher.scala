@@ -103,7 +103,7 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
         val dir: Directory[WatchedDirectory] = getRoot(path.getRoot)
         if (dir != null) {
           val entries: List[Directory.Entry[WatchedDirectory]] =
-            dir.list(true, AllPass)
+            dir.list(path, true, AllPass)
           Collections.sort(entries)
           Collections.reverse(entries)
           val it: Iterator[Directory.Entry[WatchedDirectory]] =
@@ -335,10 +335,12 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
 
       throw new FileSystemLoopException(path.toString)
     }
-    val dir: Directory[WatchedDirectory] = getRoot(realPath.getRoot)
-    var toUpdate: Path = path
-    while (toUpdate != null && !Files.isDirectory(toUpdate)) toUpdate = toUpdate.getParent
-    if (dir != null && toUpdate != null) update(dir, toUpdate)
+    if (result || maxDepth == java.lang.Integer.MIN_VALUE) {
+      val dir: Directory[WatchedDirectory] = getRoot(realPath.getRoot)
+      var toUpdate: Path = path
+      while (toUpdate != null && !Files.isDirectory(toUpdate)) toUpdate = toUpdate.getParent
+      if (dir != null && toUpdate != null) update(dir, toUpdate)
+    }
     result
   }
 

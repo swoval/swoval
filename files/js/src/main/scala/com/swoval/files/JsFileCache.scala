@@ -13,7 +13,7 @@ import scala.scalajs.js.annotation.{ JSExport, JSExportTopLevel }
 class JsFileCache[T <: AnyRef](converter: js.UndefOr[js.Function1[Path, T]],
                                callback: js.UndefOr[js.Function1[JSEntry[T], Unit]])
     extends js.Object {
-  private[this] val inner: FileCache[T] = FileCache.apply(
+  private[this] val inner: FileCache[T] = FileCaches.get(
     converter.toOption
       .map(c =>
         new Converter[T] {

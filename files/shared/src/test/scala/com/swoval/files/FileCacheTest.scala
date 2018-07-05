@@ -26,7 +26,7 @@ trait FileCacheTest extends TestSuite {
   def boundedFactory: PathWatcher.Factory
   def identity: Converter[Path] = (p: Path) => p
   def simpleCache(f: Entry[Path] => Unit): FileCache[Path] =
-    FileCache.apply(((p: Path) => p): Converter[Path], factory, Observers.apply(f: OnChange[Path]))
+    FileCaches.get(((p: Path) => p): Converter[Path], factory, Observers.apply(f: OnChange[Path]))
   class LoopObserver(val latch: CountDownLatch) extends Observer[Path] {
     override def onCreate(newEntry: Entry[Path]): Unit = {}
     override def onDelete(oldEntry: Entry[Path]): Unit = {}
@@ -101,7 +101,7 @@ trait FileCacheTest extends TestSuite {
           val onUpdate: OnUpdate[Path] = (_: Entry[Path], _: Entry[Path]) => {}
           val onError: OnError = (_: Path, _: IOException) => {}
           val observer = Observers.apply(onChange, onUpdate, onChange, onError)
-          usingAsync(FileCache.apply(identity, factory, observer)) { c =>
+          usingAsync(FileCaches.get(identity, factory, observer)) { c =>
             c.reg(dir, recursive = false)
             c.ls(dir, recursive = false) === Seq(initial)
             initial.renameTo(moved)
@@ -141,7 +141,7 @@ trait FileCacheTest extends TestSuite {
             (_: Entry[Path]) => deletionLatch.countDown(),
             (_: Path, _: IOException) => {}
           )
-          usingAsync(FileCache.apply[Path](identity, boundedFactory, observer)) { c =>
+          usingAsync(FileCaches.get[Path](identity, boundedFactory, observer)) { c =>
             c.reg(dir)
             executor.run(new Runnable {
               override def run(): Unit = {
@@ -359,7 +359,7 @@ trait FileCacheTest extends TestSuite {
       'update - withTempFile { file =>
         val latch = new CountDownLatch(1)
         usingAsync(
-          FileCache.apply[LastModified](
+          FileCaches.get[LastModified](
             LastModified(_),
             factory,
             new Observer[LastModified] {
@@ -581,7 +581,7 @@ trait FileCacheTest extends TestSuite {
           withTempFile { file =>
             val linkLatch = new CountDownLatch(1)
             val link = dir.resolve("link")
-            usingAsync(FileCache.apply[Path](
+            usingAsync(FileCaches.get[Path](
               identity,
               new Observer[Path] {
                 override def onCreate(newEntry: Entry[Path]): Unit = {}
@@ -613,7 +613,7 @@ trait FileCacheTest extends TestSuite {
             withTempFile { file =>
               val link = Files.createSymbolicLink(dir.resolve("link"), file)
               val otherLink = Files.createSymbolicLink(otherDir.resolve("link"), file)
-              usingAsync(FileCache.apply[Path](
+              usingAsync(FileCaches.get[Path](
                 identity,
                 new Observer[Path] {
                   override def onCreate(newEntry: Entry[Path]): Unit = {}
@@ -645,7 +645,7 @@ trait FileCacheTest extends TestSuite {
             withTempFile { file =>
               val link = Files.createSymbolicLink(dir.resolve("link"), file)
               val otherLink = Files.createSymbolicLink(otherDir.resolve("link"), file)
-              usingAsync(FileCache.apply[Path](
+              usingAsync(FileCaches.get[Path](
                 identity,
                 new Observer[Path] {
                   override def onCreate(newEntry: Entry[Path]): Unit = {}
@@ -752,7 +752,7 @@ trait FileCacheTest extends TestSuite {
           override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
           override def onError(path: Path, exception: IOException): Unit = {}
         }
-        usingAsync(FileCache.apply(((p: Path) => p): Converter[Path], factory, observer)) { c =>
+        usingAsync(FileCaches.get(((p: Path) => p): Converter[Path], factory, observer)) { c =>
           c.reg(dir)
           c.ls(dir) === Seq(file)
           dir.deleteRecursive()

@@ -4,7 +4,7 @@ import java.io.File
 import java.nio.file._
 
 import com.swoval.files.Directory.{ Entry, EntryFilter }
-import com.swoval.files.{ Directory, FileCache }
+import com.swoval.files.{ Directory, FileCaches }
 import com.swoval.watchservice.CloseWatchPlugin.autoImport.closeWatchFileCache
 import sbt.Keys._
 
@@ -69,7 +69,7 @@ object Compat {
   val global = Scope(Global, Global, Global, Global)
   def extraProjectSettings: Seq[Def.Setting[_]] = Seq(
     pollInterval := 75,
-    closeWatchFileCache := FileCache.apply(new Directory.Converter[Path] {
+    closeWatchFileCache := FileCaches.get(new Directory.Converter[Path] {
       override def apply(p: Path): Path = p
     })
   )
@@ -78,7 +78,9 @@ object Compat {
       override def accept(f: File): Boolean = filter.accept(f) && other.accept(f)
     }
   }
-  def makeScopedSource(p: Path, pathFilter: EntryFilter[Path], id: Def.ScopedKey[_]): WatchSource = {
+  def makeScopedSource(p: Path,
+                       pathFilter: EntryFilter[Path],
+                       id: Def.ScopedKey[_]): WatchSource = {
     new BaseFileSource(p.toFile, pathFilter)
   }
   def makeSource(p: Path, pathFilter: EntryFilter[Path]): WatchSource =

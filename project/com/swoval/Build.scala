@@ -447,6 +447,8 @@ object Build {
                 "PathWatcher",
                 "EntryFilters",
                 "FileCache",
+                "FileCacheImpl",
+                "FileCaches",
                 "MapOps",
                 "NioPathWatcher",
                 "NioQuickLister",

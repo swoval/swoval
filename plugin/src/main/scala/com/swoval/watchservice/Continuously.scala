@@ -121,7 +121,8 @@ object Continuously {
     @tailrec
     private[this] def shouldExit(): Boolean = {
       System.in.available match {
-        case i if i > 0 => System.in.read match {
+        case i if i > 0 =>
+          System.in.read match {
             case 10 | 13 => true
             case _       => false
           }
