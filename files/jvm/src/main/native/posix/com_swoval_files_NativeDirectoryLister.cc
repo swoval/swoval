@@ -3,7 +3,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include "com_swoval_files_NativeQuickLister.h"
+#include "com_swoval_files_NativeDirectoryLister.h"
 
 typedef struct Handle {
     DIR *dp = nullptr;
@@ -13,41 +13,41 @@ typedef struct Handle {
 extern "C" {
 
 /*
- * Class:     com_swoval_files_NativeQuickLister
+ * Class:     com_swoval_files_NativeDirectoryLister
  * Method:    errno
  * Signature: ()I
  */
-JNIEXPORT jint JNICALL Java_com_swoval_files_NativeQuickLister_errno(JNIEnv *env,
+JNIEXPORT jint JNICALL Java_com_swoval_files_NativeDirectoryLister_errno(JNIEnv *env,
                                                                      jobject quicklister, jlong handle) {
     Handle *h = (Handle*) handle;
     switch (h->err) {
     case EACCES:
-        return com_swoval_files_NativeQuickLister_EACCES;
+        return com_swoval_files_NativeDirectoryLister_EACCES;
     case ENOENT:
-        return com_swoval_files_NativeQuickLister_ENOENT;
+        return com_swoval_files_NativeDirectoryLister_ENOENT;
     case ENOTDIR:
-        return com_swoval_files_NativeQuickLister_ENOTDIR;
+        return com_swoval_files_NativeDirectoryLister_ENOTDIR;
     default:
         return h->err;
     }
 }
 
 /*
- * Class:     com_swoval_files_NativeQuickLister
+ * Class:     com_swoval_files_NativeDirectoryLister
  * Method:    strerror
  * Signature: (I)Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_com_swoval_files_NativeQuickLister_strerror(JNIEnv *env,
+JNIEXPORT jstring JNICALL Java_com_swoval_files_NativeDirectoryLister_strerror(JNIEnv *env,
                                                                            jobject quicklister,
                                                                            jint err) {
     return env->NewStringUTF(strerror(err));
 }
 /*
- * Class:     com_swoval_files_NativeQuickLister
+ * Class:     com_swoval_files_NativeDirectoryLister
  * Method:    openDir
  * Signature: (Ljava/lang/String;)J
  */
-JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeQuickLister_openDir(JNIEnv *env, jobject lister,
+JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeDirectoryLister_openDir(JNIEnv *env, jobject lister,
                                                                         jstring dir) {
     Handle *handle = (Handle*) malloc(sizeof(Handle));
     handle->dp = nullptr;
@@ -60,11 +60,11 @@ JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeQuickLister_openDir(JNIEnv *
 }
 
 /*
- * Class:     com_swoval_files_NativeQuickLister
+ * Class:     com_swoval_files_NativeDirectoryLister
  * Method:    closeDir
  * Signature: (J)V
  */
-JNIEXPORT void JNICALL Java_com_swoval_files_NativeQuickLister_closeDir(JNIEnv *env, jobject lister,
+JNIEXPORT void JNICALL Java_com_swoval_files_NativeDirectoryLister_closeDir(JNIEnv *env, jobject lister,
                                                                         jlong handlep) {
     Handle *handle = (Handle*)handlep;
     (void)closedir(handle->dp);
@@ -72,11 +72,11 @@ JNIEXPORT void JNICALL Java_com_swoval_files_NativeQuickLister_closeDir(JNIEnv *
 }
 
 /*
- * Class:     com_swoval_files_NativeQuickLister
+ * Class:     com_swoval_files_NativeDirectoryLister
  * Method:    nextFile
  * Signature: (J)J
  */
-JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeQuickLister_nextFile(JNIEnv *env,
+JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeDirectoryLister_nextFile(JNIEnv *env,
                                                                          jobject unused,
                                                                          jlong handlep) {
     Handle *handle = (Handle*) handlep;
@@ -87,30 +87,30 @@ JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeQuickLister_nextFile(JNIEnv 
 }
 
 /*
- * Class:     com_swoval_files_NativeQuickLister
+ * Class:     com_swoval_files_NativeDirectoryLister
  * Method:    getType
  * Signature: (J)I
  */
-JNIEXPORT jint JNICALL Java_com_swoval_files_NativeQuickLister_getType(JNIEnv *, jobject,
+JNIEXPORT jint JNICALL Java_com_swoval_files_NativeDirectoryLister_getType(JNIEnv *, jobject,
                                                                        jlong handle) {
     switch (((struct dirent *)handle)->d_type) {
     case DT_DIR:
-        return com_swoval_files_NativeQuickLister_DIRECTORY;
+        return com_swoval_files_NativeDirectoryLister_DIRECTORY;
     case DT_REG:
-        return com_swoval_files_NativeQuickLister_FILE;
+        return com_swoval_files_NativeDirectoryLister_FILE;
     case DT_LNK:
-        return com_swoval_files_NativeQuickLister_LINK;
+        return com_swoval_files_NativeDirectoryLister_LINK;
     default:
-        return com_swoval_files_NativeQuickLister_UNKNOWN;
+        return com_swoval_files_NativeDirectoryLister_UNKNOWN;
     }
 }
 
 /*
- * Class:     com_swoval_files_NativeQuickLister
+ * Class:     com_swoval_files_NativeDirectoryLister
  * Method:    getName
  * Signature: (J)Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_com_swoval_files_NativeQuickLister_getName(JNIEnv *env, jobject,
+JNIEXPORT jstring JNICALL Java_com_swoval_files_NativeDirectoryLister_getName(JNIEnv *env, jobject,
                                                                           jlong handle) {
     return env->NewStringUTF(((struct dirent *)handle)->d_name);
 }

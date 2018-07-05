@@ -451,7 +451,7 @@ object Build {
                 "FileCaches",
                 "MapOps",
                 "NioPathWatcher",
-                "NioQuickLister",
+                "NioDirectoryLister",
                 "Observers",
                 "QuickFile",
                 "QuickLister",
@@ -520,7 +520,7 @@ object Build {
       fork in Test := System.getProperty("swoval.fork.tests", "false") == "true",
       travisQuickListReflectionTest := {
         quickListReflectionTest
-          .toTask(" com.swoval.files.NioQuickLister com.swoval.files.NativeQuickLister")
+          .toTask(" com.swoval.files.NioDirectoryLister com.swoval.files.NativeDirectoryLister")
           .value
       },
       allTests := {
@@ -548,9 +548,9 @@ object Build {
             val cp =
               (fullClasspath in Test).value.map(_.data).filterNot(_.toString.contains("jacoco"))
             val prefix = Seq("java", "-classpath", cp.mkString(File.pathSeparator))
-            val args = prefix ++ (if (arg.nonEmpty) Seq(s"-Dswoval.quicklister=$arg") else Nil) ++
+            val args = prefix ++ (if (arg.nonEmpty) Seq(s"-Dswoval.directory.lister=$arg") else Nil) ++
               Seq("com.swoval.files.QuickListReflectionTest",
-                  if (arg.isEmpty) "com.swoval.files.NativeQuickLister" else arg)
+                  if (arg.isEmpty) "com.swoval.files.NativeDirectoryLister" else arg)
             val proc = new ProcessBuilder(args: _*).start()
             proc.waitFor(5, TimeUnit.SECONDS)
             val in = Source.fromInputStream(proc.getInputStream).mkString

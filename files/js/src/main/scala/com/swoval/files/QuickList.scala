@@ -12,8 +12,7 @@ import com.swoval.runtime.Platform
  * down the road.
  */
 object QuickList {
-  private val INSTANCE: QuickLister =
-    if (Platform.isJVM) new NativeQuickLister() else new NioQuickLister()
+  private val INSTANCE: QuickLister = QuickListers.getNio()
 
   /**
    * Lists the files and directories in {{{path}}}. When {{{followLinks}}} is true, for a

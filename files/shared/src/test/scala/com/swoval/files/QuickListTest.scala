@@ -162,5 +162,5 @@ class QuickListTest(quickLister: QuickLister, run: Boolean) extends TestSuite {
     }
   } else Tests {}
 }
-object NativeQuickListTest extends QuickListTest(new NativeQuickLister, Platform.isJVM)
-object NioQuickListTest extends QuickListTest(new NioQuickLister, true)
+object NativeQuickListTest extends QuickListTest(QuickListers.getNative, Platform.isJVM)
+object NioQuickListTest extends QuickListTest(QuickListers.getNio, true)
