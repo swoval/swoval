@@ -10,10 +10,8 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
 import com.swoval.files.PathWatchers.Event;
-import com.swoval.files.PathWatchers.Option;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
-import com.swoval.functional.IO;
 import com.swoval.runtime.ShutdownHooks;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
@@ -30,80 +28,20 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-class NioPathWatcherImpl extends NioPathWatcher {
+class NioPathWatcherService implements AutoCloseable {
   private final Thread loopThread;
   private final AtomicBoolean isStopped = new AtomicBoolean(false);
   private static final AtomicInteger threadId = new AtomicInteger(0);
   private final CountDownLatch shutdownLatch = new CountDownLatch(1);
+  private final Map<Path, WatchedDirectory> watchedDirectoriesByPath = new HashMap<>();
   private final Registerable watchService;
 
-  NioPathWatcherImpl(
-      final Consumer<Event> callback,
+  NioPathWatcherService(
+      final Consumer<Event> eventConsumer,
+      final Consumer<Path> overflowConsumer,
       final Registerable watchService,
-      final Executor callbackExecutor,
-      final Executor executor,
-      final DirectoryRegistry directoryRegistry,
-      final Option... options)
+      final Executor internalExecutor)
       throws InterruptedException {
-    super(
-        new IO<Path, WatchedDirectory>() {
-          final Map<Path, WatchedDirectory> watchedDirectoriesByPath = new HashMap<>();
-
-          @Override
-          public Either<IOException, WatchedDirectory> apply(final Path path) {
-            Either<IOException, WatchedDirectory> result;
-            try {
-              final WatchedDirectory previousWatchedDirectory = watchedDirectoriesByPath.get(path);
-              if (previousWatchedDirectory == null) {
-                final WatchedDirectory watchedDirectory =
-                    new WatchedDirectory() {
-                      private final WatchKey key =
-                          watchService.register(path, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
-                      private final AtomicBoolean closed = new AtomicBoolean(false);
-
-                      @Override
-                      public boolean isValid() {
-                        return true;
-                      }
-
-                      @Override
-                      public void reset() {
-                        if (!key.reset()) {
-                          key.cancel();
-                        }
-                      }
-
-                      @Override
-                      public void close() {
-                        if (closed.compareAndSet(false, true)) {
-                          watchedDirectoriesByPath.remove(path);
-                          key.reset();
-                          key.cancel();
-                        }
-                      }
-
-                      @Override
-                      public String toString() {
-                        return "WatchedDirectory(" + path + ")";
-                      }
-                    };
-                watchedDirectoriesByPath.put(path, watchedDirectory);
-                result = Either.right(watchedDirectory);
-              } else {
-                result = Either.right(previousWatchedDirectory);
-              }
-            } catch (ClosedWatchServiceException e) {
-              result = Either.left(new IOException(e));
-            } catch (IOException e) {
-              result = Either.left(e);
-            }
-            return result;
-          }
-        },
-        callbackExecutor,
-        executor,
-        directoryRegistry,
-        options);
     this.watchService = watchService;
     ShutdownHooks.addHook(
         1,
@@ -125,7 +63,7 @@ class NioPathWatcherImpl extends NioPathWatcher {
                 final WatchKey key = watchService.take();
                 boolean submitted = false;
                 while (!submitted) {
-                  executor.run(
+                  internalExecutor.run(
                       new Runnable() {
                         @Override
                         public void run() {
@@ -149,9 +87,9 @@ class NioPathWatcherImpl extends NioPathWatcher {
                                   e.context() == null
                                       ? watchKey
                                       : watchKey.resolve((Path) e.context());
-                              handleEvent(callback, path, kind);
+                              eventConsumer.accept(new Event(path, kind));
                             } else {
-                              handleOverflow(callback, watchKey);
+                              overflowConsumer.accept(watchKey);
                             }
                           }
                         }
@@ -170,12 +108,54 @@ class NioPathWatcherImpl extends NioPathWatcher {
     latch.await(5, TimeUnit.SECONDS);
   }
 
+  Either<IOException, WatchedDirectory> register(final Path path) {
+    Either<IOException, WatchedDirectory> result;
+    try {
+      final WatchedDirectory previousWatchedDirectory = watchedDirectoriesByPath.get(path);
+      if (previousWatchedDirectory == null) {
+        final WatchedDirectory watchedDirectory =
+            new WatchedDirectory() {
+              private final WatchKey key =
+                  watchService.register(path, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
+              private final AtomicBoolean closed = new AtomicBoolean(false);
+
+              @Override
+              public boolean isValid() {
+                return true;
+              }
+
+              @Override
+              public void close() {
+                if (closed.compareAndSet(false, true)) {
+                  watchedDirectoriesByPath.remove(path);
+                  key.reset();
+                  key.cancel();
+                }
+              }
+
+              @Override
+              public String toString() {
+                return "WatchedDirectory(" + path + ")";
+              }
+            };
+        watchedDirectoriesByPath.put(path, watchedDirectory);
+        result = Either.right(watchedDirectory);
+      } else {
+        result = Either.right(previousWatchedDirectory);
+      }
+    } catch (ClosedWatchServiceException e) {
+      result = Either.left(new IOException(e));
+    } catch (IOException e) {
+      result = Either.left(e);
+    }
+    return result;
+  }
+
   @SuppressWarnings("EmptyCatchBlock")
   @Override
   public void close() {
     if (isStopped.compareAndSet(false, true)) {
       loopThread.interrupt();
-      super.close();
       try {
         watchService.close();
         shutdownLatch.await(5, TimeUnit.SECONDS);

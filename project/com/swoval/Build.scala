@@ -472,12 +472,7 @@ object Build {
                 "WatchedDirectory"
               ).value
               convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
-              convertSources("com/swoval/functional",
-                             "Consumer",
-                             "Either",
-                             "Filter",
-                             "Filters",
-                             "IO").value
+              convertSources("com/swoval/functional", "Consumer", "Either", "Filter", "Filters").value
             }
           },
           scalafmt in Compile,

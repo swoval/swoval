@@ -180,17 +180,12 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
   override def list(path: Path): List[Directory.Entry[T]] =
     list(path, java.lang.Integer.MAX_VALUE, AllPass)
 
-  override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] = {
-    var result: Either[IOException, Boolean] = watcher.register(path, maxDepth)
-    if (result.isRight) {
-      result = internalExecutor
-        .block(new Callable[Boolean]() {
-          override def call(): Boolean = doReg(path, maxDepth)
-        })
-        .castLeft(classOf[IOException])
-    }
-    result
-  }
+  override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] =
+    internalExecutor
+      .block(new Callable[Boolean]() {
+        override def call(): Boolean = doReg(path, maxDepth)
+      })
+      .castLeft(classOf[IOException])
 
   override def register(path: Path, recursive: Boolean): Either[IOException, Boolean] =
     register(path, if (recursive) java.lang.Integer.MAX_VALUE else 0)
@@ -220,6 +215,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
   private def doReg(path: Path, maxDepth: Int): Boolean = {
     var result: Boolean = false
     registry.addDirectory(path, maxDepth)
+    watcher.register(path, maxDepth)
     val dirs: List[Directory[T]] =
       new ArrayList[Directory[T]](directories.values)
     Collections.sort(dirs, new Comparator[Directory[T]]() {

@@ -1,7 +1,6 @@
 package com.swoval.files;
 
 import com.swoval.files.PathWatchers.Event;
-import com.swoval.files.PathWatchers.Option;
 import com.swoval.functional.Consumer;
 import java.io.IOException;
 
@@ -9,27 +8,23 @@ public class PlatformWatcher {
   static PathWatcher make(
       final Consumer<Event> callback,
       final Executor executor,
-      final DirectoryRegistry directoryRegistry,
-      final Option... options)
+      final DirectoryRegistry directoryRegistry)
       throws IOException, InterruptedException {
-    return make(
-        callback, RegisterableWatchService.newWatchService(), executor, directoryRegistry, options);
+    return make(callback, RegisterableWatchService.newWatchService(), executor, directoryRegistry);
   }
 
   static PathWatcher make(
       final Consumer<Event> callback,
       final Registerable registerable,
       final Executor executor,
-      final DirectoryRegistry directoryRegistry,
-      final Option... options)
+      final DirectoryRegistry directoryRegistry)
       throws InterruptedException {
     return make(
         callback,
         registerable,
         Executor.make("com.swoval.files.NioPathWatcher-callback-thread"),
         executor,
-        directoryRegistry,
-        options);
+        directoryRegistry);
   }
 
   static PathWatcher make(
@@ -37,10 +32,9 @@ public class PlatformWatcher {
       final Registerable registerable,
       final Executor callbackExecutor,
       final Executor internalExecutor,
-      final DirectoryRegistry directoryRegistry,
-      final Option... options)
+      final DirectoryRegistry directoryRegistry)
       throws InterruptedException {
-    return new NioPathWatcherImpl(
-        callback, registerable, callbackExecutor, internalExecutor, directoryRegistry, options);
+    return new NioPathWatcher(
+        callback, registerable, callbackExecutor, internalExecutor, directoryRegistry);
   }
 }

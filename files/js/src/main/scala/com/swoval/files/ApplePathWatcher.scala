@@ -7,14 +7,12 @@ import com.swoval.files.PathWatchers.Event.Delete
 import com.swoval.files.PathWatchers.Event.Modify
 import com.swoval.files.PathWatchers.Event.Overflow
 import com.swoval.files.PathWatchers.Event
-import com.swoval.files.PathWatchers.Option
 import com.swoval.files.apple.FileEvent
 import com.swoval.files.apple.FileEventsApi
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException
 import com.swoval.files.apple.Flags
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
-import com.swoval.functional.Filter
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -28,7 +26,6 @@ import java.util.Map.Entry
 import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicBoolean
 import ApplePathWatcher._
-import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
 object ApplePathWatcher {
 
@@ -46,23 +43,6 @@ object ApplePathWatcher {
 
   }
 
-  private def fromOptionsOrDefault(options: Option*): Flags.Create = {
-    val option: Option = ArrayOps.find(options, new Filter[Option]() {
-      override def accept(option: Option): Boolean =
-        option.isInstanceOf[FlagOption]
-    })
-    if (option == null) new Flags.Create().setFileEvents().setNoDefer()
-    else option.asInstanceOf[FlagOption].getFlags
-  }
-
-  class FlagOption(@BeanProperty val flags: Flags.Create) extends Option("FLAG_OPTION")
-
-  object Options {
-
-    def flags(flags: Flags.Create): FlagOption = new FlagOption(flags)
-
-  }
-
 }
 
 /**
@@ -74,8 +54,12 @@ class ApplePathWatcher(private val latency: Double,
                        onFileEvent: Consumer[Event],
                        onStreamRemoved: Consumer[String],
                        executor: Executor,
-                       private val directoryRegistry: DirectoryRegistry)
+                       managedDirectoryRegistry: DirectoryRegistry)
     extends PathWatcher {
+
+  private val directoryRegistry: DirectoryRegistry =
+    if (managedDirectoryRegistry == null) new DirectoryRegistry()
+    else managedDirectoryRegistry
 
   private val streams: Map[Path, Stream] = new HashMap()
 
@@ -263,13 +247,10 @@ class ApplePathWatcher(private val latency: Double,
     }
   }
 
-  def this(onFileEvent: Consumer[Event],
-           executor: Executor,
-           directoryRegistry: DirectoryRegistry,
-           options: Option*) =
+  def this(onFileEvent: Consumer[Event], executor: Executor, directoryRegistry: DirectoryRegistry) =
     this(
       0.01,
-      fromOptionsOrDefault(options: _*),
+      new Flags.Create().setNoDefer().setFileEvents(),
       Executor.make("com.swoval.files.ApplePathWatcher-callback-executor"),
       onFileEvent,
       DefaultOnStreamRemoved,

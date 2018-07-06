@@ -28,20 +28,14 @@ public class PathWatchers {
    * Create a PathWatcher for the runtime platform.
    *
    * @param callback {@link com.swoval.functional.Consumer} to run on file events
-   * @param options Runtime {@link Option} instances for the watcher. This is only relevant for the
-   *     {@link NioPathWatcher} that is used on linux and windows.
    * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
-  public static PathWatcher get(final Consumer<Event> callback, final Option... options)
+  public static PathWatcher get(final Consumer<Event> callback)
       throws IOException, InterruptedException {
-    return get(
-        callback,
-        Executor.make("com.swoval.files.PathWatcher-internal-executor"),
-        new DirectoryRegistry(),
-        options);
+    return get(callback, Executor.make("com.swoval.files.PathWatcher-internal-executor"), null);
   }
 
   /**
@@ -49,17 +43,14 @@ public class PathWatchers {
    *
    * @param callback {@link Consumer} to run on file events
    * @param executor provides a single threaded context to manage state
-   * @param options Runtime {@link Option} instances for the watcher. This is only relevant for the
-   *     {@link NioPathWatcher} that is used on linux and windows.
    * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
-  static PathWatcher get(
-      final Consumer<Event> callback, final Executor executor, final Option... options)
+  static PathWatcher get(final Consumer<Event> callback, final Executor executor)
       throws IOException, InterruptedException {
-    return get(callback, executor, new DirectoryRegistry(), options);
+    return get(callback, executor, null);
   }
 
   /**
@@ -68,22 +59,17 @@ public class PathWatchers {
    * @param callback {@link Consumer} to run on file events
    * @param executor provides a single threaded context to manage state
    * @param registry The registry of directories to monitor
-   * @param options Runtime {@link Option} instances for the watcher. This is only relevant for the
-   *     {@link NioPathWatcher} that is used on linux and windows.
    * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
   static PathWatcher get(
-      final Consumer<Event> callback,
-      final Executor executor,
-      final DirectoryRegistry registry,
-      final Option... options)
+      final Consumer<Event> callback, final Executor executor, final DirectoryRegistry registry)
       throws IOException, InterruptedException {
     return Platform.isMac()
-        ? new ApplePathWatcher(callback, executor, registry, options)
-        : PlatformWatcher.make(callback, executor, registry, options);
+        ? new ApplePathWatcher(callback, executor, registry)
+        : PlatformWatcher.make(callback, executor, registry);
   }
 
   /**
@@ -105,7 +91,7 @@ public class PathWatchers {
      */
     public PathWatcher create(final Consumer<Event> callback, final Executor executor)
         throws InterruptedException, IOException {
-      return create(callback, executor, new DirectoryRegistry());
+      return create(callback, executor, null);
     }
 
     /**
@@ -125,41 +111,6 @@ public class PathWatchers {
         final Executor executor,
         final DirectoryRegistry directoryRegistry)
         throws InterruptedException, IOException;
-  }
-
-  /** Options for the PathWatcher. */
-  public static class Option {
-    private final String name;
-
-    public Option(final String name) {
-      this.name = name;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      return obj instanceof Option && ((Option) obj).name.equals(this.name);
-    }
-
-    @Override
-    public int hashCode() {
-      return name.hashCode();
-    }
-
-    @Override
-    public String toString() {
-      return name;
-    }
-  }
-
-  /** Container class for static options. */
-  public static final class Options {
-    /**
-     * Require that the PathWatcher poll newly created directories for files contained therein. A
-     * creation event will be generated for any file found within the new directory. This is
-     * somewhat expensive and may be redundant in some cases, see {@link FileCache} which does its
-     * own polling for new directories.
-     */
-    public static final Option POLL_NEW_DIRECTORIES = new Option("POLL_NEW_DIRECTORIES");
   }
 
   /** Container for {@link PathWatcher} events */

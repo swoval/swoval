@@ -2,10 +2,9 @@ package com.swoval.files
 
 import java.nio.file.attribute.FileTime
 import java.nio.file.{ Files, Paths }
-import java.util.concurrent.{ TimeUnit, TimeoutException }
+import java.util.concurrent.TimeoutException
 
 import com.swoval.files.PathWatchers.Event.{ Create, Delete, Modify }
-import com.swoval.files.PathWatchers.{ Option, Options }
 import com.swoval.files.apple.Flags
 import com.swoval.files.test.{ ArrayBlockingQueue, _ }
 import com.swoval.functional.Consumer
@@ -21,7 +20,9 @@ trait PathWatcherTest extends TestSuite {
   type Event = PathWatchers.Event
   val DEFAULT_LATENCY = 5.milliseconds
   val fileFlags = new Flags.Create().setNoDefer().setFileEvents()
-  def defaultWatcher(callback: Consumer[PathWatchers.Event], options: Option*): PathWatcher
+
+  def defaultWatcher(callback: Consumer[PathWatchers.Event]): PathWatcher
+
   val testsImpl = Tests {
     val events = new ArrayBlockingQueue[PathWatchers.Event](10)
     'files - {
@@ -149,7 +150,7 @@ trait PathWatcherTest extends TestSuite {
           else if (e.path == subfile) fileLatch.countDown()
         }
 
-        usingAsync(defaultWatcher(callback, Options.POLL_NEW_DIRECTORIES)) { w =>
+        usingAsync(defaultWatcher(callback)) { w =>
           w.register(file)
           file.setLastModifiedTime(3000)
           dirLatch
@@ -305,11 +306,14 @@ trait PathWatcherTest extends TestSuite {
     }
   }
 }
+
 object DefaultPathWatcherTest extends PathWatcherTest {
   val tests = testsImpl
-  def defaultWatcher(callback: Consumer[PathWatchers.Event], options: Option*): PathWatcher =
-    PathWatchers.get(callback, Executor.make("DirectoryWatcherTestExecutor"), options: _*)
+
+  def defaultWatcher(callback: Consumer[PathWatchers.Event]): PathWatcher =
+    PathWatchers.get(callback, Executor.make("DirectoryWatcherTestExecutor"))
 }
+
 object NioPathWatcherTest extends PathWatcherTest {
   val tests =
     if (Platform.isJVM && Platform.isMac) testsImpl
@@ -319,9 +323,7 @@ object NioPathWatcherTest extends PathWatcherTest {
           println("Not running NioDirectoryWatcherTest on platform other than osx on the jvm")
         }
       }
-  def defaultWatcher(callback: Consumer[PathWatchers.Event], options: Option*): PathWatcher =
-    PlatformWatcher.make(callback,
-                         Executor.make("NioDirectoryWatcherTestExecutor"),
-                         new DirectoryRegistry(),
-                         options: _*)
+
+  def defaultWatcher(callback: Consumer[PathWatchers.Event]): PathWatcher =
+    PlatformWatcher.make(callback, Executor.make("NioDirectoryWatcherTestExecutor"), null)
 }

@@ -211,20 +211,15 @@ class FileCacheImpl<T> implements FileCache<T> {
 
   @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
-    Either<IOException, Boolean> result = watcher.register(path, maxDepth);
-    if (result.isRight()) {
-      result =
-          internalExecutor
-              .block(
-                  new Callable<Boolean>() {
-                    @Override
-                    public Boolean call() throws IOException {
-                      return doReg(path, maxDepth);
-                    }
-                  })
-              .castLeft(IOException.class);
-    }
-    return result;
+    return internalExecutor
+        .block(
+            new Callable<Boolean>() {
+              @Override
+              public Boolean call() throws IOException {
+                return doReg(path, maxDepth);
+              }
+            })
+        .castLeft(IOException.class);
   }
 
   @Override
@@ -262,6 +257,7 @@ class FileCacheImpl<T> implements FileCache<T> {
   private boolean doReg(final Path path, final int maxDepth) throws IOException {
     boolean result = false;
     registry.addDirectory(path, maxDepth);
+    watcher.register(path, maxDepth);
     final List<Directory<T>> dirs = new ArrayList<>(directories.values());
     Collections.sort(
         dirs,

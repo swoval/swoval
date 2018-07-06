@@ -24,8 +24,11 @@ import scala.util.{ Failure, Success, Try }
 
 trait FileCacheTest extends TestSuite {
   def factory: Factory
+
   def boundedFactory: Factory
+
   def identity: Converter[Path] = (p: Path) => p
+
   def simpleCache(f: Entry[Path] => Unit): FileCache[Path] =
     FileCaches.get(((p: Path) => p): Converter[Path], factory, Observers.apply(f: OnChange[Path]))
 
@@ -42,8 +45,11 @@ trait FileCacheTest extends TestSuite {
 
   class LoopObserver(val latch: CountDownLatch) extends Observer[Path] {
     override def onCreate(newEntry: Entry[Path]): Unit = {}
+
     override def onDelete(oldEntry: Entry[Path]): Unit = {}
+
     override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
+
     override def onError(path: Path, exception: IOException): Unit = latch.countDown()
   }
 
@@ -126,8 +132,11 @@ trait FileCacheTest extends TestSuite {
         'addmany - withTempDirectory { dir =>
           // Windows is slow (at least on my vm)
           val subdirsToAdd = System.getProperty("swoval.test.subdir-count") match {
-            case null => if (!Platform.isJVM) { if (Platform.isWin) 5 else 50 } else 200
-            case c    => Try(c.toInt).getOrElse(200)
+            case null =>
+              if (!Platform.isJVM) {
+                if (Platform.isWin) 5 else 50
+              } else 200
+            case c => Try(c.toInt).getOrElse(200)
           }
           val timeout = DEFAULT_TIMEOUT * 5
           val filesPerSubdir = 4
@@ -166,7 +175,9 @@ trait FileCacheTest extends TestSuite {
               .waitFor(timeout) {
                 val found = c.ls(dir).map(_.path).toSet
                 // Need to synchronize since files is first set on a different thread
-                allFiles.synchronized { found === allFiles }
+                allFiles.synchronized {
+                  found === allFiles
+                }
               }
               .flatMap { _ =>
                 executor.run(new Runnable {
@@ -179,7 +190,9 @@ trait FileCacheTest extends TestSuite {
                 updateLatch
                   .waitFor(timeout) {
                     val found = c.ls(dir).map(_.path).toSet
-                    allFiles.synchronized { found === allFiles }
+                    allFiles.synchronized {
+                      found === allFiles
+                    }
                   }
                   .flatMap { _ =>
                     executor.run(new Runnable {
@@ -284,7 +297,9 @@ trait FileCacheTest extends TestSuite {
                     val deepFile = Files.createFile(deep.resolve("file"))
                     latch.waitFor(DEFAULT_TIMEOUT) {
                       var i = 0
-                      while (!Files.exists(deepFile) && i < 1000) { i += 1 }
+                      while (!Files.exists(deepFile) && i < 1000) {
+                        i += 1
+                      }
                       val existing = FileOps.list(dir, true).asScala.map(_.toPath).toSet
                       existing === Set(subdir, nestedSubdir, file, deep, deepFile)
                       c.ls(dir) === Set(subdir, nestedSubdir, file, deep)
@@ -377,11 +392,14 @@ trait FileCacheTest extends TestSuite {
             factory,
             new Observer[LastModified] {
               override def onCreate(newEntry: Entry[LastModified]): Unit = {}
+
               override def onDelete(oldEntry: Entry[LastModified]): Unit = {}
+
               override def onUpdate(oldEntry: Entry[LastModified],
                                     newEntry: Entry[LastModified]): Unit =
                 if (oldEntry.getValue.lastModified != newEntry.getValue.lastModified)
                   latch.countDown()
+
               override def onError(path: Path, iOException: IOException): Unit = {}
             }
           )) { c =>
@@ -598,9 +616,12 @@ trait FileCacheTest extends TestSuite {
               identity,
               new Observer[Path] {
                 override def onCreate(newEntry: Entry[Path]): Unit = {}
+
                 override def onDelete(oldEntry: Entry[Path]): Unit =
                   if (oldEntry.path == link) linkLatch.countDown()
+
                 override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
+
                 override def onError(path: Path, exception: IOException): Unit = {}
               }
             )) { c =>
@@ -630,10 +651,13 @@ trait FileCacheTest extends TestSuite {
                 identity,
                 new Observer[Path] {
                   override def onCreate(newEntry: Entry[Path]): Unit = {}
+
                   override def onDelete(oldEntry: Entry[Path]): Unit = {}
+
                   override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
                     if (paths.add(newEntry.path)) latch.countDown()
                   }
+
                   override def onError(path: Path, exception: IOException): Unit = {}
                 }
               )) { c =>
@@ -676,6 +700,7 @@ trait FileCacheTest extends TestSuite {
                       secondUpdateLatch.countDown()
                     }
                   }
+
                   override def onError(path: Path, exception: IOException): Unit = {}
                 }
               )) { c =>
@@ -760,9 +785,12 @@ trait FileCacheTest extends TestSuite {
           override def onCreate(newEntry: Entry[Path]): Unit = {
             if (newEntry.path == newFile) newFileLatch.countDown()
           }
+
           override def onDelete(oldEntry: Entry[Path]): Unit =
             if (oldEntry.path == dir) deletionLatch.countDown()
+
           override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
+
           override def onError(path: Path, exception: IOException): Unit = {}
         }
         usingAsync(FileCaches.get(((p: Path) => p): Converter[Path], factory, observer)) { c =>
@@ -822,11 +850,14 @@ trait FileCacheTest extends TestSuite {
           val deletionLatch = new CountDownLatch(1)
           c.addObserver(new Observer[Path] {
             override def onCreate(newEntry: Entry[Path]): Unit = creationLatch.countDown()
+
             override def onDelete(oldEntry: Entry[Path]): Unit =
               if (oldEntry.path == file) deletionLatch.countDown
+
             override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
               if (newEntry.path.lastModified == 3000) updateLatch.countDown()
             }
+
             override def onError(path: Path, exception: IOException): Unit = {}
           })
           c.reg(dir)

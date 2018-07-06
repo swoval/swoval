@@ -128,7 +128,7 @@ class SymlinkWatcher(handleEvent: Consumer[Path],
    */
 
   private val watcher: PathWatcher =
-    factory.create(callback, internalExecutor.copy(), new DirectoryRegistry())
+    factory.create(callback, internalExecutor.copy())
 
   override def close(): Unit = {
     internalExecutor.block(new Runnable() {

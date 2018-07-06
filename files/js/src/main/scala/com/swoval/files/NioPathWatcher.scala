@@ -11,11 +11,9 @@ import com.swoval.files.Directory.Entry
 import com.swoval.files.Directory.EntryFilter
 import com.swoval.files.Directory.Observer
 import com.swoval.files.PathWatchers.Event
-import com.swoval.files.PathWatchers.Option
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
-import com.swoval.functional.IO
 import java.io.IOException
 import java.nio.file.FileSystemLoopException
 import java.nio.file.Files
@@ -34,11 +32,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  Provides a PathWatcher that is backed by a [[java.nio.file.WatchService]].
  */
-abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
-                              private val callbackExecutor: Executor,
-                              private val executor: Executor,
-                              private val directoryRegistry: DirectoryRegistry,
-                              options: Option*)
+class NioPathWatcher(callback: Consumer[Event],
+                     registerable: Registerable,
+                     private val callbackExecutor: Executor,
+                     private val internalExecutor: Executor,
+                     managedDirectoryRegistry: DirectoryRegistry)
     extends PathWatcher {
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
@@ -46,14 +44,35 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
   private val rootDirectories: Map[Path, Directory[WatchedDirectory]] =
     new HashMap()
 
-  private val pollNewDirectories: Boolean =
-    ArrayOps.contains(options, PathWatchers.Options.POLL_NEW_DIRECTORIES)
+  private val managed: Boolean = managedDirectoryRegistry != null
+
+  private val directoryRegistry: DirectoryRegistry =
+    if (managedDirectoryRegistry == null) new DirectoryRegistry()
+    else managedDirectoryRegistry
 
   private val converter: Converter[WatchedDirectory] =
     new Converter[WatchedDirectory]() {
       override def apply(path: Path): WatchedDirectory =
-        register.apply(path).getOrElse(WatchedDirectories.INVALID)
+        nioPathWatcherService
+          .register(path)
+          .getOrElse(WatchedDirectories.INVALID)
     }
+
+  private val nioPathWatcherService: NioPathWatcherService =
+    new NioPathWatcherService(
+      new Consumer[Event]() {
+        override def accept(event: Event): Unit = {
+          handleEvent(callback, event)
+        }
+      },
+      new Consumer[Path]() {
+        override def accept(path: Path): Unit = {
+          handleOverflow(callback, path)
+        }
+      },
+      registerable,
+      internalExecutor
+    )
 
   private val updateObserver: Directory.Observer[WatchedDirectory] =
     new Observer[WatchedDirectory]() {
@@ -81,7 +100,7 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
    */
   override def register(path: Path,
                         maxDepth: Int): com.swoval.functional.Either[IOException, Boolean] =
-    executor
+    internalExecutor
       .block(new Callable[Boolean]() {
         override def call(): Boolean = registerImpl(path, maxDepth)
       })
@@ -99,9 +118,9 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
    * @param path The directory to remove from monitoring
    */
   override def unregister(path: Path): Unit = {
-    executor.block(new Runnable() {
+    internalExecutor.block(new Runnable() {
       override def run(): Unit = {
-        directoryRegistry.removeDirectory(path)
+        if (!managed) directoryRegistry.removeDirectory(path)
         val dir: Directory[WatchedDirectory] = getRoot(path.getRoot)
         if (dir != null) {
           val toRemove: List[Directory.Entry[WatchedDirectory]] =
@@ -130,7 +149,7 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
 
   override def close(): Unit = {
     if (closed.compareAndSet(false, true)) {
-      executor.block(new Runnable() {
+      internalExecutor.block(new Runnable() {
         override def run(): Unit = {
           callbackExecutor.close()
           val it: Iterator[Directory[WatchedDirectory]] =
@@ -142,9 +161,10 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
               dir.list(true, AllPass).iterator()
             while (entries.hasNext) entries.next().getValue.close()
           }
+          nioPathWatcherService.close()
         }
       })
-      executor.close()
+      internalExecutor.close()
     }
   }
 
@@ -164,11 +184,7 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
                           processedDirs: HashSet[QuickFile],
                           processedFiles: HashSet[Path]): Unit = {
     val newFiles: Set[QuickFile] = new HashSet[QuickFile]()
-    val maxDepth: Int = directoryRegistry.maxDepthFor(path)
-    add(path,
-        maxDepth -
-          (if (maxDepth == java.lang.Integer.MAX_VALUE) 0 else 1),
-        newFiles)
+    add(path, newFiles)
     if (processedFiles.add(path)) {
       maybeRunCallback(callback, new Event(path, kind))
       val it: Iterator[QuickFile] = newFiles.iterator()
@@ -187,28 +203,31 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
     }
   }
 
-  def handleEvent(callback: Consumer[Event], path: Path, kind: Event.Kind): Unit = {
-    if (!Files.exists(path)) {
-      val root: Directory[WatchedDirectory] = rootDirectories.get(path.getRoot)
-      if (root != null) {
-        val it: Iterator[Directory.Entry[WatchedDirectory]] =
-          root.remove(path).iterator()
-        while (it.hasNext) {
-          val watchedDirectory: WatchedDirectory = it.next().getValue
-          if (watchedDirectory != null) {
-            watchedDirectory.close()
+  private def handleEvent(callback: Consumer[Event], event: Event): Unit = {
+    if (directoryRegistry.accept(event.path)) {
+      if (!Files.exists(event.path)) {
+        val root: Directory[WatchedDirectory] =
+          rootDirectories.get(event.path.getRoot)
+        if (root != null) {
+          val it: Iterator[Directory.Entry[WatchedDirectory]] =
+            root.remove(event.path).iterator()
+          while (it.hasNext) {
+            val watchedDirectory: WatchedDirectory = it.next().getValue
+            if (watchedDirectory != null) {
+              watchedDirectory.close()
+            }
           }
         }
       }
-    }
-    if (Files.isDirectory(path)) {
-      processPath(callback, path, kind, new HashSet[QuickFile](), new HashSet[Path]())
-    } else {
-      maybeRunCallback(callback, new Event(path, kind))
+      if (Files.isDirectory(event.path)) {
+        processPath(callback, event.path, event.kind, new HashSet[QuickFile](), new HashSet[Path]())
+      } else {
+        maybeRunCallback(callback, event)
+      }
     }
   }
 
-  def handleOverflow(callback: Consumer[Event], path: Path): Unit = {
+  private def handleOverflow(callback: Consumer[Event], path: Path): Unit = {
     val maxDepth: Int = directoryRegistry.maxDepthFor(path)
     var stop: Boolean = false
     while (!stop && maxDepth > 0) try {
@@ -250,7 +269,7 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
   }
 
   private def maybePoll(path: Path, files: Set[QuickFile]): Unit = {
-    if (pollNewDirectories) {
+    if (!managed) {
       var result: Boolean = false
       do {
         result = false
@@ -280,11 +299,10 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
    * invoked for that file.
    *
    * @param path The newly created directory to add
-   * @param maxDepth The maximum depth of the subdirectory traversal
    * @param newFiles The set of files that are found for the newly created directory
    * @return true if no exception is thrown
    */
-  private def add(path: Path, maxDepth: Int, newFiles: Set[QuickFile]): Boolean = {
+  private def add(path: Path, newFiles: Set[QuickFile]): Boolean = {
     var result: Boolean = true
     try {
       if (directoryRegistry.maxDepthFor(path) >= 0) {
@@ -333,7 +351,7 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
       case e: IOException => realPath = path
 
     }
-    if (result) {
+    if (result && !managed) {
       directoryRegistry.addDirectory(path, maxDepth)
     } else if (path != realPath) {
       /*
@@ -343,11 +361,18 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
 
       throw new FileSystemLoopException(path.toString)
     }
-    if (result || maxDepth == java.lang.Integer.MIN_VALUE) {
-      val dir: Directory[WatchedDirectory] = getRoot(realPath.getRoot)
-      var toUpdate: Path = path
-      while (toUpdate != null && !Files.isDirectory(toUpdate)) toUpdate = toUpdate.getParent
-      if (dir != null && toUpdate != null) update(dir, toUpdate)
+    val dir: Directory[WatchedDirectory] = getRoot(realPath.getRoot)
+    if (dir != null) {
+      val directories: List[Directory.Entry[WatchedDirectory]] =
+        dir.list(path, -1, AllPass)
+      if (result || directories.isEmpty || !directories
+            .get(0)
+            .getValue
+            .isValid) {
+        var toUpdate: Path = path
+        while (toUpdate != null && !Files.isDirectory(toUpdate)) toUpdate = toUpdate.getParent
+        if (toUpdate != null) update(dir, toUpdate)
+      }
     }
     result
   }

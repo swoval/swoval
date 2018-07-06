@@ -6,14 +6,12 @@ import static com.swoval.files.PathWatchers.Event.Modify;
 import static com.swoval.files.PathWatchers.Event.Overflow;
 
 import com.swoval.files.PathWatchers.Event;
-import com.swoval.files.PathWatchers.Option;
 import com.swoval.files.apple.FileEvent;
 import com.swoval.files.apple.FileEventsApi;
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
 import com.swoval.files.apple.Flags;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
-import com.swoval.functional.Filter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -197,31 +195,14 @@ public class ApplePathWatcher implements PathWatcher {
     public void accept(String stream) {}
   }
 
-  @SuppressWarnings("unchecked")
-  private static Flags.Create fromOptionsOrDefault(final Option... options) {
-    final Option option =
-        ArrayOps.find(
-            options,
-            new Filter<Option>() {
-              @Override
-              public boolean accept(Option option) {
-                return option instanceof FlagOption;
-              }
-            });
-    return option == null
-        ? new Flags.Create().setFileEvents().setNoDefer()
-        : ((FlagOption) option).getFlags();
-  }
-
   public ApplePathWatcher(
       final Consumer<Event> onFileEvent,
       final Executor executor,
-      final DirectoryRegistry directoryRegistry,
-      final Option... options)
+      final DirectoryRegistry directoryRegistry)
       throws InterruptedException {
     this(
         0.01,
-        fromOptionsOrDefault(options),
+        new Flags.Create().setNoDefer().setFileEvents(),
         Executor.make("com.swoval.files.ApplePathWatcher-callback-executor"),
         onFileEvent,
         DefaultOnStreamRemoved,
@@ -241,7 +222,9 @@ public class ApplePathWatcher implements PathWatcher {
    * @param onStreamRemoved {@link com.swoval.functional.Consumer} to run when a redundant stream is
    *     removed from the underlying native file events implementation
    * @param executor The internal executor to manage the directory watcher state
-   * @param directoryRegistry The registry of directories to monitor
+   * @param managedDirectoryRegistry The nullable registry of directories to monitor. If this is
+   *     non-null, then registrations are handled by an outer class and this watcher should not call
+   *     add or remove directory.
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
    */
@@ -252,7 +235,7 @@ public class ApplePathWatcher implements PathWatcher {
       final Consumer<Event> onFileEvent,
       final Consumer<String> onStreamRemoved,
       final Executor executor,
-      final DirectoryRegistry directoryRegistry)
+      final DirectoryRegistry managedDirectoryRegistry)
       throws InterruptedException {
     this.latency = latency;
     this.flags = flags;
@@ -261,7 +244,8 @@ public class ApplePathWatcher implements PathWatcher {
         executor == null
             ? Executor.make("com.swoval.files.ApplePathWatcher-internalExecutor")
             : executor;
-    this.directoryRegistry = directoryRegistry;
+    this.directoryRegistry =
+        managedDirectoryRegistry == null ? new DirectoryRegistry() : managedDirectoryRegistry;
     fileEventsApi =
         FileEventsApi.apply(
             new Consumer<FileEvent>() {
@@ -339,24 +323,5 @@ public class ApplePathWatcher implements PathWatcher {
       }
     }
     return result;
-  }
-
-  public static class FlagOption extends Option {
-    private final Flags.Create flags;
-
-    public FlagOption(final Flags.Create flags) {
-      super("FLAG_OPTION");
-      this.flags = flags;
-    }
-
-    public Flags.Create getFlags() {
-      return flags;
-    }
-  }
-
-  public static class Options {
-    public static FlagOption flags(final Flags.Create flags) {
-      return new FlagOption(flags);
-    }
   }
 }

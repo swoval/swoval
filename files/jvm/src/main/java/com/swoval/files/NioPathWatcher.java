@@ -10,11 +10,9 @@ import com.swoval.files.Directory.Entry;
 import com.swoval.files.Directory.EntryFilter;
 import com.swoval.files.Directory.Observer;
 import com.swoval.files.PathWatchers.Event;
-import com.swoval.files.PathWatchers.Option;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
-import com.swoval.functional.IO;
 import java.io.IOException;
 import java.nio.file.FileSystemLoopException;
 import java.nio.file.Files;
@@ -31,14 +29,15 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Provides a PathWatcher that is backed by a {@link java.nio.file.WatchService}. */
-abstract class NioPathWatcher implements PathWatcher {
+class NioPathWatcher implements PathWatcher {
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final Executor callbackExecutor;
-  private final Executor executor;
+  private final Executor internalExecutor;
   private final Map<Path, Directory<WatchedDirectory>> rootDirectories = new HashMap<>();
-  private final boolean pollNewDirectories;
+  private final boolean managed;
   private final DirectoryRegistry directoryRegistry;
   private final Converter<WatchedDirectory> converter;
+  private final NioPathWatcherService nioPathWatcherService;
   private final Directory.Observer<WatchedDirectory> updateObserver =
       new Observer<WatchedDirectory>() {
         @Override
@@ -61,27 +60,47 @@ abstract class NioPathWatcher implements PathWatcher {
   /**
    * Instantiate a NioPathWatcher.
    *
-   * @param register IO task to register path
+   * @param callback The callback to run for updates to monitored paths
+   * @param registerable The underlying watchservice
    * @param callbackExecutor The Executor to invoke callbacks on
-   * @param executor The Executor to internally manage the watcher
-   * @param directoryRegistry Tracks the directories to watch
-   * @param options The options for this watcher
+   * @param internalExecutor The Executor to internally manage the watcher
+   * @param managedDirectoryRegistry The nullable registry of directories to monitor. If this is
+   *     non-null, then registrations are handled by an outer class and this watcher should not call
+   *     add or remove directory.
    */
   NioPathWatcher(
-      final IO<Path, WatchedDirectory> register,
+      final Consumer<Event> callback,
+      final Registerable registerable,
       final Executor callbackExecutor,
-      final Executor executor,
-      final DirectoryRegistry directoryRegistry,
-      final Option... options) {
-    this.directoryRegistry = directoryRegistry;
-    this.pollNewDirectories = ArrayOps.contains(options, PathWatchers.Options.POLL_NEW_DIRECTORIES);
+      final Executor internalExecutor,
+      final DirectoryRegistry managedDirectoryRegistry)
+      throws InterruptedException {
+    this.directoryRegistry =
+        managedDirectoryRegistry == null ? new DirectoryRegistry() : managedDirectoryRegistry;
+    this.managed = managedDirectoryRegistry != null;
     this.callbackExecutor = callbackExecutor;
-    this.executor = executor;
+    this.internalExecutor = internalExecutor;
+    this.nioPathWatcherService =
+        new NioPathWatcherService(
+            new Consumer<Event>() {
+              @Override
+              public void accept(Event event) {
+                handleEvent(callback, event);
+              }
+            },
+            new Consumer<Path>() {
+              @Override
+              public void accept(Path path) {
+                handleOverflow(callback, path);
+              }
+            },
+            registerable,
+            internalExecutor);
     this.converter =
         new Converter<WatchedDirectory>() {
           @Override
           public WatchedDirectory apply(final Path path) {
-            return register.apply(path).getOrElse(WatchedDirectories.INVALID);
+            return nioPathWatcherService.register(path).getOrElse(WatchedDirectories.INVALID);
           }
         };
   }
@@ -99,7 +118,7 @@ abstract class NioPathWatcher implements PathWatcher {
   @Override
   public com.swoval.functional.Either<IOException, Boolean> register(
       final Path path, final int maxDepth) {
-    return executor
+    return internalExecutor
         .block(
             new Callable<Boolean>() {
               @Override
@@ -128,11 +147,11 @@ abstract class NioPathWatcher implements PathWatcher {
   @Override
   @SuppressWarnings("EmptyCatchBlock")
   public void unregister(final Path path) {
-    executor.block(
+    internalExecutor.block(
         new Runnable() {
           @Override
           public void run() {
-            directoryRegistry.removeDirectory(path);
+            if (!managed) directoryRegistry.removeDirectory(path);
             final Directory<WatchedDirectory> dir = getRoot(path.getRoot());
             if (dir != null) {
               List<Directory.Entry<WatchedDirectory>> toRemove =
@@ -166,7 +185,7 @@ abstract class NioPathWatcher implements PathWatcher {
   @Override
   public void close() {
     if (closed.compareAndSet(false, true)) {
-      executor.block(
+      internalExecutor.block(
           new Runnable() {
             @Override
             public void run() {
@@ -181,9 +200,10 @@ abstract class NioPathWatcher implements PathWatcher {
                   entries.next().getValue().close();
                 }
               }
+              nioPathWatcherService.close();
             }
           });
-      executor.close();
+      internalExecutor.close();
     }
   }
 
@@ -206,8 +226,7 @@ abstract class NioPathWatcher implements PathWatcher {
       HashSet<QuickFile> processedDirs,
       HashSet<Path> processedFiles) {
     final Set<QuickFile> newFiles = new HashSet<>();
-    int maxDepth = directoryRegistry.maxDepthFor(path);
-    add(path, maxDepth - (maxDepth == Integer.MAX_VALUE ? 0 : 1), newFiles);
+    add(path, newFiles);
     if (processedFiles.add(path)) {
       maybeRunCallback(callback, new Event(path, kind));
       final Iterator<QuickFile> it = newFiles.iterator();
@@ -223,27 +242,30 @@ abstract class NioPathWatcher implements PathWatcher {
     }
   }
 
-  void handleEvent(final Consumer<Event> callback, final Path path, final Event.Kind kind) {
-    if (!Files.exists(path)) {
-      final Directory<WatchedDirectory> root = rootDirectories.get(path.getRoot());
-      if (root != null) {
-        final Iterator<Directory.Entry<WatchedDirectory>> it = root.remove(path).iterator();
-        while (it.hasNext()) {
-          final WatchedDirectory watchedDirectory = it.next().getValue();
-          if (watchedDirectory != null) {
-            watchedDirectory.close();
+  private void handleEvent(final Consumer<Event> callback, final Event event) {
+    if (directoryRegistry.accept(event.path)) {
+      if (!Files.exists(event.path)) {
+        final Directory<WatchedDirectory> root = rootDirectories.get(event.path.getRoot());
+        if (root != null) {
+          final Iterator<Directory.Entry<WatchedDirectory>> it = root.remove(event.path).iterator();
+          while (it.hasNext()) {
+            final WatchedDirectory watchedDirectory = it.next().getValue();
+            if (watchedDirectory != null) {
+              watchedDirectory.close();
+            }
           }
         }
       }
-    }
-    if (Files.isDirectory(path)) {
-      processPath(callback, path, kind, new HashSet<QuickFile>(), new HashSet<Path>());
-    } else {
-      maybeRunCallback(callback, new Event(path, kind));
+      if (Files.isDirectory(event.path)) {
+        processPath(
+            callback, event.path, event.kind, new HashSet<QuickFile>(), new HashSet<Path>());
+      } else {
+        maybeRunCallback(callback, event);
+      }
     }
   }
 
-  void handleOverflow(final Consumer<Event> callback, final Path path) {
+  private void handleOverflow(final Consumer<Event> callback, final Path path) {
     final int maxDepth = directoryRegistry.maxDepthFor(path);
     boolean stop = false;
     while (!stop && maxDepth > 0) {
@@ -292,7 +314,7 @@ abstract class NioPathWatcher implements PathWatcher {
   }
 
   private void maybePoll(final Path path, final Set<QuickFile> files) throws IOException {
-    if (pollNewDirectories) {
+    if (!managed) {
       boolean result;
       do {
         result = false;
@@ -325,11 +347,10 @@ abstract class NioPathWatcher implements PathWatcher {
    * invoked for that file.
    *
    * @param path The newly created directory to add
-   * @param maxDepth The maximum depth of the subdirectory traversal
    * @param newFiles The set of files that are found for the newly created directory
    * @return true if no exception is thrown
    */
-  private boolean add(final Path path, final int maxDepth, final Set<QuickFile> newFiles) {
+  private boolean add(final Path path, final Set<QuickFile> newFiles) {
     boolean result = true;
     try {
       if (directoryRegistry.maxDepthFor(path) >= 0) {
@@ -378,7 +399,7 @@ abstract class NioPathWatcher implements PathWatcher {
     } catch (IOException e) {
       realPath = path;
     }
-    if (result) {
+    if (result && !managed) {
       directoryRegistry.addDirectory(path, maxDepth);
     } else if (!path.equals(realPath)) {
       /*
@@ -387,13 +408,16 @@ abstract class NioPathWatcher implements PathWatcher {
        */
       throw new FileSystemLoopException(path.toString());
     }
-    if (result || maxDepth == Integer.MIN_VALUE) {
-      final Directory<WatchedDirectory> dir = getRoot(realPath.getRoot());
-      Path toUpdate = path;
-      while (toUpdate != null && !Files.isDirectory(toUpdate)) {
-        toUpdate = toUpdate.getParent();
+    final Directory<WatchedDirectory> dir = getRoot(realPath.getRoot());
+    if (dir != null) {
+      final List<Directory.Entry<WatchedDirectory>> directories = dir.list(path, -1, AllPass);
+      if (result || directories.isEmpty() || !directories.get(0).getValue().isValid()) {
+        Path toUpdate = path;
+        while (toUpdate != null && !Files.isDirectory(toUpdate)) {
+          toUpdate = toUpdate.getParent();
+        }
+        if (toUpdate != null) update(dir, toUpdate);
       }
-      if (dir != null && toUpdate != null) update(dir, toUpdate);
     }
     return result;
   }

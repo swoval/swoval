@@ -20,29 +20,22 @@ object PathWatchers {
    * Create a PathWatcher for the runtime platform.
    *
    * @param callback [[com.swoval.functional.Consumer]] to run on file events
-   * @param options Runtime [[Option]] instances for the watcher. This is only relevant for the
-   *     [[NioPathWatcher]] that is used on linux and windows.
    * @return PathWatcher for the runtime platform
    *     initialized
    */
-  def get(callback: Consumer[Event], options: Option*): PathWatcher =
-    get(callback,
-        Executor.make("com.swoval.files.PathWatcher-internal-executor"),
-        new DirectoryRegistry(),
-        options: _*)
+  def get(callback: Consumer[Event]): PathWatcher =
+    get(callback, Executor.make("com.swoval.files.PathWatcher-internal-executor"), null)
 
   /**
    * Create a PathWatcher for the runtime platform.
    *
    * @param callback [[Consumer]] to run on file events
    * @param executor provides a single threaded context to manage state
-   * @param options Runtime [[Option]] instances for the watcher. This is only relevant for the
-   *     [[NioPathWatcher]] that is used on linux and windows.
    * @return PathWatcher for the runtime platform
    *     initialized
    */
-  def get(callback: Consumer[Event], executor: Executor, options: Option*): PathWatcher =
-    get(callback, executor, new DirectoryRegistry(), options: _*)
+  def get(callback: Consumer[Event], executor: Executor): PathWatcher =
+    get(callback, executor, null)
 
   /**
    * Create a PathWatcher for the runtime platform.
@@ -50,18 +43,12 @@ object PathWatchers {
    * @param callback [[Consumer]] to run on file events
    * @param executor provides a single threaded context to manage state
    * @param registry The registry of directories to monitor
-   * @param options Runtime [[Option]] instances for the watcher. This is only relevant for the
-   *     [[NioPathWatcher]] that is used on linux and windows.
    * @return PathWatcher for the runtime platform
    *     initialized
    */
-  def get(callback: Consumer[Event],
-          executor: Executor,
-          registry: DirectoryRegistry,
-          options: Option*): PathWatcher =
-    if (Platform.isMac)
-      new ApplePathWatcher(callback, executor, registry, options: _*)
-    else PlatformWatcher.make(callback, executor, registry, options: _*)
+  def get(callback: Consumer[Event], executor: Executor, registry: DirectoryRegistry): PathWatcher =
+    if (Platform.isMac) new ApplePathWatcher(callback, executor, registry)
+    else PlatformWatcher.make(callback, executor, registry)
 
   /**
    * Instantiates new [[PathWatcher]] instances with a [[Consumer]]. This is primarily so
@@ -79,7 +66,7 @@ object PathWatchers {
      *     and windows
      */
     def create(callback: Consumer[Event], executor: Executor): PathWatcher =
-      create(callback, executor, new DirectoryRegistry())
+      create(callback, executor, null)
 
     /**
      * Creates a new PathWatcher
@@ -94,35 +81,6 @@ object PathWatchers {
     def create(callback: Consumer[Event],
                executor: Executor,
                directoryRegistry: DirectoryRegistry): PathWatcher
-
-  }
-
-  /**
- Options for the PathWatcher.
-   */
-  class Option(private val name: String) {
-
-    override def equals(obj: Any): Boolean = obj match {
-      case obj: Option => obj.name == this.name
-      case _           => false
-
-    }
-
-    override def hashCode(): Int = name.hashCode
-
-    override def toString(): String = name
-
-  }
-
-  object Options {
-
-    /**
-     * Require that the PathWatcher poll newly created directories for files contained therein. A
-     * creation event will be generated for any file found within the new directory. This is
-     * somewhat expensive and may be redundant in some cases, see [[FileCache]] which does its
-     * own polling for new directories.
-     */
-    val POLL_NEW_DIRECTORIES: Option = new Option("POLL_NEW_DIRECTORIES")
 
   }
 
