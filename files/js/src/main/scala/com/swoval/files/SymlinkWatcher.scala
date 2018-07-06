@@ -4,7 +4,8 @@ package com.swoval.files
 
 import java.util.Map.Entry
 import com.swoval.files.Directory.OnError
-import com.swoval.files.PathWatcher.Event
+import com.swoval.files.PathWatchers.Event
+import com.swoval.files.PathWatchers.Factory
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import java.io.IOException
@@ -39,7 +40,7 @@ object SymlinkWatcher {
  * provided [[com.swoval.functional.Consumer]] for the symlink.
  */
 class SymlinkWatcher(handleEvent: Consumer[Path],
-                     factory: PathWatcher.Factory,
+                     factory: Factory,
                      private val onError: OnError,
                      executor: Executor)
     extends AutoCloseable {

@@ -6,8 +6,8 @@ import java.io.IOException
 import java.nio.file.{ FileSystemLoopException, Files, Path, Paths }
 import java.util.concurrent.atomic.{ AtomicBoolean, AtomicReference }
 
-import com.swoval.files.PathWatcher.Event
-import com.swoval.files.PathWatcher.Event.{ Delete, Modify }
+import com.swoval.files.PathWatchers.Event
+import com.swoval.files.PathWatchers.Event.{ Delete, Modify }
 import com.swoval.functional.{ Consumer, IO }
 import io.scalajs.nodejs
 import io.scalajs.nodejs.fs.{ FSWatcherOptions, Fs }
@@ -22,7 +22,7 @@ private[files] class NioPathWatcherImpl(callback: Consumer[Event],
                                         callbackExecutor: Executor,
                                         internalExecutor: Executor,
                                         directoryRegistry: DirectoryRegistry,
-                                        options: PathWatcher.Option*)
+                                        options: PathWatchers.Option*)
     extends {
   private[this] val l: AtomicReference[Consumer[Event]] = new AtomicReference(null)
   private[this] val io = new NioPathWatcherImpl.IOImpl(l)

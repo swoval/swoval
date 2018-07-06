@@ -3,18 +3,19 @@
 package com.swoval.files
 
 import com.swoval.files.EntryFilters.AllPass
-import com.swoval.files.PathWatcher.Event.Create
-import com.swoval.files.PathWatcher.Event.Delete
-import com.swoval.files.PathWatcher.Event.Modify
-import com.swoval.files.PathWatcher.Event.Overflow
+import com.swoval.files.PathWatchers.Event.Create
+import com.swoval.files.PathWatchers.Event.Delete
+import com.swoval.files.PathWatchers.Event.Modify
+import com.swoval.files.PathWatchers.Event.Overflow
 import java.util.Map.Entry
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.EntryFilter
 import com.swoval.files.Directory.Observer
 import com.swoval.files.Directory.OnChange
 import com.swoval.files.Directory.OnError
-import com.swoval.files.PathWatcher.Event
-import com.swoval.files.PathWatcher.Event.Kind
+import com.swoval.files.PathWatchers.Event
+import com.swoval.files.PathWatchers.Event.Kind
+import com.swoval.files.PathWatchers.Factory
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import com.swoval.runtime.ShutdownHooks
@@ -36,7 +37,7 @@ import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicBoolean
 
 private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter[T],
-                                                factory: PathWatcher.Factory,
+                                                factory: Factory,
                                                 executor: Executor,
                                                 options: FileCaches.Option*)
     extends FileCache[T] {
@@ -483,7 +484,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
               updates.observe(callbackObserver(callbacks))
             } catch {
               case e: IOException =>
-                addCallback(callbacks, path, null, null, Event.Error, e)
+                addCallback(callbacks, path, null, null, PathWatchers.Event.Error, e)
 
             }
           }
@@ -566,7 +567,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
       }
 
       override def onError(path: Path, exception: IOException): Unit = {
-        addCallback(callbacks, path, null, null, Event.Error, exception)
+        addCallback(callbacks, path, null, null, PathWatchers.Event.Error, exception)
       }
     }
 

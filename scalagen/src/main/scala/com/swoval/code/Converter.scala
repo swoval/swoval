@@ -67,7 +67,7 @@ object Converter {
     }
     val varargsRegex = "(.*)options[)]".r
     val newLines = sanitize(lines)
-    (if (path.toString.contains("PathWatcher.scala")) {
+    (if (path.toString.contains("PathWatcher")) {
        newLines
          .filterNot(_.contains("import Event._"))
          .map(varargsRegex.replaceAllIn(_, "$1options:_*)"))

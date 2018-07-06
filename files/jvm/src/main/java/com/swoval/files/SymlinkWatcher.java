@@ -3,7 +3,8 @@ package com.swoval.files;
 import static java.util.Map.Entry;
 
 import com.swoval.files.Directory.OnError;
-import com.swoval.files.PathWatcher.Event;
+import com.swoval.files.PathWatchers.Event;
+import com.swoval.files.PathWatchers.Factory;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import java.io.IOException;
@@ -66,7 +67,7 @@ class SymlinkWatcher implements AutoCloseable {
 
   SymlinkWatcher(
       final Consumer<Path> handleEvent,
-      final PathWatcher.Factory factory,
+      final Factory factory,
       final OnError onError,
       final Executor executor)
       throws IOException, InterruptedException {

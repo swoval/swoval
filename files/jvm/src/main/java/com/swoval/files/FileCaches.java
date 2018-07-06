@@ -1,9 +1,10 @@
 package com.swoval.files;
 
-import static com.swoval.files.PathWatcher.DEFAULT_FACTORY;
+import static com.swoval.files.PathWatchers.DEFAULT_FACTORY;
 
 import com.swoval.files.Directory.Converter;
 import com.swoval.files.Directory.Observer;
+import com.swoval.files.PathWatchers.Factory;
 import java.io.IOException;
 
 public class FileCaches {
@@ -73,7 +74,7 @@ public class FileCaches {
    */
   public static <T> FileCache<T> get(
       final Converter<T> converter,
-      final PathWatcher.Factory factory,
+      final Factory factory,
       final Observer<T> observer,
       final Option... options)
       throws IOException, InterruptedException {

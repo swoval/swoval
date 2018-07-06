@@ -1,6 +1,6 @@
 package com.swoval.files
 
-import com.swoval.files.PathWatcher.Event
+import com.swoval.files.PathWatchers.Event
 import com.swoval.functional.Consumer
 
 object PlatformWatcher {
@@ -9,7 +9,7 @@ object PlatformWatcher {
            callbackExecutor: Executor,
            internalExecutor: Executor,
            directoryRegistry: DirectoryRegistry,
-           options: PathWatcher.Option*): PathWatcher = {
+           options: PathWatchers.Option*): PathWatcher = {
     new NioPathWatcherImpl(callback,
                            callbackExecutor,
                            internalExecutor,
@@ -20,7 +20,7 @@ object PlatformWatcher {
            registerable: Registerable,
            internalExecutor: Executor,
            directoryRegistry: DirectoryRegistry,
-           options: PathWatcher.Option*): PathWatcher = {
+           options: PathWatchers.Option*): PathWatcher = {
     make(callback,
          registerable,
          Executor.make("callback"),
@@ -31,7 +31,7 @@ object PlatformWatcher {
   def make(callback: Consumer[Event],
            executor: Executor,
            directoryRegistry: DirectoryRegistry,
-           options: PathWatcher.Option*): PathWatcher = {
+           options: PathWatchers.Option*): PathWatcher = {
     make(callback, null, executor, directoryRegistry, options: _*)
   }
 }

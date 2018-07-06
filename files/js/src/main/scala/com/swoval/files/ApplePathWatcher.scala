@@ -2,10 +2,12 @@
 
 package com.swoval.files
 
-import com.swoval.files.PathWatcher.Event.Create
-import com.swoval.files.PathWatcher.Event.Delete
-import com.swoval.files.PathWatcher.Event.Modify
-import com.swoval.files.PathWatcher.Event.Overflow
+import com.swoval.files.PathWatchers.Event.Create
+import com.swoval.files.PathWatchers.Event.Delete
+import com.swoval.files.PathWatchers.Event.Modify
+import com.swoval.files.PathWatchers.Event.Overflow
+import com.swoval.files.PathWatchers.Event
+import com.swoval.files.PathWatchers.Option
 import com.swoval.files.apple.FileEvent
 import com.swoval.files.apple.FileEventsApi
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException
@@ -44,17 +46,16 @@ object ApplePathWatcher {
 
   }
 
-  private def fromOptionsOrDefault(options: PathWatcher.Option*): Flags.Create = {
-    val option: PathWatcher.Option =
-      ArrayOps.find(options, new Filter[PathWatcher.Option]() {
-        override def accept(option: PathWatcher.Option): Boolean =
-          option.isInstanceOf[FlagOption]
-      })
+  private def fromOptionsOrDefault(options: Option*): Flags.Create = {
+    val option: Option = ArrayOps.find(options, new Filter[Option]() {
+      override def accept(option: Option): Boolean =
+        option.isInstanceOf[FlagOption]
+    })
     if (option == null) new Flags.Create().setFileEvents().setNoDefer()
     else option.asInstanceOf[FlagOption].getFlags
   }
 
-  class FlagOption(@BeanProperty val flags: Flags.Create) extends PathWatcher.Option("FLAG_OPTION")
+  class FlagOption(@BeanProperty val flags: Flags.Create) extends Option("FLAG_OPTION")
 
   object Options {
 
@@ -70,7 +71,7 @@ object ApplePathWatcher {
 class ApplePathWatcher(private val latency: Double,
                        private val flags: Flags.Create,
                        private val callbackExecutor: Executor,
-                       onFileEvent: Consumer[PathWatcher.Event],
+                       onFileEvent: Consumer[Event],
                        onStreamRemoved: Consumer[String],
                        executor: Executor,
                        private val directoryRegistry: DirectoryRegistry)
@@ -93,20 +94,18 @@ class ApplePathWatcher(private val latency: Double,
             val fileName: String = fileEvent.fileName
             val path: Path = Paths.get(fileName)
             if (directoryRegistry.accept(path)) {
-              var event: PathWatcher.Event = null
+              var event: Event = null
               event =
-                if (fileEvent.mustScanSubDirs())
-                  new PathWatcher.Event(path, Overflow)
+                if (fileEvent.mustScanSubDirs()) new Event(path, Overflow)
                 else if (fileEvent.itemIsFile())
                   if (fileEvent.isNewFile && Files.exists(path))
-                    new PathWatcher.Event(path, Create)
+                    new Event(path, Create)
                   else if (fileEvent.isRemoved || !Files.exists(path))
-                    new PathWatcher.Event(path, Delete)
-                  else new PathWatcher.Event(path, Modify)
-                else if (Files.exists(path))
-                  new PathWatcher.Event(path, Modify)
-                else new PathWatcher.Event(path, Delete)
-              val callbackEvent: PathWatcher.Event = event
+                    new Event(path, Delete)
+                  else new Event(path, Modify)
+                else if (Files.exists(path)) new Event(path, Modify)
+                else new Event(path, Delete)
+              val callbackEvent: Event = event
               callbackExecutor.run(new Runnable() {
                 override def run(): Unit = {
                   onFileEvent.accept(callbackEvent)
@@ -149,6 +148,12 @@ class ApplePathWatcher(private val latency: Double,
    */
   override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] =
     register(path, flags, maxDepth)
+
+  override def register(path: Path, recursive: Boolean): Either[IOException, Boolean] =
+    register(path, flags, if (recursive) java.lang.Integer.MAX_VALUE else 0)
+
+  override def register(path: Path): Either[IOException, Boolean] =
+    register(path, flags, java.lang.Integer.MAX_VALUE)
 
   /**
    * Registers with additional flags
@@ -247,7 +252,6 @@ class ApplePathWatcher(private val latency: Double,
    */
   override def close(): Unit = {
     if (closed.compareAndSet(false, true)) {
-      super.close()
       internalExecutor.block(new Runnable() {
         override def run(): Unit = {
           streams.clear()
@@ -259,10 +263,10 @@ class ApplePathWatcher(private val latency: Double,
     }
   }
 
-  def this(onFileEvent: Consumer[PathWatcher.Event],
+  def this(onFileEvent: Consumer[Event],
            executor: Executor,
            directoryRegistry: DirectoryRegistry,
-           options: PathWatcher.Option*) =
+           options: Option*) =
     this(
       0.01,
       fromOptionsOrDefault(options: _*),

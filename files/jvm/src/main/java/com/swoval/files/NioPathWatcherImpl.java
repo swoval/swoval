@@ -1,14 +1,16 @@
 package com.swoval.files;
 
-import static com.swoval.files.PathWatcher.Event.Create;
-import static com.swoval.files.PathWatcher.Event.Delete;
-import static com.swoval.files.PathWatcher.Event.Modify;
-import static com.swoval.files.PathWatcher.Event.Overflow;
+import static com.swoval.files.PathWatchers.Event.Create;
+import static com.swoval.files.PathWatchers.Event.Delete;
+import static com.swoval.files.PathWatchers.Event.Modify;
+import static com.swoval.files.PathWatchers.Event.Overflow;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
+import com.swoval.files.PathWatchers.Event;
+import com.swoval.files.PathWatchers.Option;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import com.swoval.functional.IO;
@@ -41,7 +43,7 @@ class NioPathWatcherImpl extends NioPathWatcher {
       final Executor callbackExecutor,
       final Executor executor,
       final DirectoryRegistry directoryRegistry,
-      final PathWatcher.Option... options)
+      final Option... options)
       throws InterruptedException {
     super(
         new IO<Path, WatchedDirectory>() {
@@ -135,7 +137,7 @@ class NioPathWatcherImpl extends NioPathWatcher {
                           while (it.hasNext()) {
                             final WatchEvent<?> e = it.next();
                             final WatchEvent.Kind<?> k = e.kind();
-                            final PathWatcher.Event.Kind kind =
+                            final Event.Kind kind =
                                 k.equals(ENTRY_DELETE)
                                     ? Delete
                                     : k.equals(ENTRY_CREATE)

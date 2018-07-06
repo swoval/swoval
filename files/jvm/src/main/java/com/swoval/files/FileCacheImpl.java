@@ -1,10 +1,10 @@
 package com.swoval.files;
 
 import static com.swoval.files.EntryFilters.AllPass;
-import static com.swoval.files.PathWatcher.Event.Create;
-import static com.swoval.files.PathWatcher.Event.Delete;
-import static com.swoval.files.PathWatcher.Event.Modify;
-import static com.swoval.files.PathWatcher.Event.Overflow;
+import static com.swoval.files.PathWatchers.Event.Create;
+import static com.swoval.files.PathWatchers.Event.Delete;
+import static com.swoval.files.PathWatchers.Event.Modify;
+import static com.swoval.files.PathWatchers.Event.Overflow;
 import static java.util.Map.Entry;
 
 import com.swoval.files.Directory.Converter;
@@ -12,8 +12,9 @@ import com.swoval.files.Directory.EntryFilter;
 import com.swoval.files.Directory.Observer;
 import com.swoval.files.Directory.OnChange;
 import com.swoval.files.Directory.OnError;
-import com.swoval.files.PathWatcher.Event;
-import com.swoval.files.PathWatcher.Event.Kind;
+import com.swoval.files.PathWatchers.Event;
+import com.swoval.files.PathWatchers.Event.Kind;
+import com.swoval.files.PathWatchers.Factory;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import com.swoval.runtime.ShutdownHooks;
@@ -71,7 +72,7 @@ class FileCacheImpl<T> implements FileCache<T> {
 
   FileCacheImpl(
       final Converter<T> converter,
-      final PathWatcher.Factory factory,
+      final Factory factory,
       final Executor executor,
       FileCaches.Option... options)
       throws InterruptedException, IOException {
@@ -527,7 +528,7 @@ class FileCacheImpl<T> implements FileCache<T> {
                   dir.update(toUpdate, Directory.Entry.getKind(toUpdate, attrs));
               updates.observe(callbackObserver(callbacks));
             } catch (final IOException e) {
-              addCallback(callbacks, path, null, null, Event.Error, e);
+              addCallback(callbacks, path, null, null, PathWatchers.Event.Error, e);
             }
           }
         } else if (pendingFiles.remove(path)) {
@@ -612,7 +613,7 @@ class FileCacheImpl<T> implements FileCache<T> {
 
       @Override
       public void onError(final Path path, final IOException exception) {
-        addCallback(callbacks, path, null, null, Event.Error, exception);
+        addCallback(callbacks, path, null, null, PathWatchers.Event.Error, exception);
       }
     };
   }

@@ -2,9 +2,10 @@
 
 package com.swoval.files
 
-import com.swoval.files.PathWatcher.DEFAULT_FACTORY
+import com.swoval.files.PathWatchers.DEFAULT_FACTORY
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.Observer
+import com.swoval.files.PathWatchers.Factory
 import java.io.IOException
 import Option._
 
@@ -31,7 +32,7 @@ object FileCaches {
    * @return A file cache
    */
   def get[T <: AnyRef](converter: Converter[T],
-                       factory: PathWatcher.Factory,
+                       factory: PathWatchers.Factory,
                        options: Option*): FileCache[T] =
     new FileCacheImpl(converter, factory, null, options: _*)
 
@@ -64,7 +65,7 @@ object FileCaches {
    * @return A file cache
    */
   def get[T <: AnyRef](converter: Converter[T],
-                       factory: PathWatcher.Factory,
+                       factory: Factory,
                        observer: Observer[T],
                        options: Option*): FileCache[T] = {
     val res: FileCache[T] =

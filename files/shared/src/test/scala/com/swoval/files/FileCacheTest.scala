@@ -7,6 +7,7 @@ import java.nio.file.{ FileSystemLoopException, Files, Path, Paths }
 import com.swoval.files.Directory._
 import com.swoval.files.EntryOps._
 import com.swoval.files.FileCacheTest.FileCacheOps
+import com.swoval.files.PathWatchers.{ DEFAULT_FACTORY, Event, Factory }
 import com.swoval.files.test._
 import com.swoval.functional.{ Consumer, Either => SEither }
 import com.swoval.test.Implicits.executionContext
@@ -22,8 +23,8 @@ import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
 
 trait FileCacheTest extends TestSuite {
-  def factory: PathWatcher.Factory
-  def boundedFactory: PathWatcher.Factory
+  def factory: Factory
+  def boundedFactory: Factory
   def identity: Converter[Path] = (p: Path) => p
   def simpleCache(f: Entry[Path] => Unit): FileCache[Path] =
     FileCaches.get(((p: Path) => p): Converter[Path], factory, Observers.apply(f: OnChange[Path]))
@@ -945,14 +946,14 @@ object FileCacheTest {
 }
 
 object DefaultFileCacheTest extends FileCacheTest {
-  val factory = PathWatcher.DEFAULT_FACTORY
+  val factory = PathWatchers.DEFAULT_FACTORY
   val boundedFactory = if (Platform.isMac) factory else NioFileCacheTest.boundedFactory
   val tests = testsImpl
 }
 
 object NioFileCacheTest extends FileCacheTest {
-  val factory = new PathWatcher.Factory {
-    override def create(callback: Consumer[PathWatcher.Event],
+  val factory = new Factory {
+    override def create(callback: Consumer[Event],
                         executor: Executor,
                         directoryRegistry: DirectoryRegistry): PathWatcher =
       PlatformWatcher.make(callback,
@@ -960,8 +961,8 @@ object NioFileCacheTest extends FileCacheTest {
                            executor,
                            directoryRegistry)
   }
-  val boundedFactory = new PathWatcher.Factory {
-    override def create(callback: Consumer[PathWatcher.Event],
+  val boundedFactory = new Factory {
+    override def create(callback: Consumer[Event],
                         executor: Executor,
                         directoryRegistry: DirectoryRegistry): PathWatcher =
       PlatformWatcher.make(callback,

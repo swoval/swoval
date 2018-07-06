@@ -456,6 +456,7 @@ object Build {
                 "Directory",
                 "DirectoryRegistry",
                 "PathWatcher",
+                "PathWatchers",
                 "EntryFilters",
                 "FileCache",
                 "FileCacheImpl",
