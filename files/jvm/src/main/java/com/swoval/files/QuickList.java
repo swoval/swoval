@@ -1,7 +1,6 @@
 package com.swoval.files;
 
 import com.swoval.functional.Filter;
-import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.file.LinkOption;
@@ -14,12 +13,12 @@ import java.util.List;
  * be slow for recursive directory listing because determining the type of file requires a stat. The
  * three major platforms (Linux, Mac OS, Windows) all have native apis that allow the caller to list
  * the files in the directory and include the types of the listed files. The {@link
- * com.swoval.files.NativeQuickLister} uses these apis to speed up the performance. This can improve
- * the performance of recursively listing a directory with many children by a large amount. For
- * example, on a 2017 macbook pro, listing a directory with 5000 subdirectories containing one file
- * takes roughly 25ms with QuickList, but roughly 100ms using {@link
- * java.nio.file.Files#walkFileTree}. It also takes roughly 75ms to stat all of the files (via
- * {@link java.nio.file.Files#readAttributes(Path, Class, LinkOption...)}) returned by the {@link
+ * NativeDirectoryLister} uses these apis to speed up the performance. This can improve the
+ * performance of recursively listing a directory with many children by a large amount. For example,
+ * on a 2017 macbook pro, listing a directory with 5000 subdirectories containing one file takes
+ * roughly 25ms with QuickList, but roughly 100ms using {@link java.nio.file.Files#walkFileTree}. It
+ * also takes roughly 75ms to stat all of the files (via {@link
+ * java.nio.file.Files#readAttributes(Path, Class, LinkOption...)}) returned by the {@link
  * QuickList#list}, explaining the difference in performance.
  *
  * <p>The implementation may be controlled using the system property -Dswoval.quicklister. For
@@ -31,12 +30,12 @@ public abstract class QuickList {
   private static final QuickLister INSTANCE;
 
   static {
-    final String className = System.getProperty("swoval.quicklister");
-    QuickLister quickLister = null;
+    final String className = System.getProperty("swoval.directory.lister");
+    DirectoryLister directoryLister = null;
     if (className != null) {
       try {
-        quickLister =
-            ((Class<QuickLister>) Class.forName(className)).getConstructor().newInstance();
+        directoryLister =
+            ((Class<DirectoryLister>) Class.forName(className)).getConstructor().newInstance();
       } catch (ClassNotFoundException
           | NoSuchMethodException
           | ClassCastException
@@ -46,11 +45,7 @@ public abstract class QuickList {
       }
     }
     INSTANCE =
-        quickLister == null
-            ? (Platform.isJVM() && NativeQuickLister.available())
-                ? new NativeQuickLister()
-                : new NioQuickLister()
-            : quickLister;
+        directoryLister != null ? new QuickListerImpl(directoryLister) : QuickListers.getDefault();
   }
 
   /**

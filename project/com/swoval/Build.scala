@@ -126,6 +126,7 @@ object Build {
   lazy val quickListReflectionTest = inputKey[Unit]("Check that reflection works for quick list")
   lazy val allTests = inputKey[Unit]("Run all tests")
   lazy val setProp = inputKey[Unit]("Set a system property")
+  lazy val checkFormat = inputKey[Boolean]("Check that the source code is formatted correctly")
 
   def projects: Seq[ProjectReference] = Seq[ProjectReference](
     files.js,
@@ -139,12 +140,8 @@ object Build {
   )
 
   def releaseTask(key: TaskKey[Unit]) = Def.taskDyn {
-    import sys.process._
-    javafmt.value
-    clangfmt.value
-    if (!Seq("git", "status").!!.contains("working tree clean"))
-      throw new IllegalStateException("There are local diffs")
-    else {
+    val valid = checkFormat.toTask(" silent").value
+    if (valid) {
       Def.taskDyn {
         (key in testing.jvm).value
         (key in util).value
@@ -164,6 +161,8 @@ object Build {
             }
         }
       }
+    } else {
+      throw new IllegalStateException("There are local diffs.")
     }
   }
 
@@ -184,6 +183,18 @@ object Build {
       publishSigned := {},
       publish := {},
       publishLocal := {},
+      checkFormat := {
+        import sys.process._
+        javafmt.value
+        clangfmt.value
+        (scalafmt in Compile).value
+        val output = Seq("git", "status").!!
+        println(output)
+        val result = output.contains("working tree clean")
+        if (!result && !Def.spaceDelimited("<arg>").parsed.headOption.contains("silent"))
+          throw new IllegalStateException("There are local diffs")
+        result
+      },
       releaseLocal := releaseTask(publishLocal).value,
       releaseSigned := releaseTask(publishSigned).value,
       releaseSnapshot := releaseTask(publish).value,
@@ -299,6 +310,7 @@ object Build {
 
   lazy val nio: CrossProject = crossProject(JSPlatform)
     .crossType(CrossType.Pure)
+    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .in(file("nio-js"))
     .settings(
       commonSettings,
@@ -444,11 +456,14 @@ object Build {
                 "Directory",
                 "DirectoryRegistry",
                 "PathWatcher",
+                "PathWatchers",
                 "EntryFilters",
                 "FileCache",
+                "FileCacheImpl",
+                "FileCaches",
                 "MapOps",
                 "NioPathWatcher",
-                "NioQuickLister",
+                "NioDirectoryLister",
                 "Observers",
                 "QuickFile",
                 "QuickLister",
@@ -457,12 +472,7 @@ object Build {
                 "WatchedDirectory"
               ).value
               convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
-              convertSources("com/swoval/functional",
-                             "Consumer",
-                             "Either",
-                             "Filter",
-                             "Filters",
-                             "IO").value
+              convertSources("com/swoval/functional", "Consumer", "Either", "Filter", "Filters").value
             }
           },
           scalafmt in Compile,
@@ -517,7 +527,7 @@ object Build {
       fork in Test := System.getProperty("swoval.fork.tests", "false") == "true",
       travisQuickListReflectionTest := {
         quickListReflectionTest
-          .toTask(" com.swoval.files.NioQuickLister com.swoval.files.NativeQuickLister")
+          .toTask(" com.swoval.files.NioDirectoryLister com.swoval.files.NativeDirectoryLister")
           .value
       },
       allTests := {
@@ -545,9 +555,9 @@ object Build {
             val cp =
               (fullClasspath in Test).value.map(_.data).filterNot(_.toString.contains("jacoco"))
             val prefix = Seq("java", "-classpath", cp.mkString(File.pathSeparator))
-            val args = prefix ++ (if (arg.nonEmpty) Seq(s"-Dswoval.quicklister=$arg") else Nil) ++
+            val args = prefix ++ (if (arg.nonEmpty) Seq(s"-Dswoval.directory.lister=$arg") else Nil) ++
               Seq("com.swoval.files.QuickListReflectionTest",
-                  if (arg.isEmpty) "com.swoval.files.NativeQuickLister" else arg)
+                  if (arg.isEmpty) "com.swoval.files.NativeDirectoryLister" else arg)
             val proc = new ProcessBuilder(args: _*).start()
             proc.waitFor(5, TimeUnit.SECONDS)
             val in = Source.fromInputStream(proc.getInputStream).mkString

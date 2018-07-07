@@ -17,7 +17,7 @@ import java.util.Map
 import java.util.concurrent.atomic.AtomicInteger
 import Observers._
 
-private[files] object Observers {
+object Observers {
 
   /**
    * Simple observer that fires the same callback for all regular events and ignores any errors.
@@ -71,7 +71,7 @@ private[files] object Observers {
  *
  * @tparam T The data type for the [[FileCache]] to which the observers correspond
  */
-private[files] class Observers[T] extends Observer[T] with AutoCloseable {
+class Observers[T] extends Observer[T] with AutoCloseable {
 
   private val counter: AtomicInteger = new AtomicInteger(0)
 

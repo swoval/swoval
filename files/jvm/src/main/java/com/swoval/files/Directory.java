@@ -35,14 +35,19 @@ import java.util.concurrent.atomic.AtomicReference;
  * @param <T> The cache value type
  */
 public class Directory<T> implements AutoCloseable {
-  public final Path path;
-  public final Path realPath;
 
   public int getDepth() {
     return depth;
   }
 
+  public Path getPath() {
+    return path;
+  }
+
   private final int depth;
+
+  private final Path path;
+  private final Path realPath;
   private final Converter<T> converter;
   private final AtomicReference<Entry<T>> _cacheEntry;
   private final Object lock = new Object();
@@ -379,7 +384,7 @@ public class Directory<T> implements AutoCloseable {
 
   private void listImpl(
       final int maxDepth, final EntryFilter<? super T> filter, final List<Entry<T>> result) {
-    if (this.depth < 0) {
+    if (this.depth < 0 || maxDepth < 0) {
       result.add(this.entry());
     } else {
       final Collection<Entry<T>> files;
@@ -589,7 +594,7 @@ public class Directory<T> implements AutoCloseable {
     public static final int LINK = 4;
     public static final int UNKNOWN = 8;
     private final int kind;
-    public final Path path;
+    private final Path path;
     private final T value;
     private final IOException exception;
 
@@ -640,6 +645,10 @@ public class Directory<T> implements AutoCloseable {
 
     public final int getKind() {
       return kind;
+    }
+
+    public final Path getPath() {
+      return path;
     }
 
     /**

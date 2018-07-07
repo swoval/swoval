@@ -46,16 +46,6 @@ private[files] object QuickListerImpl {
 
   val LINK: Int = 4
 
-  val EOF: Int = 8
-
-  val ENOENT: Int = -1
-
-  val EACCES: Int = -2
-
-  val ENOTDIR: Int = -3
-
-  val ESUCCESS: Int = -4
-
   private val AllPass: Filter[AnyRef] = new Filter[AnyRef]() {
     override def accept(o: AnyRef): Boolean = true
   }
@@ -94,9 +84,8 @@ private[files] object QuickListerImpl {
 
 }
 
-abstract private[files] class QuickListerImpl extends QuickLister {
-
-  protected def listDir(dir: String, followLinks: Boolean): ListResults
+private[files] class QuickListerImpl(private val directoryLister: DirectoryLister)
+    extends QuickLister {
 
   override def list(path: Path, maxDepth: Int, followLinks: Boolean): List[QuickFile] =
     list(path, maxDepth, followLinks, AllPass)
@@ -120,7 +109,8 @@ abstract private[files] class QuickListerImpl extends QuickLister {
                           filter: Filter[_ >: QuickFile],
                           visited: Set[String]): Unit = {
     if (visited != null) visited.add(dir)
-    val listResults: QuickListerImpl.ListResults = listDir(dir, followLinks)
+    val listResults: QuickListerImpl.ListResults =
+      directoryLister.apply(dir, followLinks)
     val it: Iterator[String] = listResults.getDirectories.iterator()
     while (it.hasNext) {
       val part: String = it.next()

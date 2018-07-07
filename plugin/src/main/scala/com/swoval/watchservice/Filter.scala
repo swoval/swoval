@@ -38,7 +38,7 @@ trait Filter extends EntryFilter[Path] {
 class SourceFilter(override val base: Path, filter: EntryFilter[Path], override val id: ID)
     extends Filter
     with Compat.FileFilter {
-  override def accept(cacheEntry: Entry[_ <: Path]): Boolean = apply(cacheEntry.path)
+  override def accept(cacheEntry: Entry[_ <: Path]): Boolean = apply(cacheEntry.getPath)
   override def accept(file: File): Boolean = apply(file.toPath)
   def apply(p: Path): Boolean = p.startsWith(base) && filter.accept(new Entry(p, p))
   override lazy val toString: String = {

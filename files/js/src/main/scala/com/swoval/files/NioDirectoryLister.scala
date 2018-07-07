@@ -17,9 +17,9 @@ import java.util.Set
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
-class NioQuickLister extends QuickListerImpl {
+class NioDirectoryLister extends DirectoryLister {
 
-  protected override def listDir(dir: String, followLinks: Boolean): QuickListerImpl.ListResults = {
+  override def apply(dir: String, followLinks: Boolean): QuickListerImpl.ListResults = {
     val basePath: Path = Paths.get(dir)
     val results: QuickListerImpl.ListResults =
       new QuickListerImpl.ListResults()
@@ -70,7 +70,7 @@ class NioQuickLister extends QuickListerImpl {
       else throw fse
     } else if (ex != null) throw ex
     if (isSymlink.get) {
-      listDir(basePath.toRealPath().toString, followLinks)
+      this.apply(basePath.toRealPath().toString, followLinks)
     }
     results
   }

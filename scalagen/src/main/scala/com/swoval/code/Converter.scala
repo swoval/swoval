@@ -58,7 +58,7 @@ object Converter {
         case l                                          => l
       }
     } while (original != next)
-    val regex = "(class|object) (\\w+Impl|Observers|FileOps|EntryFilters)".r
+    val regex = "(class|object) (\\w+Impl|FileOps|EntryFilters)".r
     next.view.map(l => regex.replaceAllIn(l, "private[files] $1 $2"))
   }
   def sanitize(path: Path): String = {
@@ -67,7 +67,7 @@ object Converter {
     }
     val varargsRegex = "(.*)options[)]".r
     val newLines = sanitize(lines)
-    (if (path.toString.contains("PathWatcher.scala")) {
+    (if (path.toString.contains("PathWatcher")) {
        newLines
          .filterNot(_.contains("import Event._"))
          .map(varargsRegex.replaceAllIn(_, "$1options:_*)"))
@@ -76,8 +76,8 @@ object Converter {
        newLines.view
          .filterNot(_.contains("import Entry._"))
          .map(regex.replaceAllIn(_, "$1[T <: AnyRef"))
-     } else if (path.toString.contains("FileCache.scala")) {
-       val applyRegex = "(apply|class FileCache(?:Impl)?)[\\[]T".r
+     } else if (path.toString.contains("FileCache")) {
+       val applyRegex = "(get|class FileCache(?:Impl)?)[\\[]T".r
        newLines.view
          .filterNot(_.contains("import Entry._"))
          .map(applyRegex.replaceAllIn(_, "$1[T <: AnyRef"))

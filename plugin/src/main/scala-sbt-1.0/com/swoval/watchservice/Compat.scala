@@ -47,8 +47,8 @@ object Compat {
     Source(p.toFile, new PathFileFilter(f), NothingFilter)
   case class SourceEntryFilter(base: Path, include: Option[FileFilter], exclude: Option[FileFilter])
       extends EntryFilter[Path] {
-    override def accept(p: Entry[_ <: Path]): Boolean = p.path.startsWith(base) && {
-      val f = p.path.toFile
+    override def accept(p: Entry[_ <: Path]): Boolean = p.getPath.startsWith(base) && {
+      val f = p.getPath.toFile
       include.fold(true)(_.accept(f)) && !exclude.fold(false)(_.accept(f))
     }
   }

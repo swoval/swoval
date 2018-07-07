@@ -1,17 +1,17 @@
 package com.swoval.files;
 
-import static com.swoval.files.PathWatcher.Event.Create;
-import static com.swoval.files.PathWatcher.Event.Delete;
-import static com.swoval.files.PathWatcher.Event.Modify;
-import static com.swoval.files.PathWatcher.Event.Overflow;
+import static com.swoval.files.PathWatchers.Event.Create;
+import static com.swoval.files.PathWatchers.Event.Delete;
+import static com.swoval.files.PathWatchers.Event.Modify;
+import static com.swoval.files.PathWatchers.Event.Overflow;
 
+import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.apple.FileEvent;
 import com.swoval.files.apple.FileEventsApi;
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
 import com.swoval.files.apple.Flags;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
-import com.swoval.functional.Filter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/UsingtheFSEventsFramework/UsingtheFSEventsFramework.html"
  * target="_blank">Apple File System Events Api</a>
  */
-public class ApplePathWatcher extends PathWatcher {
+public class ApplePathWatcher implements PathWatcher {
   private final DirectoryRegistry directoryRegistry;
   private final Map<Path, Stream> streams = new HashMap<>();
   private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -62,6 +62,16 @@ public class ApplePathWatcher extends PathWatcher {
   @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
     return register(path, flags, maxDepth);
+  }
+
+  @Override
+  public Either<IOException, Boolean> register(Path path, boolean recursive) {
+    return register(path, flags, recursive ? Integer.MAX_VALUE : 0);
+  }
+
+  @Override
+  public Either<IOException, Boolean> register(Path path) {
+    return register(path, flags, Integer.MAX_VALUE);
   }
 
   /**
@@ -164,7 +174,6 @@ public class ApplePathWatcher extends PathWatcher {
   @Override
   public void close() {
     if (closed.compareAndSet(false, true)) {
-      super.close();
       internalExecutor.block(
           new Runnable() {
             @Override
@@ -186,31 +195,14 @@ public class ApplePathWatcher extends PathWatcher {
     public void accept(String stream) {}
   }
 
-  @SuppressWarnings("unchecked")
-  private static Flags.Create fromOptionsOrDefault(final PathWatcher.Option... options) {
-    final PathWatcher.Option option =
-        ArrayOps.find(
-            options,
-            new Filter<PathWatcher.Option>() {
-              @Override
-              public boolean accept(PathWatcher.Option option) {
-                return option instanceof FlagOption;
-              }
-            });
-    return option == null
-        ? new Flags.Create().setFileEvents().setNoDefer()
-        : ((FlagOption) option).getFlags();
-  }
-
   public ApplePathWatcher(
-      final Consumer<PathWatcher.Event> onFileEvent,
+      final Consumer<Event> onFileEvent,
       final Executor executor,
-      final DirectoryRegistry directoryRegistry,
-      final PathWatcher.Option... options)
+      final DirectoryRegistry directoryRegistry)
       throws InterruptedException {
     this(
         0.01,
-        fromOptionsOrDefault(options),
+        new Flags.Create().setNoDefer().setFileEvents(),
         Executor.make("com.swoval.files.ApplePathWatcher-callback-executor"),
         onFileEvent,
         DefaultOnStreamRemoved,
@@ -218,8 +210,8 @@ public class ApplePathWatcher extends PathWatcher {
         directoryRegistry);
   }
   /**
-   * Creates a new ApplePathWatcher which is a wrapper around {@link FileEventsApi}, which in
-   * turn is a native wrapper around <a
+   * Creates a new ApplePathWatcher which is a wrapper around {@link FileEventsApi}, which in turn
+   * is a native wrapper around <a
    * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
    * Apple File System Events</a>
    *
@@ -230,7 +222,9 @@ public class ApplePathWatcher extends PathWatcher {
    * @param onStreamRemoved {@link com.swoval.functional.Consumer} to run when a redundant stream is
    *     removed from the underlying native file events implementation
    * @param executor The internal executor to manage the directory watcher state
-   * @param directoryRegistry The registry of directories to monitor
+   * @param managedDirectoryRegistry The nullable registry of directories to monitor. If this is
+   *     non-null, then registrations are handled by an outer class and this watcher should not call
+   *     add or remove directory.
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
    */
@@ -238,10 +232,10 @@ public class ApplePathWatcher extends PathWatcher {
       final double latency,
       final Flags.Create flags,
       final Executor callbackExecutor,
-      final Consumer<PathWatcher.Event> onFileEvent,
+      final Consumer<Event> onFileEvent,
       final Consumer<String> onStreamRemoved,
       final Executor executor,
-      final DirectoryRegistry directoryRegistry)
+      final DirectoryRegistry managedDirectoryRegistry)
       throws InterruptedException {
     this.latency = latency;
     this.flags = flags;
@@ -250,7 +244,8 @@ public class ApplePathWatcher extends PathWatcher {
         executor == null
             ? Executor.make("com.swoval.files.ApplePathWatcher-internalExecutor")
             : executor;
-    this.directoryRegistry = directoryRegistry;
+    this.directoryRegistry =
+        managedDirectoryRegistry == null ? new DirectoryRegistry() : managedDirectoryRegistry;
     fileEventsApi =
         FileEventsApi.apply(
             new Consumer<FileEvent>() {
@@ -263,23 +258,23 @@ public class ApplePathWatcher extends PathWatcher {
                         final String fileName = fileEvent.fileName;
                         final Path path = Paths.get(fileName);
                         if (directoryRegistry.accept(path)) {
-                          PathWatcher.Event event;
+                          Event event;
                           if (fileEvent.mustScanSubDirs()) {
-                            event = new PathWatcher.Event(path, Overflow);
+                            event = new Event(path, Overflow);
                           } else if (fileEvent.itemIsFile()) {
                             if (fileEvent.isNewFile() && Files.exists(path)) {
-                              event = new PathWatcher.Event(path, Create);
+                              event = new Event(path, Create);
                             } else if (fileEvent.isRemoved() || !Files.exists(path)) {
-                              event = new PathWatcher.Event(path, Delete);
+                              event = new Event(path, Delete);
                             } else {
-                              event = new PathWatcher.Event(path, Modify);
+                              event = new Event(path, Modify);
                             }
                           } else if (Files.exists(path)) {
-                            event = new PathWatcher.Event(path, Modify);
+                            event = new Event(path, Modify);
                           } else {
-                            event = new PathWatcher.Event(path, Delete);
+                            event = new Event(path, Delete);
                           }
-                          final PathWatcher.Event callbackEvent = event;
+                          final Event callbackEvent = event;
                           callbackExecutor.run(
                               new Runnable() {
                                 @Override
@@ -328,24 +323,5 @@ public class ApplePathWatcher extends PathWatcher {
       }
     }
     return result;
-  }
-
-  public static class FlagOption extends PathWatcher.Option {
-    private final Flags.Create flags;
-
-    public FlagOption(final Flags.Create flags) {
-      super("FLAG_OPTION");
-      this.flags = flags;
-    }
-
-    public Flags.Create getFlags() {
-      return flags;
-    }
-  }
-
-  public static class Options {
-    public static FlagOption flags(final Flags.Create flags) {
-      return new FlagOption(flags);
-    }
   }
 }

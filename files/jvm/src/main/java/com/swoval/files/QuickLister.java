@@ -27,7 +27,7 @@ public interface QuickLister {
       throws IOException;
 }
 
-abstract class QuickListerImpl implements QuickLister {
+final class QuickListerImpl implements QuickLister {
   /*
    * These constants must be kept in sync with the native quick list implementation
    */
@@ -35,11 +35,6 @@ abstract class QuickListerImpl implements QuickLister {
   static final int DIRECTORY = 1;
   static final int FILE = 2;
   static final int LINK = 4;
-  static final int EOF = 8;
-  static final int ENOENT = -1;
-  static final int EACCES = -2;
-  static final int ENOTDIR = -3;
-  static final int ESUCCESS = -4;
   private static final Filter<Object> AllPass =
       new Filter<Object>() {
         @Override
@@ -47,9 +42,11 @@ abstract class QuickListerImpl implements QuickLister {
           return true;
         }
       };
+  private final DirectoryLister directoryLister;
 
-  protected abstract ListResults listDir(final String dir, final boolean followLinks)
-      throws IOException;
+  public QuickListerImpl(final DirectoryLister directoryLister) {
+    this.directoryLister = directoryLister;
+  }
 
   static class ListResults {
     private final List<String> directories = new ArrayList<>();
@@ -121,7 +118,7 @@ abstract class QuickListerImpl implements QuickLister {
       final Set<String> visited)
       throws IOException {
     if (visited != null) visited.add(dir);
-    final QuickListerImpl.ListResults listResults = listDir(dir, followLinks);
+    final QuickListerImpl.ListResults listResults = directoryLister.apply(dir, followLinks);
     final Iterator<String> it = listResults.getDirectories().iterator();
     while (it.hasNext()) {
       final String part = it.next();

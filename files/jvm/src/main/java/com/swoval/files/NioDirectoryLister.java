@@ -15,11 +15,11 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-class NioQuickLister extends QuickListerImpl {
-  public NioQuickLister() {}
+class NioDirectoryLister implements DirectoryLister {
+  public NioDirectoryLister() {}
 
   @Override
-  protected QuickListerImpl.ListResults listDir(final String dir, final boolean followLinks)
+  public QuickListerImpl.ListResults apply(final String dir, final boolean followLinks)
       throws IOException {
     final Path basePath = Paths.get(dir);
     final QuickListerImpl.ListResults results = new QuickListerImpl.ListResults();
@@ -74,7 +74,7 @@ class NioQuickLister extends QuickListerImpl {
       else throw fse;
     } else if (ex != null) throw ex;
     if (isSymlink.get()) {
-      return listDir(basePath.toRealPath().toString(), followLinks);
+      return this.apply(basePath.toRealPath().toString(), followLinks);
     }
     return results;
   }

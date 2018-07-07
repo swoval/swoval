@@ -9,9 +9,6 @@ interface WatchedDirectory extends AutoCloseable {
    */
   boolean isValid();
 
-  /** Reset any queues for this directory */
-  void reset();
-
   /** Cancel the watch on this directory. Handle all non-fatal exceptions. */
   @Override
   void close();
@@ -26,9 +23,11 @@ class WatchedDirectories {
         }
 
         @Override
-        public void reset() {}
+        public void close() {}
 
         @Override
-        public void close() {}
+        public String toString() {
+          return "Invalid";
+        }
       };
 }

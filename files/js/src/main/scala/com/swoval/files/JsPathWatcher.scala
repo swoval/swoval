@@ -2,7 +2,7 @@ package com.swoval.files
 
 import java.nio.file.Paths
 
-import com.swoval.files.PathWatcher.Event
+import com.swoval.files.PathWatchers.Event
 import com.swoval.functional.Consumer
 
 import scala.collection.mutable
@@ -14,7 +14,7 @@ class JsPathWatcher(callback: js.UndefOr[js.Function2[String, String, Unit]]) ex
   private[this] val callbacks = new Callbacks()
   callback.toOption.foreach(addCallback)
   private[this] val inner: PathWatcher =
-    PathWatcher.defaultWatcher(callbacks, Executor.make(""))
+    PathWatchers.get(callbacks, Executor.make(""))
   def close(): Unit = inner.close()
   def register(path: String, recursive: Boolean = true): Unit =
     inner.register(Paths.get(path), recursive)
@@ -29,7 +29,7 @@ class JsPathWatcher(callback: js.UndefOr[js.Function2[String, String, Unit]]) ex
 private class Callbacks extends Consumer[Event] {
   private[this] var id = 0
   private[this] val callbacks: mutable.Map[Int, Consumer[Event]] = mutable.Map.empty
-  override def accept(event: PathWatcher.Event): Unit = {
+  override def accept(event: Event): Unit = {
     callbacks.values.foreach(_.accept(event))
   }
   def addCallback(callback: Consumer[Event]): Int = {

@@ -2,193 +2,10 @@
 
 package com.swoval.files
 
-import com.swoval.functional.Consumer
+import com.swoval.files.PathWatchers.Event
 import com.swoval.functional.Either
-import com.swoval.runtime.Platform
 import java.io.IOException
 import java.nio.file.Path
-import PathWatcher._
-
-object PathWatcher {
-
-  /**
-   * Create a PathWatcher for the runtime platform.
-   *
-   * @param callback [[com.swoval.functional.Consumer]] to run on file events
-   * @param options Runtime [[PathWatcher.Option]] instances for the watcher. This is only
-   *     relevant for the [[NioPathWatcher]] that is used on linux and windows.
-   * @return PathWatcher for the runtime platform
-   *     initialized
-   *     initialization
-   */
-  def defaultWatcher(callback: Consumer[PathWatcher.Event], options: Option*): PathWatcher =
-    defaultWatcher(callback,
-                   Executor.make("com.swoval.files.PathWatcher-internal-executor"),
-                   new DirectoryRegistry(),
-                   options: _*)
-
-  /**
-   * Create a PathWatcher for the runtime platform.
-   *
-   * @param callback [[com.swoval.functional.Consumer]] to run on file events
-   * @param executor provides a single threaded context to manage state
-   * @param options Runtime [[PathWatcher.Option]] instances for the watcher. This is only
-   *     relevant for the [[NioPathWatcher]] that is used on linux and windows.
-   * @return PathWatcher for the runtime platform
-   *     initialized
-   *     initialization
-   */
-  def defaultWatcher(callback: Consumer[PathWatcher.Event],
-                     executor: Executor,
-                     options: Option*): PathWatcher =
-    defaultWatcher(callback, executor, new DirectoryRegistry(), options: _*)
-
-  /**
-   * Create a PathWatcher for the runtime platform.
-   *
-   * @param callback [[com.swoval.functional.Consumer]] to run on file events
-   * @param executor provides a single threaded context to manage state
-   * @param registry The registry of directories to monitor
-   * @param options Runtime [[PathWatcher.Option]] instances for the watcher. This is only
-   *     relevant for the [[NioPathWatcher]] that is used on linux and windows.
-   * @return PathWatcher for the runtime platform
-   *     initialized
-   *     initialization
-   */
-  def defaultWatcher(callback: Consumer[PathWatcher.Event],
-                     executor: Executor,
-                     registry: DirectoryRegistry,
-                     options: Option*): PathWatcher =
-    if (Platform.isMac)
-      new ApplePathWatcher(callback, executor, registry, options: _*)
-    else PlatformWatcher.make(callback, executor, registry, options: _*)
-
-  /**
-   * Instantiates new [[PathWatcher]] instances with a [[com.swoval.functional.Consumer]]. This is primarily so that the [[PathWatcher]] in
-   * [[FileCache]] may be changed in testing.
-   */
-  abstract class Factory {
-
-    /**
-     * Creates a new PathWatcher
-     *
-     * @param callback The callback to invoke on directory updates
-     * @param executor The executor on which internal updates are invoked
-     * @return A PathWatcher instance
-     *     this can occur on mac
-     *     and windows
-     */
-    def create(callback: Consumer[PathWatcher.Event], executor: Executor): PathWatcher =
-      create(callback, executor, new DirectoryRegistry())
-
-    /**
-     * Creates a new PathWatcher
-     *
-     * @param callback The callback to invoke on directory updates
-     * @param executor The executor on which internal updates are invoked
-     * @param directoryRegistry The registry of directories to monitor
-     * @return A PathWatcher instance
-     *     this can occur on mac
-     *     and windows
-     */
-    def create(callback: Consumer[PathWatcher.Event],
-               executor: Executor,
-               directoryRegistry: DirectoryRegistry): PathWatcher
-
-  }
-
-  val DEFAULT_FACTORY: Factory = new Factory() {
-    override def create(callback: Consumer[PathWatcher.Event],
-                        executor: Executor,
-                        directoryRegistry: DirectoryRegistry): PathWatcher =
-      defaultWatcher(callback, executor, directoryRegistry)
-  }
-
-  object Event {
-
-    val Create: Kind = new Kind("Create", 1)
-
-    val Delete: Kind = new Kind("Delete", 2)
-
-    val Error: Kind = new Kind("Error", 4)
-
-    val Modify: Kind = new Kind("Modify", 3)
-
-    val Overflow: Kind = new Kind("Overflow", 0)
-
-    /**
-     * An enum like class to indicate the type of file event. It isn't an actual enum because the
-     * scala.js codegen has problems with enum types.
-     */
-    class Kind(private val name: String, private val priority: Int) extends Comparable[Kind] {
-
-      override def toString(): String = name
-
-      override def equals(other: Any): Boolean = other match {
-        case other: Kind => other.name == this.name
-        case _           => false
-
-      }
-
-      override def hashCode(): Int = name.hashCode
-
-      override def compareTo(that: Kind): Int =
-        java.lang.Integer.compare(this.priority, that.priority)
-
-    }
-
-  }
-
-  /**
- Container for [[PathWatcher]] events
-   */
-  class Event(val path: Path, val kind: Event.Kind) {
-
-    override def equals(other: Any): Boolean = other match {
-      case other: Event => {
-        val that: Event = other
-        this.path == that.path && this.kind == that.kind
-      }
-      case _ => false
-
-    }
-
-    override def hashCode(): Int = path.hashCode ^ kind.hashCode
-
-    override def toString(): String = "Event(" + path + ", " + kind + ")"
-
-  }
-
-  /**
- Options for the PathWatcher.
-   */
-  class Option(private val name: String) {
-
-    override def equals(obj: Any): Boolean = obj match {
-      case obj: Option => obj.name == this.name
-      case _           => false
-
-    }
-
-    override def hashCode(): Int = name.hashCode
-
-    override def toString(): String = name
-
-  }
-
-  object Options {
-
-    /**
-     * Require that the PathWatcher poll newly created directories for files contained therein.
-     * A creation event will be generated for any file found within the new directory. This is
-     * somewhat expensive and may be redundant in some cases, see [[FileCache]] which does its
-     * own polling for new directories.
-     */
-    val POLL_NEW_DIRECTORIES: Option = new Option("POLL_NEW_DIRECTORIES")
-
-  }
-
-}
 
 /**
  * Watches directories for file changes. The api permits recursive watching of directories unlike
@@ -196,10 +13,10 @@ object PathWatcher {
  * fundamental differences in the underlying file event apis. For example, Linux doesn't support
  * recursive directory monitoring via inotify, so it's possible in rare cases to miss file events
  * for newly created files in newly created directories. On OSX, it is difficult to disambiguate
- * file creation and modify events, so the [[PathWatcher.Event.Kind]] is best effort, but
- * should not be relied upon to accurately reflect the state of the file.
+ * file creation and modify events, so the [[Event.Kind]] is best effort, but should not be
+ * relied upon to accurately reflect the state of the file.
  */
-abstract class PathWatcher extends AutoCloseable {
+trait PathWatcher extends AutoCloseable {
 
   /**
    * Register a path to monitor for file events. The watcher will only watch child subdirectories up
@@ -227,8 +44,7 @@ abstract class PathWatcher extends AutoCloseable {
    *     first time the directory is registered or when the depth is changed. Otherwise it should
    *     return false.
    */
-  def register(path: Path, recursive: Boolean): Either[IOException, Boolean] =
-    register(path, if (recursive) java.lang.Integer.MAX_VALUE else 0)
+  def register(path: Path, recursive: Boolean): Either[IOException, Boolean]
 
   /**
    * Register a path to monitor for file events recursively.
@@ -239,7 +55,7 @@ abstract class PathWatcher extends AutoCloseable {
    *     first time the directory is registered or when the depth is changed. Otherwise it should
    *     return false.
    */
-  def register(path: Path): Either[IOException, Boolean] = register(path, true)
+  def register(path: Path): Either[IOException, Boolean]
 
   /**
    * Stop watching a directory
@@ -251,6 +67,6 @@ abstract class PathWatcher extends AutoCloseable {
   /**
  Catch any exceptions in subclasses.
    */
-  override def close(): Unit = {}
+  override def close(): Unit
 
 }

@@ -4,9 +4,9 @@ import java.io.{ File, IOException }
 import java.nio.file.{ Files, Path, Paths }
 
 import com.swoval.files.Directory.{ Entry, EntryFilter }
-import PathWatcher.Event
 import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.EntryOps._
+import com.swoval.files.PathWatchers.Event
 import com.swoval.files.test._
 import com.swoval.test._
 import utest._
@@ -316,6 +316,12 @@ object DirectoryTest extends TestSuite {
         'directory - withTempDirectorySync { dir =>
           Directory.of(dir, -1).ls(recursive = true, AllPass) === Seq(dir)
         }
+        'parameter - withTempFileSync { file =>
+          val dir = file.getParent
+          val directory = Directory.of(dir, Integer.MAX_VALUE)
+          directory.list(dir, -1, AllPass).asScala === Seq(dir)
+          directory.list(dir, 0, AllPass).asScala === Seq(file)
+        }
       }
     }
     'converter - {
@@ -339,7 +345,7 @@ object DirectoryTest extends TestSuite {
           directory.entry().getValueOrDefault(2) ==> 1
           directory
             .ls(recursive = true, AllPass)
-            .map(e => e.path -> e.getValueOrDefault(3)) === Seq(subdir -> 3)
+            .map(e => e.getPath -> e.getValueOrDefault(3)) === Seq(subdir -> 3)
         }
         'file - withTempFileSync { file =>
           val parent = file.getParent
@@ -350,7 +356,7 @@ object DirectoryTest extends TestSuite {
           dir.entry().getValueOrDefault(2) ==> 1
           dir
             .ls(recursive = true, AllPass)
-            .map(e => e.path -> e.getValueOrDefault(3)) === Seq(file -> 3)
+            .map(e => e.getPath -> e.getValueOrDefault(3)) === Seq(file -> 3)
         }
       }
     }

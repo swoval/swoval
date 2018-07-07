@@ -12,11 +12,6 @@ trait WatchedDirectory extends AutoCloseable {
   def isValid(): Boolean
 
   /**
- Reset any queues for this directory
-   */
-  def reset(): Unit
-
-  /**
  Cancel the watch on this directory. Handle all non-fatal exceptions.
    */
   override def close(): Unit
@@ -28,9 +23,9 @@ object WatchedDirectories {
   var INVALID: WatchedDirectory = new WatchedDirectory() {
     override def isValid(): Boolean = false
 
-    override def reset(): Unit = {}
-
     override def close(): Unit = {}
+
+    override def toString(): String = "Invalid"
   }
 
 }

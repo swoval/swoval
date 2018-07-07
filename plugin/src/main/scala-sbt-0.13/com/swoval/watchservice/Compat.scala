@@ -4,7 +4,7 @@ import java.io.File
 import java.nio.file._
 
 import com.swoval.files.Directory.{ Entry, EntryFilter }
-import com.swoval.files.{ Directory, FileCache }
+import com.swoval.files.{ Directory, FileCaches }
 import com.swoval.watchservice.CloseWatchPlugin.autoImport.closeWatchFileCache
 import sbt.Keys._
 
@@ -12,7 +12,7 @@ class FileSource(file: File, f: EntryFilter[Path]) extends File(file.toString) w
   private val _f = f
   override val base: Path = file.toPath
   override val filter: EntryFilter[Path] = new EntryFilter[Path] {
-    override def accept(p: Entry[_ <: Path]) = f.accept(p) && p.path.startsWith(base)
+    override def accept(p: Entry[_ <: Path]) = f.accept(p) && p.getPath.startsWith(base)
   }
   override def recursive: Boolean = true
   override lazy val toString: String = f.toString.replaceAll("SourceFilter", "SourcePath")
@@ -23,7 +23,7 @@ class FileSource(file: File, f: EntryFilter[Path]) extends File(file.toString) w
   override lazy val hashCode = (f :: base :: Nil).hashCode()
 }
 class ExactFileFilter(val f: File) extends EntryFilter[Path] {
-  override def accept(p: Entry[_ <: Path]): Boolean = p.path.toFile == f
+  override def accept(p: Entry[_ <: Path]): Boolean = p.getPath.toFile == f
   override val toString: String = s"""ExactFileFilter("$f")"""
   override def equals(o: Any): Boolean = o match {
     case that: ExactFileFilter => this.f == that.f
@@ -69,7 +69,7 @@ object Compat {
   val global = Scope(Global, Global, Global, Global)
   def extraProjectSettings: Seq[Def.Setting[_]] = Seq(
     pollInterval := 75,
-    closeWatchFileCache := FileCache.apply(new Directory.Converter[Path] {
+    closeWatchFileCache := FileCaches.get(new Directory.Converter[Path] {
       override def apply(p: Path): Path = p
     })
   )
@@ -78,7 +78,9 @@ object Compat {
       override def accept(f: File): Boolean = filter.accept(f) && other.accept(f)
     }
   }
-  def makeScopedSource(p: Path, pathFilter: EntryFilter[Path], id: Def.ScopedKey[_]): WatchSource = {
+  def makeScopedSource(p: Path,
+                       pathFilter: EntryFilter[Path],
+                       id: Def.ScopedKey[_]): WatchSource = {
     new BaseFileSource(p.toFile, pathFilter)
   }
   def makeSource(p: Path, pathFilter: EntryFilter[Path]): WatchSource =

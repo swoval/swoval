@@ -7,8 +7,12 @@ object QuickListReflectionTest {
     field.setAccessible(true)
     val clazz = args.headOption match {
       case Some(c) => Class.forName(c)
-      case _       => classOf[NativeQuickLister]
+      case _       => classOf[NativeDirectoryLister]
     }
-    assert(clazz.isAssignableFrom(field.get(null).getClass))
+    val quickLister = field.get(null)
+    val directoryListerField = quickLister.getClass.getDeclaredField("directoryLister")
+    directoryListerField.setAccessible(true)
+    val directoryLister = directoryListerField.get(quickLister)
+    assert(clazz.isAssignableFrom(directoryLister.getClass))
   }
 }

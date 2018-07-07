@@ -31,7 +31,7 @@ package object files extends PlatformFiles {
   }
   implicit class EntryFilterFunctionOps[T](val f: Entry[T] => Boolean) extends EntryFilter[T] {
     override def accept(cacheEntry: Entry[_ <: T]): Boolean =
-      f(new Entry[T](cacheEntry.path, cacheEntry.getValue, cacheEntry.getKind))
+      f(new Entry[T](cacheEntry.getPath, cacheEntry.getValue, cacheEntry.getKind))
   }
   implicit class OnChangeFunctionOps[T](val f: Entry[T] => Unit) extends OnChange[T] {
     override def apply(cacheEntry: Entry[T]): Unit = f(cacheEntry)
@@ -59,8 +59,8 @@ package object files extends PlatformFiles {
   }
   object EntryOps {
     implicit class SeqEntryOps[T](val l: Seq[Entry[T]]) extends AnyVal {
-      def ===(r: Seq[Path]): Unit = new RichTraversable(l.map(_.path)) === r
-      def ===(r: Set[Path]): Unit = new RichTraversable(l.map(_.path).toSet) === r
+      def ===(r: Seq[Path]): Unit = new RichTraversable(l.map(_.getPath)) === r
+      def ===(r: Set[Path]): Unit = new RichTraversable(l.map(_.getPath).toSet) === r
     }
   }
 

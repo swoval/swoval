@@ -11,8 +11,18 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 
-class NativeQuickLister extends QuickListerImpl {
-  public NativeQuickLister() {}
+class NativeDirectoryLister implements DirectoryLister {
+  public NativeDirectoryLister() {}
+
+  static final int UNKNOWN = QuickListerImpl.UNKNOWN;
+  static final int DIRECTORY = QuickListerImpl.DIRECTORY;
+  static final int FILE = QuickListerImpl.FILE;
+  static final int LINK = QuickListerImpl.LINK;
+  static final int EOF = 8;
+  static final int ENOENT = -1;
+  static final int EACCES = -2;
+  static final int ENOTDIR = -3;
+  static final int ESUCCESS = -4;
 
   private static boolean loaded;
 
@@ -30,7 +40,7 @@ class NativeQuickLister extends QuickListerImpl {
   }
 
   @Override
-  protected QuickListerImpl.ListResults listDir(final String dir, final boolean followLinks)
+  public QuickListerImpl.ListResults apply(final String dir, final boolean followLinks)
       throws IOException {
     return fillResults(dir, followLinks, 0);
   }

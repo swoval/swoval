@@ -23,13 +23,13 @@ class MapOps {
     final Iterator<Directory.Entry<T>> oldIterator = oldEntries.iterator();
     while (oldIterator.hasNext()) {
       final Directory.Entry<T> entry = oldIterator.next();
-      oldMap.put(entry.path, entry);
+      oldMap.put(entry.getPath(), entry);
     }
     final Map<Path, Directory.Entry<T>> newMap = new HashMap<>();
     final Iterator<Directory.Entry<T>> newIterator = newEntries.iterator();
     while (newIterator.hasNext()) {
       final Directory.Entry<T> entry = newIterator.next();
-      newMap.put(entry.path, entry);
+      newMap.put(entry.getPath(), entry);
     }
     diffDirectoryEntries(oldMap, newMap, observer);
   }
