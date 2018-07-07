@@ -316,6 +316,12 @@ object DirectoryTest extends TestSuite {
         'directory - withTempDirectorySync { dir =>
           Directory.of(dir, -1).ls(recursive = true, AllPass) === Seq(dir)
         }
+        'parameter - withTempFileSync { file =>
+          val dir = file.getParent
+          val directory = Directory.of(dir, Integer.MAX_VALUE)
+          directory.list(dir, -1, AllPass).asScala === Seq(dir)
+          directory.list(dir, 0, AllPass).asScala === Seq(file)
+        }
       }
     }
     'converter - {

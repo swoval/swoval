@@ -707,7 +707,7 @@ class Directory[T <: AnyRef](val path: Path,
     }
 
   private def listImpl(maxDepth: Int, filter: EntryFilter[_ >: T], result: List[Entry[T]]): Unit = {
-    if (this.depth < 0) {
+    if (this.depth < 0 || maxDepth < 0) {
       result.add(this.entry())
     } else {
       var files: Collection[Entry[T]] = null

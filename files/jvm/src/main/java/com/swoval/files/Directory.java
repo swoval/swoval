@@ -379,7 +379,7 @@ public class Directory<T> implements AutoCloseable {
 
   private void listImpl(
       final int maxDepth, final EntryFilter<? super T> filter, final List<Entry<T>> result) {
-    if (this.depth < 0) {
+    if (this.depth < 0 || maxDepth < 0) {
       result.add(this.entry());
     } else {
       final Collection<Entry<T>> files;
