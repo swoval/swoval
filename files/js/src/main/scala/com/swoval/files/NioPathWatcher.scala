@@ -2,7 +2,7 @@
 
 package com.swoval.files
 
-import com.swoval.files.Directory.Entry.DIRECTORY
+import com.swoval.files.Directory.Entries.DIRECTORY
 import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.PathWatchers.Event.Create
 import com.swoval.files.PathWatchers.Event.Overflow

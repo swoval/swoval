@@ -3,7 +3,7 @@ package com.swoval.watchservice
 import java.io.File
 import java.nio.file.{ Files, Path }
 
-import com.swoval.files.Directory.{ Entry, EntryFilter }
+import com.swoval.files.Directory.{ Entries, Entry, EntryFilter }
 import sbt.SourceWrapper._
 import sbt._
 import sbt.internal.BuildStructure
@@ -34,7 +34,7 @@ object Compat {
   private class PathFileFilter(val pathFilter: EntryFilter[Path]) extends FileFilter {
     override def accept(file: File): Boolean = pathFilter.accept {
       val p = file.toPath
-      new Entry(p, p)
+      Entries.valid(p, p)
     }
     override def equals(o: Any): Boolean = o match {
       case that: PathFileFilter => this.pathFilter == that.pathFilter

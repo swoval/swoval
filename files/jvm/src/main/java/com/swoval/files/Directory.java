@@ -110,7 +110,7 @@ public class Directory<T> implements AutoCloseable {
     this.realPath = realPath;
     this.converter = converter;
     this.depth = depth;
-    final int kind = Entry.getKind(path);
+    final int kind = Entries.getKind(path);
     this._cacheEntry = new AtomicReference<>(null);
     this.pathFilter =
         new Filter<QuickFile>() {
@@ -119,11 +119,7 @@ public class Directory<T> implements AutoCloseable {
             return quickFile.toPath().startsWith(Directory.this.path) && filter.accept(quickFile);
           }
         };
-    try {
-      this._cacheEntry.set(new Entry<>(path, this.converter.apply(realPath), kind));
-    } catch (final IOException e) {
-      this._cacheEntry.set(new Entry<T>(path, e, kind));
-    }
+    this._cacheEntry.set(Entries.get(path, kind, converter, realPath));
   }
 
   /**
@@ -259,7 +255,7 @@ public class Directory<T> implements AutoCloseable {
       final Iterator<Entry<T>> entryIterator = previous.list(Integer.MAX_VALUE, AllPass).iterator();
       while (entryIterator.hasNext()) {
         final Entry<T> entry = entryIterator.next();
-        oldEntries.put(entry.path, entry);
+        oldEntries.put(entry.getPath(), entry);
       }
     }
     final Map<Path, Entry<T>> newEntries = new HashMap<>();
@@ -267,7 +263,7 @@ public class Directory<T> implements AutoCloseable {
     final Iterator<Entry<T>> it = dir.list(Integer.MAX_VALUE, AllPass).iterator();
     while (it.hasNext()) {
       final Entry<T> entry = it.next();
-      newEntries.put(entry.path, entry);
+      newEntries.put(entry.getPath(), entry);
     }
     MapOps.diffDirectoryEntries(oldEntries, newEntries, updates);
   }
@@ -289,7 +285,7 @@ public class Directory<T> implements AutoCloseable {
         if (!it.hasNext()) {
           // We will always return from this block
           synchronized (currentDir.lock) {
-            final boolean isDirectory = (kind & Entry.DIRECTORY) != 0;
+            final boolean isDirectory = (kind & Entries.DIRECTORY) != 0;
             if (!isDirectory || currentDir.depth <= 0 || isLoop(resolved, realPath)) {
               final Directory<T> previousDirectory =
                   isDirectory ? currentDir.subdirectories.getByName(p) : null;
@@ -297,7 +293,7 @@ public class Directory<T> implements AutoCloseable {
                   previousDirectory != null
                       ? previousDirectory.entry()
                       : currentDir.files.getByName(p);
-              final Entry<T> newEntry = new Entry<>(p, converter.apply(resolved), kind);
+              final Entry<T> newEntry = Entries.get(p, kind, converter, resolved);
               if (isDirectory) {
                 currentDir.subdirectories.put(
                     p.toString(), new Directory<>(resolved, realPath, converter, -1, pathFilter));
@@ -327,19 +323,15 @@ public class Directory<T> implements AutoCloseable {
           }
         }
       }
-    } else if (kind == Entry.DIRECTORY) {
+    } else if (kind == Entries.DIRECTORY) {
       final List<Entry<T>> oldEntries = list(true, AllPass);
       init();
       MapOps.diffDirectoryEntries(oldEntries, list(true, AllPass), result);
     } else {
       final Entry<T> oldEntry = entry();
-      try {
-        final Entry<T> newEntry = new Entry<>(realPath, converter.apply(this.realPath), kind);
-        _cacheEntry.set(newEntry);
-        result.onUpdate(oldEntry, entry());
-      } catch (final IOException e) {
-        result.onError(realPath, e);
-      }
+      final Entry<T> newEntry = Entries.get(realPath, kind, converter, realPath);
+      _cacheEntry.set(newEntry);
+      result.onUpdate(oldEntry, entry());
     }
     return result;
   }
@@ -396,7 +388,7 @@ public class Directory<T> implements AutoCloseable {
       final Iterator<Entry<T>> filesIterator = files.iterator();
       while (filesIterator.hasNext()) {
         final Entry<T> entry = filesIterator.next();
-        final Entry<T> resolved = entry.resolvedFrom(this.path, entry.getKind());
+        final Entry<T> resolved = entry.resolvedFrom(this.getPath(), entry.getKind());
         if (filter.accept(resolved)) result.add(resolved);
       }
       final Iterator<Directory<T>> subdirIterator = subdirectories.iterator();
@@ -454,8 +446,8 @@ public class Directory<T> implements AutoCloseable {
           final QuickFile file = it.next();
           if (pathFilter.accept(file)) {
             final int kind =
-                (file.isSymbolicLink() ? Entry.LINK : 0)
-                    | (file.isDirectory() ? Entry.DIRECTORY : Entry.FILE);
+                (file.isSymbolicLink() ? Entries.LINK : 0)
+                    | (file.isDirectory() ? Entries.DIRECTORY : Entries.FILE);
             final Path path = file.toPath();
             final Path key = this.path.relativize(path).getFileName();
             if (file.isDirectory()) {
@@ -471,18 +463,10 @@ public class Directory<T> implements AutoCloseable {
                       key.toString(), new Directory<>(path, realPath, converter, -1, pathFilter));
                 }
               } else {
-                try {
-                  files.put(key.toString(), new Entry<>(key, converter.apply(path), kind));
-                } catch (final IOException e) {
-                  files.put(key.toString(), new Entry<T>(key, e, kind));
-                }
+                files.put(key.toString(), Entries.get(key, kind, converter, path));
               }
             } else {
-              try {
-                files.put(key.toString(), new Entry<>(key, converter.apply(path), kind));
-              } catch (final IOException e) {
-                files.put(key.toString(), new Entry<T>(key, e, kind));
-              }
+              files.put(key.toString(), Entries.get(key, kind, converter, path));
             }
           }
         }
@@ -582,21 +566,48 @@ public class Directory<T> implements AutoCloseable {
     return new Directory<>(path, path, converter, depth, Filters.AllPass).init();
   }
 
-  /**
-   * Container class for {@link Directory} entries. Contains both the path to which the path
-   * corresponds along with a data value.
-   *
-   * @param <T> The value wrapped in the Entry
-   */
-  public static final class Entry<T> implements Comparable<Entry<T>> {
-    public static final int DIRECTORY = 1;
-    public static final int FILE = 2;
-    public static final int LINK = 4;
-    public static final int UNKNOWN = 8;
-    private final int kind;
-    private final Path path;
-    private final T value;
-    private final IOException exception;
+  /** Provides static constants and methods related to {@link com.swoval.files.Directory.Entry}. */
+  public static final class Entries {
+    static final int DIRECTORY = 1;
+    static final int FILE = 2;
+    static final int LINK = 4;
+    static final int UNKNOWN = 8;
+
+    private Entries() {}
+
+    /**
+     * Construct an entry with a particular value
+     *
+     * @param path The path of the entry
+     * @param kind The kind of the entry
+     * @param value The value of the entry
+     * @param <T> The type of the value
+     * @return an Entry with the provided path and value
+     */
+    public static <T> Entry<T> valid(final Path path, final int kind, final T value) {
+      return new ValidEntry<>(path, kind, value);
+    }
+
+    /**
+     * Construct an entry with a particular value
+     *
+     * @param path The path of the entry
+     * @param value The value of the entry
+     * @param <T> The type of the value
+     * @return an Entry with the provided path and value
+     */
+    public static <T> Entry<T> valid(final Path path, final T value) {
+      return new ValidEntry<>(path, getKindOrUnknown(path), value);
+    }
+
+    static <T> Entry<T> get(
+        final Path path, final int kind, final Converter<T> converter, final Path converterPath) {
+      try {
+        return new ValidEntry<>(path, kind, converter.apply(converterPath));
+      } catch (final IOException e) {
+        return new InvalidEntry<>(path, kind, e);
+      }
+    }
 
     /**
      * Compute the underlying file type for the path.
@@ -605,10 +616,10 @@ public class Directory<T> implements AutoCloseable {
      * @param attrs The attributes of the ile
      * @return The file type of the path
      */
-    public static int getKind(final Path path, final BasicFileAttributes attrs) {
+    static int getKind(final Path path, final BasicFileAttributes attrs) {
       return attrs.isSymbolicLink()
-          ? Entry.LINK | (Files.isDirectory(path) ? Entry.DIRECTORY : Entry.FILE)
-          : attrs.isDirectory() ? Entry.DIRECTORY : Entry.FILE;
+          ? LINK | (Files.isDirectory(path) ? DIRECTORY : FILE)
+          : attrs.isDirectory() ? DIRECTORY : FILE;
     }
 
     /**
@@ -618,38 +629,156 @@ public class Directory<T> implements AutoCloseable {
      * @return The file type of the path
      * @throws IOException if the path can't be opened
      */
-    public static int getKind(final Path path) throws IOException {
+    static int getKind(final Path path) throws IOException {
       return getKind(path, NioWrappers.readAttributes(path, LinkOption.NOFOLLOW_LINKS));
     }
 
-    private static int getKindOrUnknown(final Path path) {
+    static int getKindOrUnknown(final Path path) {
       try {
         return getKind(path);
       } catch (final IOException e) {
         return UNKNOWN;
       }
     }
+  }
+  /**
+   * Container class for {@link Directory} entries. Contains both the path to which the path
+   * corresponds along with a data value.
+   *
+   * @param <T> The value wrapped in the Entry
+   */
+  public interface Entry<T> extends Comparable<Entry<T>> {
+    /**
+     * Is the path represented by this Entry a directory?
+     *
+     * @return true if the underlying path is a directory
+     */
+    boolean isDirectory();
+    /**
+     * Is the path represented by this Entry a regular file?
+     *
+     * @return true if the underlying path is a regular file
+     */
+    boolean isFile();
+    /**
+     * Is the path represented by this Entry a symbolic link?
+     *
+     * @return true if the underlying path is a symbolic link
+     */
+    boolean isSymbolicLink();
+    /**
+     * Returns the kind of file, see {@link Entries}
+     *
+     * @return the kind of file to which this corresponds
+     */
+    int getKind();
+    /**
+     * Get the value associated with this entry
+     *
+     * @return the value associated with this entry
+     * @throws NullPointerException if the value could not have been computed due to an IOException.
+     */
+    T getValue() throws NullPointerException;
+    /**
+     * Get the path associated with this entry
+     *
+     * @return the path associated with this entry
+     */
+    Path getPath();
+    /**
+     * Returns the value of this entry or a default if it is null
+     *
+     * @param t The default value
+     * @return the underlying value if not null, otherwise the default
+     */
+    T getValueOrDefault(final T t);
 
-    /** @return true if the underlying path is a directory */
-    public final boolean isDirectory() {
-      return is(Entry.DIRECTORY) || (is(Entry.UNKNOWN) && Files.isDirectory(path));
+    /**
+     * Getter for the IOException that may have thrown computing the value for the Entry
+     *
+     * @return the IOException thrown attempting to compute the value
+     * @throws NullPointerException if no IOException was thrown computing the value
+     */
+    IOException getIOException() throws NullPointerException;
+
+    /**
+     * Resolves the path of this entry to the provided absolute path
+     *
+     * @param other The path to resolve against
+     * @return a new Entry with the same value, exception and kind
+     */
+    Entry<T> resolvedFrom(final Path other);
+
+    /**
+     * Resolves the path of this entry to the provided absolute path
+     *
+     * @param other The path to resolve against
+     * @param kind The kind of the entry
+     * @return a new Entry with the same value, exception but the kind replaced by the input kind
+     */
+    Entry<T> resolvedFrom(final Path other, final int kind);
+  }
+
+  abstract static class EntryImpl<T> implements Entry<T> {
+    private final int kind;
+    private final Path path;
+
+    EntryImpl(final Path path, final int kind) {
+      this.path = path;
+      this.kind = kind;
     }
 
-    public final boolean isFile() {
-      return is(Entry.FILE) || (is(Entry.UNKNOWN) && Files.isRegularFile(path));
+    @Override
+    public boolean isDirectory() {
+      return is(Entries.DIRECTORY) || (is(Entries.UNKNOWN) && Files.isDirectory(path));
     }
 
-    public final boolean isSymbolicLink() {
-      return is(Entry.LINK) || (is(Entry.UNKNOWN) && Files.isRegularFile(path));
+    @Override
+    public boolean isFile() {
+      return is(Entries.FILE) || (is(Entries.UNKNOWN) && Files.isRegularFile(path));
     }
 
-    public final int getKind() {
+    @Override
+    public boolean isSymbolicLink() {
+      return is(Entries.LINK) || (is(Entries.UNKNOWN) && Files.isRegularFile(path));
+    }
+
+    @Override
+    public int getKind() {
       return kind;
     }
 
-    public final Path getPath() {
+    @Override
+    public Path getPath() {
       return path;
     }
+
+    @Override
+    public int compareTo(final Entry<T> that) {
+      return this.getPath().compareTo(that.getPath());
+    }
+
+    private boolean is(final int kind) {
+      return (kind & this.kind) != 0;
+    }
+
+    @Override
+    public int hashCode() {
+      final T value = getValue();
+      return path.hashCode() ^ (value == null ? 0 : value.hashCode());
+    }
+
+    @Override
+    public boolean equals(final Object other) {
+      return other instanceof Entry<?>
+          && ((Entry<?>) other).getPath().equals(getPath())
+          && (getValue() != null && getValue().equals(((Entry<?>) other).getValue())
+              || ((Entry<?>) other).getIOException() != null);
+    }
+  }
+
+  private static final class ValidEntry<T> extends EntryImpl<T> {
+    private final T value;
 
     /**
      * Returns the value of this entry. The value may be null, so in general it is better to use
@@ -658,6 +787,7 @@ public class Directory<T> implements AutoCloseable {
      * @return the value
      * @throws NullPointerException if the value is null
      */
+    @Override
     public T getValue() throws NullPointerException {
       if (value == null) throw new NullPointerException();
       return value;
@@ -669,6 +799,7 @@ public class Directory<T> implements AutoCloseable {
      * @param t The nullable value
      * @return the value
      */
+    @Override
     public T getValueOrDefault(final T t) {
       return value == null ? t : value;
     }
@@ -679,27 +810,11 @@ public class Directory<T> implements AutoCloseable {
      * @return ehe IOException thrown trying to convert the path to a value. Will be null if no
      *     exception was thrown
      */
-    public IOException getIOException() {
-      return exception;
+    @Override
+    public IOException getIOException() throws NullPointerException {
+      throw new NullPointerException();
     }
 
-    private Entry(final Path path, final T value, final IOException exception, final int kind) {
-      this.path = path;
-      this.value = value;
-      this.kind = kind;
-      this.exception = exception;
-    }
-    /**
-     * Create a new Entry
-     *
-     * @param path The path to which this entry corresponds blah
-     * @param exception The IOException that was thrown trying to generate the value
-     * @param kind The type of file that this entry represents. In the case of symbolic links, it
-     *     can be both a link and a directory or file.
-     */
-    public Entry(final Path path, final IOException exception, final int kind) {
-      this(path, /* cast needed for code-gen */ (T) null, exception, kind);
-    }
     /**
      * Create a new Entry
      *
@@ -708,8 +823,9 @@ public class Directory<T> implements AutoCloseable {
      * @param kind The type of file that this entry represents. In the case of symbolic links, it
      *     can be both a link and a directory or file.
      */
-    public Entry(final Path path, final T value, final int kind) {
-      this(path, value, null, kind);
+    ValidEntry(final Path path, final int kind, final T value) {
+      super(path, kind);
+      this.value = value;
     }
 
     /**
@@ -718,8 +834,8 @@ public class Directory<T> implements AutoCloseable {
      * @param path The path to which this entry corresponds
      * @param value The {@code path} derived value for this entry
      */
-    public Entry(final Path path, final T value) {
-      this(path, value, Entry.getKindOrUnknown(path));
+    ValidEntry(final Path path, final T value) {
+      this(path, Entries.getKindOrUnknown(path), value);
     }
 
     /**
@@ -730,9 +846,7 @@ public class Directory<T> implements AutoCloseable {
      */
     @SuppressWarnings("unchecked")
     public Entry<T> resolvedFrom(Path other) {
-      return this.value == null
-          ? new Entry<T>(other.resolve(path), exception, this.kind)
-          : new Entry<>(other.resolve(path), this.value, this.kind);
+      return new ValidEntry<>(other.resolve(getPath()), this.getKind(), this.value);
     }
     /**
      * Resolve a Entry for a relative {@code path</code> where <code>isDirectory} is known in
@@ -744,39 +858,51 @@ public class Directory<T> implements AutoCloseable {
      */
     @SuppressWarnings("unchecked")
     public Entry<T> resolvedFrom(Path other, final int kind) {
-      return this.value == null
-          ? new Entry<T>(other.resolve(path), exception, kind)
-          : new Entry<>(other.resolve(path), this.value, kind);
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      if (other instanceof Directory.Entry<?>) {
-        Entry<?> that = (Entry<?>) other;
-        return this.path.equals(that.path)
-            && (this.value == null ? that.value == null : this.value.equals(that.value));
-      } else {
-        return false;
-      }
-    }
-
-    @Override
-    public int hashCode() {
-      return path.hashCode() ^ value.hashCode();
+      return new ValidEntry<>(other.resolve(getPath()), kind, this.value);
     }
 
     @Override
     public String toString() {
-      return "Entry(" + path + ", " + value + ")";
-    }
-
-    private boolean is(final int kind) {
-      return (kind & this.kind) != 0;
+      return "ValidEntry(" + getPath() + ", " + value + ")";
     }
 
     @Override
     public int compareTo(Entry<T> that) {
-      return this.path.compareTo(that.path);
+      return this.getPath().compareTo(that.getPath());
+    }
+  }
+
+  private static class InvalidEntry<T> extends EntryImpl<T> {
+    private final IOException exception;
+
+    InvalidEntry(final Path path, final int kind, final IOException exception) {
+      super(path, kind);
+      this.exception = exception;
+    }
+
+    @Override
+    public T getValue() throws NullPointerException {
+      throw new NullPointerException();
+    }
+
+    @Override
+    public T getValueOrDefault(T t) {
+      return t;
+    }
+
+    @Override
+    public IOException getIOException() throws NullPointerException {
+      return exception;
+    }
+
+    @Override
+    public Entry<T> resolvedFrom(final Path other) {
+      return new InvalidEntry<>(other.resolve(getPath()), getKind(), exception);
+    }
+
+    @Override
+    public Entry<T> resolvedFrom(Path other, int kind) {
+      return new InvalidEntry<>(other.resolve(getPath()), kind, exception);
     }
   }
 

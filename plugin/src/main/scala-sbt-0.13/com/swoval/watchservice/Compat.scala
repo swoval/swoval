@@ -3,7 +3,7 @@ package com.swoval.watchservice
 import java.io.File
 import java.nio.file._
 
-import com.swoval.files.Directory.{ Entry, EntryFilter }
+import com.swoval.files.Directory.{ Entries, Entry, EntryFilter }
 import com.swoval.files.{ Directory, FileCaches }
 import com.swoval.watchservice.CloseWatchPlugin.autoImport.closeWatchFileCache
 import sbt.Keys._
@@ -92,7 +92,7 @@ object Compat {
         case ((s, rf), f)                       => (s, rf :+ f)
       }
     val extra = rawFiles
-      .filterNot(f => sources.exists(_.filter.accept(new Entry(f.toPath, f.toPath))))
+      .filterNot(f => sources.exists(_.filter.accept(Entries.valid(f.toPath, f.toPath))))
       .map(new ExactFileSource(_))
     sources ++ extra
   }

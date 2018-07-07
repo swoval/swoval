@@ -122,7 +122,7 @@ object Directory {
   def cached[T <: AnyRef](path: Path, converter: Converter[T], depth: Int): Directory[T] =
     new Directory(path, path, converter, depth, Filters.AllPass).init()
 
-  object Entry {
+  object Entries {
 
     val DIRECTORY: Int = 1
 
@@ -133,6 +133,36 @@ object Directory {
     val UNKNOWN: Int = 8
 
     /**
+     * Construct an entry with a particular value
+     *
+     * @param path The path of the entry
+     * @param kind The kind of the entry
+     * @param value The value of the entry
+     * @tparam T The type of the value
+     * @return an Entry with the provided path and value
+     */
+    def valid[T](path: Path, kind: Int, value: T): Entry[T] =
+      new ValidEntry(path, kind, value)
+
+    /**
+     * Construct an entry with a particular value
+     *
+     * @param path The path of the entry
+     * @param value The value of the entry
+     * @tparam T The type of the value
+     * @return an Entry with the provided path and value
+     */
+    def valid[T](path: Path, value: T): Entry[T] =
+      new ValidEntry(path, getKindOrUnknown(path), value)
+
+    def get[T](path: Path, kind: Int, converter: Converter[T], converterPath: Path): Entry[T] =
+      try new ValidEntry(path, kind, converter.apply(converterPath))
+      catch {
+        case e: IOException => new InvalidEntry(path, kind, e)
+
+      }
+
+    /**
      * Compute the underlying file type for the path.
      *
      * @param path The path whose type is to be determined.
@@ -141,10 +171,9 @@ object Directory {
      */
     def getKind(path: Path, attrs: BasicFileAttributes): Int =
       if (attrs.isSymbolicLink)
-        Entry.LINK |
-          (if (Files.isDirectory(path)) Entry.DIRECTORY else Entry.FILE)
-      else if (attrs.isDirectory) Entry.DIRECTORY
-      else Entry.FILE
+        LINK | (if (Files.isDirectory(path)) DIRECTORY else FILE)
+      else if (attrs.isDirectory) DIRECTORY
+      else FILE
 
     /**
      * Compute the underlying file type for the path.
@@ -155,7 +184,7 @@ object Directory {
     def getKind(path: Path): Int =
       getKind(path, NioWrappers.readAttributes(path, LinkOption.NOFOLLOW_LINKS))
 
-    private def getKindOrUnknown(path: Path): Int =
+    def getKindOrUnknown(path: Path): Int =
       try getKind(path)
       catch {
         case e: IOException => UNKNOWN
@@ -170,23 +199,120 @@ object Directory {
    *
    * @tparam T The value wrapped in the Entry
    */
-  class Entry[T] private (@BeanProperty val path: Path,
-                          private val value: T,
-                          private val exception: IOException,
-                          @BeanProperty val kind: Int)
-      extends Comparable[Entry[T]] {
+  trait Entry[T] extends Comparable[Entry[T]] {
 
     /**
- @return true if the underlying path is a directory
+     * Is the path represented by this Entry a directory?
+     *
+     * @return true if the underlying path is a directory
      */
-    def isDirectory(): Boolean =
-      is(Entry.DIRECTORY) || (is(Entry.UNKNOWN) && Files.isDirectory(path))
+    def isDirectory(): Boolean
 
-    def isFile(): Boolean =
-      is(Entry.FILE) || (is(Entry.UNKNOWN) && Files.isRegularFile(path))
+    /**
+     * Is the path represented by this Entry a regular file?
+     *
+     * @return true if the underlying path is a regular file
+     */
+    def isFile(): Boolean
 
-    def isSymbolicLink(): Boolean =
-      is(Entry.LINK) || (is(Entry.UNKNOWN) && Files.isRegularFile(path))
+    /**
+     * Is the path represented by this Entry a symbolic link?
+     *
+     * @return true if the underlying path is a symbolic link
+     */
+    def isSymbolicLink(): Boolean
+
+    /**
+     * Returns the kind of file, see [[Entries]]
+     *
+     * @return the kind of file to which this corresponds
+     */
+    def getKind(): Int
+
+    /**
+     * Get the value associated with this entry
+     *
+     * @return the value associated with this entry
+     */
+    def getValue(): T
+
+    /**
+     * Get the path associated with this entry
+     *
+     * @return the path associated with this entry
+     */
+    def getPath(): Path
+
+    /**
+     * Returns the value of this entry or a default if it is null
+     *
+     * @param t The default value
+     * @return the underlying value if not null, otherwise the default
+     */
+    def getValueOrDefault(t: T): T
+
+    /**
+     * Getter for the IOException that may have thrown computing the value for the Entry
+     *
+     * @return the IOException thrown attempting to compute the value
+     */
+    def getIOException(): IOException
+
+    /**
+     * Resolves the path of this entry to the provided absolute path
+     *
+     * @param other The path to resolve against
+     * @return a new Entry with the same value, exception and kind
+     */
+    def resolvedFrom(other: Path): Entry[T]
+
+    /**
+     * Resolves the path of this entry to the provided absolute path
+     *
+     * @param other The path to resolve against
+     * @param kind The kind of the entry
+     * @return a new Entry with the same value, exception but the kind replaced by the input kind
+     */
+    def resolvedFrom(other: Path, kind: Int): Entry[T]
+
+  }
+
+  abstract private[files] class EntryImpl[T](@BeanProperty val path: Path,
+                                             @BeanProperty val kind: Int)
+      extends Entry[T] {
+
+    override def isDirectory(): Boolean =
+      is(Entries.DIRECTORY) || (is(Entries.UNKNOWN) && Files.isDirectory(path))
+
+    override def isFile(): Boolean =
+      is(Entries.FILE) || (is(Entries.UNKNOWN) && Files.isRegularFile(path))
+
+    override def isSymbolicLink(): Boolean =
+      is(Entries.LINK) || (is(Entries.UNKNOWN) && Files.isRegularFile(path))
+
+    override def compareTo(that: Entry[T]): Int =
+      this.getPath.compareTo(that.getPath)
+
+    private def is(kind: Int): Boolean = (kind & this.kind) != 0
+
+    override def hashCode(): Int = {
+      val value: T = getValue
+      path.hashCode ^ (if (value == null) 0 else value.hashCode)
+    }
+
+    override def equals(other: Any): Boolean =
+      other.isInstanceOf[Entry[_]] && other
+        .asInstanceOf[Entry[_]]
+        .getPath == getPath &&
+        (getValue != null && getValue == other
+          .asInstanceOf[Entry[_]]
+          .getValue ||
+          other.asInstanceOf[Entry[_]].getIOException != null)
+
+  }
+
+  private class ValidEntry[T](path: Path, kind: Int, private val value: T)
+      extends EntryImpl[T](path, kind) {
 
     /**
      * Returns the value of this entry. The value may be null, so in general it is better to use
@@ -194,7 +320,7 @@ object Directory {
      *
      * @return the value
      */
-    def getValue(): T = {
+    override def getValue(): T = {
       if (value == null) throw new NullPointerException()
       value
     }
@@ -205,7 +331,7 @@ object Directory {
      * @param t The nullable value
      * @return the value
      */
-    def getValueOrDefault(t: T): T = if (value == null) t else value
+    override def getValueOrDefault(t: T): T = if (value == null) t else value
 
     /**
      * Get the IOException thrown trying to compute the value for this entry
@@ -213,32 +339,8 @@ object Directory {
      * @return ehe IOException thrown trying to convert the path to a value. Will be null if no
      *     exception was thrown
      */
-    def getIOException(): IOException = exception
-
-    /**
-     * Create a new Entry
-     *
-     * @param path The path to which this entry corresponds blah
-     * @param exception The IOException that was thrown trying to generate the value
-     * @param kind The type of file that this entry represents. In the case of symbolic links, it
-     *     can be both a link and a directory or file.
-     */
-    def this(path: Path, exception: IOException, kind: Int) =
-      this(path, /* cast needed for code-gen */
-
-           null.asInstanceOf[T],
-           exception,
-           kind)
-
-    /**
-     * Create a new Entry
-     *
-     * @param path The path to which this entry corresponds blah
-     * @param value The {@code path} derived value for this entry
-     * @param kind The type of file that this entry represents. In the case of symbolic links, it
-     *     can be both a link and a directory or file.
-     */
-    def this(path: Path, value: T, kind: Int) = this(path, value, null, kind)
+    override def getIOException(): IOException =
+      throw new NullPointerException()
 
     /**
      * Create a new Entry using the FileSystem to check if the Entry is for a directory
@@ -247,7 +349,7 @@ object Directory {
      * @param value The {@code path} derived value for this entry
      */
     def this(path: Path, value: T) =
-      this(path, value, Entry.getKindOrUnknown(path))
+      this(path, Entries.getKindOrUnknown(path), value)
 
     /**
      * Resolve a Entry for a relative {@code path}
@@ -256,9 +358,7 @@ object Directory {
      * @return A Entry where the {@code path</code> has been resolved against <code>other}
      */
     def resolvedFrom(other: Path): Entry[T] =
-      if (this.value == null)
-        new Entry[T](other.resolve(path), exception, this.kind)
-      else new Entry(other.resolve(path), this.value, this.kind)
+      new ValidEntry(other.resolve(getPath), this.getKind, this.value)
 
     /**
      * Resolve a Entry for a relative {@code path</code> where <code>isDirectory} is known in
@@ -269,29 +369,30 @@ object Directory {
      * @return A Entry where the {@code path</code> has been resolved against <code>other}
      */
     def resolvedFrom(other: Path, kind: Int): Entry[T] =
-      if (this.value == null)
-        new Entry[T](other.resolve(path), exception, kind)
-      else new Entry(other.resolve(path), this.value, kind)
+      new ValidEntry(other.resolve(getPath), kind, this.value)
 
-    override def equals(other: Any): Boolean = other match {
-      case other: Directory.Entry[_] => {
-        val that: Entry[_] = other
-        this.path == that.path &&
-        (if (this.value == null) that.value == null
-         else this.value == that.value)
-      }
-      case _ => false
-
-    }
-
-    override def hashCode(): Int = path.hashCode ^ value.hashCode
-
-    override def toString(): String = "Entry(" + path + ", " + value + ")"
-
-    private def is(kind: Int): Boolean = (kind & this.kind) != 0
+    override def toString(): String =
+      "ValidEntry(" + getPath + ", " + value + ")"
 
     override def compareTo(that: Entry[T]): Int =
-      this.path.compareTo(that.path)
+      this.getPath.compareTo(that.getPath)
+
+  }
+
+  private class InvalidEntry[T](path: Path, kind: Int, private val exception: IOException)
+      extends EntryImpl[T](path, kind) {
+
+    override def getValue(): T = throw new NullPointerException()
+
+    override def getValueOrDefault(t: T): T = t
+
+    override def getIOException(): IOException = exception
+
+    override def resolvedFrom(other: Path): Entry[T] =
+      new InvalidEntry(other.resolve(getPath), getKind, exception)
+
+    override def resolvedFrom(other: Path, kind: Int): Entry[T] =
+      new InvalidEntry(other.resolve(getPath), kind, exception)
 
   }
 
@@ -450,13 +551,9 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
    */
   def entry(): Entry[T] = _cacheEntry.get
 
-  val kind: Int = Entry.getKind(path)
+  val kind: Int = Entries.getKind(path)
 
-  try this._cacheEntry.set(new Entry(path, this.converter.apply(realPath), kind))
-  catch {
-    case e: IOException => this._cacheEntry.set(new Entry[T](path, e, kind))
-
-  }
+  this._cacheEntry.set(Entries.get(path, kind, converter, realPath))
 
   /**
    * List all of the files for the {@code path}
@@ -580,7 +677,7 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
         previous.list(java.lang.Integer.MAX_VALUE, AllPass).iterator()
       while (entryIterator.hasNext) {
         val entry: Entry[T] = entryIterator.next()
-        oldEntries.put(entry.path, entry)
+        oldEntries.put(entry.getPath, entry)
       }
     }
     val newEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
@@ -589,7 +686,7 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
       dir.list(java.lang.Integer.MAX_VALUE, AllPass).iterator()
     while (it.hasNext) {
       val entry: Entry[T] = it.next()
-      newEntries.put(entry.path, entry)
+      newEntries.put(entry.getPath, entry)
     }
     MapOps.diffDirectoryEntries(oldEntries, newEntries, updates)
   }
@@ -610,7 +707,7 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
         if (!it.hasNext) {
 // We will always return from this block
           currentDir.lock.synchronized {
-            val isDirectory: Boolean = (kind & Entry.DIRECTORY) != 0
+            val isDirectory: Boolean = (kind & Entries.DIRECTORY) != 0
             if (!isDirectory || currentDir.depth <= 0 || isLoop(resolved, realPath)) {
               val previousDirectory: Directory[T] =
                 if (isDirectory) currentDir.subdirectories.getByName(p)
@@ -619,7 +716,7 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
                 if (previousDirectory != null) previousDirectory.entry()
                 else currentDir.files.getByName(p)
               val newEntry: Entry[T] =
-                new Entry[T](p, converter.apply(resolved), kind)
+                Entries.get(p, kind, converter, resolved)
               if (isDirectory) {
                 currentDir.subdirectories
                   .put(p.toString, new Directory(resolved, realPath, converter, -1, pathFilter))
@@ -650,21 +747,15 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
           }
         }
       }
-    } else if (kind == Entry.DIRECTORY) {
+    } else if (kind == Entries.DIRECTORY) {
       val oldEntries: List[Entry[T]] = list(true, AllPass)
       init()
       MapOps.diffDirectoryEntries(oldEntries, list(true, AllPass), result)
     } else {
       val oldEntry: Entry[T] = entry()
-      try {
-        val newEntry: Entry[T] =
-          new Entry[T](realPath, converter.apply(this.realPath), kind)
-        _cacheEntry.set(newEntry)
-        result.onUpdate(oldEntry, entry())
-      } catch {
-        case e: IOException => result.onError(realPath, e)
-
-      }
+      val newEntry: Entry[T] = Entries.get(realPath, kind, converter, realPath)
+      _cacheEntry.set(newEntry)
+      result.onUpdate(oldEntry, entry())
     }
     result
   }
@@ -719,7 +810,8 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
       val filesIterator: Iterator[Entry[T]] = files.iterator()
       while (filesIterator.hasNext) {
         val entry: Entry[T] = filesIterator.next()
-        val resolved: Entry[T] = entry.resolvedFrom(this.path, entry.getKind)
+        val resolved: Entry[T] =
+          entry.resolvedFrom(this.getPath, entry.getKind)
         if (filter.accept(resolved)) result.add(resolved)
       }
       val subdirIterator: Iterator[Directory[T]] = subdirectories.iterator()
@@ -775,8 +867,8 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
         while (it.hasNext) {
           val file: QuickFile = it.next()
           if (pathFilter.accept(file)) {
-            val kind: Int = (if (file.isSymbolicLink) Entry.LINK else 0) |
-              (if (file.isDirectory) Entry.DIRECTORY else Entry.FILE)
+            val kind: Int = (if (file.isSymbolicLink) Entries.LINK else 0) |
+              (if (file.isDirectory) Entries.DIRECTORY else Entries.FILE)
             val path: Path = file.toPath()
             val key: Path = this.path.relativize(path).getFileName
             if (file.isDirectory) {
@@ -794,20 +886,10 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
                                      new Directory(path, realPath, converter, -1, pathFilter))
                 }
               } else {
-                try files.put(key.toString, new Entry(key, converter.apply(path), kind))
-                catch {
-                  case e: IOException =>
-                    files.put(key.toString, new Entry[T](key, e, kind))
-
-                }
+                files.put(key.toString, Entries.get(key, kind, converter, path))
               }
             } else {
-              try files.put(key.toString, new Entry(key, converter.apply(path), kind))
-              catch {
-                case e: IOException =>
-                  files.put(key.toString, new Entry[T](key, e, kind))
-
-              }
+              files.put(key.toString, Entries.get(key, kind, converter, path))
             }
           }
         }

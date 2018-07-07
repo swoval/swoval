@@ -478,7 +478,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
                                             java.lang.Integer.MAX_VALUE
                                           else dir.getDepth - 1)
               val updates: Directory.Updates[T] =
-                dir.update(toUpdate, Directory.Entry.getKind(toUpdate, attrs))
+                dir.update(toUpdate, Directory.Entries.getKind(toUpdate, attrs))
               updates.observe(callbackObserver(callbacks))
             } catch {
               case e: IOException =>

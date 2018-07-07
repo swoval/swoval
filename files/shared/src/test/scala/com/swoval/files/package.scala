@@ -31,7 +31,7 @@ package object files extends PlatformFiles {
   }
   implicit class EntryFilterFunctionOps[T](val f: Entry[T] => Boolean) extends EntryFilter[T] {
     override def accept(cacheEntry: Entry[_ <: T]): Boolean =
-      f(new Entry[T](cacheEntry.getPath, cacheEntry.getValue, cacheEntry.getKind))
+      f(Entries.valid(cacheEntry.getPath, cacheEntry.getKind, cacheEntry.getValue))
   }
   implicit class OnChangeFunctionOps[T](val f: Entry[T] => Unit) extends OnChange[T] {
     override def apply(cacheEntry: Entry[T]): Unit = f(cacheEntry)

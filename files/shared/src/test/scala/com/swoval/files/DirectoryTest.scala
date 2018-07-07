@@ -3,7 +3,8 @@ package com.swoval.files
 import java.io.{ File, IOException }
 import java.nio.file.{ Files, Path, Paths }
 
-import com.swoval.files.Directory.{ Entry, EntryFilter }
+import com.swoval.files.Directory.Entries.{ DIRECTORY, FILE }
+import com.swoval.files.Directory.{ Converter, Entries, Entry, EntryFilter }
 import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.EntryOps._
 import com.swoval.files.PathWatchers.Event
@@ -121,7 +122,7 @@ object DirectoryTest extends TestSuite {
         val directory = Directory.of(dir)
         withTempFileSync(dir) { f =>
           directory.ls(f, recursive = false, AllPass) === Seq.empty
-          assert(directory.update(f, Entry.FILE).toUpdates.creations.nonEmpty)
+          assert(directory.update(f, Entries.FILE).toUpdates.creations.nonEmpty)
           directory.ls(f, recursive = false, AllPass) === Seq(f)
         }
       }
@@ -130,7 +131,7 @@ object DirectoryTest extends TestSuite {
         withTempDirectory(dir) { subdir =>
           withTempFileSync(subdir) { f =>
             directory.ls(f, recursive = true, AllPass) === Seq.empty
-            assert(directory.update(f, Entry.FILE).toUpdates.creations.nonEmpty)
+            assert(directory.update(f, Entries.FILE).toUpdates.creations.nonEmpty)
             directory.ls(dir, recursive = true, AllPass) === Seq(subdir, f)
           }
         }
@@ -138,9 +139,9 @@ object DirectoryTest extends TestSuite {
       'sequentially - withTempDirectory { dir =>
         val directory = Directory.of(dir)
         withTempDirectory(dir) { subdir =>
-          assert(directory.update(subdir, Entry.DIRECTORY).toUpdates.creations.nonEmpty)
+          assert(directory.update(subdir, Entries.DIRECTORY).toUpdates.creations.nonEmpty)
           withTempFileSync(subdir) { f =>
-            assert(directory.update(f, Entry.FILE).toUpdates.creations.nonEmpty)
+            assert(directory.update(f, Entries.FILE).toUpdates.creations.nonEmpty)
             directory.ls(recursive = true, AllPass) === Set(subdir, f)
           }
         }
@@ -149,7 +150,7 @@ object DirectoryTest extends TestSuite {
         val directory = Directory.of(dir)
         withTempDirectory(dir) { subdir =>
           withTempFileSync(subdir) { f =>
-            assert(directory.update(f, Entry.FILE).toUpdates.creations.nonEmpty)
+            assert(directory.update(f, Entries.FILE).toUpdates.creations.nonEmpty)
             directory.ls(recursive = true, AllPass) === Set(f, subdir)
           }
         }
@@ -159,7 +160,7 @@ object DirectoryTest extends TestSuite {
           val directory = Directory.of(dir, 0)
           withTempDirectory(dir) { subdir =>
             withTempFileSync(subdir) { file =>
-              directory.update(subdir, Directory.Entry.DIRECTORY)
+              directory.update(subdir, Entries.DIRECTORY)
               directory.ls(recursive = true, AllPass) === Set(subdir)
             }
           }
@@ -170,7 +171,7 @@ object DirectoryTest extends TestSuite {
             withTempDirectory(subdir) { nestedSubdir =>
               withTempDirectory(nestedSubdir) { deepNestedSubdir =>
                 withTempFileSync(deepNestedSubdir) { file =>
-                  directory.update(nestedSubdir, Directory.Entry.DIRECTORY)
+                  directory.update(nestedSubdir, Entries.DIRECTORY)
                   directory.ls(recursive = true, AllPass) === Set(subdir,
                                                                   nestedSubdir,
                                                                   deepNestedSubdir)
@@ -187,8 +188,9 @@ object DirectoryTest extends TestSuite {
           withTempDirectorySync(dir) { subdir =>
             val directory = Directory.of(dir)
             val file = subdir.resolve("file").createFile()
-            val updates = directory.update(subdir, Entry.DIRECTORY).toUpdates
-            val entry = new Entry[Path](subdir, subdir, Entry.DIRECTORY)
+            val updates = directory.update(subdir, Entries.DIRECTORY).toUpdates
+            val entry: Entry[Path] =
+              Entries.get(subdir, Entries.DIRECTORY, identity(_: Path), subdir)
             updates.updates === Seq(entry -> entry)
             updates.creations === Seq(file)
           }
@@ -199,8 +201,9 @@ object DirectoryTest extends TestSuite {
               val directory = Directory.of(dir)
               val nestedSubdir = Files.createDirectory(subdir.resolve("nested"))
               val nestedFile = nestedSubdir.resolve("file").createFile()
-              val updates = directory.update(subdir, Entry.DIRECTORY).toUpdates
-              val entry = new Entry[Path](subdir, subdir, Entry.DIRECTORY)
+              val updates = directory.update(subdir, Entries.DIRECTORY).toUpdates
+              val entry: Entry[Path] =
+                Entries.get(subdir, Entries.DIRECTORY, identity(_: Path), subdir)
               updates.updates === Seq(entry -> entry)
               updates.creations === Set(nestedSubdir, nestedFile)
             }
@@ -211,8 +214,9 @@ object DirectoryTest extends TestSuite {
               val nestedFile = nestedSubdir.resolve("file").createFile()
               val directory = Directory.of(dir)
               nestedSubdir.deleteRecursive()
-              val updates = directory.update(subdir, Entry.DIRECTORY).toUpdates
-              val entry = new Entry[Path](subdir, subdir, Entry.DIRECTORY)
+              val updates = directory.update(subdir, Entries.DIRECTORY).toUpdates
+              val entry: Entry[Path] =
+                Entries.get(subdir, Entries.DIRECTORY, identity(_: Path), subdir)
               updates.updates === Seq(entry -> entry)
               updates.deletions === Set(nestedSubdir, nestedFile)
             }
@@ -224,9 +228,9 @@ object DirectoryTest extends TestSuite {
         withTempDirectory(dir) { subdir =>
           withTempDirectorySync(subdir) { nestedSubdir =>
             directory.ls(recursive = true, AllPass) === Seq.empty[Path]
-            directory.update(subdir, Directory.Entry.DIRECTORY)
+            directory.update(subdir, Entries.DIRECTORY)
             directory.ls(recursive = true, AllPass) === Seq(subdir)
-            directory.update(nestedSubdir, Directory.Entry.DIRECTORY)
+            directory.update(nestedSubdir, Entries.DIRECTORY)
             directory.ls(recursive = true, AllPass) === Seq(subdir)
           }
         }
@@ -283,7 +287,7 @@ object DirectoryTest extends TestSuite {
         val newBytes = "bar".getBytes
         cachedFile.getValue.bytes ==> initialBytes
         f.getBytes ==> newBytes
-        dir.update(f, Entry.FILE)
+        dir.update(f, Entries.FILE)
         val newCachedFile = dir.ls(f, recursive = true, filter(newBytes)).head
         assert(newCachedFile.getValue.bytes.sameElements(newBytes))
         dir.ls(f, recursive = true, filter(initialBytes)) === Seq.empty[Path]
@@ -396,7 +400,7 @@ object DirectoryTest extends TestSuite {
                 Files.createDirectory(otherDirToDirLink)
                 val nestedFile = otherDirToDirLink.resolve("file").createFile()
                 val file = dirToOtherDirLink.resolve("dir").resolve("file")
-                directory.update(dir, Entry.DIRECTORY)
+                directory.update(dir, Entries.DIRECTORY)
                 directory.ls(true, AllPass) === Set(dirToOtherDirLink, file.getParent, file)
               }
             }
@@ -410,7 +414,7 @@ object DirectoryTest extends TestSuite {
                 dirToOtherDirLink.delete()
                 Files.createDirectory(dirToOtherDirLink)
                 val nestedFile = dirToOtherDirLink.resolve("file").createFile()
-                directory.update(dir, Entry.DIRECTORY)
+                directory.update(dir, Entries.DIRECTORY)
                 directory.ls(true, AllPass) === Set(dirToOtherDirLink, nestedFile)
               }
             }
@@ -427,7 +431,7 @@ object DirectoryTest extends TestSuite {
               dirToOtherDirLink.delete()
               Files.createDirectory(dirToOtherDirLink)
               val nestedFile = dirToOtherDirLink.resolve("file").createFile()
-              directory.update(dirToOtherDirLink, Entry.DIRECTORY)
+              directory.update(dirToOtherDirLink, Entries.DIRECTORY)
               directory.ls(true, AllPass) === Set(dirToOtherDirLink, nestedFile)
             }
           }

@@ -1,6 +1,6 @@
 package com.swoval.files;
 
-import static com.swoval.files.Directory.Entry.DIRECTORY;
+import static com.swoval.files.Directory.Entries.DIRECTORY;
 import static com.swoval.files.EntryFilters.AllPass;
 import static com.swoval.files.PathWatchers.Event.Create;
 import static com.swoval.files.PathWatchers.Event.Overflow;
