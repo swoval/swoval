@@ -52,20 +52,24 @@ abstract class Executor implements AutoCloseable {
    */
   <T> Either<Exception, T> block(final Callable<T> callable) {
     final ArrayBlockingQueue<Either<Exception, T>> queue = new ArrayBlockingQueue<>(1);
-    run(
-        new Runnable() {
-          @Override
-          public void run() {
-            try {
-              queue.add(Either.<Exception, T, T>right(callable.call()));
-            } catch (Exception e) {
-              queue.add(Either.<Exception, T, Exception>left(e));
-            }
-          }
-        });
     try {
-      return queue.take();
-    } catch (InterruptedException e) {
+      run(
+          new Runnable() {
+            @Override
+            public void run() {
+              try {
+                queue.add(Either.<Exception, T, T>right(callable.call()));
+              } catch (Exception e) {
+                queue.add(Either.<Exception, T, Exception>left(e));
+              }
+            }
+          });
+      try {
+        return queue.take();
+      } catch (InterruptedException e) {
+        return Either.left(e);
+      }
+    } catch (final Exception e) {
       return Either.left(e);
     }
   }
@@ -165,7 +169,11 @@ abstract class Executor implements AutoCloseable {
 
     void run(final Runnable runnable) {
       if (factory.created(Thread.currentThread())) {
-        runnable.run();
+        try {
+          runnable.run();
+        } catch (final Exception e) {
+          e.printStackTrace();
+        }
       } else {
         synchronized (runnables) {
           final Either<Integer, Runnable> either = Either.right(runnable);
