@@ -17,7 +17,11 @@ public abstract class Either<L, R> {
    * @return a Left projection
    * @throws NotLeftException if the value is a left
    */
-  public abstract Left<L, R> left() throws NotLeftException;
+  public static <L, R> Left<L, R> leftProjection(final Either<L, R> either)
+      throws NotLeftException {
+    if (either.isLeft()) return (Left<L, R>) either;
+    else throw new NotLeftException();
+  }
 
   /**
    * Returns the Right projection
@@ -25,7 +29,11 @@ public abstract class Either<L, R> {
    * @return a Right projection
    * @throws NotRightException if the value is a right
    */
-  public abstract Right<L, R> right() throws NotRightException;
+  public static <L, R> Right<L, R> rightProjection(final Either<L, R> either)
+      throws NotRightException {
+    if (either.isRight()) return (Right<L, R>) either;
+    else throw new NotRightException();
+  }
 
   /**
    * Check whether this is a Left projection.
@@ -49,18 +57,18 @@ public abstract class Either<L, R> {
    * @throws NotRightException if this is a left projection
    */
   public R get() {
-    if (isRight()) return right().getValue();
+    if (isRight()) return rightProjection(this).getValue();
     else throw new NotRightException();
   }
 
   /**
    * Get the right projected value of the either or a provided default value.
    *
-   * @param r the default value
+   * @param t the default value
    * @return the wrapped value if this is a right projection, otherwise the default
    */
-  public R getOrElse(final R r) {
-    return isRight() ? right().getValue() : r;
+  public static <T> T getOrElse(final Either<?, ? extends T> either, final T t) {
+    return either.isRight() ? either.get() : t;
   }
 
   @Override
@@ -82,8 +90,9 @@ public abstract class Either<L, R> {
   @SuppressWarnings("unchecked")
   public <L, R, T extends L> Either<T, R> castLeft(final Class<T> clazz) {
     if (isRight()) return (Either<T, R>) this;
-    else if (clazz.isAssignableFrom(left().getValue().getClass())) return (Either<T, R>) this;
-    else throw new ClassCastException(left() + " is not an instance of " + clazz);
+    else if (clazz.isAssignableFrom(leftProjection(this).getValue().getClass()))
+      return (Either<T, R>) this;
+    else throw new ClassCastException(leftProjection(this) + " is not an instance of " + clazz);
   }
 
   /**
@@ -99,8 +108,8 @@ public abstract class Either<L, R> {
   @SuppressWarnings("unchecked")
   public <L, R, T extends R> Either<L, T> castRight(final Class<T> clazz) {
     if (this.isLeft()) return (Either<L, T>) this;
-    else if (clazz.isAssignableFrom(right().getValue().getClass())) return (Either<L, T>) this;
-    else throw new ClassCastException(right() + " is not an instance of " + clazz);
+    else if (clazz.isAssignableFrom(get().getClass())) return (Either<L, T>) this;
+    else throw new ClassCastException(rightProjection(this) + " is not an instance of " + clazz);
   }
 
   /**
@@ -150,16 +159,6 @@ public abstract class Either<L, R> {
     }
 
     @Override
-    public Left<L, R> left() {
-      return this;
-    }
-
-    @Override
-    public Right<L, R> right() {
-      throw new NotRightException();
-    }
-
-    @Override
     public boolean isLeft() {
       return true;
     }
@@ -200,16 +199,6 @@ public abstract class Either<L, R> {
      */
     public R getValue() {
       return value;
-    }
-
-    @Override
-    public Left<L, R> left() {
-      throw new NotLeftException();
-    }
-
-    @Override
-    public Right<L, R> right() {
-      return this;
     }
 
     @Override

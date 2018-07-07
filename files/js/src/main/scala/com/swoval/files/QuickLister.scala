@@ -32,7 +32,7 @@ trait QuickLister {
 
 }
 
-private[files] object QuickListerImpl {
+object QuickListerImpl {
 
   /*
    * These constants must be kept in sync with the native quick list implementation
@@ -84,8 +84,7 @@ private[files] object QuickListerImpl {
 
 }
 
-private[files] class QuickListerImpl(private val directoryLister: DirectoryLister)
-    extends QuickLister {
+class QuickListerImpl(private val directoryLister: DirectoryLister) extends QuickLister {
 
   override def list(path: Path, maxDepth: Int, followLinks: Boolean): List[QuickFile] =
     list(path, maxDepth, followLinks, AllPass)

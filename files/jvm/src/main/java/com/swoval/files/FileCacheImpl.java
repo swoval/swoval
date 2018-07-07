@@ -522,7 +522,7 @@ class FileCacheImpl<T> implements FileCache<T> {
                     path,
                     dir.getDepth() == Integer.MAX_VALUE ? Integer.MAX_VALUE : dir.getDepth() - 1);
               final Directory.Updates<T> updates =
-                  dir.update(toUpdate, Directory.Entry.getKind(toUpdate, attrs));
+                  dir.update(toUpdate, Entries.getKind(toUpdate, attrs));
               updates.observe(callbackObserver(callbacks));
             } catch (final IOException e) {
               addCallback(callbacks, path, null, null, PathWatchers.Event.Error, e);

@@ -2,7 +2,7 @@
 
 package com.swoval.files
 
-import com.swoval.files.Directory.Entry.DIRECTORY
+import com.swoval.files.Entries.DIRECTORY
 import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.PathWatchers.Event.Create
 import com.swoval.files.PathWatchers.Event.Overflow
@@ -19,7 +19,6 @@ import java.nio.file.FileSystemLoopException
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
-import java.util.Collections
 import java.util.HashMap
 import java.util.HashSet
 import java.util.Iterator
@@ -53,9 +52,7 @@ class NioPathWatcher(callback: Consumer[Event],
   private val converter: Converter[WatchedDirectory] =
     new Converter[WatchedDirectory]() {
       override def apply(path: Path): WatchedDirectory =
-        nioPathWatcherService
-          .register(path)
-          .getOrElse(WatchedDirectories.INVALID)
+        Either.getOrElse(nioPathWatcherService.register(path), WatchedDirectories.INVALID)
     }
 
   private val nioPathWatcherService: NioPathWatcherService =
@@ -79,7 +76,7 @@ class NioPathWatcher(callback: Consumer[Event],
       override def onCreate(newEntry: Directory.Entry[WatchedDirectory]): Unit = {}
 
       override def onDelete(oldEntry: Directory.Entry[WatchedDirectory]): Unit = {
-        oldEntry.getValue.close()
+        close(oldEntry.getValue)
       }
 
       override def onUpdate(oldEntry: Directory.Entry[WatchedDirectory],
@@ -128,7 +125,6 @@ class NioPathWatcher(callback: Consumer[Event],
               override def accept(entry: Entry[_ <: WatchedDirectory]): Boolean =
                 !directoryRegistry.accept(entry.getPath)
             })
-          Collections.sort(toRemove)
           val it: Iterator[Directory.Entry[WatchedDirectory]] =
             toRemove.iterator()
           while (it.hasNext) {
@@ -136,7 +132,7 @@ class NioPathWatcher(callback: Consumer[Event],
             if (!directoryRegistry.accept(entry.getPath)) {
               val toCancel: Iterator[Directory.Entry[WatchedDirectory]] =
                 dir.remove(entry.getPath).iterator()
-              while (toCancel.hasNext) toCancel.next().getValue.close()
+              while (toCancel.hasNext) close(toCancel.next().getValue)
             }
           }
         }
@@ -153,10 +149,10 @@ class NioPathWatcher(callback: Consumer[Event],
             rootDirectories.values.iterator()
           while (it.hasNext) {
             val dir: Directory[WatchedDirectory] = it.next()
-            dir.entry().getValue.close()
+            close(dir.entry().getValue)
             val entries: Iterator[Directory.Entry[WatchedDirectory]] =
               dir.list(true, AllPass).iterator()
-            while (entries.hasNext) entries.next().getValue.close()
+            while (entries.hasNext) close(entries.next().getValue)
           }
           nioPathWatcherService.close()
         }
@@ -208,12 +204,7 @@ class NioPathWatcher(callback: Consumer[Event],
         if (root != null) {
           val it: Iterator[Directory.Entry[WatchedDirectory]] =
             root.remove(event.getPath).iterator()
-          while (it.hasNext) {
-            val watchedDirectory: WatchedDirectory = it.next().getValue
-            if (watchedDirectory != null) {
-              watchedDirectory.close()
-            }
-          }
+          while (it.hasNext) close(it.next().getValue)
         }
       }
       if (Files.isDirectory(event.getPath)) {
@@ -366,10 +357,7 @@ class NioPathWatcher(callback: Consumer[Event],
     if (dir != null) {
       val directories: List[Directory.Entry[WatchedDirectory]] =
         dir.list(path, -1, AllPass)
-      if (result || directories.isEmpty || !directories
-            .get(0)
-            .getValue
-            .isValid) {
+      if (result || directories.isEmpty || !isValid(directories.get(0).getValue)) {
         var toUpdate: Path = path
         while (toUpdate != null && !Files.isDirectory(toUpdate)) toUpdate = toUpdate.getParent
         if (toUpdate != null) update(dir, toUpdate)
@@ -381,5 +369,13 @@ class NioPathWatcher(callback: Consumer[Event],
   private def update(dir: Directory[WatchedDirectory], path: Path): Unit = {
     dir.update(path, DIRECTORY).observe(updateObserver)
   }
+
+  private def close(either: com.swoval.functional.Either[IOException, WatchedDirectory]): Unit = {
+    if (either.isRight) either.get.close()
+  }
+
+  private def isValid(
+      either: com.swoval.functional.Either[IOException, WatchedDirectory]): Boolean =
+    either.isRight && either.get.isValid
 
 }

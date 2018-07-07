@@ -1,6 +1,6 @@
 package com.swoval.files;
 
-import static com.swoval.files.Directory.Entry.DIRECTORY;
+import static com.swoval.files.Entries.DIRECTORY;
 import static com.swoval.files.EntryFilters.AllPass;
 import static com.swoval.files.PathWatchers.Event.Create;
 import static com.swoval.files.PathWatchers.Event.Overflow;
@@ -18,7 +18,6 @@ import java.nio.file.FileSystemLoopException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -45,7 +44,7 @@ class NioPathWatcher implements PathWatcher {
 
         @Override
         public void onDelete(final Directory.Entry<WatchedDirectory> oldEntry) {
-          oldEntry.getValue().close();
+          close(oldEntry.getValue());
         }
 
         @Override
@@ -100,7 +99,8 @@ class NioPathWatcher implements PathWatcher {
         new Converter<WatchedDirectory>() {
           @Override
           public WatchedDirectory apply(final Path path) {
-            return nioPathWatcherService.register(path).getOrElse(WatchedDirectories.INVALID);
+            return Either.getOrElse(
+                nioPathWatcherService.register(path), WatchedDirectories.INVALID);
           }
         };
   }
@@ -163,7 +163,6 @@ class NioPathWatcher implements PathWatcher {
                           return !directoryRegistry.accept(entry.getPath());
                         }
                       });
-              Collections.sort(toRemove);
               final Iterator<Directory.Entry<WatchedDirectory>> it = toRemove.iterator();
               while (it.hasNext()) {
                 final Directory.Entry<WatchedDirectory> entry = it.next();
@@ -171,7 +170,7 @@ class NioPathWatcher implements PathWatcher {
                   final Iterator<Directory.Entry<WatchedDirectory>> toCancel =
                       dir.remove(entry.getPath()).iterator();
                   while (toCancel.hasNext()) {
-                    toCancel.next().getValue().close();
+                    close(toCancel.next().getValue());
                   }
                 }
               }
@@ -192,11 +191,11 @@ class NioPathWatcher implements PathWatcher {
               final Iterator<Directory<WatchedDirectory>> it = rootDirectories.values().iterator();
               while (it.hasNext()) {
                 final Directory<WatchedDirectory> dir = it.next();
-                dir.entry().getValue().close();
+                close(dir.entry().getValue());
                 final Iterator<Directory.Entry<WatchedDirectory>> entries =
                     dir.list(true, AllPass).iterator();
                 while (entries.hasNext()) {
-                  entries.next().getValue().close();
+                  close(entries.next().getValue());
                 }
               }
               nioPathWatcherService.close();
@@ -249,10 +248,7 @@ class NioPathWatcher implements PathWatcher {
           final Iterator<Directory.Entry<WatchedDirectory>> it =
               root.remove(event.getPath()).iterator();
           while (it.hasNext()) {
-            final WatchedDirectory watchedDirectory = it.next().getValue();
-            if (watchedDirectory != null) {
-              watchedDirectory.close();
-            }
+            close(it.next().getValue());
           }
         }
       }
@@ -415,7 +411,7 @@ class NioPathWatcher implements PathWatcher {
     final Directory<WatchedDirectory> dir = getRoot(realPath.getRoot());
     if (dir != null) {
       final List<Directory.Entry<WatchedDirectory>> directories = dir.list(path, -1, AllPass);
-      if (result || directories.isEmpty() || !directories.get(0).getValue().isValid()) {
+      if (result || directories.isEmpty() || !isValid(directories.get(0).getValue())) {
         Path toUpdate = path;
         while (toUpdate != null && !Files.isDirectory(toUpdate)) {
           toUpdate = toUpdate.getParent();
@@ -428,5 +424,14 @@ class NioPathWatcher implements PathWatcher {
 
   private void update(final Directory<WatchedDirectory> dir, final Path path) throws IOException {
     dir.update(path, DIRECTORY).observe(updateObserver);
+  }
+
+  private void close(final com.swoval.functional.Either<IOException, WatchedDirectory> either) {
+    if (either.isRight()) either.get().close();
+  }
+
+  private boolean isValid(
+      final com.swoval.functional.Either<IOException, WatchedDirectory> either) {
+    return either.isRight() && either.get().isValid();
   }
 }

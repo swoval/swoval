@@ -8,6 +8,33 @@ import scala.beans.{ BeanProperty, BooleanBeanProperty }
 object Either {
 
   /**
+   * Returns the Left projection
+   *
+   * @return a Left projection
+   */
+  def leftProjection[L, R](either: Either[L, R]): Left[L, R] =
+    if (either.isLeft) either.asInstanceOf[Left[L, R]]
+    else throw new NotLeftException()
+
+  /**
+   * Returns the Right projection
+   *
+   * @return a Right projection
+   */
+  def rightProjection[L, R](either: Either[L, R]): Right[L, R] =
+    if (either.isRight) either.asInstanceOf[Right[L, R]]
+    else throw new NotRightException()
+
+  /**
+   * Get the right projected value of the either or a provided default value.
+   *
+   * @param t the default value
+   * @return the wrapped value if this is a right projection, otherwise the default
+   */
+  def getOrElse[T](either: Either[_, _ <: T], t: T): T =
+    if (either.isRight) either.get else t
+
+  /**
    * Returns a left projected either
    *
    * @param value The value to wrap
@@ -37,10 +64,6 @@ object Either {
 
   class Left[L, R](@BeanProperty val value: L) extends Either[L, R] {
 
-    override def left(): Left[L, R] = this
-
-    override def right(): Right[L, R] = throw new NotRightException()
-
     override def isLeft(): Boolean = true
 
     override def isRight(): Boolean = false
@@ -59,10 +82,6 @@ object Either {
   }
 
   class Right[L, R](@BeanProperty val value: R) extends Either[L, R] {
-
-    override def left(): Left[L, R] = throw new NotLeftException()
-
-    override def right(): Right[L, R] = this
 
     override def isLeft(): Boolean = false
 
@@ -90,21 +109,7 @@ object Either {
  * @tparam L The left value
  * @tparam R The right value
  */
-abstract class Either[L, R] private () {
-
-  /**
-   * Returns the Left projection
-   *
-   * @return a Left projection
-   */
-  def left(): Left[L, R]
-
-  /**
-   * Returns the Right projection
-   *
-   * @return a Right projection
-   */
-  def right(): Right[L, R]
+abstract class Either[+L, +R] private () {
 
   /**
    * Check whether this is a Left projection.
@@ -127,15 +132,8 @@ abstract class Either[L, R] private () {
    * @return the wrapped value if is a right projection
    */
   def get(): R =
-    if (isRight) right().getValue else throw new NotRightException()
-
-  /**
-   * Get the right projected value of the either or a provided default value.
-   *
-   * @param r the default value
-   * @return the wrapped value if this is a right projection, otherwise the default
-   */
-  def getOrElse(r: R): R = if (isRight) right().getValue else r
+    if (isRight) rightProjection(this).getValue
+    else throw new NotRightException()
 
   override def hashCode(): Int
 
@@ -152,10 +150,10 @@ abstract class Either[L, R] private () {
    */
   def castLeft[L, R, T <: L](clazz: Class[T]): Either[T, R] =
     if (isRight) this.asInstanceOf[Either[T, R]]
-    else if (clazz.isAssignableFrom(left().getValue.getClass))
+    else if (clazz.isAssignableFrom(leftProjection(this).getValue.getClass))
       this.asInstanceOf[Either[T, R]]
     else
-      throw new ClassCastException(left() + " is not an instance of " + clazz)
+      throw new ClassCastException(leftProjection(this) + " is not an instance of " + clazz)
 
   /**
    * Casts an either to a more specific right type
@@ -168,9 +166,9 @@ abstract class Either[L, R] private () {
    */
   def castRight[L, R, T <: R](clazz: Class[T]): Either[L, T] =
     if (this.isLeft) this.asInstanceOf[Either[L, T]]
-    else if (clazz.isAssignableFrom(right().getValue.getClass))
+    else if (clazz.isAssignableFrom(get.getClass))
       this.asInstanceOf[Either[L, T]]
     else
-      throw new ClassCastException(right() + " is not an instance of " + clazz)
+      throw new ClassCastException(rightProjection(this) + " is not an instance of " + clazz)
 
 }

@@ -36,10 +36,10 @@ import java.util.Set
 import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicBoolean
 
-private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter[T],
-                                                factory: Factory,
-                                                executor: Executor,
-                                                options: FileCaches.Option*)
+class FileCacheImpl[T <: AnyRef](private val converter: Converter[T],
+                                 factory: Factory,
+                                 executor: Executor,
+                                 options: FileCaches.Option*)
     extends FileCache[T] {
 
   private val observers: Observers[T] = new Observers()
@@ -478,7 +478,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
                                             java.lang.Integer.MAX_VALUE
                                           else dir.getDepth - 1)
               val updates: Directory.Updates[T] =
-                dir.update(toUpdate, Directory.Entry.getKind(toUpdate, attrs))
+                dir.update(toUpdate, Entries.getKind(toUpdate, attrs))
               updates.observe(callbackObserver(callbacks))
             } catch {
               case e: IOException =>

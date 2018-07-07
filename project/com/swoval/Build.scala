@@ -455,8 +455,7 @@ object Build {
                 "ApplePathWatcher",
                 "Directory",
                 "DirectoryRegistry",
-                "PathWatcher",
-                "PathWatchers",
+                "Entries",
                 "EntryFilters",
                 "FileCache",
                 "FileCacheImpl",
@@ -465,10 +464,13 @@ object Build {
                 "NioPathWatcher",
                 "NioDirectoryLister",
                 "Observers",
+                "PathWatcher",
+                "PathWatchers",
                 "QuickFile",
                 "QuickLister",
                 "RegisterableWatchService",
                 "SymlinkWatcher",
+                "TypedPath",
                 "WatchedDirectory"
               ).value
               convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value

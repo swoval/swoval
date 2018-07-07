@@ -397,7 +397,7 @@ trait FileCacheTest extends TestSuite {
 
               override def onUpdate(oldEntry: Entry[LastModified],
                                     newEntry: Entry[LastModified]): Unit =
-                if (oldEntry.getValue.lastModified != newEntry.getValue.lastModified)
+                if (oldEntry.value.lastModified != newEntry.value.lastModified)
                   latch.countDown()
 
               override def onError(path: Path, iOException: IOException): Unit = {}
@@ -409,7 +409,7 @@ trait FileCacheTest extends TestSuite {
               case Seq(f) if f.getPath == file => f
               case p                           => throw new IllegalStateException(p.toString)
             }
-          val lastModified = cachedFile.getValue.lastModified
+          val lastModified = cachedFile.value.lastModified
           lastModified ==> file.lastModified
           val updatedLastModified = 3000
           file.setLastModifiedTime(updatedLastModified)
@@ -419,8 +419,8 @@ trait FileCacheTest extends TestSuite {
                 case Seq(f) if f.getPath == file => f
                 case p                           => throw new IllegalStateException(p.toString)
               }
-            cachedFile.getValue.lastModified ==> lastModified
-            newCachedFile.getValue.lastModified ==> updatedLastModified
+            cachedFile.value.lastModified ==> lastModified
+            newCachedFile.value.lastModified ==> updatedLastModified
           }
         }
       }
@@ -913,7 +913,7 @@ trait FileCacheTest extends TestSuite {
           lastModifiedCache(
             (_: Entry[LastModified]) => {},
             (_: Entry[LastModified], newEntry: Entry[LastModified]) =>
-              if (newEntry.getValue.lastModified == 3000) latch.countDown(),
+              if (newEntry.value.lastModified == 3000) latch.countDown(),
             (_: Entry[LastModified]) => {}
           )) { c =>
           c.register(file)
@@ -939,7 +939,7 @@ trait FileCacheTest extends TestSuite {
             usingAsync(lastModifiedCache(
               (_: Entry[LastModified]) => {},
               (_: Entry[LastModified], newEntry: Entry[LastModified]) =>
-                newEntry.getValue.lastModified match {
+                newEntry.value.lastModified match {
                   case 3000 => latch.countDown()
                   case 4000 => secondLatch.countDown()
                   case _    =>
@@ -991,7 +991,7 @@ object FileCacheTest {
 
     def reg(dir: Path, recursive: Boolean = true): SEither[IOException, Bool] = {
       val res = fileCache.register(dir, recursive)
-      assert(res.getOrElse(false))
+      assert(res.getOrElse[Bool](false))
       res
     }
   }

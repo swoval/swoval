@@ -12,36 +12,13 @@ import java.nio.file.Path;
  * non-POSIX equivalent) on the underlying file. Can be converted to a {@link java.io.File} or
  * {@link java.nio.file.Path} with {@link QuickFile#toFile} and {@link QuickFile#toPath}.
  */
-public interface QuickFile {
+public interface QuickFile extends TypedPath {
   /**
    * Returns the fully resolved file name
    *
    * @return the fully resolved file name
    */
   String getFileName();
-
-  /**
-   * Returns true if this was a directory at the time time of listing. This may become inconsistent
-   * if the QuickFile is cached
-   *
-   * @return true when the QuickFile is a directory
-   */
-  boolean isDirectory();
-  /**
-   * Returns true if this was a regular file at the time time of listing. This may become
-   * inconsistent if the QuickFile is cached
-   *
-   * @return true when the QuickFile is a file
-   */
-  boolean isFile();
-
-  /**
-   * Returns true if this was a symbolic link at the time time of listing. This may become
-   * inconsistent if the QuickFile is cached
-   *
-   * @return true when the QuickFile is a symbolic link
-   */
-  boolean isSymbolicLink();
 
   /**
    * Returns an instance of {@link java.io.File} with fast implementations of {@link

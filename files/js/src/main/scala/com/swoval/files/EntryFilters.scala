@@ -6,7 +6,7 @@ import com.swoval.files.Directory.Entry
 import com.swoval.files.Directory.EntryFilter
 import java.io.FileFilter
 
-private[files] object EntryFilters {
+object EntryFilters {
 
   var AllPass: EntryFilter[AnyRef] = new EntryFilter[AnyRef]() {
     override def accept(entry: Entry[_ <: AnyRef]): Boolean = true

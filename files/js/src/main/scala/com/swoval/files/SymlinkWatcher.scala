@@ -2,6 +2,8 @@
 
 package com.swoval.files
 
+import com.swoval.functional.Either.getOrElse
+import com.swoval.functional.Either.leftProjection
 import java.util.Map.Entry
 import com.swoval.files.Directory.OnError
 import com.swoval.files.PathWatchers.Event
@@ -170,13 +172,13 @@ class SymlinkWatcher(handleEvent: Consumer[Path],
               if (registeredPath == null) {
                 val result: Either[IOException, Boolean] =
                   watcher.register(realPath, maxDepth)
-                if (result.getOrElse(false)) {
+                if (getOrElse(result, false)) {
                   watchedSymlinksByDirectory
                     .put(realPath, new RegisteredPath(path, realPath))
                   watchedSymlinksByTarget
                     .put(realPath, new RegisteredPath(realPath, path))
                 } else if (result.isLeft) {
-                  onError.apply(path, result.left().getValue)
+                  onError.apply(path, leftProjection(result).getValue)
                 }
               }
             } else if (Files.isDirectory(realPath)) {

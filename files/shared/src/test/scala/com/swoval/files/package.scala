@@ -1,16 +1,12 @@
 package com.swoval
 
 import java.io.{ File, FileFilter, IOException }
-import java.nio.charset.Charset
-import java.nio.file.attribute.FileTime
-import java.nio.file.{ Files, NoSuchFileException, Path }
+import java.nio.file.Path
 
 import com.swoval.files.Directory._
 import com.swoval.functional.Consumer
 import com.swoval.test._
 import utest._
-
-import scala.collection.JavaConverters._
 
 /**
  * Provides helper functions to make it more convenient to test the classes in com.swoval.files. It
@@ -23,15 +19,23 @@ package object files extends PlatformFiles {
   val Ignore = Observers.apply(new OnChange[Path] {
     override def apply(cacheEntry: Entry[Path]): Unit = {}
   })
+  implicit class EitherOps[L, R](val either: functional.Either[L, R]) extends AnyVal {
+    def getOrElse[U >: R](u: U): U = functional.Either.getOrElse(either, u)
+    def left(): functional.Either.Left[L, R] = functional.Either.leftProjection[L, R](either)
+    def right(): functional.Either.Right[L, R] = functional.Either.rightProjection[L, R](either)
+  }
   implicit class ConverterFunctionOps[T](val f: Path => T) extends Converter[T] {
     override def apply(path: Path): T = f(path)
   }
   implicit class FileFilterFunctionOps(val f: File => Boolean) extends FileFilter {
     override def accept(pathname: File): Boolean = f(pathname)
   }
+  implicit class EntryOps[T](val entry: Entry[T]) {
+    def value: T = entry.getValue.get
+  }
   implicit class EntryFilterFunctionOps[T](val f: Entry[T] => Boolean) extends EntryFilter[T] {
     override def accept(cacheEntry: Entry[_ <: T]): Boolean =
-      f(new Entry[T](cacheEntry.getPath, cacheEntry.getValue, cacheEntry.getKind))
+      f(cacheEntry.asInstanceOf[Entry[T]])
   }
   implicit class OnChangeFunctionOps[T](val f: Entry[T] => Unit) extends OnChange[T] {
     override def apply(cacheEntry: Entry[T]): Unit = f(cacheEntry)

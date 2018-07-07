@@ -12,7 +12,7 @@ import java.nio.file.Path
  * non-POSIX equivalent) on the underlying file. Can be converted to a [[java.io.File]] or
  * [[java.nio.file.Path]] with [[QuickFile.toFile]] and [[QuickFile.toPath]].
  */
-trait QuickFile {
+trait QuickFile extends TypedPath {
 
   /**
    * Returns the fully resolved file name
@@ -20,30 +20,6 @@ trait QuickFile {
    * @return the fully resolved file name
    */
   def getFileName(): String
-
-  /**
-   * Returns true if this was a directory at the time time of listing. This may become inconsistent
-   * if the QuickFile is cached
-   *
-   * @return true when the QuickFile is a directory
-   */
-  def isDirectory(): Boolean
-
-  /**
-   * Returns true if this was a regular file at the time time of listing. This may become
-   * inconsistent if the QuickFile is cached
-   *
-   * @return true when the QuickFile is a file
-   */
-  def isFile(): Boolean
-
-  /**
-   * Returns true if this was a symbolic link at the time time of listing. This may become
-   * inconsistent if the QuickFile is cached
-   *
-   * @return true when the QuickFile is a symbolic link
-   */
-  def isSymbolicLink(): Boolean
 
   /**
    * Returns an instance of [[java.io.File]] with fast implementations of [[java.io.File.isFile]] and [[File.isDirectory]]. The [[java.io.File.isFile]] and [[java.io.File.isDirectory]] methods return the cached values returned by the native file result
@@ -70,9 +46,7 @@ trait QuickFile {
 
 }
 
-private[files] class QuickFileImpl(name: String, private val kind: Int)
-    extends File(name)
-    with QuickFile {
+class QuickFileImpl(name: String, private val kind: Int) extends File(name) with QuickFile {
 
   override def getFileName(): String = super.toString
 

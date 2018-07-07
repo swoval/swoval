@@ -4,6 +4,7 @@ import static com.swoval.files.PathWatchers.Event.Create;
 import static com.swoval.files.PathWatchers.Event.Delete;
 import static com.swoval.files.PathWatchers.Event.Modify;
 import static com.swoval.files.PathWatchers.Event.Overflow;
+import static com.swoval.functional.Either.leftProjection;
 
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.apple.FileEvent;
@@ -95,8 +96,8 @@ public class ApplePathWatcher implements PathWatcher {
                 return registerImpl(path, flags, maxDepth);
               }
             });
-    if (either.isLeft() && !(either.left().getValue() instanceof IOException)) {
-      throw new RuntimeException(either.left().getValue());
+    if (either.isLeft() && !(leftProjection(either).getValue() instanceof IOException)) {
+      throw new RuntimeException(leftProjection(either).getValue());
     }
     return either.castLeft(IOException.class);
   }

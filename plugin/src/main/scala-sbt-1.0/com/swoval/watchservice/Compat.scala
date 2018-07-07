@@ -1,9 +1,10 @@
 package com.swoval.watchservice
 
-import java.io.File
+import java.io.{ File, IOException }
 import java.nio.file.{ Files, Path }
 
 import com.swoval.files.Directory.{ Entry, EntryFilter }
+import com.swoval.functional
 import sbt.SourceWrapper._
 import sbt._
 import sbt.internal.BuildStructure
@@ -31,10 +32,16 @@ object Compat {
   def extraProjectSettings: Seq[Def.Setting[_]] = Nil
   def settings(s: Seq[Def.Setting[_]]): Seq[Def.Setting[_]] = s
 
+  case class EntryImpl(getPath: Path) extends Entry[Path] {
+    override def getValue: functional.Either[IOException, Path] = functional.Either.right(getPath)
+    override def isDirectory: Boolean = Files.isDirectory(getPath)
+    override def isFile: Boolean = Files.isRegularFile(getPath)
+    override def isSymbolicLink: Boolean = Files.isSymbolicLink(getPath)
+  }
   private class PathFileFilter(val pathFilter: EntryFilter[Path]) extends FileFilter {
     override def accept(file: File): Boolean = pathFilter.accept {
       val p = file.toPath
-      new Entry(p, p)
+      EntryImpl(p)
     }
     override def equals(o: Any): Boolean = o match {
       case that: PathFileFilter => this.pathFilter == that.pathFilter

@@ -1,5 +1,8 @@
-package com.swoval.files
+package com
+package swoval
+package files
 
+import java.io.IOException
 import java.nio.file.{ Path, Paths }
 
 import com.swoval.files.Directory.{ Converter, Entry, EntryFilter, OnChange }
@@ -9,6 +12,12 @@ import scala.scalajs.js
 import scala.scalajs.js.JSConverters._
 import scala.scalajs.js.annotation.{ JSExport, JSExportTopLevel }
 
+private object EitherOpsHolder {
+  implicit class EitherOps[L, R](val e: functional.Either[L, R]) {
+    def getOrElse[U >: R](u: R): U = functional.Either.getOrElse(e, u)
+  }
+}
+import EitherOpsHolder._
 @JSExportTopLevel("FileCache")
 class JsFileCache[T <: AnyRef](converter: js.UndefOr[js.Function1[Path, T]],
                                callback: js.UndefOr[js.Function1[JSEntry[T], Unit]])
@@ -32,11 +41,14 @@ class JsFileCache[T <: AnyRef](converter: js.UndefOr[js.Function1[Path, T]],
         recursive.toOption.getOrElse(false),
         new EntryFilter[T] {
           override def accept(entry: Entry[_ <: T]): Boolean =
-            filter.fold(true)(_.apply(new JSEntry[T](entry.path.toString, entry.getValue)))
+            filter.fold(true)(
+              _.apply(
+                new JSEntry[T](entry.getPath.toString,
+                               functional.Either.getOrElse(entry.getValue, null.asInstanceOf[T]))))
         }
       )
       .asScala
-      .map(e => new JSEntry[T](e.path.toString, e.getValue))
+      .map(e => new JSEntry[T](e.getPath.toString, e.getValue.getOrElse[T](null.asInstanceOf[T])))
       .toJSArray
   }
   def register(path: String,
@@ -47,7 +59,8 @@ class JsFileCache[T <: AnyRef](converter: js.UndefOr[js.Function1[Path, T]],
   def addCallback(callback: js.Function1[JSEntry[T], Unit]): Int =
     inner.addCallback(new OnChange[T] {
       override def apply(entry: Entry[T]) =
-        callback.apply(new JSEntry[T](entry.path.toString, entry.getValue))
+        callback.apply(
+          new JSEntry[T](entry.getPath.toString, entry.getValue.getOrElse[T](null.asInstanceOf[T])))
     })
   def removeCallback(handle: Int): Unit = inner.removeObserver(handle)
   def close(): Unit = inner.close()
