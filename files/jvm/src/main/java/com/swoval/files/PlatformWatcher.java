@@ -4,7 +4,7 @@ import com.swoval.files.PathWatchers.Event;
 import com.swoval.functional.Consumer;
 import java.io.IOException;
 
-public class PlatformWatcher {
+class PlatformWatcher {
   static PathWatcher make(
       final Consumer<Event> callback,
       final Executor executor,
