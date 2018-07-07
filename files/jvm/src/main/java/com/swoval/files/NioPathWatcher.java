@@ -6,6 +6,8 @@ import static com.swoval.files.PathWatchers.Event.Create;
 import static com.swoval.files.PathWatchers.Event.Overflow;
 
 import com.swoval.files.Directory.Converter;
+import com.swoval.files.Directory.Entry;
+import com.swoval.files.Directory.EntryFilter;
 import com.swoval.files.Directory.Observer;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Option;
@@ -133,17 +135,25 @@ abstract class NioPathWatcher implements PathWatcher {
             directoryRegistry.removeDirectory(path);
             final Directory<WatchedDirectory> dir = getRoot(path.getRoot());
             if (dir != null) {
-              List<Directory.Entry<WatchedDirectory>> entries = dir.list(path, true, AllPass);
-              Collections.sort(entries);
-              Collections.reverse(entries);
-              final Iterator<Directory.Entry<WatchedDirectory>> it = entries.iterator();
+              List<Directory.Entry<WatchedDirectory>> toRemove =
+                  dir.list(
+                      true,
+                      new EntryFilter<WatchedDirectory>() {
+                        @Override
+                        public boolean accept(final Entry<? extends WatchedDirectory> entry) {
+                          return !directoryRegistry.accept(entry.path);
+                        }
+                      });
+              Collections.sort(toRemove);
+              final Iterator<Directory.Entry<WatchedDirectory>> it = toRemove.iterator();
               while (it.hasNext()) {
                 final Directory.Entry<WatchedDirectory> watchedDirectory = it.next();
                 if (!directoryRegistry.accept(watchedDirectory.path)) {
                   final Iterator<Directory.Entry<WatchedDirectory>> toCancel =
                       dir.remove(watchedDirectory.path).iterator();
                   while (toCancel.hasNext()) {
-                    toCancel.next().getValue().close();
+                    final Directory.Entry<WatchedDirectory> entry = toCancel.next();
+                    entry.getValue().close();
                   }
                 }
               }

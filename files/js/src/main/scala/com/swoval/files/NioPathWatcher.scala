@@ -7,6 +7,8 @@ import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.PathWatchers.Event.Create
 import com.swoval.files.PathWatchers.Event.Overflow
 import com.swoval.files.Directory.Converter
+import com.swoval.files.Directory.Entry
+import com.swoval.files.Directory.EntryFilter
 import com.swoval.files.Directory.Observer
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.PathWatchers.Option
@@ -102,18 +104,23 @@ abstract class NioPathWatcher(register: IO[Path, WatchedDirectory],
         directoryRegistry.removeDirectory(path)
         val dir: Directory[WatchedDirectory] = getRoot(path.getRoot)
         if (dir != null) {
-          val entries: List[Directory.Entry[WatchedDirectory]] =
-            dir.list(path, true, AllPass)
-          Collections.sort(entries)
-          Collections.reverse(entries)
+          val toRemove: List[Directory.Entry[WatchedDirectory]] =
+            dir.list(true, new EntryFilter[WatchedDirectory]() {
+              override def accept(entry: Entry[_ <: WatchedDirectory]): Boolean =
+                !directoryRegistry.accept(entry.path)
+            })
+          Collections.sort(toRemove)
           val it: Iterator[Directory.Entry[WatchedDirectory]] =
-            entries.iterator()
+            toRemove.iterator()
           while (it.hasNext) {
             val watchedDirectory: Directory.Entry[WatchedDirectory] = it.next()
             if (!directoryRegistry.accept(watchedDirectory.path)) {
               val toCancel: Iterator[Directory.Entry[WatchedDirectory]] =
                 dir.remove(watchedDirectory.path).iterator()
-              while (toCancel.hasNext) toCancel.next().getValue.close()
+              while (toCancel.hasNext) {
+                val entry: Directory.Entry[WatchedDirectory] = toCancel.next()
+                entry.getValue.close()
+              }
             }
           }
         }

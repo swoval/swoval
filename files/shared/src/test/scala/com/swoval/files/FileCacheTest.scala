@@ -28,6 +28,18 @@ trait FileCacheTest extends TestSuite {
   def identity: Converter[Path] = (p: Path) => p
   def simpleCache(f: Entry[Path] => Unit): FileCache[Path] =
     FileCaches.get(((p: Path) => p): Converter[Path], factory, Observers.apply(f: OnChange[Path]))
+
+  def lastModifiedCache(f: Entry[LastModified] => Unit): FileCache[LastModified] =
+    FileCaches.get(LastModified(_), factory, Observers.apply(f: OnChange[LastModified]))
+
+  def lastModifiedCache(onCreate: Entry[LastModified] => Unit,
+                        onUpdate: (Entry[LastModified], Entry[LastModified]) => Unit,
+                        onDelete: Entry[LastModified] => Unit): FileCache[LastModified] =
+    FileCaches.get(
+      LastModified(_),
+      factory,
+      Observers.apply[LastModified](onCreate, onUpdate, onDelete, (_: Path, _: IOException) => {}))
+
   class LoopObserver(val latch: CountDownLatch) extends Observer[Path] {
     override def onCreate(newEntry: Entry[Path]): Unit = {}
     override def onDelete(oldEntry: Entry[Path]): Unit = {}
@@ -861,24 +873,30 @@ trait FileCacheTest extends TestSuite {
           c.ls(dir) === Seq.empty[Path]
         }
       }
-      'simple - withTempFile { file =>
+      'simple - withTempDirectory { root =>
+        val dir = Files.createDirectories(root.resolve("unregister"))
+        val file = dir.resolve("simple").createFile()
         val latch = new CountDownLatch(1)
-        usingAsync(simpleCache((e: Entry[Path]) =>
-          if (e.path == file && Try(e.path.lastModified) == Success(3000)) latch.countDown())) {
-          c =>
-            c.register(file)
-            c.ls(file) === Seq(file)
-            c.unregister(file)
-            c.ls(file) === Seq.empty[Path]
-            file.setLastModifiedTime(3000)
-            latch
-              .waitFor(100.millis) {
-                throw new IllegalStateException(
-                  s"Cache triggered for file that shouldn't be monitored: $file")
-              }
-              .recover {
-                case _: TimeoutException => file.lastModified ==> 3000
-              }
+        usingAsync(
+          lastModifiedCache(
+            (_: Entry[LastModified]) => {},
+            (_: Entry[LastModified], newEntry: Entry[LastModified]) =>
+              if (newEntry.getValue.lastModified == 3000) latch.countDown(),
+            (_: Entry[LastModified]) => {}
+          )) { c =>
+          c.register(file)
+          c.ls(file) === Seq(file)
+          c.unregister(file)
+          c.ls(file) === Seq.empty[Path]
+          file.setLastModifiedTime(3000)
+          latch
+            .waitFor(100.millis) {
+              throw new IllegalStateException(
+                s"Cache triggered for file that shouldn't be monitored: $file")
+            }
+            .recover {
+              case _: TimeoutException => file.lastModified ==> 3000
+            }
         }
       }
       'covered - withTempDirectory { dir =>
@@ -886,13 +904,16 @@ trait FileCacheTest extends TestSuite {
           withTempFile(subdir) { file =>
             val latch = new CountDownLatch(1)
             val secondLatch = new CountDownLatch(1)
-            usingAsync(simpleCache((e: Entry[Path]) => {
-              e.path.lastModified match {
-                case 3000 => latch.countDown()
-                case 4000 => secondLatch.countDown()
-                case _    =>
-              }
-            })) { c =>
+            usingAsync(lastModifiedCache(
+              (_: Entry[LastModified]) => {},
+              (_: Entry[LastModified], newEntry: Entry[LastModified]) =>
+                newEntry.getValue.lastModified match {
+                  case 3000 => latch.countDown()
+                  case 4000 => secondLatch.countDown()
+                  case _    =>
+              },
+              (_: Entry[LastModified]) => {}
+            )) { c =>
               c.register(dir)
               c.register(file)
               c.ls(dir) === Set(subdir, file)
