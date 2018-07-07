@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * @param <T> The data type for the {@link FileCache} to which the observers correspond
  */
-class Observers<T> implements Observer<T>, AutoCloseable {
+public class Observers<T> implements Observer<T>, AutoCloseable {
   private final AtomicInteger counter = new AtomicInteger(0);
   private final Map<Integer, Observer<T>> observers = new HashMap<>();
 

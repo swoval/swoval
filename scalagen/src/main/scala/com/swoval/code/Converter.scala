@@ -58,7 +58,7 @@ object Converter {
         case l                                          => l
       }
     } while (original != next)
-    val regex = "(class|object) (\\w+Impl|Observers|FileOps|EntryFilters)".r
+    val regex = "(class|object) (\\w+Impl|FileOps|EntryFilters)".r
     next.view.map(l => regex.replaceAllIn(l, "private[files] $1 $2"))
   }
   def sanitize(path: Path): String = {
