@@ -192,8 +192,10 @@ abstract class Executor implements AutoCloseable {
     final ExecutorService service =
         new ThreadPoolExecutor(
             1, 1, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(), factory) {
+          @Override
           protected void finalize() {
             shutdown();
+            super.finalize();
           }
 
           @Override
