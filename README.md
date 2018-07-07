@@ -12,13 +12,19 @@ swoval
 [5]: https://ci.appveyor.com/api/projects/status/oy6siu8mom9tk8us?svg=true
 [6]: https://ci.appveyor.com/project/eatkins/swoval/branch/master
 
-A collection of small libraries to facilitate scala development.
+A collection of small developer libraries.
+
+Files
+=
+A cross platform (scala.js and jvm) project that provides a number of helpful utilities,
+including a reactive file system cache and a fast tool for listing the contents of a directory.
+See documentation: [files](files/README.md).
 
 CloseWatch
 =
 
 An sbt plugin to improve watch performance on all platforms (but especially OSX).
-See documentation [CloseWatch](plugin/README.md)
+See documentation: [CloseWatch](plugin/README.md).
 
 License
 ---
