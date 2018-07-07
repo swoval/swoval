@@ -19,6 +19,22 @@ import java.util.List
  * information in the cache by customizing the [[Directory.Converter]] that is passed into the
  * factory [[FileCaches.get]].
  *
+ * The cache allows the user to register a regular file, directory or symbolic link. After
+ * registration, the cache should monitor the path (and in the case of symbolic links, the target
+ * of the link) for updates. Whenever an update is detected, the cache updates its internal
+ * representation of the file system. When that is complete, it will notify all of the registered
+ * [[com.swoval.files.Observers]] of the change. In general, the update that is sent in the
+ * callback will be visible if the user lists the relevant path. It is however, possible that if
+ * the file is being updated rapidly that the internal state of the cache may change in between
+ * the callback being invoked and the user listing the path. Once the file system activity settles
+ * down, the cache should always end up in a consistent state where it mirrors the state of the
+ * file system.
+ *
+ * The semantics of the list method are very similar to the linux `ls` tool. Listing a directory
+ * returns all of the subdirectories and files contained in the directory and the empty list if
+ * the directory is empty. Listing a file, however, will return the entry for the file if it exists
+ * and the empty list otherwise.
+ *
  * @tparam T The type of data stored in the [[Directory.Entry]] instances for the cache
  */
 trait FileCache[T] extends AutoCloseable {

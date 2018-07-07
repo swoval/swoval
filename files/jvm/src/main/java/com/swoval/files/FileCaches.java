@@ -7,6 +7,9 @@ import com.swoval.files.Directory.Observer;
 import com.swoval.files.PathWatchers.Factory;
 import java.io.IOException;
 
+/**
+ * Provides factory methods for generating instances of {@link com.swoval.files.FileCache}.
+ */
 public class FileCaches {
   /**
    * Create a file cache
