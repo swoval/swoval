@@ -8,6 +8,7 @@ import com.swoval.files.Directory._
 import com.swoval.files.EntryOps._
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.PathWatchers.{ DEFAULT_FACTORY, Event, Factory }
+import com.swoval.files.WatchServices.get
 import com.swoval.files.test._
 import com.swoval.functional.{ Consumer, Either => SEither }
 import com.swoval.test.Implicits.executionContext
@@ -1008,17 +1009,14 @@ object NioFileCacheTest extends FileCacheTest {
     override def create(callback: Consumer[Event],
                         executor: Executor,
                         directoryRegistry: DirectoryRegistry): PathWatcher =
-      PlatformWatcher.make(callback,
-                           RegisterableWatchService.newWatchService,
-                           executor,
-                           directoryRegistry)
+      PlatformWatcher.make(callback, WatchServices.get, executor, directoryRegistry)
   }
   val boundedFactory = new Factory {
     override def create(callback: Consumer[Event],
                         executor: Executor,
                         directoryRegistry: DirectoryRegistry): PathWatcher =
       PlatformWatcher.make(callback,
-                           new BoundedWatchService(4, RegisterableWatchService.newWatchService()),
+                           new BoundedWatchService(4, WatchServices.get()),
                            executor,
                            directoryRegistry)
   }

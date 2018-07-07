@@ -1,55 +1,26 @@
 package com.swoval.files;
 
-import com.swoval.files.apple.MacOSXWatchService;
-import com.swoval.runtime.Platform;
 import java.io.IOException;
-import java.nio.file.FileSystems;
 import java.nio.file.Path;
-import java.nio.file.WatchEvent.Kind;
+import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
-import java.nio.file.WatchService;
-import java.util.concurrent.TimeUnit;
 
-/** Wraps a WatchService and implements {@link Registerable} */
-public class RegisterableWatchService implements WatchService, Registerable {
-  private final WatchService watchService;
+/**
+ * Augments the <a
+ * href="https://docs.oracle.com/javase/7/docs/api/java/nio/file/WatchService.html">java.nio.file.WatchService</a>
+ * with a {@link RegisterableWatchService#register} method. This is because <a
+ * href="https://docs.oracle.com/javase/7/docs/api/java/nio/file/Path.html#register(java.nio.file.WatchService,%20java.nio.file.WatchEvent.Kind...)">Path.register</a>
+ * does not work on custom watch services.
+ */
+public interface RegisterableWatchService extends java.nio.file.WatchService {
 
-  public RegisterableWatchService(final WatchService watchService) {
-    this.watchService = watchService;
-  }
-
-  public RegisterableWatchService() throws IOException {
-    this(FileSystems.getDefault().newWatchService());
-  }
-
-  public static Registerable newWatchService() throws IOException, InterruptedException {
-    return Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchService();
-  }
-
-  @Override
-  public WatchKey register(final Path path, final Kind<?>... kinds) throws IOException {
-    return watchService instanceof Registerable
-        ? ((Registerable) watchService).register(path, kinds)
-        : path.register(watchService, kinds);
-  }
-
-  @Override
-  public void close() throws IOException {
-    watchService.close();
-  }
-
-  @Override
-  public WatchKey poll() {
-    return watchService.poll();
-  }
-
-  @Override
-  public WatchKey poll(final long timeout, final TimeUnit unit) throws InterruptedException {
-    return watchService.poll(timeout, unit);
-  }
-
-  @Override
-  public WatchKey take() throws InterruptedException {
-    return watchService.take();
-  }
+  /**
+   * Register a path for monitoring.
+   *
+   * @param path The path to monitor.
+   * @param kinds The types of events to monitor.
+   * @return WatchKey the key returned by the WatchService
+   * @throws IOException when the path cannot be registered
+   */
+  WatchKey register(final Path path, final WatchEvent.Kind<?>... kinds) throws IOException;
 }

@@ -20,7 +20,7 @@ import scala.util.Try
  */
 private[files] class NioPathWatcherService(eventConsumer: Consumer[Event],
                                            overflowConsumer: Consumer[Path],
-                                           registerable: Registerable,
+                                           registerable: RegisterableWatchService,
                                            internalExecutor: Executor)
     extends AutoCloseable {
   private[this] var closed = false

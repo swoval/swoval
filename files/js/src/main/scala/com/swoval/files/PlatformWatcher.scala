@@ -3,9 +3,9 @@ package com.swoval.files
 import com.swoval.files.PathWatchers.Event
 import com.swoval.functional.Consumer
 
-object PlatformWatcher {
+private[files] object PlatformWatcher {
   def make(callback: Consumer[Event],
-           registerable: Registerable,
+           registerable: RegisterableWatchService,
            callbackExecutor: Executor,
            internalExecutor: Executor,
            directoryRegistry: DirectoryRegistry): PathWatcher = {
@@ -16,7 +16,7 @@ object PlatformWatcher {
                        directoryRegistry)
   }
   def make(callback: Consumer[Event],
-           registerable: Registerable,
+           registerable: RegisterableWatchService,
            internalExecutor: Executor,
            directoryRegistry: DirectoryRegistry): PathWatcher = {
     make(callback, registerable, Executor.make("callback"), internalExecutor, directoryRegistry)

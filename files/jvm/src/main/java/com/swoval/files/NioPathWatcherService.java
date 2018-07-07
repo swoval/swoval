@@ -34,12 +34,12 @@ class NioPathWatcherService implements AutoCloseable {
   private static final AtomicInteger threadId = new AtomicInteger(0);
   private final CountDownLatch shutdownLatch = new CountDownLatch(1);
   private final Map<Path, WatchedDirectory> watchedDirectoriesByPath = new HashMap<>();
-  private final Registerable watchService;
+  private final RegisterableWatchService watchService;
 
   NioPathWatcherService(
       final Consumer<Event> eventConsumer,
       final Consumer<Path> overflowConsumer,
-      final Registerable watchService,
+      final RegisterableWatchService watchService,
       final Executor internalExecutor)
       throws InterruptedException {
     this.watchService = watchService;

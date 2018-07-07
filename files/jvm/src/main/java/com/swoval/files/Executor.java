@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Provides an execution context to run tasks. Exists to allow source interoperability with scala.js
  */
-public abstract class Executor implements AutoCloseable {
+abstract class Executor implements AutoCloseable {
   Executor() {}
 
   /**
@@ -25,7 +25,7 @@ public abstract class Executor implements AutoCloseable {
    *
    * @param runnable task to run
    */
-  public abstract void run(final Runnable runnable);
+  abstract void run(final Runnable runnable);
 
   /**
    * Returns a copy of the executor. The purpose of this is to provide the executor to a class or
@@ -33,7 +33,7 @@ public abstract class Executor implements AutoCloseable {
    *
    * @return An executor that
    */
-  public Executor copy() {
+  Executor copy() {
     final Executor self = this;
     return new Executor() {
       @Override
@@ -50,22 +50,26 @@ public abstract class Executor implements AutoCloseable {
    * @param <T> The result type of the Callable
    * @return The result evaluated by the Callable
    */
-  public <T> Either<Exception, T> block(final Callable<T> callable) {
+  <T> Either<Exception, T> block(final Callable<T> callable) {
     final ArrayBlockingQueue<Either<Exception, T>> queue = new ArrayBlockingQueue<>(1);
-    run(
-        new Runnable() {
-          @Override
-          public void run() {
-            try {
-              queue.add(Either.<Exception, T, T>right(callable.call()));
-            } catch (Exception e) {
-              queue.add(Either.<Exception, T, Exception>left(e));
-            }
-          }
-        });
     try {
-      return queue.take();
-    } catch (InterruptedException e) {
+      run(
+          new Runnable() {
+            @Override
+            public void run() {
+              try {
+                queue.add(Either.<Exception, T, T>right(callable.call()));
+              } catch (Exception e) {
+                queue.add(Either.<Exception, T, Exception>left(e));
+              }
+            }
+          });
+      try {
+        return queue.take();
+      } catch (InterruptedException e) {
+        return Either.left(e);
+      }
+    } catch (final Exception e) {
       return Either.left(e);
     }
   }
@@ -74,11 +78,10 @@ public abstract class Executor implements AutoCloseable {
    * Blocks the current thread until the executor runs the provided Runnable.
    *
    * @param runnable The Runnable to invoke.
-   * @return true if the Runnable succeeds, false otherwise.
    */
-  public boolean block(final Runnable runnable) {
+  @SuppressWarnings("EmptyCatchBlock")
+  void block(final Runnable runnable) {
     final CountDownLatch latch = new CountDownLatch(1);
-    boolean result;
     try {
       run(
           new Runnable() {
@@ -89,18 +92,15 @@ public abstract class Executor implements AutoCloseable {
             }
           });
       latch.await();
-      result = true;
     } catch (InterruptedException e) {
-      result = false;
     }
-    return result;
   }
 
   /** Close the executor. All exceptions must be handled by the implementation. */
   @Override
   public void close() {}
 
-  static class ExecutorImpl extends Executor {
+  private static class ExecutorImpl extends Executor {
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     final ThreadFactory factory;
@@ -163,9 +163,13 @@ public abstract class Executor implements AutoCloseable {
       }
     }
 
-    public void run(final Runnable runnable) {
+    void run(final Runnable runnable) {
       if (factory.created(Thread.currentThread())) {
-        runnable.run();
+        try {
+          runnable.run();
+        } catch (final Exception e) {
+          e.printStackTrace();
+        }
       } else {
         synchronized (runnables) {
           final Either<Integer, Runnable> either = Either.right(runnable);
@@ -183,13 +187,15 @@ public abstract class Executor implements AutoCloseable {
    * @param name The name of the executor thread
    * @return Executor
    */
-  public static Executor make(final String name) {
+  static Executor make(final String name) {
     final ThreadFactory factory = new ThreadFactory(name);
     final ExecutorService service =
         new ThreadPoolExecutor(
             1, 1, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(), factory) {
+          @Override
           protected void finalize() {
             shutdown();
+            super.finalize();
           }
 
           @Override

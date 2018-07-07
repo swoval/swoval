@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  Provides a PathWatcher that is backed by a [[java.nio.file.WatchService]].
  */
 class NioPathWatcher(callback: Consumer[Event],
-                     registerable: Registerable,
+                     registerableWatchService: RegisterableWatchService,
                      private val callbackExecutor: Executor,
                      private val internalExecutor: Executor,
                      managedDirectoryRegistry: DirectoryRegistry)
@@ -70,7 +70,7 @@ class NioPathWatcher(callback: Consumer[Event],
           handleOverflow(callback, path)
         }
       },
-      registerable,
+      registerableWatchService,
       internalExecutor
     )
 

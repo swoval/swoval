@@ -7,7 +7,7 @@ import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
 import com.swoval.concurrent.ThreadFactory;
 import com.swoval.files.LinkOption;
-import com.swoval.files.Registerable;
+import com.swoval.files.RegisterableWatchService;
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
 import com.swoval.functional.Consumer;
 import java.io.IOException;
@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Provides an alternative @{link java.nio.file.WatchService} for mac that uses native file system
  * events rather than polling for file changes.
  */
-public class MacOSXWatchService implements WatchService, AutoCloseable, Registerable {
+public class MacOSXWatchService implements WatchService, AutoCloseable, RegisterableWatchService {
   private final double watchLatency;
   private final int queueSize;
   private final AtomicBoolean open = new AtomicBoolean(true);
