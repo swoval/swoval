@@ -78,11 +78,10 @@ abstract class Executor implements AutoCloseable {
    * Blocks the current thread until the executor runs the provided Runnable.
    *
    * @param runnable The Runnable to invoke.
-   * @return true if the Runnable succeeds, false otherwise.
    */
-  boolean block(final Runnable runnable) {
+  @SuppressWarnings("EmptyCatchBlock")
+  void block(final Runnable runnable) {
     final CountDownLatch latch = new CountDownLatch(1);
-    boolean result;
     try {
       run(
           new Runnable() {
@@ -93,11 +92,8 @@ abstract class Executor implements AutoCloseable {
             }
           });
       latch.await();
-      result = true;
     } catch (InterruptedException e) {
-      result = false;
     }
-    return result;
   }
 
   /** Close the executor. All exceptions must be handled by the implementation. */
