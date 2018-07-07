@@ -19,7 +19,7 @@ private[files] object EntryFilters {
 
   def fromFileFilter[T](f: FileFilter): EntryFilter[T] = new EntryFilter[T]() {
     override def accept(entry: Entry[_ <: T]): Boolean =
-      f.accept(entry.path.toFile())
+      f.accept(entry.getPath.toFile())
 
     override def toString(): String = "FromFileFilter(" + f + ")"
   }

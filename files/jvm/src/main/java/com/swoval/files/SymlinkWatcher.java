@@ -87,7 +87,7 @@ class SymlinkWatcher implements AutoCloseable {
                   public void run() {
 
                     final List<Runnable> callbacks = new ArrayList<>();
-                    final Path path = event.path;
+                    final Path path = event.getPath();
                     {
                       final RegisteredPath registeredPath = find(path, watchedSymlinksByTarget);
                       if (registeredPath != null) {
@@ -107,15 +107,15 @@ class SymlinkWatcher implements AutoCloseable {
                         }
                       }
                     }
-                    if (!Files.exists(event.path)) {
-                      watchedSymlinksByTarget.remove(event.path);
+                    if (!Files.exists(event.getPath())) {
+                      watchedSymlinksByTarget.remove(event.getPath());
                       final RegisteredPath registeredPath =
-                          watchedSymlinksByDirectory.get(event.path);
+                          watchedSymlinksByDirectory.get(event.getPath());
                       if (registeredPath != null) {
-                        registeredPath.paths.remove(event.path);
+                        registeredPath.paths.remove(event.getPath());
                         if (registeredPath.paths.isEmpty()) {
-                          watcher.unregister(event.path);
-                          watchedSymlinksByDirectory.remove(event.path);
+                          watcher.unregister(event.getPath());
+                          watchedSymlinksByDirectory.remove(event.getPath());
                         }
                       }
                     }

@@ -27,7 +27,7 @@ class EntryFilters {
     return new EntryFilter<T>() {
       @Override
       public boolean accept(Entry<? extends T> entry) {
-        return f.accept(entry.path.toFile());
+        return f.accept(entry.getPath().toFile());
       }
 
       @Override

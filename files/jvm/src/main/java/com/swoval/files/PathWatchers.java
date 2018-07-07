@@ -115,13 +115,22 @@ public class PathWatchers {
 
   /** Container for {@link PathWatcher} events */
   public static final class Event {
-    public final Path path;
-    public final Event.Kind kind;
     public static final Kind Create = new Kind("Create", 1);
     public static final Kind Delete = new Kind("Delete", 2);
     public static final Kind Error = new Kind("Error", 4);
     public static final Kind Modify = new Kind("Modify", 3);
     public static final Kind Overflow = new Kind("Overflow", 0);
+
+    public Path getPath() {
+      return path;
+    }
+
+    public Kind getKind() {
+      return kind;
+    }
+
+    private final Path path;
+    private final Event.Kind kind;
 
     public Event(final Path path, final Event.Kind kind) {
       this.path = path;

@@ -345,7 +345,7 @@ object DirectoryTest extends TestSuite {
           directory.entry().getValueOrDefault(2) ==> 1
           directory
             .ls(recursive = true, AllPass)
-            .map(e => e.path -> e.getValueOrDefault(3)) === Seq(subdir -> 3)
+            .map(e => e.getPath -> e.getValueOrDefault(3)) === Seq(subdir -> 3)
         }
         'file - withTempFileSync { file =>
           val parent = file.getParent
@@ -356,7 +356,7 @@ object DirectoryTest extends TestSuite {
           dir.entry().getValueOrDefault(2) ==> 1
           dir
             .ls(recursive = true, AllPass)
-            .map(e => e.path -> e.getValueOrDefault(3)) === Seq(file -> 3)
+            .map(e => e.getPath -> e.getValueOrDefault(3)) === Seq(file -> 3)
         }
       }
     }

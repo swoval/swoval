@@ -1,10 +1,9 @@
 package com.swoval.watchservice
 
 import java.io.FileFilter
-import java.nio.file.{ Path, Paths }
+import java.nio.file.Path
 
 import com.swoval.files.Directory.{ Converter, Entry, EntryFilter }
-import com.swoval.files.FileCaches.get
 import com.swoval.files._
 import com.swoval.runtime.ShutdownHooks
 import sbt.Keys._
@@ -14,11 +13,12 @@ import sbt.complete.{ DefaultParsers, Parser }
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.duration._
+import scala.util.Try
 
 object CloseWatchPlugin extends AutoPlugin {
   override def trigger = allRequirements
   private implicit class FileFilterOps(val fileFilter: FileFilter) extends EntryFilter[Path] {
-    override def accept(entry: Entry[_ <: Path]): Boolean = fileFilter.accept(entry.path.toFile)
+    override def accept(entry: Entry[_ <: Path]): Boolean = fileFilter.accept(entry.getPath.toFile)
   }
   private[watchservice] var _internalFileCache: FileCache[Path] = _
   object autoImport {
@@ -61,7 +61,7 @@ object CloseWatchPlugin extends AutoPlugin {
         _internalFileCache
           .list(path, recursive, filter)
           .asScala
-          .map(_.path.toFile)
+          .map(_.getPath.toFile)
       }
 
     val unmanagedDirs = (unmanagedSourceDirectories in conf).value.distinct
@@ -91,8 +91,8 @@ object CloseWatchPlugin extends AutoPlugin {
       if (sourcesInBase.value && config != ConfigKey(Test.name)) {
         val pathFilter = new EntryFilter[Path] {
           override def accept(cacheEntry: Entry[_ <: Path]): Boolean = {
-            val f = cacheEntry.path.toFile
-            cacheEntry.path.getParent == baseDir && include.accept(f) && !exclude.accept(f)
+            val f = cacheEntry.getPath.toFile
+            cacheEntry.getPath.getParent == baseDir && include.accept(f) && !exclude.accept(f)
           }
           override def toString: String =
             s"""SourceFilter(
@@ -192,7 +192,7 @@ object CloseWatchPlugin extends AutoPlugin {
       def filter(dir: File): SourceFilter = {
         val pathFilter = new EntryFilter[Path] {
           override def accept(cacheEntry: Entry[_ <: Path]): Boolean = {
-            val f = cacheEntry.path.toFile
+            val f = cacheEntry.getPath.toFile
             include.accept(f) && !exclude.accept(f)
           }
           override def toString: String = s"${Filter.show(include)} && !${Filter.show(ef)}"
@@ -280,7 +280,7 @@ object CloseWatchPlugin extends AutoPlugin {
     },
     onUnload := { state =>
       state.log.debug(s"Closing internal file cache")
-      _internalFileCache.close()
+      Try(_internalFileCache.close())
       state
     }
   )

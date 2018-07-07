@@ -60,14 +60,14 @@ trait FileCacheTest extends TestSuite {
           val events = new ArrayBlockingQueue[Path](2)
           val eventSet = mutable.Set.empty[Path]
           usingAsync(simpleCache((cacheEntry: Entry[Path]) =>
-            if (eventSet.add(cacheEntry.path)) events.add(cacheEntry.path))) { c =>
+            if (eventSet.add(cacheEntry.getPath)) events.add(cacheEntry.getPath))) { c =>
             c.register(dir)
             withTempDirectory(dir) { subdir =>
               withTempFile(subdir) { f =>
                 events.poll(DEFAULT_TIMEOUT)(e => assert(e == subdir || e == f)).flatMap { _ =>
                   events.poll(DEFAULT_TIMEOUT) { e =>
                     assert(e == subdir || e == f)
-                    c.ls(dir).map(_.path).toSet === Set(subdir, f)
+                    c.ls(dir).map(_.getPath).toSet === Set(subdir, f)
                     ()
                   }
                 }
@@ -156,8 +156,8 @@ trait FileCacheTest extends TestSuite {
           val observer = Observers.apply[Path](
             (_: Entry[Path]) => creationLatch.countDown(),
             (_: Entry[Path], e: Entry[Path]) =>
-              if (Try(e.path.lastModified) == Success(3000)) {
-                e.path.setLastModifiedTime(4000)
+              if (Try(e.getPath.lastModified) == Success(3000)) {
+                e.getPath.setLastModifiedTime(4000)
                 updateLatch.countDown()
             },
             (_: Entry[Path]) => deletionLatch.countDown(),
@@ -173,7 +173,7 @@ trait FileCacheTest extends TestSuite {
             })
             creationLatch
               .waitFor(timeout) {
-                val found = c.ls(dir).map(_.path).toSet
+                val found = c.ls(dir).map(_.getPath).toSet
                 // Need to synchronize since files is first set on a different thread
                 allFiles.synchronized {
                   found === allFiles
@@ -189,7 +189,7 @@ trait FileCacheTest extends TestSuite {
                 })
                 updateLatch
                   .waitFor(timeout) {
-                    val found = c.ls(dir).map(_.path).toSet
+                    val found = c.ls(dir).map(_.getPath).toSet
                     allFiles.synchronized {
                       found === allFiles
                     }
@@ -286,24 +286,23 @@ trait FileCacheTest extends TestSuite {
             withTempDirectory(subdir) { nestedSubdir =>
               withTempFile(nestedSubdir) { file =>
                 val latch = new CountDownLatch(1)
-                usingAsync(
-                  simpleCache((e: Entry[Path]) => if (e.path.endsWith("deep")) latch.countDown())) {
-                  c =>
-                    c.register(dir, 1)
-                    c.ls(dir) === Set(subdir, nestedSubdir)
-                    c.register(nestedSubdir, 0)
-                    c.ls(dir) === Set(subdir, nestedSubdir, file)
-                    val deep = Files.createDirectory(nestedSubdir.resolve("deep"))
-                    val deepFile = Files.createFile(deep.resolve("file"))
-                    latch.waitFor(DEFAULT_TIMEOUT) {
-                      var i = 0
-                      while (!Files.exists(deepFile) && i < 1000) {
-                        i += 1
-                      }
-                      val existing = FileOps.list(dir, true).asScala.map(_.toPath).toSet
-                      existing === Set(subdir, nestedSubdir, file, deep, deepFile)
-                      c.ls(dir) === Set(subdir, nestedSubdir, file, deep)
+                usingAsync(simpleCache((e: Entry[Path]) =>
+                  if (e.getPath.endsWith("deep")) latch.countDown())) { c =>
+                  c.register(dir, 1)
+                  c.ls(dir) === Set(subdir, nestedSubdir)
+                  c.register(nestedSubdir, 0)
+                  c.ls(dir) === Set(subdir, nestedSubdir, file)
+                  val deep = Files.createDirectory(nestedSubdir.resolve("deep"))
+                  val deepFile = Files.createFile(deep.resolve("file"))
+                  latch.waitFor(DEFAULT_TIMEOUT) {
+                    var i = 0
+                    while (!Files.exists(deepFile) && i < 1000) {
+                      i += 1
                     }
+                    val existing = FileOps.list(dir, true).asScala.map(_.toPath).toSet
+                    existing === Set(subdir, nestedSubdir, file, deep, deepFile)
+                    c.ls(dir) === Set(subdir, nestedSubdir, file, deep)
+                  }
                 }
               }
             }
@@ -406,8 +405,8 @@ trait FileCacheTest extends TestSuite {
           c.reg(file.getParent, recursive = false)
           val cachedFile: Entry[LastModified] =
             c.ls(file.getParent, recursive = false) match {
-              case Seq(f) if f.path == file => f
-              case p                        => throw new IllegalStateException(p.toString)
+              case Seq(f) if f.getPath == file => f
+              case p                           => throw new IllegalStateException(p.toString)
             }
           val lastModified = cachedFile.getValue.lastModified
           lastModified ==> file.lastModified
@@ -416,8 +415,8 @@ trait FileCacheTest extends TestSuite {
           latch.waitFor(DEFAULT_TIMEOUT) {
             val newCachedFile: Entry[LastModified] =
               c.ls(file.getParent, recursive = false) match {
-                case Seq(f) if f.path == file => f
-                case p                        => throw new IllegalStateException(p.toString)
+                case Seq(f) if f.getPath == file => f
+                case p                           => throw new IllegalStateException(p.toString)
               }
             cachedFile.getValue.lastModified ==> lastModified
             newCachedFile.getValue.lastModified ==> updatedLastModified
@@ -475,7 +474,8 @@ trait FileCacheTest extends TestSuite {
             val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
             val linkedFile = link.resolve(otherDir.relativize(file))
             val latch = new CountDownLatch(1)
-            usingAsync(simpleCache((e: Entry[Path]) => if (e.path == linkedFile) latch.countDown())) {
+            usingAsync(
+              simpleCache((e: Entry[Path]) => if (e.getPath == linkedFile) latch.countDown())) {
               c =>
                 c.reg(dir)
                 Files.write(file, "foo".getBytes)
@@ -503,7 +503,7 @@ trait FileCacheTest extends TestSuite {
                   val otherLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
                   val latch = new CountDownLatch(1)
                   usingAsync(simpleCache((e: Entry[Path]) => {
-                    if (e.path.endsWith("other")) latch.countDown()
+                    if (e.getPath.endsWith("other")) latch.countDown()
                   })) { c =>
                     c.reg(dir)
                     val loopLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
@@ -520,7 +520,7 @@ trait FileCacheTest extends TestSuite {
                   val link = Files.createSymbolicLink(dir.resolve("other"), otherDir)
                   val latch = new CountDownLatch(1)
                   usingAsync(simpleCache((e: Entry[Path]) => {
-                    if (e.path.endsWith("dir")) latch.countDown()
+                    if (e.getPath.endsWith("dir")) latch.countDown()
                   })) { c =>
                     c.reg(dir)
                     val loopLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
@@ -540,8 +540,8 @@ trait FileCacheTest extends TestSuite {
             val fileLatch = new CountDownLatch(1)
             val link = Files.createSymbolicLink(dir.resolve("link"), file)
             usingAsync(simpleCache((e: Entry[Path]) => {
-              if (e.path.endsWith("dir-link")) linkLatch.countDown()
-              if (e.path.endsWith("newfile")) fileLatch.countDown()
+              if (e.getPath.endsWith("dir-link")) linkLatch.countDown()
+              if (e.getPath.endsWith("newfile")) fileLatch.countDown()
             })) { c =>
               c.reg(dir)
               val otherDir = file.getParent
@@ -618,7 +618,7 @@ trait FileCacheTest extends TestSuite {
                 override def onCreate(newEntry: Entry[Path]): Unit = {}
 
                 override def onDelete(oldEntry: Entry[Path]): Unit =
-                  if (oldEntry.path == link) linkLatch.countDown()
+                  if (oldEntry.getPath == link) linkLatch.countDown()
 
                 override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
 
@@ -655,7 +655,7 @@ trait FileCacheTest extends TestSuite {
                   override def onDelete(oldEntry: Entry[Path]): Unit = {}
 
                   override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
-                    if (paths.add(newEntry.path)) latch.countDown()
+                    if (paths.add(newEntry.getPath)) latch.countDown()
                   }
 
                   override def onError(path: Path, exception: IOException): Unit = {}
@@ -693,8 +693,8 @@ trait FileCacheTest extends TestSuite {
                   }
 
                   override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
-                    if (newEntry.path == link) {
-                      paths.add(newEntry.path)
+                    if (newEntry.getPath == link) {
+                      paths.add(newEntry.getPath)
                       updateLatch.countDown()
                     } else if (closed) {
                       secondUpdateLatch.countDown()
@@ -754,7 +754,7 @@ trait FileCacheTest extends TestSuite {
       'exists - withTempFile { file =>
         val latch = new CountDownLatch(1)
         usingAsync(simpleCache((e: Entry[Path]) => {
-          if (e.path.lastModified == 3000) latch.countDown()
+          if (e.getPath.lastModified == 3000) latch.countDown()
         })) { c =>
           c.reg(file)
           file.setLastModifiedTime(3000)
@@ -767,7 +767,7 @@ trait FileCacheTest extends TestSuite {
         val file = dir.resolve("file")
         val latch = new CountDownLatch(1)
         usingAsync(simpleCache((e: Entry[Path]) => {
-          if (e.path == file) latch.countDown()
+          if (e.getPath == file) latch.countDown()
         })) { c =>
           c.reg(file)
           file.createFile()
@@ -783,11 +783,11 @@ trait FileCacheTest extends TestSuite {
         val newFile = dir.resolve("new-file")
         val observer = new Observer[Path] {
           override def onCreate(newEntry: Entry[Path]): Unit = {
-            if (newEntry.path == newFile) newFileLatch.countDown()
+            if (newEntry.getPath == newFile) newFileLatch.countDown()
           }
 
           override def onDelete(oldEntry: Entry[Path]): Unit =
-            if (oldEntry.path == dir) deletionLatch.countDown()
+            if (oldEntry.getPath == dir) deletionLatch.countDown()
 
           override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
 
@@ -852,10 +852,10 @@ trait FileCacheTest extends TestSuite {
             override def onCreate(newEntry: Entry[Path]): Unit = creationLatch.countDown()
 
             override def onDelete(oldEntry: Entry[Path]): Unit =
-              if (oldEntry.path == file) deletionLatch.countDown
+              if (oldEntry.getPath == file) deletionLatch.countDown
 
             override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
-              if (newEntry.path.lastModified == 3000) updateLatch.countDown()
+              if (newEntry.getPath.lastModified == 3000) updateLatch.countDown()
             }
 
             override def onError(path: Path, exception: IOException): Unit = {}

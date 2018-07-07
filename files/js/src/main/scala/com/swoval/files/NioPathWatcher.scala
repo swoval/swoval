@@ -126,20 +126,17 @@ class NioPathWatcher(callback: Consumer[Event],
           val toRemove: List[Directory.Entry[WatchedDirectory]] =
             dir.list(true, new EntryFilter[WatchedDirectory]() {
               override def accept(entry: Entry[_ <: WatchedDirectory]): Boolean =
-                !directoryRegistry.accept(entry.path)
+                !directoryRegistry.accept(entry.getPath)
             })
           Collections.sort(toRemove)
           val it: Iterator[Directory.Entry[WatchedDirectory]] =
             toRemove.iterator()
           while (it.hasNext) {
-            val watchedDirectory: Directory.Entry[WatchedDirectory] = it.next()
-            if (!directoryRegistry.accept(watchedDirectory.path)) {
+            val entry: Directory.Entry[WatchedDirectory] = it.next()
+            if (!directoryRegistry.accept(entry.getPath)) {
               val toCancel: Iterator[Directory.Entry[WatchedDirectory]] =
-                dir.remove(watchedDirectory.path).iterator()
-              while (toCancel.hasNext) {
-                val entry: Directory.Entry[WatchedDirectory] = toCancel.next()
-                entry.getValue.close()
-              }
+                dir.remove(entry.getPath).iterator()
+              while (toCancel.hasNext) toCancel.next().getValue.close()
             }
           }
         }
@@ -169,7 +166,7 @@ class NioPathWatcher(callback: Consumer[Event],
   }
 
   private def maybeRunCallback(callback: Consumer[Event], event: Event): Unit = {
-    if (directoryRegistry.accept(event.path)) {
+    if (directoryRegistry.accept(event.getPath)) {
       callbackExecutor.run(new Runnable() {
         override def run(): Unit = {
           callback.accept(event)
@@ -204,13 +201,13 @@ class NioPathWatcher(callback: Consumer[Event],
   }
 
   private def handleEvent(callback: Consumer[Event], event: Event): Unit = {
-    if (directoryRegistry.accept(event.path)) {
-      if (!Files.exists(event.path)) {
+    if (directoryRegistry.accept(event.getPath)) {
+      if (!Files.exists(event.getPath)) {
         val root: Directory[WatchedDirectory] =
-          rootDirectories.get(event.path.getRoot)
+          rootDirectories.get(event.getPath.getRoot)
         if (root != null) {
           val it: Iterator[Directory.Entry[WatchedDirectory]] =
-            root.remove(event.path).iterator()
+            root.remove(event.getPath).iterator()
           while (it.hasNext) {
             val watchedDirectory: WatchedDirectory = it.next().getValue
             if (watchedDirectory != null) {
@@ -219,8 +216,12 @@ class NioPathWatcher(callback: Consumer[Event],
           }
         }
       }
-      if (Files.isDirectory(event.path)) {
-        processPath(callback, event.path, event.kind, new HashSet[QuickFile](), new HashSet[Path]())
+      if (Files.isDirectory(event.getPath)) {
+        processPath(callback,
+                    event.getPath,
+                    event.getKind,
+                    new HashSet[QuickFile](),
+                    new HashSet[Path]())
       } else {
         maybeRunCallback(callback, event)
       }

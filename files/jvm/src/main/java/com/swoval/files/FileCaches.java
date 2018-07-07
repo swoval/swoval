@@ -7,9 +7,7 @@ import com.swoval.files.Directory.Observer;
 import com.swoval.files.PathWatchers.Factory;
 import java.io.IOException;
 
-/**
- * Provides factory methods for generating instances of {@link com.swoval.files.FileCache}.
- */
+/** Provides factory methods for generating instances of {@link com.swoval.files.FileCache}. */
 public class FileCaches {
   /**
    * Create a file cache
@@ -21,8 +19,7 @@ public class FileCaches {
    * @throws IOException if the {@link PathWatcher} cannot be initialized
    * @throws InterruptedException if the {@link PathWatcher} cannot be initialized
    */
-  public static <T> FileCache<T> get(
-      final Converter<T> converter, final Option... options)
+  public static <T> FileCache<T> get(final Converter<T> converter, final Option... options)
       throws IOException, InterruptedException {
     return new FileCacheImpl<>(converter, DEFAULT_FACTORY, null, options);
   }

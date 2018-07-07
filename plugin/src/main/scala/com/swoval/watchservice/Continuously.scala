@@ -66,9 +66,9 @@ object Continuously {
     private[this] val onChange: OnChange[Path] = new OnChange[Path] {
       override def apply(cacheEntry: Entry[Path]): Unit = {
         if (sources.exists(s => s.filter.accept(cacheEntry))) {
-          offer(Triggered(cacheEntry.path))
+          offer(Triggered(cacheEntry.getPath))
         } else {
-          debug(s"No source filter found for ${cacheEntry.path}")
+          debug(s"No source filter found for ${cacheEntry.getPath}")
         }
       }
     }

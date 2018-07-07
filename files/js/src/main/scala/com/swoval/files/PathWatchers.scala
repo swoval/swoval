@@ -6,6 +6,7 @@ import com.swoval.functional.Consumer
 import com.swoval.runtime.Platform
 import java.io.IOException
 import java.nio.file.Path
+import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
 object PathWatchers {
 
@@ -122,7 +123,7 @@ object PathWatchers {
   /**
  Container for [[PathWatcher]] events
    */
-  class Event(val path: Path, val kind: Event.Kind) {
+  class Event(@BeanProperty val path: Path, @BeanProperty val kind: Event.Kind) {
 
     override def equals(other: Any): Boolean = other match {
       case other: Event => {

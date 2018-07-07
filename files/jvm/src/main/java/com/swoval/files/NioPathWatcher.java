@@ -160,19 +160,18 @@ class NioPathWatcher implements PathWatcher {
                       new EntryFilter<WatchedDirectory>() {
                         @Override
                         public boolean accept(final Entry<? extends WatchedDirectory> entry) {
-                          return !directoryRegistry.accept(entry.path);
+                          return !directoryRegistry.accept(entry.getPath());
                         }
                       });
               Collections.sort(toRemove);
               final Iterator<Directory.Entry<WatchedDirectory>> it = toRemove.iterator();
               while (it.hasNext()) {
-                final Directory.Entry<WatchedDirectory> watchedDirectory = it.next();
-                if (!directoryRegistry.accept(watchedDirectory.path)) {
+                final Directory.Entry<WatchedDirectory> entry = it.next();
+                if (!directoryRegistry.accept(entry.getPath())) {
                   final Iterator<Directory.Entry<WatchedDirectory>> toCancel =
-                      dir.remove(watchedDirectory.path).iterator();
+                      dir.remove(entry.getPath()).iterator();
                   while (toCancel.hasNext()) {
-                    final Directory.Entry<WatchedDirectory> entry = toCancel.next();
-                    entry.getValue().close();
+                    toCancel.next().getValue().close();
                   }
                 }
               }
@@ -208,7 +207,7 @@ class NioPathWatcher implements PathWatcher {
   }
 
   private void maybeRunCallback(final Consumer<Event> callback, final Event event) {
-    if (directoryRegistry.accept(event.path)) {
+    if (directoryRegistry.accept(event.getPath())) {
       callbackExecutor.run(
           new Runnable() {
             @Override
@@ -243,11 +242,12 @@ class NioPathWatcher implements PathWatcher {
   }
 
   private void handleEvent(final Consumer<Event> callback, final Event event) {
-    if (directoryRegistry.accept(event.path)) {
-      if (!Files.exists(event.path)) {
-        final Directory<WatchedDirectory> root = rootDirectories.get(event.path.getRoot());
+    if (directoryRegistry.accept(event.getPath())) {
+      if (!Files.exists(event.getPath())) {
+        final Directory<WatchedDirectory> root = rootDirectories.get(event.getPath().getRoot());
         if (root != null) {
-          final Iterator<Directory.Entry<WatchedDirectory>> it = root.remove(event.path).iterator();
+          final Iterator<Directory.Entry<WatchedDirectory>> it =
+              root.remove(event.getPath()).iterator();
           while (it.hasNext()) {
             final WatchedDirectory watchedDirectory = it.next().getValue();
             if (watchedDirectory != null) {
@@ -256,9 +256,13 @@ class NioPathWatcher implements PathWatcher {
           }
         }
       }
-      if (Files.isDirectory(event.path)) {
+      if (Files.isDirectory(event.getPath())) {
         processPath(
-            callback, event.path, event.kind, new HashSet<QuickFile>(), new HashSet<Path>());
+            callback,
+            event.getPath(),
+            event.getKind(),
+            new HashSet<QuickFile>(),
+            new HashSet<Path>());
       } else {
         maybeRunCallback(callback, event);
       }

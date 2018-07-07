@@ -170,7 +170,7 @@ object Directory {
    *
    * @tparam T The value wrapped in the Entry
    */
-  class Entry[T] private (val path: Path,
+  class Entry[T] private (@BeanProperty val path: Path,
                           private val value: T,
                           private val exception: IOException,
                           @BeanProperty val kind: Int)
@@ -414,8 +414,8 @@ object Directory {
  *
  * @tparam T The cache value type
  */
-class Directory[T <: AnyRef](val path: Path,
-                             val realPath: Path,
+class Directory[T <: AnyRef](@BeanProperty val path: Path,
+                             private val realPath: Path,
                              private val converter: Converter[T],
                              @BeanProperty val depth: Int,
                              filter: Filter[_ >: QuickFile])

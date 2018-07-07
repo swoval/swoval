@@ -56,8 +56,8 @@ class FileCacheImpl<T> implements FileCache<T> {
             new Runnable() {
               @Override
               public void run() {
-                final Path path = event.path;
-                if (event.kind.equals(Overflow)) {
+                final Path path = event.getPath();
+                if (event.getKind().equals(Overflow)) {
                   handleOverflow(path);
                 } else {
                   handleEvent(path);
@@ -175,7 +175,7 @@ class FileCacheImpl<T> implements FileCache<T> {
                 if (dir == null) {
                   return new ArrayList<>();
                 } else {
-                  if (dir.path.equals(path) && dir.getDepth() == -1) {
+                  if (dir.getPath().equals(path) && dir.getDepth() == -1) {
                     List<Directory.Entry<T>> result = new ArrayList<>();
                     result.add(dir.entry());
                     return result;
@@ -243,7 +243,7 @@ class FileCacheImpl<T> implements FileCache<T> {
             if (!registry.accept(path)) {
               final Directory<T> dir = find(path);
               if (dir != null) {
-                if (dir.path.equals(path)) {
+                if (dir.getPath().equals(path)) {
                   directories.remove(path);
                 } else {
                   dir.remove(path);
@@ -264,16 +264,16 @@ class FileCacheImpl<T> implements FileCache<T> {
         new Comparator<Directory<T>>() {
           @Override
           public int compare(Directory<T> left, Directory<T> right) {
-            return left.path.compareTo(right.path);
+            return left.getPath().compareTo(right.getPath());
           }
         });
     final Iterator<Directory<T>> it = dirs.iterator();
     Directory<T> existing = null;
     while (it.hasNext() && existing == null) {
       final Directory<T> dir = it.next();
-      if (path.startsWith(dir.path)) {
+      if (path.startsWith(dir.getPath())) {
         final int depth =
-            path.equals(dir.path) ? 0 : (dir.path.relativize(path).getNameCount() - 1);
+            path.equals(dir.getPath()) ? 0 : (dir.getPath().relativize(path).getNameCount() - 1);
         if (dir.getDepth() == Integer.MAX_VALUE || maxDepth < dir.getDepth() - depth) {
           existing = dir;
         } else if (depth <= dir.getDepth()) {
@@ -282,8 +282,8 @@ class FileCacheImpl<T> implements FileCache<T> {
           try {
             final int md =
                 maxDepth < Integer.MAX_VALUE - depth - 1 ? maxDepth + depth + 1 : Integer.MAX_VALUE;
-            existing = Directory.cached(dir.path, converter, md);
-            directories.put(dir.path, existing);
+            existing = Directory.cached(dir.getPath(), converter, md);
+            directories.put(dir.getPath(), existing);
           } catch (IOException e) {
             existing = null;
           }
@@ -306,7 +306,7 @@ class FileCacheImpl<T> implements FileCache<T> {
             final Directory.Entry<T> entry = entryIterator.next();
             if (entry.isSymbolicLink()) {
               symlinkWatcher.addSymlink(
-                  entry.path, maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - 1);
+                  entry.getPath(), maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - 1);
             }
           }
         }
@@ -323,7 +323,8 @@ class FileCacheImpl<T> implements FileCache<T> {
     final Iterator<Directory<T>> it = directories.values().iterator();
     while (it.hasNext()) {
       final Directory<T> dir = it.next();
-      if (path.startsWith(dir.path) && (foundDir == null || dir.path.startsWith(foundDir.path))) {
+      if (path.startsWith(dir.getPath())
+          && (foundDir == null || dir.getPath().startsWith(foundDir.getPath()))) {
         foundDir = dir;
       }
     }
@@ -335,13 +336,13 @@ class FileCacheImpl<T> implements FileCache<T> {
     Set<Path> oldPaths = new HashSet<>();
     final Iterator<Directory.Entry<T>> oldEntryIterator = oldEntries.iterator();
     while (oldEntryIterator.hasNext()) {
-      oldPaths.add(oldEntryIterator.next().path);
+      oldPaths.add(oldEntryIterator.next().getPath());
     }
     List<Directory.Entry<T>> newEntries = right.list(left.recursive(), AllPass);
     Set<Path> newPaths = new HashSet<>();
     final Iterator<Directory.Entry<T>> newEntryIterator = newEntries.iterator();
     while (newEntryIterator.hasNext()) {
-      newPaths.add(newEntryIterator.next().path);
+      newPaths.add(newEntryIterator.next().getPath());
     }
     boolean result = oldPaths.size() != newPaths.size();
     final Iterator<Path> oldIterator = oldPaths.iterator();
@@ -375,12 +376,12 @@ class FileCacheImpl<T> implements FileCache<T> {
       final List<Directory.Entry<T>> deletions = new ArrayList<>();
       while (directoryIterator.hasNext()) {
         final Directory<T> currentDir = directoryIterator.next();
-        if (path.startsWith(currentDir.path)) {
+        if (path.startsWith(currentDir.getPath())) {
           Directory<T> oldDir = currentDir;
-          Directory<T> newDir = cachedOrNull(oldDir.path, oldDir.getDepth());
+          Directory<T> newDir = cachedOrNull(oldDir.getPath(), oldDir.getDepth());
           while (newDir == null || diff(oldDir, newDir)) {
             if (newDir != null) oldDir = newDir;
-            newDir = cachedOrNull(oldDir.path, oldDir.getDepth());
+            newDir = cachedOrNull(oldDir.getPath(), oldDir.getDepth());
           }
           final Map<Path, Directory.Entry<T>> oldEntries = new HashMap<>();
           final Map<Path, Directory.Entry<T>> newEntries = new HashMap<>();
@@ -388,13 +389,13 @@ class FileCacheImpl<T> implements FileCache<T> {
               currentDir.list(currentDir.recursive(), AllPass).iterator();
           while (oldEntryIterator.hasNext()) {
             final Directory.Entry<T> entry = oldEntryIterator.next();
-            oldEntries.put(entry.path, entry);
+            oldEntries.put(entry.getPath(), entry);
           }
           final Iterator<Directory.Entry<T>> newEntryIterator =
               newDir.list(currentDir.recursive(), AllPass).iterator();
           while (newEntryIterator.hasNext()) {
             final Directory.Entry<T> entry = newEntryIterator.next();
-            newEntries.put(entry.path, entry);
+            newEntries.put(entry.getPath(), entry);
           }
           final Iterator<Entry<Path, Directory.Entry<T>>> oldIterator =
               oldEntries.entrySet().iterator();
@@ -431,7 +432,7 @@ class FileCacheImpl<T> implements FileCache<T> {
       final Iterator<Directory<T>> replacements = toReplace.iterator();
       while (replacements.hasNext()) {
         final Directory<T> replacement = replacements.next();
-        directories.put(replacement.path, replacement);
+        directories.put(replacement.getPath(), replacement);
       }
       callbackExecutor.run(
           new Runnable() {
@@ -510,11 +511,11 @@ class FileCacheImpl<T> implements FileCache<T> {
                   new Directory.EntryFilter<T>() {
                     @Override
                     public boolean accept(Directory.Entry<? extends T> entry) {
-                      return path.equals(entry.path);
+                      return path.equals(entry.getPath());
                     }
                   });
-          if (!paths.isEmpty() || !path.equals(dir.path)) {
-            final Path toUpdate = paths.isEmpty() ? path : paths.get(0).path;
+          if (!paths.isEmpty() || !path.equals(dir.getPath())) {
+            final Path toUpdate = paths.isEmpty() ? path : paths.get(0).getPath();
             try {
               if (attrs.isSymbolicLink() && symlinkWatcher != null)
                 symlinkWatcher.addSymlink(
@@ -540,7 +541,7 @@ class FileCacheImpl<T> implements FileCache<T> {
             final Iterator<Directory.Entry<T>> it = directory.list(true, AllPass).iterator();
             while (it.hasNext()) {
               final Directory.Entry<T> entry = it.next();
-              addCallback(callbacks, entry.path, null, entry, Create, null);
+              addCallback(callbacks, entry.getPath(), null, entry, Create, null);
             }
           } catch (final IOException e) {
             pendingFiles.add(path);
@@ -552,9 +553,9 @@ class FileCacheImpl<T> implements FileCache<T> {
             new ArrayList<>(directories.values()).iterator();
         while (directoryIterator.hasNext()) {
           final Directory<T> dir = directoryIterator.next();
-          if (path.startsWith(dir.path)) {
+          if (path.startsWith(dir.getPath())) {
             List<Directory.Entry<T>> updates = dir.remove(path);
-            if (dir.path.equals(path)) {
+            if (dir.getPath().equals(path)) {
               pendingFiles.add(path);
               updates.add(dir.entry());
               directories.remove(path);
@@ -567,9 +568,9 @@ class FileCacheImpl<T> implements FileCache<T> {
           final Iterator<Directory.Entry<T>> removeIterator = it.next();
           while (removeIterator.hasNext()) {
             final Directory.Entry<T> entry = removeIterator.next();
-            addCallback(callbacks, entry.path, entry, null, Delete, null);
+            addCallback(callbacks, entry.getPath(), entry, null, Delete, null);
             if (symlinkWatcher != null) {
-              symlinkWatcher.remove(entry.path);
+              symlinkWatcher.remove(entry.getPath());
             }
           }
         }
@@ -594,17 +595,17 @@ class FileCacheImpl<T> implements FileCache<T> {
     return new Observer<T>() {
       @Override
       public void onCreate(final Directory.Entry<T> newEntry) {
-        addCallback(callbacks, newEntry.path, null, newEntry, Create, null);
+        addCallback(callbacks, newEntry.getPath(), null, newEntry, Create, null);
       }
 
       @Override
       public void onDelete(final Directory.Entry<T> oldEntry) {
-        addCallback(callbacks, oldEntry.path, oldEntry, null, Delete, null);
+        addCallback(callbacks, oldEntry.getPath(), oldEntry, null, Delete, null);
       }
 
       @Override
       public void onUpdate(final Directory.Entry<T> oldEntry, final Directory.Entry<T> newEntry) {
-        addCallback(callbacks, oldEntry.path, oldEntry, newEntry, Modify, null);
+        addCallback(callbacks, oldEntry.getPath(), oldEntry, newEntry, Modify, null);
       }
 
       @Override

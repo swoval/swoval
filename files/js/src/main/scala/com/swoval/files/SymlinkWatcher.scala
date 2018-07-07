@@ -87,7 +87,7 @@ class SymlinkWatcher(handleEvent: Consumer[Path],
       SymlinkWatcher.this.internalExecutor.run(new Runnable() {
         override def run(): Unit = {
           val callbacks: List[Runnable] = new ArrayList[Runnable]()
-          val path: Path = event.path
+          val path: Path = event.getPath
           val registeredPath: RegisteredPath =
             find(path, watchedSymlinksByTarget)
           if (registeredPath != null) {
@@ -104,15 +104,15 @@ class SymlinkWatcher(handleEvent: Consumer[Path],
               }
             }
           }
-          if (!Files.exists(event.path)) {
-            watchedSymlinksByTarget.remove(event.path)
+          if (!Files.exists(event.getPath)) {
+            watchedSymlinksByTarget.remove(event.getPath)
             val registeredPath: RegisteredPath =
-              watchedSymlinksByDirectory.get(event.path)
+              watchedSymlinksByDirectory.get(event.getPath)
             if (registeredPath != null) {
-              registeredPath.paths.remove(event.path)
+              registeredPath.paths.remove(event.getPath)
               if (registeredPath.paths.isEmpty) {
-                watcher.unregister(event.path)
-                watchedSymlinksByDirectory.remove(event.path)
+                watcher.unregister(event.getPath)
+                watchedSymlinksByDirectory.remove(event.getPath)
               }
             }
           }
