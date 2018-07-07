@@ -61,7 +61,7 @@ class NioPathWatcher implements PathWatcher {
    * Instantiate a NioPathWatcher.
    *
    * @param callback The callback to run for updates to monitored paths
-   * @param registerable The underlying watchservice
+   * @param registerableWatchService The underlying watchservice
    * @param callbackExecutor The Executor to invoke callbacks on
    * @param internalExecutor The Executor to internally manage the watcher
    * @param managedDirectoryRegistry The nullable registry of directories to monitor. If this is
@@ -70,7 +70,7 @@ class NioPathWatcher implements PathWatcher {
    */
   NioPathWatcher(
       final Consumer<Event> callback,
-      final Registerable registerable,
+      final RegisterableWatchService registerableWatchService,
       final Executor callbackExecutor,
       final Executor internalExecutor,
       final DirectoryRegistry managedDirectoryRegistry)
@@ -94,7 +94,7 @@ class NioPathWatcher implements PathWatcher {
                 handleOverflow(callback, path);
               }
             },
-            registerable,
+            registerableWatchService,
             internalExecutor);
     this.converter =
         new Converter<WatchedDirectory>() {

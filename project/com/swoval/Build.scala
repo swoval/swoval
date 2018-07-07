@@ -467,7 +467,7 @@ object Build {
                 "Observers",
                 "QuickFile",
                 "QuickLister",
-                "Registerable",
+                "RegisterableWatchService",
                 "SymlinkWatcher",
                 "WatchedDirectory"
               ).value
