@@ -302,6 +302,31 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
    * List all of the files for the {@code path}
    *
    * @param maxDepth The maximum depth of subdirectories to query
+   * @return a List of Entry instances accepted by the filter
+   */
+  def list(maxDepth: Int): List[Entry[T]] = {
+    val result: List[Entry[T]] = new ArrayList[Entry[T]]()
+    listImpl(maxDepth, EntryFilters.AllPass, result)
+    result
+  }
+
+  /**
+   * List all of the files for the {@code path}
+   *
+   * @param recursive Toggles whether or not the children of subdirectories are returned
+   * @return a List of Entry instances accepted by the filter
+   */
+  def list(recursive: Boolean): List[Entry[T]] = {
+    val result: List[Entry[T]] = new ArrayList[Entry[T]]()
+    listImpl(if (recursive) java.lang.Integer.MAX_VALUE else 0, EntryFilters.AllPass, result)
+    result
+  }
+
+  /**
+   * List all of the files for the {@code path}, returning only those files that are accepted by
+   * the provided filter.
+   *
+   * @param maxDepth The maximum depth of subdirectories to query
    * @param filter Include only entries accepted by the filter
    * @return a List of Entry instances accepted by the filter
    */

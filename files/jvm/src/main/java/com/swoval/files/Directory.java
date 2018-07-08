@@ -127,6 +127,30 @@ public class Directory<T> implements AutoCloseable {
    * List all of the files for the {@code path}
    *
    * @param maxDepth The maximum depth of subdirectories to query
+   * @return a List of Entry instances accepted by the filter
+   */
+  public List<Entry<T>> list(final int maxDepth) {
+    final List<Entry<T>> result = new ArrayList<>();
+    listImpl(maxDepth, EntryFilters.AllPass, result);
+    return result;
+  }
+
+  /**
+   * List all of the files for the {@code path}
+   *
+   * @param recursive Toggles whether or not the children of subdirectories are returned
+   * @return a List of Entry instances accepted by the filter
+   */
+  public List<Entry<T>> list(final boolean recursive) {
+    final List<Entry<T>> result = new ArrayList<>();
+    listImpl(recursive ? Integer.MAX_VALUE : 0, EntryFilters.AllPass, result);
+    return result;
+  }
+  /**
+   * List all of the files for the {@code path}, returning only those files that are accepted by the
+   * provided filter.
+   *
+   * @param maxDepth The maximum depth of subdirectories to query
    * @param filter Include only entries accepted by the filter
    * @return a List of Entry instances accepted by the filter
    */

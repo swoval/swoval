@@ -8,12 +8,24 @@ import java.io.FileFilter
 
 object EntryFilters {
 
+  /**
+   * Accept any entry with any value type.
+   */
   var AllPass: EntryFilter[AnyRef] = new EntryFilter[AnyRef]() {
     override def accept(entry: Entry[_ <: AnyRef]): Boolean = true
 
     override def toString(): String = "AllPass"
   }
 
+  /**
+   * Combine two entry filters
+   * @param left The first entry filter to apply
+   * @param right The second entry filter to apply if the entry is accepted by the first filter.
+   * This filter must be for an entry whose value is a super class of the left entry filter.
+   * @tparam T The greatest lower bound of the two entry filters
+   * @return An entry filter that first applies the left filter and then the right filter if the
+   * entry is accepted by the left filter.
+   */
   def AND[T](left: EntryFilter[T], right: EntryFilter[_ >: T]): EntryFilter[T] =
     new CombinedFilter(left, right)
 
