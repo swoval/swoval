@@ -7,6 +7,7 @@ import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
 import com.swoval.functional.Filters;
 import java.io.IOException;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -476,10 +477,13 @@ public class Directory<T> implements AutoCloseable {
               if (depth > 0) {
                 final Path realPath = toRealPath(path);
                 if (!file.isSymbolicLink() || !isLoop(path, realPath)) {
-                  subdirectories.put(
-                      key,
-                      new Directory<>(path, realPath, converter, subdirectoryDepth(), pathFilter)
-                          .init());
+                  final Directory<T> dir =
+                      new Directory<>(path, realPath, converter, subdirectoryDepth(), pathFilter);
+                  subdirectories.put(key, dir);
+                  try {
+                    dir.init();
+                  } catch (final IOException e) {
+                  }
                 } else {
                   subdirectories.put(
                       key, new Directory<>(path, realPath, converter, -1, pathFilter));

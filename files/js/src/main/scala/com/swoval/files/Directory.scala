@@ -641,12 +641,14 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
               if (depth > 0) {
                 val realPath: Path = toRealPath(path)
                 if (!file.isSymbolicLink || !isLoop(path, realPath)) {
-                  subdirectories.put(key,
-                                     new Directory(path,
-                                                   realPath,
-                                                   converter,
-                                                   subdirectoryDepth(),
-                                                   pathFilter).init())
+                  val dir: Directory[T] =
+                    new Directory[T](path, realPath, converter, subdirectoryDepth(), pathFilter)
+                  subdirectories.put(key, dir)
+                  try dir.init()
+                  catch {
+                    case e: IOException => {}
+
+                  }
                 } else {
                   subdirectories.put(key, new Directory(path, realPath, converter, -1, pathFilter))
                 }

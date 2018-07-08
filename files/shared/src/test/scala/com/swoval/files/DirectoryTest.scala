@@ -7,6 +7,7 @@ import com.swoval.files.Directory.{ Entry, EntryFilter }
 import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.EntryOps._
 import com.swoval.files.test._
+import com.swoval.runtime.Platform
 import com.swoval.test._
 import utest._
 
@@ -359,6 +360,23 @@ object DirectoryTest extends TestSuite {
           dir
             .ls(recursive = true, AllPass)
             .map(e => e.getPath -> e.getValue.getOrElse(3)) === Seq(file -> 3)
+        }
+      }
+    }
+    'init - {
+      'accessDenied - {
+        if (!Platform.isWin) withTempDirectory { dir =>
+          withTempDirectory(dir) { subdir =>
+            withTempFileSync(subdir) { file =>
+              subdir.toFile.setReadable(false)
+              try {
+                val directory = Directory.of(dir)
+                directory.ls(recursive = true, AllPass) === Seq(subdir)
+              } finally {
+                subdir.toFile.setReadable(true)
+              }
+            }
+          }
         }
       }
     }
