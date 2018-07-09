@@ -17,7 +17,7 @@ class JsPathWatcher(callback: js.UndefOr[js.Function2[String, String, Unit]]) ex
     PathWatchers.get(callbacks, Executor.make(""))
   def close(): Unit = inner.close()
   def register(path: String, recursive: Boolean = true): Unit =
-    inner.register(Paths.get(path), recursive)
+    inner.register(Paths.get(path), if (recursive) Integer.MAX_VALUE else 0)
   def addCallback(callback: js.Function2[String, String, Unit]): Int =
     callbacks.addCallback(new Consumer[Event] {
       override def accept(event: Event): Unit =

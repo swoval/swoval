@@ -4,6 +4,7 @@ import java.io.{ File, FileFilter, IOException }
 import java.nio.file.Path
 
 import com.swoval.files.Directory._
+import com.swoval.files.test.platform.Bool
 import com.swoval.functional.Consumer
 import com.swoval.test._
 import utest._
@@ -33,6 +34,11 @@ package object files extends PlatformFiles {
   def getObserver[T](onUpdate: Entry[T] => Unit): Observer[T] =
     getObserver[T](onUpdate, (_: Entry[T], e: Entry[T]) => onUpdate(e), onUpdate)
 
+  implicit class PathWatcherOps(val watcher: PathWatcher) extends AnyVal {
+    def register(path: Path, recursive: Boolean): functional.Either[IOException, Bool] =
+      watcher.register(path, if (recursive) Integer.MAX_VALUE else 0)
+    def register(path: Path): functional.Either[IOException, Bool] = register(path, true)
+  }
   implicit class EitherOps[L, R](val either: functional.Either[L, R]) extends AnyVal {
     def getOrElse[U >: R](u: U): U = functional.Either.getOrElse(either, u)
     def left(): functional.Either.Left[L, R] = functional.Either.leftProjection[L, R](either)

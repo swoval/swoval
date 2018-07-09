@@ -74,7 +74,8 @@ object Converter {
      } else if (path.toString.contains("Either.scala")) {
        val regex = "class Either\\[L, R\\]".r
        newLines.map(regex.replaceAllIn(_, "class Either[+L, +R]"))
-     } else if (path.toString.contains("Directory.scala")) {
+     } else if (path.toString.contains("Directory.scala") || path.toString.contains(
+                  "Repositories.scala")) {
        val regex = "(apply|cached|class Directory)[\\[]T".r
        newLines.view
          .filterNot(_.contains("import Entry._"))

@@ -9,7 +9,6 @@ import static com.swoval.files.PathWatchers.Event.Kind.Overflow;
 import static java.util.Map.Entry;
 
 import com.swoval.files.Directory.Converter;
-import com.swoval.files.Directory.EntryFilter;
 import com.swoval.files.Directory.Observer;
 import com.swoval.files.Directory.OnChange;
 import com.swoval.files.Directory.OnError;
@@ -176,7 +175,7 @@ class FileCacheImpl<T> implements FileCache<T> {
                 if (dir == null) {
                   return new ArrayList<>();
                 } else {
-                  if (dir.getPath().equals(path) && dir.getDepth() == -1) {
+                  if (dir.getPath().equals(path) && dir.getMaxDepth() == -1) {
                     List<Directory.Entry<T>> result = new ArrayList<>();
                     result.add(dir.entry());
                     return result;
@@ -190,27 +189,6 @@ class FileCacheImpl<T> implements FileCache<T> {
   }
 
   @Override
-  public List<Directory.Entry<T>> list(
-      final Path path, final boolean recursive, EntryFilter<? super T> filter) {
-    return list(path, recursive ? Integer.MAX_VALUE : 0, filter);
-  }
-
-  @Override
-  public List<Directory.Entry<T>> list(final Path path, final int maxDepth) {
-    return list(path, maxDepth, AllPass);
-  }
-
-  @Override
-  public List<Directory.Entry<T>> list(final Path path, final boolean recursive) {
-    return list(path, recursive, AllPass);
-  }
-
-  @Override
-  public List<Directory.Entry<T>> list(Path path) {
-    return list(path, Integer.MAX_VALUE, AllPass);
-  }
-
-  @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
     return internalExecutor
         .block(
@@ -221,16 +199,6 @@ class FileCacheImpl<T> implements FileCache<T> {
               }
             })
         .castLeft(IOException.class);
-  }
-
-  @Override
-  public Either<IOException, Boolean> register(Path path, boolean recursive) {
-    return register(path, recursive ? Integer.MAX_VALUE : 0);
-  }
-
-  @Override
-  public Either<IOException, Boolean> register(Path path) {
-    return register(path, Integer.MAX_VALUE);
   }
 
   @Override
@@ -275,15 +243,15 @@ class FileCacheImpl<T> implements FileCache<T> {
       if (path.startsWith(dir.getPath())) {
         final int depth =
             path.equals(dir.getPath()) ? 0 : (dir.getPath().relativize(path).getNameCount() - 1);
-        if (dir.getDepth() == Integer.MAX_VALUE || maxDepth < dir.getDepth() - depth) {
+        if (dir.getMaxDepth() == Integer.MAX_VALUE || maxDepth < dir.getMaxDepth() - depth) {
           existing = dir;
-        } else if (depth <= dir.getDepth()) {
+        } else if (depth <= dir.getMaxDepth()) {
           result = true;
           dir.close();
           try {
             final int md =
                 maxDepth < Integer.MAX_VALUE - depth - 1 ? maxDepth + depth + 1 : Integer.MAX_VALUE;
-            existing = Directory.cached(dir.getPath(), converter, md);
+            existing = Repositories.cached(dir.getPath(), converter, md);
             directories.put(dir.getPath(), existing);
           } catch (IOException e) {
             existing = null;
@@ -295,13 +263,13 @@ class FileCacheImpl<T> implements FileCache<T> {
       try {
         Directory<T> dir;
         try {
-          dir = Directory.cached(path, converter, maxDepth);
+          dir = Repositories.cached(path, converter, maxDepth);
         } catch (final NotDirectoryException e) {
-          dir = Directory.cached(path, converter, -1);
+          dir = Repositories.cached(path, converter, -1);
         }
         directories.put(path, dir);
         final Iterator<Directory.Entry<T>> entryIterator =
-            dir.list(true, EntryFilters.AllPass).iterator();
+            dir.list(dir.getMaxDepth(), EntryFilters.AllPass).iterator();
         if (symlinkWatcher != null) {
           while (entryIterator.hasNext()) {
             final Directory.Entry<T> entry = entryIterator.next();
@@ -333,13 +301,13 @@ class FileCacheImpl<T> implements FileCache<T> {
   }
 
   private boolean diff(Directory<T> left, Directory<T> right) {
-    List<Directory.Entry<T>> oldEntries = left.list(left.getDepth(), AllPass);
+    List<Directory.Entry<T>> oldEntries = left.list(left.getMaxDepth(), AllPass);
     Set<Path> oldPaths = new HashSet<>();
     final Iterator<Directory.Entry<T>> oldEntryIterator = oldEntries.iterator();
     while (oldEntryIterator.hasNext()) {
       oldPaths.add(oldEntryIterator.next().getPath());
     }
-    List<Directory.Entry<T>> newEntries = right.list(left.getDepth(), AllPass);
+    List<Directory.Entry<T>> newEntries = right.list(left.getMaxDepth(), AllPass);
     Set<Path> newPaths = new HashSet<>();
     final Iterator<Directory.Entry<T>> newEntryIterator = newEntries.iterator();
     while (newEntryIterator.hasNext()) {
@@ -361,7 +329,7 @@ class FileCacheImpl<T> implements FileCache<T> {
   private Directory<T> cachedOrNull(final Path path, final int maxDepth) {
     Directory<T> res = null;
     try {
-      res = Directory.cached(path, converter, maxDepth);
+      res = Repositories.cached(path, converter, maxDepth);
     } catch (IOException e) {
     }
     return res;
@@ -379,21 +347,21 @@ class FileCacheImpl<T> implements FileCache<T> {
         final Directory<T> currentDir = directoryIterator.next();
         if (path.startsWith(currentDir.getPath())) {
           Directory<T> oldDir = currentDir;
-          Directory<T> newDir = cachedOrNull(oldDir.getPath(), oldDir.getDepth());
+          Directory<T> newDir = cachedOrNull(oldDir.getPath(), oldDir.getMaxDepth());
           while (newDir == null || diff(oldDir, newDir)) {
             if (newDir != null) oldDir = newDir;
-            newDir = cachedOrNull(oldDir.getPath(), oldDir.getDepth());
+            newDir = cachedOrNull(oldDir.getPath(), oldDir.getMaxDepth());
           }
           final Map<Path, Directory.Entry<T>> oldEntries = new HashMap<>();
           final Map<Path, Directory.Entry<T>> newEntries = new HashMap<>();
           final Iterator<Directory.Entry<T>> oldEntryIterator =
-              currentDir.list(currentDir.getDepth(), AllPass).iterator();
+              currentDir.list(currentDir.getMaxDepth(), AllPass).iterator();
           while (oldEntryIterator.hasNext()) {
             final Directory.Entry<T> entry = oldEntryIterator.next();
             oldEntries.put(entry.getPath(), entry);
           }
           final Iterator<Directory.Entry<T>> newEntryIterator =
-              newDir.list(currentDir.getDepth(), AllPass).iterator();
+              newDir.list(currentDir.getMaxDepth(), AllPass).iterator();
           while (newEntryIterator.hasNext()) {
             final Directory.Entry<T> entry = newEntryIterator.next();
             newEntries.put(entry.getPath(), entry);
@@ -521,7 +489,9 @@ class FileCacheImpl<T> implements FileCache<T> {
               if (attrs.isSymbolicLink() && symlinkWatcher != null)
                 symlinkWatcher.addSymlink(
                     path,
-                    dir.getDepth() == Integer.MAX_VALUE ? Integer.MAX_VALUE : dir.getDepth() - 1);
+                    dir.getMaxDepth() == Integer.MAX_VALUE
+                        ? Integer.MAX_VALUE
+                        : dir.getMaxDepth() - 1);
               final Directory.Updates<T> updates =
                   dir.update(toUpdate, Entries.getKind(toUpdate, attrs));
               updates.observe(callbackObserver(callbacks));
@@ -533,13 +503,14 @@ class FileCacheImpl<T> implements FileCache<T> {
           try {
             Directory<T> directory;
             try {
-              directory = Directory.cached(path, converter, registry.maxDepthFor(path));
+              directory = Repositories.cached(path, converter, registry.maxDepthFor(path));
             } catch (final NotDirectoryException nde) {
-              directory = Directory.cached(path, converter, -1);
+              directory = Repositories.cached(path, converter, -1);
             }
             directories.put(path, directory);
             addCallback(callbacks, path, null, directory.entry(), Create, null);
-            final Iterator<Directory.Entry<T>> it = directory.list(true, AllPass).iterator();
+            final Iterator<Directory.Entry<T>> it =
+                directory.list(directory.getMaxDepth(), AllPass).iterator();
             while (it.hasNext()) {
               final Directory.Entry<T> entry = it.next();
               addCallback(callbacks, entry.getPath(), null, entry, Create, null);

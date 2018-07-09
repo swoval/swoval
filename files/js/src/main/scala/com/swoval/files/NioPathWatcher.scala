@@ -103,12 +103,6 @@ class NioPathWatcher(callback: Consumer[Event],
       })
       .castLeft(classOf[IOException])
 
-  override def register(path: Path, recursive: Boolean): Either[IOException, Boolean] =
-    register(path, if (recursive) java.lang.Integer.MAX_VALUE else 0)
-
-  override def register(path: Path): Either[IOException, Boolean] =
-    register(path, java.lang.Integer.MAX_VALUE)
-
   /**
    * Stop watching a directory
    *
@@ -120,11 +114,13 @@ class NioPathWatcher(callback: Consumer[Event],
         if (!managed) directoryRegistry.removeDirectory(path)
         val dir: Directory[WatchedDirectory] = getRoot(path.getRoot)
         if (dir != null) {
-          val toRemove: List[Directory.Entry[WatchedDirectory]] =
-            dir.list(true, new EntryFilter[WatchedDirectory]() {
+          val toRemove: List[Directory.Entry[WatchedDirectory]] = dir.list(
+            dir.getMaxDepth,
+            new EntryFilter[WatchedDirectory]() {
               override def accept(entry: Entry[_ <: WatchedDirectory]): Boolean =
                 !directoryRegistry.accept(entry.getPath)
-            })
+            }
+          )
           val it: Iterator[Directory.Entry[WatchedDirectory]] =
             toRemove.iterator()
           while (it.hasNext) {
@@ -151,7 +147,7 @@ class NioPathWatcher(callback: Consumer[Event],
             val dir: Directory[WatchedDirectory] = it.next()
             close(dir.entry().getValue)
             val entries: Iterator[Directory.Entry[WatchedDirectory]] =
-              dir.list(true, AllPass).iterator()
+              dir.list(dir.getMaxDepth, AllPass).iterator()
             while (entries.hasNext) close(entries.next().getValue)
           }
           nioPathWatcherService.close()

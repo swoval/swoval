@@ -65,16 +65,6 @@ public class ApplePathWatcher implements PathWatcher {
     return register(path, flags, maxDepth);
   }
 
-  @Override
-  public Either<IOException, Boolean> register(Path path, boolean recursive) {
-    return register(path, flags, recursive ? Integer.MAX_VALUE : 0);
-  }
-
-  @Override
-  public Either<IOException, Boolean> register(Path path) {
-    return register(path, flags, Integer.MAX_VALUE);
-  }
-
   /**
    * Registers with additional flags
    *

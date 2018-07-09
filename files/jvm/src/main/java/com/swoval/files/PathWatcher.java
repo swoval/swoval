@@ -34,32 +34,9 @@ public interface PathWatcher extends AutoCloseable {
   Either<IOException, Boolean> register(Path path, int maxDepth);
 
   /**
-   * Register a path to monitor for file events. The monitoring may be recursive.
+   * Stop watching a path.
    *
-   * @param path the directory to watch for file events
-   * @param recursive toggles whether or not to monitor subdirectories
-   * @return an {@link com.swoval.functional.Either} containing the result of the registration or an
-   *     IOException if registration fails. This method should be idempotent and return true the
-   *     first time the directory is registered or when the depth is changed. Otherwise it should
-   *     return false.
-   */
-  Either<IOException, Boolean> register(Path path, boolean recursive);
-
-  /**
-   * Register a path to monitor for file events recursively.
-   *
-   * @param path the directory to watch for file events
-   * @return an {@link com.swoval.functional.Either} containing the result of the registration or an
-   *     IOException if registration fails. This method should be idempotent and return true the
-   *     first time the directory is registered or when the depth is changed. Otherwise it should
-   *     return false.
-   */
-  Either<IOException, Boolean> register(Path path);
-
-  /**
-   * Stop watching a directory.
-   *
-   * @param path the directory to remove from monitoring
+   * @param path the path to remove from monitoring
    */
   void unregister(Path path);
 

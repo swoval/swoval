@@ -453,7 +453,9 @@ object Build {
               convertSources(
                 "com/swoval/files",
                 "ApplePathWatcher",
+                "DataRepository",
                 "Directory",
+                "DirectoryRepository",
                 "DirectoryRegistry",
                 "Entries",
                 "EntryFilters",
@@ -469,6 +471,8 @@ object Build {
                 "QuickFile",
                 "QuickLister",
                 "RegisterableWatchService",
+                "Repository",
+                "Repositories",
                 "SymlinkWatcher",
                 "TypedPath",
                 "WatchedDirectory"

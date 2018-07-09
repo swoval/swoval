@@ -35,32 +35,9 @@ trait PathWatcher extends AutoCloseable {
   def register(path: Path, maxDepth: Int): Either[IOException, Boolean]
 
   /**
-   * Register a path to monitor for file events. The monitoring may be recursive.
+   * Stop watching a path.
    *
-   * @param path the directory to watch for file events
-   * @param recursive toggles whether or not to monitor subdirectories
-   * @return an [[com.swoval.functional.Either]] containing the result of the registration or an
-   *     IOException if registration fails. This method should be idempotent and return true the
-   *     first time the directory is registered or when the depth is changed. Otherwise it should
-   *     return false.
-   */
-  def register(path: Path, recursive: Boolean): Either[IOException, Boolean]
-
-  /**
-   * Register a path to monitor for file events recursively.
-   *
-   * @param path the directory to watch for file events
-   * @return an [[com.swoval.functional.Either]] containing the result of the registration or an
-   *     IOException if registration fails. This method should be idempotent and return true the
-   *     first time the directory is registered or when the depth is changed. Otherwise it should
-   *     return false.
-   */
-  def register(path: Path): Either[IOException, Boolean]
-
-  /**
-   * Stop watching a directory.
-   *
-   * @param path the directory to remove from monitoring
+   * @param path the path to remove from monitoring
    */
   def unregister(path: Path): Unit
 

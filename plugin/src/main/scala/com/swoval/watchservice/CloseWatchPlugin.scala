@@ -17,6 +17,11 @@ import scala.util.Try
 
 object CloseWatchPlugin extends AutoPlugin {
   override def trigger = allRequirements
+  implicit class PathWatcherOps(val watcher: PathWatcher) {
+    def register(path: Path, recursive: Boolean): Unit =
+      watcher.register(path, if (recursive) Integer.MAX_VALUE else 0)
+    def register(path: Path): Unit = register(path, recursive = true)
+  }
   private implicit class FileFilterOps(val fileFilter: FileFilter) extends EntryFilter[Path] {
     override def accept(entry: Entry[_ <: Path]): Boolean = fileFilter.accept(entry.getPath.toFile)
   }
@@ -59,7 +64,7 @@ object CloseWatchPlugin extends AutoPlugin {
         val path = f.toPath()
         _internalFileCache.register(path, recursive)
         _internalFileCache
-          .list(path, recursive, filter)
+          .list(path, if (recursive) Integer.MAX_VALUE else 0, filter)
           .asScala
           .map(_.getPath.toFile)
       }

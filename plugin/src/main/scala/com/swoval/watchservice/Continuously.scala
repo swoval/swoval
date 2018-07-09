@@ -16,6 +16,7 @@ import sbt._
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
+import CloseWatchPlugin.PathWatcherOps
 
 object Continuously {
   def continuous: Command =

@@ -21,10 +21,6 @@ import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
 object Directory {
 
-  private val PATH_CONVERTER: Converter[Path] = new Converter[Path]() {
-    override def apply(path: Path): Path = path
-  }
-
   /**
    * Converts a Path into an arbitrary value to be cached.
    *
@@ -41,77 +37,6 @@ object Directory {
     def apply(path: Path): R
 
   }
-
-  /**
-   * Make a new recursive Directory with no cache value associated with the path.
-   *
-   * @param path the path to monitor
-   * @return a directory whose entries just contain the path itself.
-   */
-  def of(path: Path): Directory[Path] = of(path, true)
-
-  /**
-   * Make a new Directory with no cache value associated with the path.
-   *
-   * @param path the path to monitor
-   * @param depth sets how the limit for how deep to traverse the children of this directory
-   * @return a directory whose entries just contain the path itself.
-   */
-  def of(path: Path, depth: Int): Directory[Path] =
-    new Directory(path, path, PATH_CONVERTER, depth, Filters.AllPass).init()
-
-  /**
-   * Make a new Directory with no cache value associated with the path.
-   *
-   * @param path the path to monitor
-   * @param recursive Toggles whether or not to cache the children of subdirectories
-   * @return a directory whose entries just contain the path itself.
-   */
-  def of(path: Path, recursive: Boolean): Directory[Path] =
-    new Directory(path,
-                  path,
-                  PATH_CONVERTER,
-                  if (recursive) java.lang.Integer.MAX_VALUE else 0,
-                  Filters.AllPass).init()
-
-  /**
-   * Make a new Directory with a cache entries created by {@code converter}.
-   *
-   * @param path the path to cache
-   * @param converter a function to create the cache value for each path
-   * @tparam T the cache value type
-   * @return a directory with entries of type T.
-   */
-  def cached[T <: AnyRef](path: Path, converter: Converter[T]): Directory[T] =
-    new Directory(path, path, converter, java.lang.Integer.MAX_VALUE, Filters.AllPass).init()
-
-  /**
-   * Make a new Directory with a cache entries created by {@code converter}.
-   *
-   * @param path the path to cache
-   * @param converter a function to create the cache value for each path
-   * @param recursive toggles whether or not to the children of subdirectories
-   * @tparam T the cache value type
-   * @return a directory with entries of type T.
-   */
-  def cached[T <: AnyRef](path: Path, converter: Converter[T], recursive: Boolean): Directory[T] =
-    new Directory(path,
-                  path,
-                  converter,
-                  if (recursive) java.lang.Integer.MAX_VALUE else 0,
-                  Filters.AllPass).init()
-
-  /**
-   * Make a new Directory with a cache entries created by {@code converter}.
-   *
-   * @param path the path to cache
-   * @param converter a function to create the cache value for each path
-   * @param depth determines how many levels of children of subdirectories to include in the results
-   * @tparam T the cache value type
-   * @return a directory with entries of type T.
-   */
-  def cached[T <: AnyRef](path: Path, converter: Converter[T], depth: Int): Directory[T] =
-    new Directory(path, path, converter, depth, Filters.AllPass).init()
 
   /**
    * Container class for [[Directory]] entries. Contains both the path to which the path
@@ -298,9 +223,16 @@ object Directory {
 class Directory[T <: AnyRef](@BeanProperty val path: Path,
                              private val realPath: Path,
                              private val converter: Converter[T],
-                             @BeanProperty val depth: Int,
+                             private val depth: Int,
                              filter: Filter[_ >: QuickFile])
-    extends AutoCloseable {
+    extends DataRepository[T]
+    with DirectoryRepository
+    with AutoCloseable {
+
+  def getMaxDepth(): Int = depth
+
+  override def list(maxDepth: Int, filter: Filter[_ >: Path]): List[Path] =
+    list(path, maxDepth, filter)
 
   private val _cacheEntry: AtomicReference[Entry[T]] = new AtomicReference(null)
 
@@ -324,65 +256,13 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
     }
   }
 
-  /**
-   * The cache entry for the underlying path of this directory.
-   *
-   * @return the Entry for the directory itself.
-   */
-  def entry(): Entry[T] = _cacheEntry.get
-
-  val kind: Int = Entries.getKind(path)
-
-  this._cacheEntry.set(Entries.get(path, kind, converter, realPath))
-
-  /**
-   * List all of the files for the {@code path}.
-   *
-   * @param maxDepth the maximum depth of subdirectories to query
-   * @return a List of Entry instances accepted by the filter.
-   */
-  def list(maxDepth: Int): List[Entry[T]] = {
-    val result: List[Entry[T]] = new ArrayList[Entry[T]]()
-    listImpl(maxDepth, EntryFilters.AllPass, result)
-    result
-  }
-
-  /**
-   * List all of the files for the {@code path}.
-   *
-   * @param recursive toggles whether or not the children of subdirectories are returned
-   * @return a List of Entry instances accepted by the filter.
-   */
-  def list(recursive: Boolean): List[Entry[T]] = {
-    val result: List[Entry[T]] = new ArrayList[Entry[T]]()
-    listImpl(if (recursive) java.lang.Integer.MAX_VALUE else 0, EntryFilters.AllPass, result)
-    result
-  }
-
-  /**
-   * List all of the files for the {@code path}, returning only those files that are accepted by the
-   * provided filter.
-   *
-   * @param maxDepth the maximum depth of subdirectories to query
-   * @param filter include only entries accepted by the filter
-   * @return a List of Entry instances accepted by the filter.
-   */
-  def list(maxDepth: Int, filter: EntryFilter[_ >: T]): List[Entry[T]] = {
-    val result: List[Entry[T]] = new ArrayList[Entry[T]]()
-    listImpl(maxDepth, filter, result)
-    result
-  }
-
-  /**
-   * List all of the files for the {@code path}.
-   *
-   * @param recursive toggles whether to include the children of subdirectories
-   * @param filter include only entries accepted by the filter
-   * @return a list of Entry instances accepted by the filter.
-   */
-  def list(recursive: Boolean, filter: EntryFilter[_ >: T]): List[Entry[T]] = {
-    val result: List[Entry[T]] = new ArrayList[Entry[T]]()
-    listImpl(if (recursive) java.lang.Integer.MAX_VALUE else 0, filter, result)
+  override def list(path: Path, maxDepth: Int, filter: Filter[_ >: Path]): List[Path] = {
+    val it: Iterator[Entry[T]] = list(path, maxDepth, new EntryFilter[T]() {
+      override def accept(entry: Entry[_ <: T]): Boolean =
+        filter.accept(entry.getPath)
+    }).iterator()
+    val result: List[Path] = new ArrayList[Path]()
+    while (it.hasNext) result.add(it.next().getPath)
     result
   }
 
@@ -397,11 +277,13 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
    *     not a subdirectory of this Directory or if it is a subdirectory, but the Directory was
    *     created without the recursive flag.
    */
-  def list(path: Path, maxDepth: Int, filter: EntryFilter[_ >: T]): List[Entry[T]] = {
+  override def list(path: Path, maxDepth: Int, filter: EntryFilter[_ >: T]): List[Entry[T]] = {
     val findResult: Either[Entry[T], Directory[T]] = find(path)
     if (findResult != null) {
       if (findResult.isRight) {
-        findResult.get.list(maxDepth, filter)
+        val result: List[Entry[T]] = new ArrayList[Entry[T]]()
+        findResult.get.listImpl(maxDepth, filter, result)
+        result
       } else {
         val entry: Entry[T] = leftProjection(findResult).getValue
         val result: List[Entry[T]] = new ArrayList[Entry[T]]()
@@ -413,19 +295,19 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
     }
   }
 
+  def list(maxDepth: Int, filter: EntryFilter[_ >: T]): List[Entry[T]] =
+    list(getPath, maxDepth, filter)
+
   /**
-   * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
+   * The cache entry for the underlying path of this directory.
    *
-   * @param path the path to list. If this is a file, returns a list containing the Entry for the
-   *     file or an empty list if the file is not monitored by the path.
-   * @param recursive toggles whether or not to include children of subdirectories in the results
-   * @param filter include only paths accepted by this.
-   * @return a List of Entry instances accepted by the filter. The list will be empty if the path is
-   *     not a subdirectory of this Directory or if it is a subdirectory, but the Directory was
-   *     created without the recursive flag.
+   * @return the Entry for the directory itself.
    */
-  def list(path: Path, recursive: Boolean, filter: EntryFilter[_ >: T]): List[Entry[T]] =
-    list(path, if (recursive) java.lang.Integer.MAX_VALUE else 0, filter)
+  def entry(): Entry[T] = _cacheEntry.get
+
+  val kind: Int = Entries.getKind(path)
+
+  this._cacheEntry.set(Entries.get(path, kind, converter, realPath))
 
   /**
    * Updates the Directory entry for a particular path.
@@ -550,9 +432,9 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
         }
       }
     } else if (kind == Entries.DIRECTORY) {
-      val oldEntries: List[Entry[T]] = list(true, AllPass)
+      val oldEntries: List[Entry[T]] = list(getMaxDepth, AllPass)
       init()
-      MapOps.diffDirectoryEntries(oldEntries, list(true, AllPass), result)
+      MapOps.diffDirectoryEntries(oldEntries, list(getMaxDepth, AllPass), result)
     } else {
       val oldEntry: Entry[T] = entry()
       val newEntry: Entry[T] = Entries.get(realPath, kind, converter, realPath)

@@ -129,16 +129,6 @@ class NioPathWatcher implements PathWatcher {
         .castLeft(IOException.class);
   }
 
-  @Override
-  public Either<IOException, Boolean> register(Path path, boolean recursive) {
-    return register(path, recursive ? Integer.MAX_VALUE : 0);
-  }
-
-  @Override
-  public Either<IOException, Boolean> register(Path path) {
-    return register(path, Integer.MAX_VALUE);
-  }
-
   /**
    * Stop watching a directory
    *
@@ -156,7 +146,7 @@ class NioPathWatcher implements PathWatcher {
             if (dir != null) {
               List<Directory.Entry<WatchedDirectory>> toRemove =
                   dir.list(
-                      true,
+                      dir.getMaxDepth(),
                       new EntryFilter<WatchedDirectory>() {
                         @Override
                         public boolean accept(final Entry<? extends WatchedDirectory> entry) {
@@ -193,7 +183,7 @@ class NioPathWatcher implements PathWatcher {
                 final Directory<WatchedDirectory> dir = it.next();
                 close(dir.entry().getValue());
                 final Iterator<Directory.Entry<WatchedDirectory>> entries =
-                    dir.list(true, AllPass).iterator();
+                    dir.list(dir.getMaxDepth(), AllPass).iterator();
                 while (entries.hasNext()) {
                   close(entries.next().getValue());
                 }

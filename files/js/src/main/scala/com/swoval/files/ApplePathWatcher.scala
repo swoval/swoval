@@ -134,12 +134,6 @@ class ApplePathWatcher(private val latency: Double,
   override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] =
     register(path, flags, maxDepth)
 
-  override def register(path: Path, recursive: Boolean): Either[IOException, Boolean] =
-    register(path, flags, if (recursive) java.lang.Integer.MAX_VALUE else 0)
-
-  override def register(path: Path): Either[IOException, Boolean] =
-    register(path, flags, java.lang.Integer.MAX_VALUE)
-
   /**
    * Registers with additional flags
    *

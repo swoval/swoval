@@ -982,7 +982,7 @@ object FileCacheTest {
     def ls(dir: Path,
            recursive: Boolean = true,
            filter: EntryFilter[_ >: T] = EntryFilters.AllPass): Seq[Entry[T]] =
-      fileCache.list(dir, recursive, filter).asScala
+      fileCache.list(dir, if (recursive) Integer.MAX_VALUE else 0, filter).asScala
 
     def reg(dir: Path, recursive: Boolean = true): SEither[IOException, Bool] = {
       val res = fileCache.register(dir, recursive)

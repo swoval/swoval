@@ -21,14 +21,14 @@ object AllTests {
       (t.tests, t.getClass.getName.replaceAll("[$]", ""))
     val tests = Seq(
       test(DefaultFileCacheTest),
-      test(DirectoryTest),
       test(EntryFilterTest),
       test(FileEventApiTest),
       test(PathTest),
       test(NativeQuickListTest),
       test(NioPathWatcherTest),
       test(NioFileCacheTest),
-      test(NioQuickListTest)
+      test(NioQuickListTest),
+      test(RepositoryTest)
     )
     val latch = new CountDownLatch(tests.size)
     val failed = new AtomicBoolean(false)

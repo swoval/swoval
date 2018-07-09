@@ -38,7 +38,7 @@ class JsFileCache[T <: AnyRef](converter: js.UndefOr[js.Function1[Path, T]],
     inner
       .list(
         Paths.get(path),
-        recursive.toOption.getOrElse(false),
+        if (recursive.toOption.getOrElse(false)) Integer.MAX_VALUE else 0,
         new EntryFilter[T] {
           override def accept(entry: Entry[_ <: T]): Boolean =
             filter.fold(true)(
@@ -54,7 +54,8 @@ class JsFileCache[T <: AnyRef](converter: js.UndefOr[js.Function1[Path, T]],
   def register(path: String,
                recursive: js.UndefOr[Boolean],
                filter: js.UndefOr[js.Function1[String, Boolean]]): Unit = {
-    inner.register(Paths.get(path), recursive.toOption.getOrElse(false))
+    inner.register(Paths.get(path),
+                   if (recursive.toOption.getOrElse(false)) Integer.MAX_VALUE else 0)
   }
   def addCallback(callback: js.Function1[JSEntry[T], Unit]): Int =
     inner.addCallback(new OnChange[T] {

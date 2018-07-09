@@ -33,14 +33,19 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @param <T> the cache value type.
  */
-public class Directory<T> implements AutoCloseable {
-
-  public int getDepth() {
+public class Directory<T> implements DataRepository<T>, DirectoryRepository, AutoCloseable {
+  public int getMaxDepth() {
     return depth;
   }
 
+  @Override
   public Path getPath() {
     return path;
+  }
+
+  @Override
+  public List<Path> list(int maxDepth, Filter<? super Path> filter) {
+    return list(path, maxDepth, filter);
   }
 
   private final int depth;
@@ -52,13 +57,6 @@ public class Directory<T> implements AutoCloseable {
   private final Object lock = new Object();
   private final Map<Path, Directory<T>> subdirectories = new HashMap<>();
   private final Map<Path, Entry<T>> files = new HashMap<>();
-  private static final Converter<Path> PATH_CONVERTER =
-      new Converter<Path>() {
-        @Override
-        public Path apply(final Path path) {
-          return path;
-        }
-      };
   private final Filter<QuickFile> pathFilter;
 
   @Override
@@ -69,6 +67,61 @@ public class Directory<T> implements AutoCloseable {
       subdirectories.clear();
       files.clear();
     }
+  }
+
+  @Override
+  public List<Path> list(final Path path, final int maxDepth, final Filter<? super Path> filter) {
+    final Iterator<Entry<T>> it =
+        list(
+                path,
+                maxDepth,
+                new EntryFilter<T>() {
+                  @Override
+                  public boolean accept(Entry<? extends T> entry) {
+                    return filter.accept(entry.getPath());
+                  }
+                })
+            .iterator();
+    final List<Path> result = new ArrayList<>();
+    while (it.hasNext()) {
+      result.add(it.next().getPath());
+    }
+    return result;
+  }
+
+  /**
+   * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
+   *
+   * @param path the path to list. If this is a file, returns a list containing the Entry for the
+   *     file or an empty list if the file is not monitored by the path.
+   * @param maxDepth the maximum depth of subdirectories to return
+   * @param filter include only paths accepted by this
+   * @return a List of Entry instances accepted by the filter. The list will be empty if the path is
+   *     not a subdirectory of this Directory or if it is a subdirectory, but the Directory was
+   *     created without the recursive flag.
+   */
+  @Override
+  public List<Entry<T>> list(
+      final Path path, final int maxDepth, final EntryFilter<? super T> filter) {
+    final Either<Entry<T>, Directory<T>> findResult = find(path);
+    if (findResult != null) {
+      if (findResult.isRight()) {
+        final List<Entry<T>> result = new ArrayList<>();
+        findResult.get().listImpl(maxDepth, filter, result);
+        return result;
+      } else {
+        final Entry<T> entry = leftProjection(findResult).getValue();
+        final List<Entry<T>> result = new ArrayList<>();
+        if (entry != null && filter.accept(entry)) result.add(entry);
+        return result;
+      }
+    } else {
+      return new ArrayList<>();
+    }
+  }
+
+  List<Entry<T>> list(final int maxDepth, final EntryFilter<? super T> filter) {
+    return list(getPath(), maxDepth, filter);
   }
 
   /**
@@ -119,100 +172,6 @@ public class Directory<T> implements AutoCloseable {
           }
         };
     this._cacheEntry.set(Entries.get(path, kind, converter, realPath));
-  }
-
-  /**
-   * List all of the files for the {@code path}.
-   *
-   * @param maxDepth the maximum depth of subdirectories to query
-   * @return a List of Entry instances accepted by the filter.
-   */
-  public List<Entry<T>> list(final int maxDepth) {
-    final List<Entry<T>> result = new ArrayList<>();
-    listImpl(maxDepth, EntryFilters.AllPass, result);
-    return result;
-  }
-
-  /**
-   * List all of the files for the {@code path}.
-   *
-   * @param recursive toggles whether or not the children of subdirectories are returned
-   * @return a List of Entry instances accepted by the filter.
-   */
-  public List<Entry<T>> list(final boolean recursive) {
-    final List<Entry<T>> result = new ArrayList<>();
-    listImpl(recursive ? Integer.MAX_VALUE : 0, EntryFilters.AllPass, result);
-    return result;
-  }
-  /**
-   * List all of the files for the {@code path}, returning only those files that are accepted by the
-   * provided filter.
-   *
-   * @param maxDepth the maximum depth of subdirectories to query
-   * @param filter include only entries accepted by the filter
-   * @return a List of Entry instances accepted by the filter.
-   */
-  public List<Entry<T>> list(final int maxDepth, final EntryFilter<? super T> filter) {
-    final List<Entry<T>> result = new ArrayList<>();
-    listImpl(maxDepth, filter, result);
-    return result;
-  }
-
-  /**
-   * List all of the files for the {@code path}.
-   *
-   * @param recursive toggles whether to include the children of subdirectories
-   * @param filter include only entries accepted by the filter
-   * @return a list of Entry instances accepted by the filter.
-   */
-  public List<Entry<T>> list(final boolean recursive, final EntryFilter<? super T> filter) {
-    final List<Entry<T>> result = new ArrayList<>();
-    listImpl(recursive ? Integer.MAX_VALUE : 0, filter, result);
-    return result;
-  }
-
-  /**
-   * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
-   *
-   * @param path the path to list. If this is a file, returns a list containing the Entry for the
-   *     file or an empty list if the file is not monitored by the path.
-   * @param maxDepth the maximum depth of subdirectories to return
-   * @param filter include only paths accepted by this
-   * @return a List of Entry instances accepted by the filter. The list will be empty if the path is
-   *     not a subdirectory of this Directory or if it is a subdirectory, but the Directory was
-   *     created without the recursive flag.
-   */
-  public List<Entry<T>> list(
-      final Path path, final int maxDepth, final EntryFilter<? super T> filter) {
-    final Either<Entry<T>, Directory<T>> findResult = find(path);
-    if (findResult != null) {
-      if (findResult.isRight()) {
-        return findResult.get().list(maxDepth, filter);
-      } else {
-        final Entry<T> entry = leftProjection(findResult).getValue();
-        final List<Entry<T>> result = new ArrayList<>();
-        if (entry != null && filter.accept(entry)) result.add(entry);
-        return result;
-      }
-    } else {
-      return new ArrayList<>();
-    }
-  }
-
-  /**
-   * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
-   *
-   * @param path the path to list. If this is a file, returns a list containing the Entry for the
-   *     file or an empty list if the file is not monitored by the path.
-   * @param recursive toggles whether or not to include children of subdirectories in the results
-   * @param filter include only paths accepted by this.
-   * @return a List of Entry instances accepted by the filter. The list will be empty if the path is
-   *     not a subdirectory of this Directory or if it is a subdirectory, but the Directory was
-   *     created without the recursive flag.
-   */
-  public List<Entry<T>> list(
-      final Path path, final boolean recursive, final EntryFilter<? super T> filter) {
-    return list(path, recursive ? Integer.MAX_VALUE : 0, filter);
   }
 
   /**
@@ -341,9 +300,9 @@ public class Directory<T> implements AutoCloseable {
         }
       }
     } else if (kind == Entries.DIRECTORY) {
-      final List<Entry<T>> oldEntries = list(true, AllPass);
+      final List<Entry<T>> oldEntries = list(getMaxDepth(), AllPass);
       init();
-      MapOps.diffDirectoryEntries(oldEntries, list(true, AllPass), result);
+      MapOps.diffDirectoryEntries(oldEntries, list(getMaxDepth(), AllPass), result);
     } else {
       final Entry<T> oldEntry = entry();
       final Entry<T> newEntry = Entries.get(realPath, kind, converter, realPath);
@@ -492,87 +451,6 @@ public class Directory<T> implements AutoCloseable {
       }
     }
     return this;
-  }
-
-  /**
-   * Make a new recursive Directory with no cache value associated with the path.
-   *
-   * @param path the path to monitor
-   * @return a directory whose entries just contain the path itself.
-   * @throws IOException when an error is encountered traversing the directory.
-   */
-  public static Directory<Path> of(final Path path) throws IOException {
-    return of(path, true);
-  }
-
-  /**
-   * Make a new Directory with no cache value associated with the path.
-   *
-   * @param path the path to monitor
-   * @param depth sets how the limit for how deep to traverse the children of this directory
-   * @return a directory whose entries just contain the path itself.
-   * @throws IOException when an error is encountered traversing the directory.
-   */
-  public static Directory<Path> of(final Path path, final int depth) throws IOException {
-    return new Directory<>(path, path, PATH_CONVERTER, depth, Filters.AllPass).init();
-  }
-  /**
-   * Make a new Directory with no cache value associated with the path.
-   *
-   * @param path the path to monitor
-   * @param recursive Toggles whether or not to cache the children of subdirectories
-   * @return a directory whose entries just contain the path itself.
-   * @throws IOException when an error is encountered traversing the directory.
-   */
-  public static Directory<Path> of(final Path path, final boolean recursive) throws IOException {
-    return new Directory<>(
-            path, path, PATH_CONVERTER, recursive ? Integer.MAX_VALUE : 0, Filters.AllPass)
-        .init();
-  }
-
-  /**
-   * Make a new Directory with a cache entries created by {@code converter}.
-   *
-   * @param path the path to cache
-   * @param converter a function to create the cache value for each path
-   * @param <T> the cache value type
-   * @return a directory with entries of type T.
-   * @throws IOException when an error is encountered traversing the directory.
-   */
-  public static <T> Directory<T> cached(final Path path, final Converter<T> converter)
-      throws IOException {
-    return new Directory<>(path, path, converter, Integer.MAX_VALUE, Filters.AllPass).init();
-  }
-  /**
-   * Make a new Directory with a cache entries created by {@code converter}.
-   *
-   * @param path the path to cache
-   * @param converter a function to create the cache value for each path
-   * @param recursive toggles whether or not to the children of subdirectories
-   * @param <T> the cache value type
-   * @return a directory with entries of type T.
-   * @throws IOException when an error is encountered traversing the directory.
-   */
-  public static <T> Directory<T> cached(
-      final Path path, final Converter<T> converter, final boolean recursive) throws IOException {
-    return new Directory<>(
-            path, path, converter, recursive ? Integer.MAX_VALUE : 0, Filters.AllPass)
-        .init();
-  }
-
-  /**
-   * Make a new Directory with a cache entries created by {@code converter}.
-   *
-   * @param path the path to cache
-   * @param converter a function to create the cache value for each path
-   * @param depth determines how many levels of children of subdirectories to include in the results
-   * @param <T> the cache value type
-   * @return a directory with entries of type T.
-   * @throws IOException when an error is encountered traversing the directory.
-   */
-  public static <T> Directory<T> cached(
-      final Path path, final Converter<T> converter, final int depth) throws IOException {
-    return new Directory<>(path, path, converter, depth, Filters.AllPass).init();
   }
 
   /**
