@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.file.Path
 
 import com.swoval.files.Directory.{ Entry, EntryFilter }
+import com.swoval.watchservice.Compat.EntryImpl
 import com.swoval.watchservice.Compat.io._
 import com.swoval.watchservice.Filter._
 
@@ -40,7 +41,7 @@ class SourceFilter(override val base: Path, filter: EntryFilter[Path], override 
     with Compat.FileFilter {
   override def accept(cacheEntry: Entry[_ <: Path]): Boolean = apply(cacheEntry.getPath)
   override def accept(file: File): Boolean = apply(file.toPath)
-  def apply(p: Path): Boolean = p.startsWith(base) && filter.accept(new Entry(p, p))
+  def apply(p: Path): Boolean = p.startsWith(base) && filter.accept(EntryImpl(p))
   override lazy val toString: String = {
     val filterStr = Filter.show(filter, 0) match {
       case f if f.length > 80 =>

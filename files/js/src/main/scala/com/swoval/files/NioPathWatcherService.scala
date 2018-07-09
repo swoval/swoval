@@ -7,7 +7,7 @@ import java.nio.file.{ FileSystemLoopException, Files, Path, Paths }
 import java.util.concurrent.atomic.AtomicBoolean
 
 import com.swoval.files.PathWatchers.Event
-import com.swoval.files.PathWatchers.Event.{ Delete, Modify }
+import com.swoval.files.PathWatchers.Event.Kind.{ Delete, Error, Modify }
 import com.swoval.functional.Consumer
 import io.scalajs.nodejs
 import io.scalajs.nodejs.fs.{ FSWatcherOptions, Fs }
@@ -62,7 +62,7 @@ private[files] class NioPathWatcherService(eventConsumer: Consumer[Event],
             closed.set(true)
             watcher.close()
             watchedDirectoriesByPath += path -> WatchedDirectories.INVALID
-            eventConsumer.accept(new Event(path, Event.Error))
+            eventConsumer.accept(new Event(path, Error))
           }
           val watchedDirectory: WatchedDirectory = new WatchedDirectory {
 

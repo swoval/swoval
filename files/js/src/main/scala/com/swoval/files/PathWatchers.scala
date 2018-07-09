@@ -58,23 +58,23 @@ object PathWatchers {
   abstract class Factory {
 
     /**
-     * Creates a new PathWatcher
+     * Creates a new PathWatcher.
      *
-     * @param callback The callback to invoke on directory updates
-     * @param executor The executor on which internal updates are invoked
-     * @return A PathWatcher instance
-     *     can occur on mac
-     *     and windows
+     * @param callback the callback to invoke on directory updates
+     * @param executor the executor on which internal updates are invoked
+     * @return a PathWatcher instance.
+     *     can occur on mac.
+     *     and windows.
      */
     def create(callback: Consumer[Event], executor: Executor): PathWatcher =
       create(callback, executor, null)
 
     /**
-     * Creates a new PathWatcher
+     * Creates a new PathWatcher.
      *
-     * @param callback The callback to invoke on directory updates
-     * @param executor The executor on which internal updates are invoked
-     * @param directoryRegistry The registry of directories to monitor
+     * @param callback the callback to invoke on directory updates
+     * @param executor the executor on which internal updates are invoked
+     * @param directoryRegistry the registry of directories to monitor
      * @return A PathWatcher instance
      *     can occur on mac
      *     and windows
@@ -87,15 +87,34 @@ object PathWatchers {
 
   object Event {
 
-    val Create: Kind = new Kind("Create", 1)
+    object Kind {
 
-    val Delete: Kind = new Kind("Delete", 2)
+      /**
+ A new file was created.
+       */
+      val Create: Kind = new Kind("Create", 1)
 
-    val Error: Kind = new Kind("Error", 4)
+      /**
+ The file was deleted.
+       */
+      val Delete: Kind = new Kind("Delete", 2)
 
-    val Modify: Kind = new Kind("Modify", 3)
+      /**
+ An error occurred processing the event.
+       */
+      val Error: Kind = new Kind("Error", 4)
 
-    val Overflow: Kind = new Kind("Overflow", 0)
+      /**
+ An existing file was modified.
+       */
+      val Modify: Kind = new Kind("Modify", 3)
+
+      /**
+ An overflow occurred in the underlying path monitor.
+       */
+      val Overflow: Kind = new Kind("Overflow", 0)
+
+    }
 
     /**
      * An enum like class to indicate the type of file event. It isn't an actual enum because the

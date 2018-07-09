@@ -1,10 +1,11 @@
 package com.swoval.files;
 
 import static com.swoval.files.EntryFilters.AllPass;
-import static com.swoval.files.PathWatchers.Event.Create;
-import static com.swoval.files.PathWatchers.Event.Delete;
-import static com.swoval.files.PathWatchers.Event.Modify;
-import static com.swoval.files.PathWatchers.Event.Overflow;
+import static com.swoval.files.PathWatchers.Event.Kind.Create;
+import static com.swoval.files.PathWatchers.Event.Kind.Delete;
+import static com.swoval.files.PathWatchers.Event.Kind.Error;
+import static com.swoval.files.PathWatchers.Event.Kind.Modify;
+import static com.swoval.files.PathWatchers.Event.Kind.Overflow;
 import static java.util.Map.Entry;
 
 import com.swoval.files.Directory.Converter;
@@ -332,13 +333,13 @@ class FileCacheImpl<T> implements FileCache<T> {
   }
 
   private boolean diff(Directory<T> left, Directory<T> right) {
-    List<Directory.Entry<T>> oldEntries = left.list(left.recursive(), AllPass);
+    List<Directory.Entry<T>> oldEntries = left.list(left.getDepth(), AllPass);
     Set<Path> oldPaths = new HashSet<>();
     final Iterator<Directory.Entry<T>> oldEntryIterator = oldEntries.iterator();
     while (oldEntryIterator.hasNext()) {
       oldPaths.add(oldEntryIterator.next().getPath());
     }
-    List<Directory.Entry<T>> newEntries = right.list(left.recursive(), AllPass);
+    List<Directory.Entry<T>> newEntries = right.list(left.getDepth(), AllPass);
     Set<Path> newPaths = new HashSet<>();
     final Iterator<Directory.Entry<T>> newEntryIterator = newEntries.iterator();
     while (newEntryIterator.hasNext()) {
@@ -386,13 +387,13 @@ class FileCacheImpl<T> implements FileCache<T> {
           final Map<Path, Directory.Entry<T>> oldEntries = new HashMap<>();
           final Map<Path, Directory.Entry<T>> newEntries = new HashMap<>();
           final Iterator<Directory.Entry<T>> oldEntryIterator =
-              currentDir.list(currentDir.recursive(), AllPass).iterator();
+              currentDir.list(currentDir.getDepth(), AllPass).iterator();
           while (oldEntryIterator.hasNext()) {
             final Directory.Entry<T> entry = oldEntryIterator.next();
             oldEntries.put(entry.getPath(), entry);
           }
           final Iterator<Directory.Entry<T>> newEntryIterator =
-              newDir.list(currentDir.recursive(), AllPass).iterator();
+              newDir.list(currentDir.getDepth(), AllPass).iterator();
           while (newEntryIterator.hasNext()) {
             final Directory.Entry<T> entry = newEntryIterator.next();
             newEntries.put(entry.getPath(), entry);
@@ -522,10 +523,10 @@ class FileCacheImpl<T> implements FileCache<T> {
                     path,
                     dir.getDepth() == Integer.MAX_VALUE ? Integer.MAX_VALUE : dir.getDepth() - 1);
               final Directory.Updates<T> updates =
-                  dir.update(toUpdate, Directory.Entry.getKind(toUpdate, attrs));
+                  dir.update(toUpdate, Entries.getKind(toUpdate, attrs));
               updates.observe(callbackObserver(callbacks));
             } catch (final IOException e) {
-              addCallback(callbacks, path, null, null, PathWatchers.Event.Error, e);
+              addCallback(callbacks, path, null, null, Error, e);
             }
           }
         } else if (pendingFiles.remove(path)) {
@@ -610,7 +611,7 @@ class FileCacheImpl<T> implements FileCache<T> {
 
       @Override
       public void onError(final Path path, final IOException exception) {
-        addCallback(callbacks, path, null, null, PathWatchers.Event.Error, exception);
+        addCallback(callbacks, path, null, null, Error, exception);
       }
     };
   }

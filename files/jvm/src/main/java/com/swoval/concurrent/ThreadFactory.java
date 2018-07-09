@@ -11,9 +11,9 @@ public class ThreadFactory implements java.util.concurrent.ThreadFactory, AutoCl
   private final WeakHashMap<Thread, Boolean> threads = new WeakHashMap<>();
 
   /**
-   * Creates a new ThreadFactor with thread name prefix. The suffix will b
+   * Creates a new ThreadFactor with thread name prefix.
    *
-   * @param name The prefix for the name of thread
+   * @param name the prefix for the name of thread
    */
   public ThreadFactory(String name) {
     SecurityManager s = System.getSecurityManager();

@@ -10,14 +10,14 @@ import java.io.IOException;
 /** Provides factory methods for generating instances of {@link com.swoval.files.FileCache}. */
 public class FileCaches {
   /**
-   * Create a file cache
+   * Create a file cache.
    *
-   * @param converter Converts a path to the cached value type T
-   * @param options Options for the cache.
-   * @param <T> The value type of the cache entries
-   * @return A file cache
-   * @throws IOException if the {@link PathWatcher} cannot be initialized
-   * @throws InterruptedException if the {@link PathWatcher} cannot be initialized
+   * @param converter converts a path to the cached value type T
+   * @param options options for the cache
+   * @param <T> the value type of the cache entries
+   * @return a file cache.
+   * @throws IOException if the {@link com.swoval.files.PathWatcher} cannot be initialized.
+   * @throws InterruptedException if the {@link com.swoval.files.PathWatcher} cannot be initialized.
    */
   public static <T> FileCache<T> get(final Converter<T> converter, final Option... options)
       throws IOException, InterruptedException {
@@ -25,32 +25,15 @@ public class FileCaches {
   }
 
   /**
-   * Create a file cache using a specific PathWatcher created by the provided factory
+   * Create a file cache with an Observer of events.
    *
-   * @param converter Converts a path to the cached value type T
-   * @param factory A factory to create a path watcher
-   * @param options Options for the cache
-   * @param <T> The value type of the cache entries
-   * @return A file cache
-   * @throws IOException if the {@link PathWatcher} cannot be initialized
-   * @throws InterruptedException if the {@link PathWatcher} cannot be initialized
-   */
-  public static <T> FileCache<T> get(
-      final Converter<T> converter, final PathWatchers.Factory factory, final Option... options)
-      throws IOException, InterruptedException {
-    return new FileCacheImpl<>(converter, factory, null, options);
-  }
-
-  /**
-   * Create a file cache with an Observer of events
-   *
-   * @param converter Converts a path to the cached value type T
-   * @param observer Observer of events for this cache
-   * @param options Options for the cache
-   * @param <T> The value type of the cache entries
-   * @return A file cache
-   * @throws IOException if the {@link PathWatcher} cannot be initialized
-   * @throws InterruptedException if the {@link PathWatcher} cannot be initialized
+   * @param converter converts a path to the cached value type T
+   * @param observer observer of events for this cache
+   * @param options options for the cache
+   * @param <T> the value type of the cache entries
+   * @return a file cache.
+   * @throws IOException if the {@link PathWatcher} cannot be initialized.
+   * @throws InterruptedException if the {@link PathWatcher} cannot be initialized.
    */
   public static <T> FileCache<T> get(
       final Converter<T> converter, final Observer<T> observer, final Option... options)
@@ -61,18 +44,36 @@ public class FileCaches {
   }
 
   /**
-   * Create a file cache with an Observer of events
+   * Create a file cache using a factory to provide an instance of{@link
+   * com.swoval.files.PathWatcher}.
    *
-   * @param converter Converts a path to the cached value type T
-   * @param factory A factory to create a path watcher
-   * @param observer Observer of events for this cache
-   * @param options Options for the cache
+   * @param converter converts a path to the cached value type T
+   * @param factory creates a {@link com.swoval.files.PathWatcher}
+   * @param options options for the cache
    * @param <T> The value type of the cache entries
    * @return A file cache
    * @throws IOException if the {@link PathWatcher} cannot be initialized
    * @throws InterruptedException if the {@link PathWatcher} cannot be initialized
    */
-  public static <T> FileCache<T> get(
+  static <T> FileCache<T> get(
+      final Converter<T> converter, final PathWatchers.Factory factory, final Option... options)
+      throws IOException, InterruptedException {
+    return new FileCacheImpl<>(converter, factory, null, options);
+  }
+
+  /**
+   * Create a file cache with an Observer of events.
+   *
+   * @param converter converts a path to the cached value type T
+   * @param factory a factory to create a path watcher
+   * @param observer an observer of events for this cache
+   * @param options options for the cache
+   * @param <T> the value type of the cache entries
+   * @return a file cache.
+   * @throws IOException if the {@link PathWatcher} cannot be initialized.
+   * @throws InterruptedException if the {@link PathWatcher} cannot be initialized.
+   */
+  static <T> FileCache<T> get(
       final Converter<T> converter,
       final Factory factory,
       final Observer<T> observer,
@@ -83,7 +84,7 @@ public class FileCaches {
     return res;
   }
 
-  /** Options for the implementation of a {@link FileCache} */
+  /** Options for the implementation of a {@link FileCache}. */
   public static class Option {
     /** This constructor is needed for code gen. Otherwise only the companion is generated */
     Option() {}
@@ -94,6 +95,6 @@ public class FileCaches {
      * java.nio.file.FileSystemLoopException} when attempting to register one of these directories
      * or if the link that completes the loop is added to a registered path.
      */
-    public static final FileCaches.Option NOFOLLOW_LINKS = new Option();
+    static final FileCaches.Option NOFOLLOW_LINKS = new Option();
   }
 }

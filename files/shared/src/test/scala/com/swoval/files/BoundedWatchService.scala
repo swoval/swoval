@@ -1,29 +1,34 @@
 package com.swoval.files
 import java.nio.file.StandardWatchEventKinds.OVERFLOW
-import java.nio.file.{ Path, WatchEvent, WatchKey, Watchable }
+import java.nio.file._
 import java.util
 import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConverters._
 
 class BoundedWatchService(val queueSize: Int, underlying: RegisterableWatchService)
-    extends WatchServices.RegisterableWatchServiceImpl(underlying) {
+    extends RegisterableWatchService {
   override def register(path: Path, kinds: WatchEvent.Kind[_]*): WatchKey = {
-    val underlying = super.register(path, kinds: _*)
-    new BoundedWatchKey(queueSize, underlying)
+    new BoundedWatchKey(queueSize, underlying.register(path, kinds: _*))
   }
 
-  override def poll(): WatchKey = super.poll() match {
+  override def poll(): WatchKey = underlying.poll() match {
     case null => null
     case key  => new BoundedWatchKey(queueSize, key)
   }
 
-  override def poll(timeout: Long, unit: TimeUnit): WatchKey = super.poll(timeout, unit) match {
+  override def poll(timeout: Long, unit: TimeUnit): WatchKey =
+    underlying.poll(timeout, unit) match {
+      case null => null
+      case key  => new BoundedWatchKey(queueSize, key)
+    }
+
+  override def close(): Unit = underlying.close()
+
+  override def take(): WatchKey = underlying.take() match {
     case null => null
     case key  => new BoundedWatchKey(queueSize, key)
   }
-
-  override def take(): WatchKey = new BoundedWatchKey(queueSize, super.take())
 }
 private class BoundedWatchKey(val queueSize: Int, underlying: WatchKey) extends WatchKey {
   override def isValid: Boolean = underlying.isValid

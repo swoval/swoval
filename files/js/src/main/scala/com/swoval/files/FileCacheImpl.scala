@@ -3,10 +3,11 @@
 package com.swoval.files
 
 import com.swoval.files.EntryFilters.AllPass
-import com.swoval.files.PathWatchers.Event.Create
-import com.swoval.files.PathWatchers.Event.Delete
-import com.swoval.files.PathWatchers.Event.Modify
-import com.swoval.files.PathWatchers.Event.Overflow
+import com.swoval.files.PathWatchers.Event.Kind.Create
+import com.swoval.files.PathWatchers.Event.Kind.Delete
+import com.swoval.files.PathWatchers.Event.Kind.Error
+import com.swoval.files.PathWatchers.Event.Kind.Modify
+import com.swoval.files.PathWatchers.Event.Kind.Overflow
 import java.util.Map.Entry
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.EntryFilter
@@ -36,10 +37,10 @@ import java.util.Set
 import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicBoolean
 
-private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter[T],
-                                                factory: Factory,
-                                                executor: Executor,
-                                                options: FileCaches.Option*)
+class FileCacheImpl[T <: AnyRef](private val converter: Converter[T],
+                                 factory: Factory,
+                                 executor: Executor,
+                                 options: FileCaches.Option*)
     extends FileCache[T] {
 
   private val observers: Observers[T] = new Observers()
@@ -295,12 +296,12 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
 
   private def diff(left: Directory[T], right: Directory[T]): Boolean = {
     val oldEntries: List[Directory.Entry[T]] =
-      left.list(left.recursive(), AllPass)
+      left.list(left.getDepth, AllPass)
     val oldPaths: Set[Path] = new HashSet[Path]()
     val oldEntryIterator: Iterator[Directory.Entry[T]] = oldEntries.iterator()
     while (oldEntryIterator.hasNext) oldPaths.add(oldEntryIterator.next().getPath)
     val newEntries: List[Directory.Entry[T]] =
-      right.list(left.recursive(), AllPass)
+      right.list(left.getDepth, AllPass)
     val newPaths: Set[Path] = new HashSet[Path]()
     val newEntryIterator: Iterator[Directory.Entry[T]] = newEntries.iterator()
     while (newEntryIterator.hasNext) newPaths.add(newEntryIterator.next().getPath)
@@ -350,13 +351,13 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
           val newEntries: Map[Path, Directory.Entry[T]] =
             new HashMap[Path, Directory.Entry[T]]()
           val oldEntryIterator: Iterator[Directory.Entry[T]] =
-            currentDir.list(currentDir.recursive(), AllPass).iterator()
+            currentDir.list(currentDir.getDepth, AllPass).iterator()
           while (oldEntryIterator.hasNext) {
             val entry: Directory.Entry[T] = oldEntryIterator.next()
             oldEntries.put(entry.getPath, entry)
           }
           val newEntryIterator: Iterator[Directory.Entry[T]] =
-            newDir.list(currentDir.recursive(), AllPass).iterator()
+            newDir.list(currentDir.getDepth, AllPass).iterator()
           while (newEntryIterator.hasNext) {
             val entry: Directory.Entry[T] = newEntryIterator.next()
             newEntries.put(entry.getPath, entry)
@@ -478,11 +479,11 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
                                             java.lang.Integer.MAX_VALUE
                                           else dir.getDepth - 1)
               val updates: Directory.Updates[T] =
-                dir.update(toUpdate, Directory.Entry.getKind(toUpdate, attrs))
+                dir.update(toUpdate, Entries.getKind(toUpdate, attrs))
               updates.observe(callbackObserver(callbacks))
             } catch {
               case e: IOException =>
-                addCallback(callbacks, path, null, null, PathWatchers.Event.Error, e)
+                addCallback(callbacks, path, null, null, Error, e)
 
             }
           }
@@ -565,7 +566,7 @@ private[files] class FileCacheImpl[T <: AnyRef](private val converter: Converter
       }
 
       override def onError(path: Path, exception: IOException): Unit = {
-        addCallback(callbacks, path, null, null, PathWatchers.Event.Error, exception)
+        addCallback(callbacks, path, null, null, Error, exception)
       }
     }
 

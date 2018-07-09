@@ -1,5 +1,7 @@
 package com.swoval.files;
 
+import static com.swoval.functional.Either.getOrElse;
+import static com.swoval.functional.Either.leftProjection;
 import static java.util.Map.Entry;
 
 import com.swoval.files.Directory.OnError;
@@ -182,11 +184,11 @@ class SymlinkWatcher implements AutoCloseable {
                   if (registeredPath == null) {
                     final Either<IOException, Boolean> result =
                         watcher.register(realPath, maxDepth);
-                    if (result.getOrElse(false)) {
+                    if (getOrElse(result, false)) {
                       watchedSymlinksByDirectory.put(realPath, new RegisteredPath(path, realPath));
                       watchedSymlinksByTarget.put(realPath, new RegisteredPath(realPath, path));
                     } else if (result.isLeft()) {
-                      onError.apply(path, result.left().getValue());
+                      onError.apply(path, leftProjection(result).getValue());
                     }
                   }
                 } else if (Files.isDirectory(realPath)) {

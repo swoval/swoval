@@ -3,6 +3,10 @@ package com.swoval.functional
 import utest._
 
 object EitherTest extends TestSuite {
+  implicit class EitherOps[L, R](val either: Either[L, R]) extends AnyVal {
+    def left(): Either.Left[L, R] = Either.leftProjection[L, R](either)
+    def right(): Either.Right[L, R] = Either.rightProjection[L, R](either)
+  }
   override def tests: Tests = Tests {
     'exceptions - {
       'left - {

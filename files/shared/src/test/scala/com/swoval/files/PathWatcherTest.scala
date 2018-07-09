@@ -4,7 +4,7 @@ import java.nio.file.attribute.FileTime
 import java.nio.file.{ Files, Paths }
 import java.util.concurrent.TimeoutException
 
-import com.swoval.files.PathWatchers.Event.{ Create, Delete, Modify }
+import com.swoval.files.PathWatchers.Event.Kind.{ Create, Delete, Modify }
 import com.swoval.files.apple.Flags
 import com.swoval.files.test.{ ArrayBlockingQueue, _ }
 import com.swoval.functional.Consumer

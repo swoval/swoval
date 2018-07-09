@@ -1,6 +1,7 @@
-package com.swoval.watchservice
+package com.swoval
+package watchservice
 
-import java.io.File
+import java.io.{ File, IOException }
 import java.nio.file._
 
 import com.swoval.files.Directory.{ Entry, EntryFilter }
@@ -49,6 +50,12 @@ class BaseFileSource(val file: File, filter: EntryFilter[Path]) extends FileSour
 }
 
 object Compat {
+  case class EntryImpl(getPath: Path) extends Entry[Path] {
+    override def getValue: functional.Either[IOException, Path] = functional.Either.right(getPath)
+    override def isDirectory: Boolean = Files.isDirectory(getPath)
+    override def isFile: Boolean = Files.isRegularFile(getPath)
+    override def isSymbolicLink: Boolean = Files.isSymbolicLink(getPath)
+  }
   object internal {
     val Act = sbt.Act
     val Parser = sbt.complete.Parser
@@ -92,7 +99,7 @@ object Compat {
         case ((s, rf), f)                       => (s, rf :+ f)
       }
     val extra = rawFiles
-      .filterNot(f => sources.exists(_.filter.accept(new Entry(f.toPath, f.toPath))))
+      .filterNot(f => sources.exists(_.filter.accept(EntryImpl(f.toPath()))))
       .map(new ExactFileSource(_))
     sources ++ extra
   }

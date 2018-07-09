@@ -455,8 +455,7 @@ object Build {
                 "ApplePathWatcher",
                 "Directory",
                 "DirectoryRegistry",
-                "PathWatcher",
-                "PathWatchers",
+                "Entries",
                 "EntryFilters",
                 "FileCache",
                 "FileCacheImpl",
@@ -465,10 +464,13 @@ object Build {
                 "NioPathWatcher",
                 "NioDirectoryLister",
                 "Observers",
+                "PathWatcher",
+                "PathWatchers",
                 "QuickFile",
                 "QuickLister",
                 "RegisterableWatchService",
                 "SymlinkWatcher",
+                "TypedPath",
                 "WatchedDirectory"
               ).value
               convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
@@ -506,7 +508,8 @@ object Build {
         "com.swoval.files.apple.Native*"
       ) ++ (if (!Properties.isMac) Seq("*apple*", "*Apple*")
             else Nil),
-      javacOptions in (Compile, doc) := Nil,
+      javacOptions in (Compile, doc) :=
+        Seq("-overview", baseDirectory.value.toPath.resolve("overview.html").toString),
       crossScalaVersions := scalaCrossVersions,
       crossPaths := false,
       autoScalaLibrary := false,

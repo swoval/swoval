@@ -34,13 +34,13 @@ public class ShutdownHooks {
     private final int priority;
     private final Runnable runnable;
 
-    public Hook(final int priority, final Runnable runnable) {
+    private Hook(final int priority, final Runnable runnable) {
       this.priority = priority;
       this.runnable = runnable;
     }
 
     @Override
-    public int compareTo(Hook other) {
+    public int compareTo(final Hook other) {
       return Integer.compare(this.priority, other.priority);
     }
   }
@@ -48,8 +48,8 @@ public class ShutdownHooks {
   /**
    * Add a hook to run at shutdown.
    *
-   * @param priority Controls the ordering of this hook. Lower values run first.
-   * @param runnable The shutdown task to run
+   * @param priority controls the ordering of this hook. Lower values run first.
+   * @param runnable the shutdown task to run
    */
   public static void addHook(final int priority, final Runnable runnable) {
     hooks.add(new Hook(priority, runnable));
