@@ -4,9 +4,6 @@ package com.swoval.files
 
 import com.swoval.files.Directory.Entry
 import com.swoval.files.Directory.Observer
-import com.swoval.files.Directory.OnChange
-import com.swoval.files.Directory.OnError
-import com.swoval.files.Directory.OnUpdate
 import java.io.IOException
 import java.nio.file.Path
 import java.util.ArrayList

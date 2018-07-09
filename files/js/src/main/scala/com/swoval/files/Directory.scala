@@ -8,9 +8,7 @@ import com.swoval.functional.Either
 import com.swoval.functional.Filter
 import com.swoval.functional.Filters
 import java.io.IOException
-import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.attribute.BasicFileAttributes
 import java.util.ArrayList
 import java.util.Collection
 import java.util.HashMap
