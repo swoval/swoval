@@ -508,7 +508,8 @@ object Build {
         "com.swoval.files.apple.Native*"
       ) ++ (if (!Properties.isMac) Seq("*apple*", "*Apple*")
             else Nil),
-      javacOptions in (Compile, doc) := Nil,
+      javacOptions in (Compile, doc) :=
+        Seq("-overview", baseDirectory.value.toPath.resolve("overview.html").toString),
       crossScalaVersions := scalaCrossVersions,
       crossPaths := false,
       autoScalaLibrary := false,
