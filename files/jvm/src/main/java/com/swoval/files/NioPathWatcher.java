@@ -2,8 +2,8 @@ package com.swoval.files;
 
 import static com.swoval.files.Entries.DIRECTORY;
 import static com.swoval.files.EntryFilters.AllPass;
-import static com.swoval.files.PathWatchers.Event.Create;
-import static com.swoval.files.PathWatchers.Event.Overflow;
+import static com.swoval.files.PathWatchers.Event.Kind.Create;
+import static com.swoval.files.PathWatchers.Event.Kind.Overflow;
 
 import com.swoval.files.Directory.Converter;
 import com.swoval.files.Directory.Entry;
@@ -231,10 +231,9 @@ class NioPathWatcher implements PathWatcher {
       while (it.hasNext()) {
         final QuickFile file = it.next();
         if (file.isDirectory() && processedDirs.add(file)) {
-          processPath(
-              callback, file.toPath(), PathWatchers.Event.Create, processedDirs, processedFiles);
+          processPath(callback, file.toPath(), Create, processedDirs, processedFiles);
         } else if (processedFiles.add(file.toPath())) {
-          maybeRunCallback(callback, new Event(file.toPath(), PathWatchers.Event.Create));
+          maybeRunCallback(callback, new Event(file.toPath(), Create));
         }
       }
     }

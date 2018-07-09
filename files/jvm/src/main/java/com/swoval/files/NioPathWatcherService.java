@@ -1,9 +1,9 @@
 package com.swoval.files;
 
-import static com.swoval.files.PathWatchers.Event.Create;
-import static com.swoval.files.PathWatchers.Event.Delete;
-import static com.swoval.files.PathWatchers.Event.Modify;
-import static com.swoval.files.PathWatchers.Event.Overflow;
+import static com.swoval.files.PathWatchers.Event.Kind.Create;
+import static com.swoval.files.PathWatchers.Event.Kind.Delete;
+import static com.swoval.files.PathWatchers.Event.Kind.Modify;
+import static com.swoval.files.PathWatchers.Event.Kind.Overflow;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;

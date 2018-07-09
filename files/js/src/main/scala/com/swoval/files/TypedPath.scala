@@ -3,8 +3,8 @@
 package com.swoval.files
 
 /**
- * A mix-in for an object that represents a file system path. Provides (possibly) fast accessors
- * for the type of the file.
+ * A mix-in for an object that represents a file system path. Provides (possibly) fast accessors for
+ * the type of the file.
  */
 trait TypedPath {
 

@@ -15,9 +15,9 @@ import java.nio.file.Path
 trait QuickFile extends TypedPath {
 
   /**
-   * Returns the fully resolved file name
+   * Returns the fully resolved file name.
    *
-   * @return the fully resolved file name
+   * @return the fully resolved file name.
    */
   def getFileName(): String
 
@@ -26,21 +26,21 @@ trait QuickFile extends TypedPath {
    * returned by readdir (posix) or FindNextFile (windows). This makes the result generically
    * unsuitable for caching. Instead, use [[QuickFile.toFile]].
    *
-   * @return An instance of [[java.io.File]]
+   * @return an instance of [[java.io.File]].
    */
   def asFile(): File
 
   /**
    * Returns an instance of [[java.io.File]]. The instance should not override [[java.io.File.isDirectory]] or [[java.io.File.isFile]] which makes it safe to persist.
    *
-   * @return an instance of [[java.io.File]]
+   * @return an instance of [[java.io.File]].
    */
   def toFile(): File
 
   /**
    * Returns an instance of [[java.nio.file.Path]].
    *
-   * @return an instance of [[java.nio.file.Path]]
+   * @return an instance of [[java.nio.file.Path]].
    */
   def toPath(): Path
 

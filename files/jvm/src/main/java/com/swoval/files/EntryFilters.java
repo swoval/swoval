@@ -23,13 +23,13 @@ public class EntryFilters {
       };
 
   /**
-   * Combine two entry filters
+   * Combine two entry filters by accepting only entries that are accepted by both.
    *
-   * @param left The first entry filter to apply
-   * @param right The second entry filter to apply if the entry is accepted by the first filter.
+   * @param left the first entry filter to apply
+   * @param right the second entry filter to apply if the entry is accepted by the first filter.
    *     This filter must be for an entry whose value is a super class of the left entry filter.
-   * @param <T> The greatest lower bound of the two entry filters
-   * @return An entry filter that first applies the left filter and then the right filter if the
+   * @param <T> the greatest lower bound of the two entry filters
+   * @return an entry filter that first applies the left filter and then the right filter if the
    *     entry is accepted by the left filter.
    */
   public static <T> EntryFilter<T> AND(
@@ -37,16 +37,25 @@ public class EntryFilters {
     return new CombinedFilter<>(left, right);
   }
 
-  public static <T> EntryFilter<T> fromFileFilter(final FileFilter f) {
+  /**
+   * Converts a FileFilter into an EntryFilter that accepts an entry of any type whose path is
+   * accepted by the file filter.
+   *
+   * @param fileFilter the filter to transform
+   * @param <T> the entry type
+   * @return an EntryFilter that accepts an entry of any type whose path is accepted by the file
+   *     filter.
+   */
+  public static <T> EntryFilter<T> fromFileFilter(final FileFilter fileFilter) {
     return new EntryFilter<T>() {
       @Override
       public boolean accept(Entry<? extends T> entry) {
-        return f.accept(entry.getPath().toFile());
+        return fileFilter.accept(entry.getPath().toFile());
       }
 
       @Override
       public String toString() {
-        return "FromFileFilter(" + f + ")";
+        return "FromFileFilter(" + fileFilter + ")";
       }
     };
   }

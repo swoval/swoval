@@ -4,8 +4,8 @@ package com.swoval.files
 
 import com.swoval.files.Entries.DIRECTORY
 import com.swoval.files.EntryFilters.AllPass
-import com.swoval.files.PathWatchers.Event.Create
-import com.swoval.files.PathWatchers.Event.Overflow
+import com.swoval.files.PathWatchers.Event.Kind.Create
+import com.swoval.files.PathWatchers.Event.Kind.Overflow
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.Entry
 import com.swoval.files.Directory.EntryFilter
@@ -184,13 +184,9 @@ class NioPathWatcher(callback: Consumer[Event],
       while (it.hasNext) {
         val file: QuickFile = it.next()
         if (file.isDirectory && processedDirs.add(file)) {
-          processPath(callback,
-                      file.toPath(),
-                      PathWatchers.Event.Create,
-                      processedDirs,
-                      processedFiles)
+          processPath(callback, file.toPath(), Create, processedDirs, processedFiles)
         } else if (processedFiles.add(file.toPath())) {
-          maybeRunCallback(callback, new Event(file.toPath(), PathWatchers.Event.Create))
+          maybeRunCallback(callback, new Event(file.toPath(), Create))
         }
       }
     }

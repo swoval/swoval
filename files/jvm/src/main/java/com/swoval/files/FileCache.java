@@ -33,12 +33,12 @@ import java.util.List;
  * directory is empty. Listing a file, however, will return the entry for the file if it exists and
  * the empty list otherwise.
  *
- * @param <T> The type of data stored in the {@link Directory.Entry} instances for the cache
+ * @param <T> the type of data stored in the {@link Directory.Entry} instances for the cache
  */
 public interface FileCache<T> extends AutoCloseable {
 
   /**
-   * Add observer of file events
+   * Add observer of file events.
    *
    * @param observer The new observer
    * @return handle that can be used to remove the callback using {@link #removeObserver(int)}
@@ -46,7 +46,7 @@ public interface FileCache<T> extends AutoCloseable {
   int addObserver(final Observer<T> observer);
 
   /**
-   * Add callback to fire when a file event is detected by the monitor
+   * Add callback to fire when a file event is detected by the monitor.
    *
    * @param onChange The callback to fire on file events
    * @return handle that can be used to remove the callback using {@link #removeObserver(int)}
@@ -55,20 +55,20 @@ public interface FileCache<T> extends AutoCloseable {
 
   /**
    * Stop firing the previously registered callback where {@code handle} is returned by {@link
-   * #addObserver(Directory.Observer)}
+   * #addObserver(Directory.Observer)}.
    *
    * @param handle A handle to the observer added by {@link #addObserver(Directory.Observer)}
    */
   void removeObserver(final int handle);
 
   /**
-   * Lists the cache elements in the particular path
+   * Lists the cache elements.
    *
-   * @param path The path to list. This may be a file in which case the result list contains only
+   * @param path the path to list. This may be a file in which case the result list contains only
    *     this path or the empty list if the path is not monitored by the cache.
-   * @param maxDepth The maximum depth of children of the parent to traverse in the tree.
-   * @param filter Only include cache entries that are accepted by the filter.
-   * @return The list of cache elements. This will be empty if the path is not monitored in a
+   * @param maxDepth the maximum depth of children of the parent to traverse in the tree.
+   * @param filter only include cache entries that are accepted by the filter.
+   * @return the list of cache elements. This will be empty if the path is not monitored in a
    *     monitored path. If the path is a file and the file is monitored by the cache, the returned
    *     list will contain just the cache entry for the path.
    */
@@ -76,15 +76,15 @@ public interface FileCache<T> extends AutoCloseable {
       final Path path, final int maxDepth, final Directory.EntryFilter<? super T> filter);
 
   /**
-   * Lists the cache elements in the particular path
+   * Lists the cache elements.
    *
-   * @param path The path to list. This may be a file in which case the result list contains only
+   * @param path the path to list. This may be a file in which case the result list contains only
    *     this path or the empty list if the path is not monitored by the cache.
-   * @param recursive Toggles whether or not to include paths in subdirectories. Even when the cache
+   * @param recursive toggles whether or not to include paths in subdirectories. Even when the cache
    *     is recursively monitoring the input path, it will not return cache entries for children if
    *     this flag is false.
-   * @param filter Only include cache entries that are accepted by the filter.
-   * @return The list of cache elements. This will be empty if the path is not monitored in a
+   * @param filter only include cache entries that are accepted by the filter.
+   * @return the list of cache elements. This will be empty if the path is not monitored in a
    *     monitored path. If the path is a file and the file is monitored by the cache, the returned
    *     list will contain just the cache entry for the path.
    */
@@ -92,14 +92,14 @@ public interface FileCache<T> extends AutoCloseable {
       final Path path, final boolean recursive, final Directory.EntryFilter<? super T> filter);
 
   /**
-   * Lists the cache elements in the particular path without any filtering
+   * Lists the cache elements without any filtering.
    *
-   * @param path The path to list. This may be a file in which case the result list contains only
+   * @param path the path to list. This may be a file in which case the result list contains only
    *     this path or the empty list if the path is not monitored by the cache.
    *     <p>is recursively monitoring the input path, it will not return cache entries for children
    *     if this flag is false.
-   * @param maxDepth The maximum depth of children of the parent to traverse in the tree.
-   * @return The list of cache elements. This will be empty if the path is not monitored in a
+   * @param maxDepth the maximum depth of children of the parent to traverse in the tree.
+   * @return the list of cache elements. This will be empty if the path is not monitored in a
    *     monitored path. If the path is a file and the file is monitored by the cache, the returned
    *     list will contain just the cache entry for the path.
    */
@@ -107,14 +107,14 @@ public interface FileCache<T> extends AutoCloseable {
   List<Directory.Entry<T>> list(final Path path, final int maxDepth);
 
   /**
-   * Lists the cache elements in the particular path without any filtering
+   * Lists the cache elements without any filtering.
    *
-   * @param path The path to list. This may be a file in which case the result list contains only
+   * @param path the path to list. This may be a file in which case the result list contains only
    *     this path or the empty list if the path is not monitored by the cache.
    *     <p>is recursively monitoring the input path, it will not return cache entries for children
    *     if this flag is false.
-   * @param recursive Toggles whether or not to traverse the children of the path
-   * @return The list of cache elements. This will be empty if the path is not monitored in a
+   * @param recursive toggles whether or not to traverse the children of the path
+   * @return the list of cache elements. This will be empty if the path is not monitored in a
    *     monitored path. If the path is a file and the file is monitored by the cache, the returned
    *     list will contain just the cache entry for the path.
    */
@@ -122,11 +122,11 @@ public interface FileCache<T> extends AutoCloseable {
   List<Directory.Entry<T>> list(final Path path, final boolean recursive);
 
   /**
-   * Lists the cache elements in the particular path recursively and with no filter.
+   * Lists the cache elements, recursively and with no filter.
    *
-   * @param path The path to list. This may be a file in which case the result list contains only
+   * @param path the path to list. This may be a file in which case the result list contains only
    *     this path or the empty list if the path is not monitored by the cache.
-   * @return The list of cache elements. This will be empty if the path is not monitored in a
+   * @return the list of cache elements. This will be empty if the path is not monitored in a
    *     monitored path. If the path is a file and the file is monitored by the cache, the returned
    *     list will contain just the cache entry for the path.
    */
@@ -136,8 +136,8 @@ public interface FileCache<T> extends AutoCloseable {
   /**
    * Register the path for monitoring.
    *
-   * @param path The path to monitor
-   * @param maxDepth The maximum depth of subdirectories to include
+   * @param path the path to monitor
+   * @param maxDepth the maximum depth of subdirectories to include
    * @return an instance of {@link com.swoval.functional.Either} that contains a boolean flag
    *     indicating whether registration succeeds. If an IOException is thrown registering the path,
    *     it is returned as a {@link com.swoval.functional.Either.Left}. This method should be
@@ -149,7 +149,7 @@ public interface FileCache<T> extends AutoCloseable {
    * Register the path for monitoring.
    *
    * @param path The path to monitor
-   * @param recursive Recursively monitor the path if true
+   * @param recursive recursively monitor the path if true
    * @return an instance of {@link com.swoval.functional.Either} that contains a boolean flag
    *     indicating whether registration succeeds. If an IOException is thrown registering the path,
    *     it is returned as a {@link com.swoval.functional.Either.Left}. This method should be
@@ -160,7 +160,7 @@ public interface FileCache<T> extends AutoCloseable {
   /**
    * Register the path for monitoring recursively.
    *
-   * @param path The path to monitor
+   * @param path the path to monitor
    * @return an instance of {@link com.swoval.functional.Either} that contains a boolean flag
    *     indicating whether registration succeeds. If an IOException is thrown registering the path,
    *     it is returned as a {@link com.swoval.functional.Either.Left}. This method should be
@@ -178,7 +178,7 @@ public interface FileCache<T> extends AutoCloseable {
    * /foo/bar should be included in the list returned by {@link
    * com.swoval.files.FileCache#list(Path)}.
    *
-   * @param path The path to unregister
+   * @param path the path to unregister
    */
   void unregister(final Path path);
 }

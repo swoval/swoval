@@ -15,61 +15,13 @@ import java.util.Iterator
 import java.util.List
 import java.util.Map
 import java.util.concurrent.atomic.AtomicInteger
-import Observers._
-
-object Observers {
-
-  /**
-   * Simple observer that fires the same callback for all regular events and ignores any errors.
-   *
-   * @param onchange The callback to fire when a file is created/updated/deleted
-   * @tparam T The generic type of the [[Directory.Entry]]
-   * @return An [[Observer]] instance
-   */
-  def apply[T](onchange: OnChange[T]): Observer[T] = new Observer[T]() {
-    override def onCreate(newEntry: Entry[T]): Unit = {
-      onchange.apply(newEntry)
-    }
-
-    override def onDelete(oldEntry: Entry[T]): Unit = {
-      onchange.apply(oldEntry)
-    }
-
-    override def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit = {
-      onchange.apply(newEntry)
-    }
-
-    override def onError(path: Path, e: IOException): Unit = {}
-  }
-
-  def apply[T](oncreate: OnChange[T],
-               onupdate: OnUpdate[T],
-               ondelete: OnChange[T],
-               onerror: OnError): Observer[T] = new Observer[T]() {
-    override def onCreate(newEntry: Entry[T]): Unit = {
-      oncreate.apply(newEntry)
-    }
-
-    override def onDelete(oldEntry: Entry[T]): Unit = {
-      ondelete.apply(oldEntry)
-    }
-
-    override def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit = {
-      onupdate.apply(oldEntry, newEntry)
-    }
-
-    override def onError(path: Path, ex: IOException): Unit = {
-      onerror.apply(path, ex)
-    }
-  }
-
-}
 
 /**
- * Container class that wraps multiple [[Observer]] and runs the callbacks for each whenever the
- * [[FileCache]] detects an event.
+ * Container class that wraps multiple [[com.swoval.files.Directory.Observer]] and runs the
+ * callbacks for each whenever the [[com.swoval.files.FileCache]] detects an event.
  *
- * @tparam T The data type for the [[FileCache]] to which the observers correspond
+ * @tparam T the data type for the [[com.swoval.files.FileCache]] to which the observers
+ *     correspond
  */
 class Observers[T] extends Observer[T] with AutoCloseable {
 
@@ -113,6 +65,12 @@ class Observers[T] extends Observer[T] with AutoCloseable {
     while (it.hasNext) it.next().onError(path, exception)
   }
 
+  /**
+   * Add an observer to receive events.
+   *
+   * @param observer the new observer
+   * @return a handle to the added observer that can be used to halt observation using [[    com.swoval.files.Observers.removeObserver]] .
+   */
   def addObserver(observer: Observer[T]): Int = {
     val key: Int = counter.getAndIncrement
     observers.synchronized {
@@ -121,6 +79,12 @@ class Observers[T] extends Observer[T] with AutoCloseable {
     key
   }
 
+  /**
+   * Remove an instance of [[com.swoval.files.Directory.Observer]] that was previously added
+   * using [[com.swoval.files.Observers.addObserver]].
+   *
+   * @param handle the handle to remove
+   */
   def removeObserver(handle: Int): Unit = {
     observers.synchronized {
       observers.remove(handle)

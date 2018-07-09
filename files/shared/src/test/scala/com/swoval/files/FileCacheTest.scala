@@ -31,18 +31,15 @@ trait FileCacheTest extends TestSuite {
   def identity: Converter[Path] = (p: Path) => p
 
   def simpleCache(f: Entry[Path] => Unit): FileCache[Path] =
-    FileCaches.get(((p: Path) => p): Converter[Path], factory, Observers.apply(f: OnChange[Path]))
+    FileCaches.get(((p: Path) => p): Converter[Path], factory, getObserver(f))
 
   def lastModifiedCache(f: Entry[LastModified] => Unit): FileCache[LastModified] =
-    FileCaches.get(LastModified(_), factory, Observers.apply(f: OnChange[LastModified]))
+    FileCaches.get(LastModified(_), factory, getObserver(f))
 
   def lastModifiedCache(onCreate: Entry[LastModified] => Unit,
                         onUpdate: (Entry[LastModified], Entry[LastModified]) => Unit,
                         onDelete: Entry[LastModified] => Unit): FileCache[LastModified] =
-    FileCaches.get(
-      LastModified(_),
-      factory,
-      Observers.apply[LastModified](onCreate, onUpdate, onDelete, (_: Path, _: IOException) => {}))
+    FileCaches.get(LastModified(_), factory, getObserver(onCreate, onUpdate, onDelete))
 
   class LoopObserver(val latch: CountDownLatch) extends Observer[Path] {
     override def onCreate(newEntry: Entry[Path]): Unit = {}
@@ -117,10 +114,10 @@ trait FileCacheTest extends TestSuite {
           val latch = new CountDownLatch(2)
           val initial = Files.createTempFile(dir, "move", "")
           val moved = Paths.get(s"${initial.toString}.moved")
-          val onChange: OnChange[Path] = (_: Entry[Path]) => latch.countDown()
-          val onUpdate: OnUpdate[Path] = (_: Entry[Path], _: Entry[Path]) => {}
-          val onError: OnError = (_: Path, _: IOException) => {}
-          val observer = Observers.apply(onChange, onUpdate, onChange, onError)
+          val onChange = (_: Entry[Path]) => latch.countDown()
+          val onUpdate = (_: Entry[Path], _: Entry[Path]) => {}
+          val onError = (_: Path, _: IOException) => {}
+          val observer = getObserver(onChange, onUpdate, onChange, onError)
           usingAsync(FileCaches.get(identity, factory, observer)) { c =>
             c.reg(dir, recursive = false)
             c.ls(dir, recursive = false) === Seq(initial)
@@ -154,15 +151,14 @@ trait FileCacheTest extends TestSuite {
             }
           }
           val allFiles = (subdirs ++ files).toSet
-          val observer = Observers.apply[Path](
+          val observer = getObserver[Path](
             (_: Entry[Path]) => creationLatch.countDown(),
             (_: Entry[Path], e: Entry[Path]) =>
               if (Try(e.getPath.lastModified) == Success(3000)) {
                 e.getPath.setLastModifiedTime(4000)
                 updateLatch.countDown()
             },
-            (_: Entry[Path]) => deletionLatch.countDown(),
-            (_: Path, _: IOException) => {}
+            (_: Entry[Path]) => deletionLatch.countDown()
           )
           usingAsync(FileCaches.get[Path](identity, boundedFactory, observer)) { c =>
             c.reg(dir)

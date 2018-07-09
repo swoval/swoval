@@ -10,6 +10,13 @@ import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Provides a platform dependent implementation of {@link
+ * com.swoval.files.RegisterableWatchService}. On osx, the implementation will be {@link
+ * com.swoval.files.apple.MacOSXWatchService}. On linux and windows, it will be an object that
+ * implements {@link com.swoval.files.RegisterableWatchService} by delegation with an instance of
+ * {@link java.nio.file.WatchService}.
+ */
 public class WatchServices {
 
   public static RegisterableWatchService get() throws IOException, InterruptedException {
@@ -21,11 +28,11 @@ public class WatchServices {
       implements WatchService, com.swoval.files.RegisterableWatchService {
     private final WatchService watchService;
 
-    public RegisterableWatchServiceImpl(final WatchService watchService) {
+    RegisterableWatchServiceImpl(final WatchService watchService) {
       this.watchService = watchService;
     }
 
-    public RegisterableWatchServiceImpl() throws IOException {
+    RegisterableWatchServiceImpl() throws IOException {
       this(FileSystems.getDefault().newWatchService());
     }
 

@@ -1,10 +1,11 @@
 package com.swoval.files;
 
 import static com.swoval.files.EntryFilters.AllPass;
-import static com.swoval.files.PathWatchers.Event.Create;
-import static com.swoval.files.PathWatchers.Event.Delete;
-import static com.swoval.files.PathWatchers.Event.Modify;
-import static com.swoval.files.PathWatchers.Event.Overflow;
+import static com.swoval.files.PathWatchers.Event.Kind.Create;
+import static com.swoval.files.PathWatchers.Event.Kind.Delete;
+import static com.swoval.files.PathWatchers.Event.Kind.Error;
+import static com.swoval.files.PathWatchers.Event.Kind.Modify;
+import static com.swoval.files.PathWatchers.Event.Kind.Overflow;
 import static java.util.Map.Entry;
 
 import com.swoval.files.Directory.Converter;
@@ -525,7 +526,7 @@ class FileCacheImpl<T> implements FileCache<T> {
                   dir.update(toUpdate, Entries.getKind(toUpdate, attrs));
               updates.observe(callbackObserver(callbacks));
             } catch (final IOException e) {
-              addCallback(callbacks, path, null, null, PathWatchers.Event.Error, e);
+              addCallback(callbacks, path, null, null, Error, e);
             }
           }
         } else if (pendingFiles.remove(path)) {
@@ -610,7 +611,7 @@ class FileCacheImpl<T> implements FileCache<T> {
 
       @Override
       public void onError(final Path path, final IOException exception) {
-        addCallback(callbacks, path, null, null, PathWatchers.Event.Error, exception);
+        addCallback(callbacks, path, null, null, Error, exception);
       }
     };
   }

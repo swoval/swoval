@@ -25,8 +25,8 @@ trait PathWatcher extends AutoCloseable {
    * in foo, but not bar. If we increase maxDepth to 1, then the files in /foo/bar are monitored,
    * but not the files in /foo/bar/baz.
    *
-   * @param path The directory to watch for file events
-   * @param maxDepth The maximum maxDepth of subdirectories to watch
+   * @param path the directory to watch for file events
+   * @param maxDepth the maximum maxDepth of subdirectories to watch
    * @return an [[com.swoval.functional.Either]] containing the result of the registration or an
    *     IOException if registration fails. This method should be idempotent and return true the
    *     first time the directory is registered or when the depth is changed. Otherwise it should
@@ -37,8 +37,8 @@ trait PathWatcher extends AutoCloseable {
   /**
    * Register a path to monitor for file events. The monitoring may be recursive.
    *
-   * @param path The directory to watch for file events
-   * @param recursive Toggles whether or not to monitor subdirectories
+   * @param path the directory to watch for file events
+   * @param recursive toggles whether or not to monitor subdirectories
    * @return an [[com.swoval.functional.Either]] containing the result of the registration or an
    *     IOException if registration fails. This method should be idempotent and return true the
    *     first time the directory is registered or when the depth is changed. Otherwise it should
@@ -49,7 +49,7 @@ trait PathWatcher extends AutoCloseable {
   /**
    * Register a path to monitor for file events recursively.
    *
-   * @param path The directory to watch for file events
+   * @param path the directory to watch for file events
    * @return an [[com.swoval.functional.Either]] containing the result of the registration or an
    *     IOException if registration fails. This method should be idempotent and return true the
    *     first time the directory is registered or when the depth is changed. Otherwise it should
@@ -58,9 +58,9 @@ trait PathWatcher extends AutoCloseable {
   def register(path: Path): Either[IOException, Boolean]
 
   /**
-   * Stop watching a directory
+   * Stop watching a directory.
    *
-   * @param path The directory to remove from monitoring
+   * @param path the directory to remove from monitoring
    */
   def unregister(path: Path): Unit
 

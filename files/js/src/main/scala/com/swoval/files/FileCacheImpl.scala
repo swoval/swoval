@@ -3,10 +3,11 @@
 package com.swoval.files
 
 import com.swoval.files.EntryFilters.AllPass
-import com.swoval.files.PathWatchers.Event.Create
-import com.swoval.files.PathWatchers.Event.Delete
-import com.swoval.files.PathWatchers.Event.Modify
-import com.swoval.files.PathWatchers.Event.Overflow
+import com.swoval.files.PathWatchers.Event.Kind.Create
+import com.swoval.files.PathWatchers.Event.Kind.Delete
+import com.swoval.files.PathWatchers.Event.Kind.Error
+import com.swoval.files.PathWatchers.Event.Kind.Modify
+import com.swoval.files.PathWatchers.Event.Kind.Overflow
 import java.util.Map.Entry
 import com.swoval.files.Directory.Converter
 import com.swoval.files.Directory.EntryFilter
@@ -295,12 +296,12 @@ class FileCacheImpl[T <: AnyRef](private val converter: Converter[T],
 
   private def diff(left: Directory[T], right: Directory[T]): Boolean = {
     val oldEntries: List[Directory.Entry[T]] =
-      left.list(left.recursive(), AllPass)
+      left.list(left.getDepth, AllPass)
     val oldPaths: Set[Path] = new HashSet[Path]()
     val oldEntryIterator: Iterator[Directory.Entry[T]] = oldEntries.iterator()
     while (oldEntryIterator.hasNext) oldPaths.add(oldEntryIterator.next().getPath)
     val newEntries: List[Directory.Entry[T]] =
-      right.list(left.recursive(), AllPass)
+      right.list(left.getDepth, AllPass)
     val newPaths: Set[Path] = new HashSet[Path]()
     val newEntryIterator: Iterator[Directory.Entry[T]] = newEntries.iterator()
     while (newEntryIterator.hasNext) newPaths.add(newEntryIterator.next().getPath)
@@ -350,13 +351,13 @@ class FileCacheImpl[T <: AnyRef](private val converter: Converter[T],
           val newEntries: Map[Path, Directory.Entry[T]] =
             new HashMap[Path, Directory.Entry[T]]()
           val oldEntryIterator: Iterator[Directory.Entry[T]] =
-            currentDir.list(currentDir.recursive(), AllPass).iterator()
+            currentDir.list(currentDir.getDepth, AllPass).iterator()
           while (oldEntryIterator.hasNext) {
             val entry: Directory.Entry[T] = oldEntryIterator.next()
             oldEntries.put(entry.getPath, entry)
           }
           val newEntryIterator: Iterator[Directory.Entry[T]] =
-            newDir.list(currentDir.recursive(), AllPass).iterator()
+            newDir.list(currentDir.getDepth, AllPass).iterator()
           while (newEntryIterator.hasNext) {
             val entry: Directory.Entry[T] = newEntryIterator.next()
             newEntries.put(entry.getPath, entry)
@@ -482,7 +483,7 @@ class FileCacheImpl[T <: AnyRef](private val converter: Converter[T],
               updates.observe(callbackObserver(callbacks))
             } catch {
               case e: IOException =>
-                addCallback(callbacks, path, null, null, PathWatchers.Event.Error, e)
+                addCallback(callbacks, path, null, null, Error, e)
 
             }
           }
@@ -565,7 +566,7 @@ class FileCacheImpl[T <: AnyRef](private val converter: Converter[T],
       }
 
       override def onError(path: Path, exception: IOException): Unit = {
-        addCallback(callbacks, path, null, null, PathWatchers.Event.Error, exception)
+        addCallback(callbacks, path, null, null, Error, exception)
       }
     }
 

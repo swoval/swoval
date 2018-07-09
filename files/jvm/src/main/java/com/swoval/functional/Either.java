@@ -12,10 +12,14 @@ public abstract class Either<L, R> {
   private Either() {}
 
   /**
-   * Returns the Left projection
+   * Returns the Left projection for the provided Either or throws an exception if the Either is
+   * actually an instance of {@link com.swoval.functional.Either.Right}.
    *
-   * @return a Left projection
-   * @throws NotLeftException if the value is a left
+   * @param either the either, assumed to be an instance of left, that will
+   * @param <L> the left type of the either.
+   * @param <R> the right type of the either.
+   * @return a Left projection.
+   * @throws NotLeftException if the value is a {@link com.swoval.functional.Either.Right}.
    */
   public static <L, R> Left<L, R> leftProjection(final Either<L, R> either)
       throws NotLeftException {
@@ -24,10 +28,14 @@ public abstract class Either<L, R> {
   }
 
   /**
-   * Returns the Right projection
+   * Returns the Right projection for the provided Either or throws an exception if the Either is
+   * actually an instance of {@link com.swoval.functional.Either.Left}.
    *
-   * @return a Right projection
-   * @throws NotRightException if the value is a right
+   * @param either the either, assumed to be an instance of left, that will
+   * @param <L> the left type of the either.
+   * @param <R> the right type of the either.
+   * @return a Right projection.
+   * @throws NotRightException if the value is a {@link com.swoval.functional.Either.Left}.
    */
   public static <L, R> Right<L, R> rightProjection(final Either<L, R> either)
       throws NotRightException {
@@ -64,7 +72,10 @@ public abstract class Either<L, R> {
   /**
    * Get the right projected value of the either or a provided default value.
    *
+   * @param either the either from which the method extracts the result if it is a {@link
+   *     com.swoval.functional.Either.Right}.
    * @param t the default value
+   * @param <T> the default type
    * @return the wrapped value if this is a right projection, otherwise the default
    */
   public static <T> T getOrElse(final Either<?, ? extends T> either, final T t) {
@@ -78,14 +89,14 @@ public abstract class Either<L, R> {
   public abstract boolean equals(final Object other);
 
   /**
-   * Casts an either to a more specific left type
+   * Casts an either to a more specific left type.
    *
-   * @param clazz The left type to downcast to
-   * @param <L> The original left type
-   * @param <R> The right type
-   * @param <T> The downcasted left type
-   * @return The original either with the left type downcasted to T
-   * @throws ClassCastException if the wrapped value is not a subtype of T
+   * @param clazz the left type to which we downcast
+   * @param <L> the original left type
+   * @param <R> the right type
+   * @param <T> the downcasted left type
+   * @return the original either with the left type downcasted to T.
+   * @throws ClassCastException if the wrapped value is not a subtype of T.
    */
   @SuppressWarnings("unchecked")
   public <L, R, T extends L> Either<T, R> castLeft(final Class<T> clazz) {
@@ -96,14 +107,14 @@ public abstract class Either<L, R> {
   }
 
   /**
-   * Casts an either to a more specific right type
+   * Casts an either to a more specific right type.
    *
-   * @param clazz The left type to downcast to
+   * @param clazz The right type to which we downcast
    * @param <L> The original left type
    * @param <R> The right type
    * @param <T> The downcasted right type
-   * @return The original either with the right type downcasted to T
-   * @throws ClassCastException if the wrapped value is not a subtype of T
+   * @return The original either with the right type downcasted to T.
+   * @throws ClassCastException if the wrapped value is not a subtype of T.
    */
   @SuppressWarnings("unchecked")
   public <L, R, T extends R> Either<L, T> castRight(final Class<T> clazz) {
@@ -113,12 +124,12 @@ public abstract class Either<L, R> {
   }
 
   /**
-   * Returns a left projected either
+   * Returns a left projected either.
    *
-   * @param value The value to wrap
-   * @param <L> The type of the left parameter of the result
-   * @param <R> The type of the right parameter of the result
-   * @param <T> A refinement type that allows us to wrap subtypes of L
+   * @param value the value to wrap
+   * @param <L> the type of the left parameter of the result
+   * @param <R> the type of the right parameter of the result
+   * @param <T> a refinement type that allows us to wrap subtypes of L
    * @return A left projected either
    */
   public static <L, R, T extends L> Either<L, R> left(final T value) {
@@ -126,22 +137,38 @@ public abstract class Either<L, R> {
   }
 
   /**
-   * Returns a right projected either
+   * Returns a right projected either.
    *
-   * @param value The value to wrap
-   * @param <L> The type of the left parameter of the result
-   * @param <R> The type of the right parameter of the result
-   * @param <T> A refinement type that allows us to wrap subtypes of R
-   * @return A right projected either
+   * @param value the value to wrap
+   * @param <L> the type of the left parameter of the result
+   * @param <R> the type of the right parameter of the result
+   * @param <T> a refinement type that allows us to wrap subtypes of R
+   * @return a right projected either.
    */
   public static <L, R, T extends R> Either<L, R> right(final T value) {
     return new Right<>((R) value);
   }
 
+  /**
+   * An error that is thrown if an attempt is made to project an Either to {@link
+   * com.swoval.functional.Either.Left} when the object is actually an instance of {@link
+   * com.swoval.functional.Either.Right}.
+   */
   public static class NotLeftException extends RuntimeException {}
 
+  /**
+   * An error that is thrown if an attempt is made to project an Either to {@link
+   * com.swoval.functional.Either.Right} when the object is actually an instance of {@link
+   * com.swoval.functional.Either.Left}.
+   */
   public static class NotRightException extends RuntimeException {}
 
+  /**
+   * A left projected {@link com.swoval.functional.Either}.
+   *
+   * @param <L> the left type
+   * @param <R> the right type
+   */
   public static final class Left<L, R> extends Either<L, R> {
     private final L value;
 
@@ -185,6 +212,12 @@ public abstract class Either<L, R> {
     }
   }
 
+  /**
+   * A right projected {@link com.swoval.functional.Either}.
+   *
+   * @param <L> the left type
+   * @param <R> the right type
+   */
   public static final class Right<L, R> extends Either<L, R> {
     private final R value;
 
@@ -193,9 +226,9 @@ public abstract class Either<L, R> {
     }
 
     /**
-     * Returns the wrapped value
+     * Returns the wrapped value.
      *
-     * @return the wrapped value
+     * @return the wrapped value.
      */
     public R getValue() {
       return value;

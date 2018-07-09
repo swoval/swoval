@@ -12,38 +12,24 @@ import Option._
 object FileCaches {
 
   /**
-   * Create a file cache
+   * Create a file cache.
    *
-   * @param converter Converts a path to the cached value type T
-   * @param options Options for the cache.
-   * @tparam T The value type of the cache entries
-   * @return A file cache
+   * @param converter converts a path to the cached value type T
+   * @param options options for the cache
+   * @tparam T the value type of the cache entries
+   * @return a file cache.
    */
   def get[T <: AnyRef](converter: Converter[T], options: Option*): FileCache[T] =
     new FileCacheImpl(converter, DEFAULT_FACTORY, null, options: _*)
 
   /**
-   * Create a file cache using a specific PathWatcher created by the provided factory
+   * Create a file cache with an Observer of events.
    *
-   * @param converter Converts a path to the cached value type T
-   * @param factory A factory to create a path watcher
-   * @param options Options for the cache
-   * @tparam T The value type of the cache entries
-   * @return A file cache
-   */
-  def get[T <: AnyRef](converter: Converter[T],
-                       factory: PathWatchers.Factory,
-                       options: Option*): FileCache[T] =
-    new FileCacheImpl(converter, factory, null, options: _*)
-
-  /**
-   * Create a file cache with an Observer of events
-   *
-   * @param converter Converts a path to the cached value type T
-   * @param observer Observer of events for this cache
-   * @param options Options for the cache
-   * @tparam T The value type of the cache entries
-   * @return A file cache
+   * @param converter converts a path to the cached value type T
+   * @param observer observer of events for this cache
+   * @param options options for the cache
+   * @tparam T the value type of the cache entries
+   * @return a file cache.
    */
   def get[T <: AnyRef](converter: Converter[T],
                        observer: Observer[T],
@@ -55,14 +41,28 @@ object FileCaches {
   }
 
   /**
-   * Create a file cache with an Observer of events
+   * Create a file cache using a factory to provide an instance of[[com.swoval.files.PathWatcher]].
    *
-   * @param converter Converts a path to the cached value type T
-   * @param factory A factory to create a path watcher
-   * @param observer Observer of events for this cache
-   * @param options Options for the cache
+   * @param converter converts a path to the cached value type T
+   * @param factory creates a [[com.swoval.files.PathWatcher]]
+   * @param options options for the cache
    * @tparam T The value type of the cache entries
    * @return A file cache
+   */
+  def get[T <: AnyRef](converter: Converter[T],
+                       factory: PathWatchers.Factory,
+                       options: Option*): FileCache[T] =
+    new FileCacheImpl(converter, factory, null, options: _*)
+
+  /**
+   * Create a file cache with an Observer of events.
+   *
+   * @param converter converts a path to the cached value type T
+   * @param factory a factory to create a path watcher
+   * @param observer an observer of events for this cache
+   * @param options options for the cache
+   * @tparam T the value type of the cache entries
+   * @return a file cache.
    */
   def get[T <: AnyRef](converter: Converter[T],
                        factory: Factory,
@@ -87,7 +87,7 @@ object FileCaches {
   }
 
   /**
- Options for the implementation of a [[FileCache]]
+ Options for the implementation of a [[FileCache]].
    */
   class Option()
 

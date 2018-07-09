@@ -9,7 +9,7 @@ import java.io.FileFilter
 object EntryFilters {
 
   /**
-   * Accept any entry with any value type.
+ Accept any entry with any value type.
    */
   var AllPass: EntryFilter[AnyRef] = new EntryFilter[AnyRef]() {
     override def accept(entry: Entry[_ <: AnyRef]): Boolean = true
@@ -18,23 +18,34 @@ object EntryFilters {
   }
 
   /**
-   * Combine two entry filters
-   * @param left The first entry filter to apply
-   * @param right The second entry filter to apply if the entry is accepted by the first filter.
-   * This filter must be for an entry whose value is a super class of the left entry filter.
-   * @tparam T The greatest lower bound of the two entry filters
-   * @return An entry filter that first applies the left filter and then the right filter if the
-   * entry is accepted by the left filter.
+   * Combine two entry filters by accepting only entries that are accepted by both.
+   *
+   * @param left the first entry filter to apply
+   * @param right the second entry filter to apply if the entry is accepted by the first filter.
+   *     This filter must be for an entry whose value is a super class of the left entry filter.
+   * @tparam T the greatest lower bound of the two entry filters
+   * @return an entry filter that first applies the left filter and then the right filter if the
+   *     entry is accepted by the left filter.
    */
   def AND[T](left: EntryFilter[T], right: EntryFilter[_ >: T]): EntryFilter[T] =
     new CombinedFilter(left, right)
 
-  def fromFileFilter[T](f: FileFilter): EntryFilter[T] = new EntryFilter[T]() {
-    override def accept(entry: Entry[_ <: T]): Boolean =
-      f.accept(entry.getPath.toFile())
+  /**
+   * Converts a FileFilter into an EntryFilter that accepts an entry of any type whose path is
+   * accepted by the file filter.
+   *
+   * @param fileFilter the filter to transform
+   * @tparam T the entry type
+   * @return an EntryFilter that accepts an entry of any type whose path is accepted by the file
+   *     filter.
+   */
+  def fromFileFilter[T](fileFilter: FileFilter): EntryFilter[T] =
+    new EntryFilter[T]() {
+      override def accept(entry: Entry[_ <: T]): Boolean =
+        fileFilter.accept(entry.getPath.toFile())
 
-    override def toString(): String = "FromFileFilter(" + f + ")"
-  }
+      override def toString(): String = "FromFileFilter(" + fileFilter + ")"
+    }
 
   class CombinedFilter[T <: T0, T0](private val left: EntryFilter[T],
                                     private val right: EntryFilter[T0])

@@ -126,6 +126,14 @@ public class NativeLoader {
     thread.start();
   }
 
+  /**
+   * Loads the <code>swoval-files0</code> shared library. It will first try to load the library from
+   * the system library path and fallback to extracting a platform-specific jar to a temporary
+   * directory.
+   *
+   * @throws IOException if the packaged native binary cannot be written to a temp directory.
+   * @throws UnsatisfiedLinkError if no compatible binary for the platform is present.
+   */
   public static void loadPackaged() throws IOException, UnsatisfiedLinkError {
     try {
       System.loadLibrary(NATIVE_LIBRARY);

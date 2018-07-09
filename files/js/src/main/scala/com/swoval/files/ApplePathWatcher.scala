@@ -2,10 +2,10 @@
 
 package com.swoval.files
 
-import com.swoval.files.PathWatchers.Event.Create
-import com.swoval.files.PathWatchers.Event.Delete
-import com.swoval.files.PathWatchers.Event.Modify
-import com.swoval.files.PathWatchers.Event.Overflow
+import com.swoval.files.PathWatchers.Event.Kind.Create
+import com.swoval.files.PathWatchers.Event.Kind.Delete
+import com.swoval.files.PathWatchers.Event.Kind.Modify
+import com.swoval.files.PathWatchers.Event.Kind.Overflow
 import com.swoval.functional.Either.leftProjection
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.apple.FileEvent

@@ -16,9 +16,23 @@ import utest._
  *
  */
 package object files extends PlatformFiles {
-  val Ignore = Observers.apply(new OnChange[Path] {
-    override def apply(cacheEntry: Entry[Path]): Unit = {}
-  })
+  val Ignore = getObserver[Path]((_: Entry[Path]) => {})
+  def getObserver[T](oncreate: Entry[T] => Unit,
+                     onupdate: (Entry[T], Entry[T]) => Unit,
+                     ondelete: Entry[T] => Unit,
+                     onerror: (Path, IOException) => Unit = (_, _) => {}): Observer[T] =
+    new Observer[T] {
+      override def onCreate(newEntry: Entry[T]): Unit = oncreate(newEntry)
+      override def onDelete(oldEntry: Entry[T]): Unit = ondelete(oldEntry)
+      override def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit =
+        onupdate(oldEntry, newEntry)
+      override def onError(path: Path, exception: IOException): Unit = {
+        onerror(path, exception)
+      }
+    }
+  def getObserver[T](onUpdate: Entry[T] => Unit): Observer[T] =
+    getObserver[T](onUpdate, (_: Entry[T], e: Entry[T]) => onUpdate(e), onUpdate)
+
   implicit class EitherOps[L, R](val either: functional.Either[L, R]) extends AnyVal {
     def getOrElse[U >: R](u: U): U = functional.Either.getOrElse(either, u)
     def left(): functional.Either.Left[L, R] = functional.Either.leftProjection[L, R](either)

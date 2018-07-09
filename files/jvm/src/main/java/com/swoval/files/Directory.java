@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * directory. In the event that a loop is created by symlinks, the Directory will include the
  * symlink that completes the loop, but will not descend further (inducing a loop).
  *
- * @param <T> The cache value type
+ * @param <T> the cache value type.
  */
 public class Directory<T> implements AutoCloseable {
 
@@ -75,26 +75,26 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * Converts a Path into an arbitrary value to be cached
+   * Converts a Path into an arbitrary value to be cached.
    *
-   * @param <R> The generic type generated from the path
+   * @param <R> the generic type generated from the path.
    */
   public interface Converter<R> {
 
     /**
-     * Convert the path to a value
+     * Convert the path to a value.
      *
-     * @param path The path to convert
-     * @return The value
+     * @param path the path to convert
+     * @return the converted value
      * @throws IOException when the value can't be computed
      */
     R apply(Path path) throws IOException;
   }
 
   /**
-   * The cache entry for the underlying path of this directory
+   * The cache entry for the underlying path of this directory.
    *
-   * @return The Entry for the directory itself
+   * @return the Entry for the directory itself.
    */
   public Entry<T> entry() {
     return _cacheEntry.get();
@@ -125,10 +125,10 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * List all of the files for the {@code path}
+   * List all of the files for the {@code path}.
    *
-   * @param maxDepth The maximum depth of subdirectories to query
-   * @return a List of Entry instances accepted by the filter
+   * @param maxDepth the maximum depth of subdirectories to query
+   * @return a List of Entry instances accepted by the filter.
    */
   public List<Entry<T>> list(final int maxDepth) {
     final List<Entry<T>> result = new ArrayList<>();
@@ -137,10 +137,10 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * List all of the files for the {@code path}
+   * List all of the files for the {@code path}.
    *
-   * @param recursive Toggles whether or not the children of subdirectories are returned
-   * @return a List of Entry instances accepted by the filter
+   * @param recursive toggles whether or not the children of subdirectories are returned
+   * @return a List of Entry instances accepted by the filter.
    */
   public List<Entry<T>> list(final boolean recursive) {
     final List<Entry<T>> result = new ArrayList<>();
@@ -151,9 +151,9 @@ public class Directory<T> implements AutoCloseable {
    * List all of the files for the {@code path}, returning only those files that are accepted by the
    * provided filter.
    *
-   * @param maxDepth The maximum depth of subdirectories to query
-   * @param filter Include only entries accepted by the filter
-   * @return a List of Entry instances accepted by the filter
+   * @param maxDepth the maximum depth of subdirectories to query
+   * @param filter include only entries accepted by the filter
+   * @return a List of Entry instances accepted by the filter.
    */
   public List<Entry<T>> list(final int maxDepth, final EntryFilter<? super T> filter) {
     final List<Entry<T>> result = new ArrayList<>();
@@ -162,11 +162,11 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * List all of the files for the {@code path}
+   * List all of the files for the {@code path}.
    *
-   * @param recursive Toggles whether to include the children of subdirectories
-   * @param filter Include only entries accepted by the filter
-   * @return a List of Entry instances accepted by the filter
+   * @param recursive toggles whether to include the children of subdirectories
+   * @param filter include only entries accepted by the filter
+   * @return a list of Entry instances accepted by the filter.
    */
   public List<Entry<T>> list(final boolean recursive, final EntryFilter<? super T> filter) {
     final List<Entry<T>> result = new ArrayList<>();
@@ -177,10 +177,10 @@ public class Directory<T> implements AutoCloseable {
   /**
    * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
    *
-   * @param path The path to list. If this is a file, returns a list containing the Entry for the
+   * @param path the path to list. If this is a file, returns a list containing the Entry for the
    *     file or an empty list if the file is not monitored by the path.
-   * @param maxDepth The maximum depth of subdirectories to return
-   * @param filter Include only paths accepted by this
+   * @param maxDepth the maximum depth of subdirectories to return
+   * @param filter include only paths accepted by this
    * @return a List of Entry instances accepted by the filter. The list will be empty if the path is
    *     not a subdirectory of this Directory or if it is a subdirectory, but the Directory was
    *     created without the recursive flag.
@@ -205,10 +205,10 @@ public class Directory<T> implements AutoCloseable {
   /**
    * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
    *
-   * @param path The path to list. If this is a file, returns a list containing the Entry for the
+   * @param path the path to list. If this is a file, returns a list containing the Entry for the
    *     file or an empty list if the file is not monitored by the path.
-   * @param recursive Toggles whether or not to include children of subdirectories in the results
-   * @param filter Include only paths accepted by this
+   * @param recursive toggles whether or not to include children of subdirectories in the results
+   * @param filter include only paths accepted by this.
    * @return a List of Entry instances accepted by the filter. The list will be empty if the path is
    *     not a subdirectory of this Directory or if it is a subdirectory, but the Directory was
    *     created without the recursive flag.
@@ -221,13 +221,13 @@ public class Directory<T> implements AutoCloseable {
   /**
    * Updates the Directory entry for a particular path.
    *
-   * @param path The path to update
-   * @param kind Specifies the type of file. This can be DIRECTORY, FILE with an optional LINK bit
-   *     set if the file is a symbolic link.
-   * @return A list of updates for the path. When the path is new, the updates have the
+   * @param path the path to update
+   * @param kind specifies the type of file. This can be DIRECTORY, FILE with an optional LINK bit
+   *     set if the file is a symbolic link
+   * @return a list of updates for the path. When the path is new, the updates have the
    *     oldCachedPath field set to null and will contain all of the children of the new path when
    *     it is a directory. For an existing path, the List contains a single Updates that contains
-   *     the previous and new {@link Directory.Entry}
+   *     the previous and new {@link Directory.Entry}.
    * @throws IOException when the updated Path is a directory and an IOException is encountered
    *     traversing the directory.
    */
@@ -242,11 +242,11 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * Remove a path from the directory
+   * Remove a path from the directory.
    *
-   * @param path The path to remove
-   * @return List containing the Entry instances for the removed path. Also contains the cache
-   *     entries for any children of the path when the path is a non-empty directory
+   * @param path the path to remove
+   * @return a List containing the Entry instances for the removed path. The result also contains
+   *     the cache entries for any children of the path when the path is a non-empty directory.
    */
   public List<Entry<T>> remove(final Path path) {
     if (path.isAbsolute() && path.startsWith(this.path)) {
@@ -498,34 +498,34 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * Make a new recursive Directory with no cache value associated with the path
+   * Make a new recursive Directory with no cache value associated with the path.
    *
-   * @param path The path to monitor
-   * @return A directory whose entries just contain the path itself
-   * @throws IOException when an error is encountered traversing the directory
+   * @param path the path to monitor
+   * @return a directory whose entries just contain the path itself.
+   * @throws IOException when an error is encountered traversing the directory.
    */
   public static Directory<Path> of(final Path path) throws IOException {
     return of(path, true);
   }
 
   /**
-   * Make a new Directory with no cache value associated with the path
+   * Make a new Directory with no cache value associated with the path.
    *
-   * @param path The path to monitor
-   * @param depth Sets how the limit for how deep to traverse the children of this directory
-   * @return A directory whose entries just contain the path itself
-   * @throws IOException when an error is encountered traversing the directory
+   * @param path the path to monitor
+   * @param depth sets how the limit for how deep to traverse the children of this directory
+   * @return a directory whose entries just contain the path itself.
+   * @throws IOException when an error is encountered traversing the directory.
    */
   public static Directory<Path> of(final Path path, final int depth) throws IOException {
     return new Directory<>(path, path, PATH_CONVERTER, depth, Filters.AllPass).init();
   }
   /**
-   * Make a new Directory with no cache value associated with the path
+   * Make a new Directory with no cache value associated with the path.
    *
-   * @param path The path to monitor
+   * @param path the path to monitor
    * @param recursive Toggles whether or not to cache the children of subdirectories
-   * @return A directory whose entries just contain the path itself
-   * @throws IOException when an error is encountered traversing the directory
+   * @return a directory whose entries just contain the path itself.
+   * @throws IOException when an error is encountered traversing the directory.
    */
   public static Directory<Path> of(final Path path, final boolean recursive) throws IOException {
     return new Directory<>(
@@ -534,27 +534,27 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * Make a new Directory with a cache entries created by {@code converter}
+   * Make a new Directory with a cache entries created by {@code converter}.
    *
-   * @param path The path to cache
-   * @param converter Function to create the cache value for each path
-   * @param <T> The cache value type
-   * @return A directory with entries of type T
-   * @throws IOException when an error is encountered traversing the directory
+   * @param path the path to cache
+   * @param converter a function to create the cache value for each path
+   * @param <T> the cache value type
+   * @return a directory with entries of type T.
+   * @throws IOException when an error is encountered traversing the directory.
    */
   public static <T> Directory<T> cached(final Path path, final Converter<T> converter)
       throws IOException {
     return new Directory<>(path, path, converter, Integer.MAX_VALUE, Filters.AllPass).init();
   }
   /**
-   * Make a new Directory with a cache entries created by {@code converter}
+   * Make a new Directory with a cache entries created by {@code converter}.
    *
-   * @param path The path to cache
-   * @param converter Function to create the cache value for each path
-   * @param recursive How many levels of children to accept for this directory
-   * @param <T> The cache value type
-   * @return A directory with entries of type T
-   * @throws IOException when an error is encountered traversing the directory
+   * @param path the path to cache
+   * @param converter a function to create the cache value for each path
+   * @param recursive toggles whether or not to the children of subdirectories
+   * @param <T> the cache value type
+   * @return a directory with entries of type T.
+   * @throws IOException when an error is encountered traversing the directory.
    */
   public static <T> Directory<T> cached(
       final Path path, final Converter<T> converter, final boolean recursive) throws IOException {
@@ -564,14 +564,14 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * Make a new Directory with a cache entries created by {@code converter}
+   * Make a new Directory with a cache entries created by {@code converter}.
    *
-   * @param path The path to cache
-   * @param converter Function to create the cache value for each path
-   * @param depth How many levels of children to accept for this directory
-   * @param <T> The cache value type
-   * @return A directory with entries of type T
-   * @throws IOException when an error is encountered traversing the directory
+   * @param path the path to cache
+   * @param converter a function to create the cache value for each path
+   * @param depth determines how many levels of children of subdirectories to include in the results
+   * @param <T> the cache value type
+   * @return a directory with entries of type T.
+   * @throws IOException when an error is encountered traversing the directory.
    */
   public static <T> Directory<T> cached(
       final Path path, final Converter<T> converter, final int depth) throws IOException {
@@ -586,16 +586,15 @@ public class Directory<T> implements AutoCloseable {
    */
   public interface Entry<T> extends TypedPath {
     /**
-     * Get the value associated with this entry
+     * Return the value associated with this entry.
      *
-     * @return the value associated with this entry
-     * @throws NullPointerException if the value could not have been computed due to an IOException.
+     * @return the value associated with this entry.
      */
     Either<IOException, T> getValue();
     /**
-     * Get the path associated with this entry
+     * Return the path associated with this entry.
      *
-     * @return the path associated with this entry
+     * @return the path associated with this entry.
      */
     Path getPath();
   }
@@ -643,59 +642,101 @@ public class Directory<T> implements AutoCloseable {
   }
 
   /**
-   * Filter {@link Directory.Entry} elements
+   * A Filter for {@link Directory.Entry} elements.
    *
-   * @param <T> The data value type for the {@link Directory.Entry}
+   * @param <T> the data value type for the {@link Directory.Entry}
    */
   public interface EntryFilter<T> {
+
+    /**
+     * Evaluates the filter for a given entry.
+     *
+     * @param entry the entry type
+     * @return true if the {@link com.swoval.files.Directory.Entry} is accepted.
+     */
     boolean accept(Entry<? extends T> entry);
   }
 
   /**
-   * Callback to fire when a file in a monitored directory is created or deleted
+   * A callback to fire when a file in a monitored directory is created or deleted.
    *
    * @param <T> The cached value associated with the path
    */
   public interface OnChange<T> {
+
+    /**
+     * The callback to run when the path changes.
+     *
+     * @param entry the entry for the updated path
+     */
     void apply(Entry<T> entry);
   }
 
   /**
-   * Callback to fire when a file in a monitor is updated
+   * A callback to fire when a file in a monitor is updated.
    *
-   * @param <T> The cached value associated with the path
+   * @param <T> the cached value associated with the path
    */
   public interface OnUpdate<T> {
+    /**
+     * The callback to run when a path is updated.
+     *
+     * @param oldEntry the previous entry for the updated path
+     * @param newEntry the new entry for the updated path
+     */
     void apply(Entry<T> oldEntry, Entry<T> newEntry);
   }
 
   /**
-   * Callback to fire when an error is encountered. This will generally be a {@link
+   * A callback to fire when an error is encountered. This will generally be a {@link
    * java.nio.file.FileSystemLoopException}.
    */
   public interface OnError {
 
     /**
-     * Apply callback for error
+     * Apply callback for error.
      *
-     * @param path The path that induced the error
-     * @param exception The encountered error
+     * @param path the path that induced the error
+     * @param exception the encountered error
      */
     void apply(final Path path, final IOException exception);
   }
 
   /**
-   * Provides callbacks to run when different types of file events are detected by the cache
+   * Provides callbacks to run when different types of file events are detected by the cache.
    *
-   * @param <T> The type for the {@link Directory.Entry} data
+   * @param <T> the type for the {@link Directory.Entry} data
    */
   public interface Observer<T> {
+
+    /**
+     * Callback to fire when a new path is created.
+     *
+     * @param newEntry the {@link com.swoval.files.Directory.Entry} for the newly created file
+     */
     void onCreate(Entry<T> newEntry);
 
+    /**
+     * Callback to fire when a path is deleted.
+     *
+     * @param oldEntry the {@link com.swoval.files.Directory.Entry} for the deleted.
+     */
     void onDelete(Entry<T> oldEntry);
 
+    /**
+     * Callback to fire when a path is modified.
+     *
+     * @param oldEntry the {@link com.swoval.files.Directory.Entry} for the updated path
+     * @param newEntry the {@link com.swoval.files.Directory.Entry} for the deleted path
+     */
     void onUpdate(Entry<T> oldEntry, Entry<T> newEntry);
 
+    /**
+     * Callback to fire when an error is encountered generating while updating a path.
+     *
+     * @param path The path that triggered the exception
+     * @param exception The exception thrown by the computation
+     */
     void onError(final Path path, final IOException exception);
   }
 }

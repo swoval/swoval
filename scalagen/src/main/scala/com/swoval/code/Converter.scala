@@ -69,7 +69,7 @@ object Converter {
     val newLines = sanitize(lines)
     (if (path.toString.contains("PathWatcher")) {
        newLines
-         .filterNot(_.contains("import Event._"))
+         .filterNot(l => l.contains("import Event._") || l.contains("import Kind._"))
          .map(varargsRegex.replaceAllIn(_, "$1options:_*)"))
      } else if (path.toString.contains("Either.scala")) {
        val regex = "class Either\\[L, R\\]".r

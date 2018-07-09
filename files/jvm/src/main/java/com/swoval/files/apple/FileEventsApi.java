@@ -25,8 +25,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class FileEventsApi implements AutoCloseable {
   /**
-   * Checked exception that is thrown when one of the mutation methods (e.g. {@link
-   * FileEventsApi#createStream(String, double, int)} ) is called on a closed {@link FileEventsApi}
+   * A checked exception that is thrown when one of the mutation methods (e.g. {@link
+   * FileEventsApi#createStream(String, double, int)} ) is called on a closed {@link FileEventsApi}.
    */
   public static class ClosedFileEventsApiException extends IOException {
     public ClosedFileEventsApiException(final String msg) {

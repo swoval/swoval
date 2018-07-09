@@ -8,18 +8,26 @@ import scala.beans.{ BeanProperty, BooleanBeanProperty }
 object Either {
 
   /**
-   * Returns the Left projection
+   * Returns the Left projection for the provided Either or throws an exception if the Either is
+   * actually an instance of [[com.swoval.functional.Either.Right]].
    *
-   * @return a Left projection
+   * @param either the either, assumed to be an instance of left, that will
+   * @tparam L the left type of the either.
+   * @tparam R the right type of the either.
+   * @return a Left projection.
    */
   def leftProjection[L, R](either: Either[L, R]): Left[L, R] =
     if (either.isLeft) either.asInstanceOf[Left[L, R]]
     else throw new NotLeftException()
 
   /**
-   * Returns the Right projection
+   * Returns the Right projection for the provided Either or throws an exception if the Either is
+   * actually an instance of [[com.swoval.functional.Either.Left]].
    *
-   * @return a Right projection
+   * @param either the either, assumed to be an instance of left, that will
+   * @tparam L the left type of the either.
+   * @tparam R the right type of the either.
+   * @return a Right projection.
    */
   def rightProjection[L, R](either: Either[L, R]): Right[L, R] =
     if (either.isRight) either.asInstanceOf[Right[L, R]]
@@ -28,40 +36,54 @@ object Either {
   /**
    * Get the right projected value of the either or a provided default value.
    *
+   * @param either the either from which the method extracts the result if it is a [[    com.swoval.functional.Either.Right]].
    * @param t the default value
+   * @tparam T the default type
    * @return the wrapped value if this is a right projection, otherwise the default
    */
   def getOrElse[T](either: Either[_, _ <: T], t: T): T =
     if (either.isRight) either.get else t
 
   /**
-   * Returns a left projected either
+   * Returns a left projected either.
    *
-   * @param value The value to wrap
-   * @tparam L The type of the left parameter of the result
-   * @tparam R The type of the right parameter of the result
-   * @tparam T A refinement type that allows us to wrap subtypes of L
+   * @param value the value to wrap
+   * @tparam L the type of the left parameter of the result
+   * @tparam R the type of the right parameter of the result
+   * @tparam T a refinement type that allows us to wrap subtypes of L
    * @return A left projected either
    */
   def left[L, R, T <: L](value: T): Either[L, R] =
     new Left(value.asInstanceOf[L])
 
   /**
-   * Returns a right projected either
+   * Returns a right projected either.
    *
-   * @param value The value to wrap
-   * @tparam L The type of the left parameter of the result
-   * @tparam R The type of the right parameter of the result
-   * @tparam T A refinement type that allows us to wrap subtypes of R
-   * @return A right projected either
+   * @param value the value to wrap
+   * @tparam L the type of the left parameter of the result
+   * @tparam R the type of the right parameter of the result
+   * @tparam T a refinement type that allows us to wrap subtypes of R
+   * @return a right projected either.
    */
   def right[L, R, T <: R](value: T): Either[L, R] =
     new Right(value.asInstanceOf[R])
 
+  /**
+   * An error that is thrown if an attempt is made to project an Either to [[com.swoval.functional.Either.Left]] when the object is actually an instance of [[com.swoval.functional.Either.Right]].
+   */
   class NotLeftException extends RuntimeException
 
+  /**
+   * An error that is thrown if an attempt is made to project an Either to [[com.swoval.functional.Either.Right]] when the object is actually an instance of [[com.swoval.functional.Either.Left]].
+   */
   class NotRightException extends RuntimeException
 
+  /**
+   * A left projected [[com.swoval.functional.Either]].
+   *
+   * @tparam L the left type
+   * @tparam R the right type
+   */
   class Left[L, R](@BeanProperty val value: L) extends Either[L, R] {
 
     override def isLeft(): Boolean = true
@@ -81,6 +103,12 @@ object Either {
 
   }
 
+  /**
+   * A right projected [[com.swoval.functional.Either]].
+   *
+   * @tparam L the left type
+   * @tparam R the right type
+   */
   class Right[L, R](@BeanProperty val value: R) extends Either[L, R] {
 
     override def isLeft(): Boolean = false
@@ -140,13 +168,13 @@ abstract class Either[+L, +R] private () {
   override def equals(other: Any): Boolean
 
   /**
-   * Casts an either to a more specific left type
+   * Casts an either to a more specific left type.
    *
-   * @param clazz The left type to downcast to
-   * @tparam L The original left type
-   * @tparam R The right type
-   * @tparam T The downcasted left type
-   * @return The original either with the left type downcasted to T
+   * @param clazz the left type to which we downcast
+   * @tparam L the original left type
+   * @tparam R the right type
+   * @tparam T the downcasted left type
+   * @return the original either with the left type downcasted to T.
    */
   def castLeft[L, R, T <: L](clazz: Class[T]): Either[T, R] =
     if (isRight) this.asInstanceOf[Either[T, R]]
@@ -156,13 +184,13 @@ abstract class Either[+L, +R] private () {
       throw new ClassCastException(leftProjection(this) + " is not an instance of " + clazz)
 
   /**
-   * Casts an either to a more specific right type
+   * Casts an either to a more specific right type.
    *
-   * @param clazz The left type to downcast to
+   * @param clazz The right type to which we downcast
    * @tparam L The original left type
    * @tparam R The right type
    * @tparam T The downcasted right type
-   * @return The original either with the right type downcasted to T
+   * @return The original either with the right type downcasted to T.
    */
   def castRight[L, R, T <: R](clazz: Class[T]): Either[L, T] =
     if (this.isLeft) this.asInstanceOf[Either[L, T]]

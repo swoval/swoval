@@ -76,37 +76,37 @@ public class PathWatchers {
    * Instantiates new {@link PathWatcher} instances with a {@link Consumer}. This is primarily so
    * that the {@link PathWatcher} in {@link FileCache} may be changed in testing.
    */
-  public abstract static class Factory {
+  abstract static class Factory {
 
     /**
-     * Creates a new PathWatcher
+     * Creates a new PathWatcher.
      *
-     * @param callback The callback to invoke on directory updates
-     * @param executor The executor on which internal updates are invoked
-     * @return A PathWatcher instance
+     * @param callback the callback to invoke on directory updates
+     * @param executor the executor on which internal updates are invoked
+     * @return a PathWatcher instance.
      * @throws InterruptedException if the PathWatcher is interrupted during initialization -- this
-     *     can occur on mac
+     *     can occur on mac.
      * @throws IOException if an IOException occurs during initialization -- this can occur on linux
-     *     and windows
+     *     and windows.
      */
-    public PathWatcher create(final Consumer<Event> callback, final Executor executor)
+    PathWatcher create(final Consumer<Event> callback, final Executor executor)
         throws InterruptedException, IOException {
       return create(callback, executor, null);
     }
 
     /**
-     * Creates a new PathWatcher
+     * Creates a new PathWatcher.
      *
-     * @param callback The callback to invoke on directory updates
-     * @param executor The executor on which internal updates are invoked
-     * @param directoryRegistry The registry of directories to monitor
+     * @param callback the callback to invoke on directory updates
+     * @param executor the executor on which internal updates are invoked
+     * @param directoryRegistry the registry of directories to monitor
      * @return A PathWatcher instance
      * @throws InterruptedException if the PathWatcher is interrupted during initialization -- this
      *     can occur on mac
      * @throws IOException if an IOException occurs during initialization -- this can occur on linux
      *     and windows
      */
-    public abstract PathWatcher create(
+    abstract PathWatcher create(
         final Consumer<Event> callback,
         final Executor executor,
         final DirectoryRegistry directoryRegistry)
@@ -115,16 +115,21 @@ public class PathWatchers {
 
   /** Container for {@link PathWatcher} events */
   public static final class Event {
-    public static final Kind Create = new Kind("Create", 1);
-    public static final Kind Delete = new Kind("Delete", 2);
-    public static final Kind Error = new Kind("Error", 4);
-    public static final Kind Modify = new Kind("Modify", 3);
-    public static final Kind Overflow = new Kind("Overflow", 0);
 
+    /**
+     * Returns the path that triggered the event.
+     *
+     * @return the path that triggered the event.
+     */
     public Path getPath() {
       return path;
     }
 
+    /**
+     * Returns the kind of event.
+     *
+     * @return the kind of event.
+     */
     public Kind getKind() {
       return kind;
     }
@@ -162,6 +167,18 @@ public class PathWatchers {
      * scala.js codegen has problems with enum types.
      */
     public static class Kind implements Comparable<Kind> {
+
+      /** A new file was created. */
+      public static final Kind Create = new Kind("Create", 1);
+      /** The file was deleted. */
+      public static final Kind Delete = new Kind("Delete", 2);
+      /** An error occurred processing the event. */
+      public static final Kind Error = new Kind("Error", 4);
+      /** An existing file was modified. */
+      public static final Kind Modify = new Kind("Modify", 3);
+      /** An overflow occurred in the underlying path monitor. */
+      public static final Kind Overflow = new Kind("Overflow", 0);
+
       private final String name;
       private final int priority;
 

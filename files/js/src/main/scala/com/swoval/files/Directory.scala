@@ -28,46 +28,46 @@ object Directory {
   }
 
   /**
-   * Converts a Path into an arbitrary value to be cached
+   * Converts a Path into an arbitrary value to be cached.
    *
-   * @tparam R The generic type generated from the path
+   * @tparam R the generic type generated from the path.
    */
   trait Converter[R] {
 
     /**
-     * Convert the path to a value
+     * Convert the path to a value.
      *
-     * @param path The path to convert
-     * @return The value
+     * @param path the path to convert
+     * @return the converted value
      */
     def apply(path: Path): R
 
   }
 
   /**
-   * Make a new recursive Directory with no cache value associated with the path
+   * Make a new recursive Directory with no cache value associated with the path.
    *
-   * @param path The path to monitor
-   * @return A directory whose entries just contain the path itself
+   * @param path the path to monitor
+   * @return a directory whose entries just contain the path itself.
    */
   def of(path: Path): Directory[Path] = of(path, true)
 
   /**
-   * Make a new Directory with no cache value associated with the path
+   * Make a new Directory with no cache value associated with the path.
    *
-   * @param path The path to monitor
-   * @param depth Sets how the limit for how deep to traverse the children of this directory
-   * @return A directory whose entries just contain the path itself
+   * @param path the path to monitor
+   * @param depth sets how the limit for how deep to traverse the children of this directory
+   * @return a directory whose entries just contain the path itself.
    */
   def of(path: Path, depth: Int): Directory[Path] =
     new Directory(path, path, PATH_CONVERTER, depth, Filters.AllPass).init()
 
   /**
-   * Make a new Directory with no cache value associated with the path
+   * Make a new Directory with no cache value associated with the path.
    *
-   * @param path The path to monitor
+   * @param path the path to monitor
    * @param recursive Toggles whether or not to cache the children of subdirectories
-   * @return A directory whose entries just contain the path itself
+   * @return a directory whose entries just contain the path itself.
    */
   def of(path: Path, recursive: Boolean): Directory[Path] =
     new Directory(path,
@@ -77,24 +77,24 @@ object Directory {
                   Filters.AllPass).init()
 
   /**
-   * Make a new Directory with a cache entries created by {@code converter}
+   * Make a new Directory with a cache entries created by {@code converter}.
    *
-   * @param path The path to cache
-   * @param converter Function to create the cache value for each path
-   * @tparam T The cache value type
-   * @return A directory with entries of type T
+   * @param path the path to cache
+   * @param converter a function to create the cache value for each path
+   * @tparam T the cache value type
+   * @return a directory with entries of type T.
    */
   def cached[T <: AnyRef](path: Path, converter: Converter[T]): Directory[T] =
     new Directory(path, path, converter, java.lang.Integer.MAX_VALUE, Filters.AllPass).init()
 
   /**
-   * Make a new Directory with a cache entries created by {@code converter}
+   * Make a new Directory with a cache entries created by {@code converter}.
    *
-   * @param path The path to cache
-   * @param converter Function to create the cache value for each path
-   * @param recursive How many levels of children to accept for this directory
-   * @tparam T The cache value type
-   * @return A directory with entries of type T
+   * @param path the path to cache
+   * @param converter a function to create the cache value for each path
+   * @param recursive toggles whether or not to the children of subdirectories
+   * @tparam T the cache value type
+   * @return a directory with entries of type T.
    */
   def cached[T <: AnyRef](path: Path, converter: Converter[T], recursive: Boolean): Directory[T] =
     new Directory(path,
@@ -104,13 +104,13 @@ object Directory {
                   Filters.AllPass).init()
 
   /**
-   * Make a new Directory with a cache entries created by {@code converter}
+   * Make a new Directory with a cache entries created by {@code converter}.
    *
-   * @param path The path to cache
-   * @param converter Function to create the cache value for each path
-   * @param depth How many levels of children to accept for this directory
-   * @tparam T The cache value type
-   * @return A directory with entries of type T
+   * @param path the path to cache
+   * @param converter a function to create the cache value for each path
+   * @param depth determines how many levels of children of subdirectories to include in the results
+   * @tparam T the cache value type
+   * @return a directory with entries of type T.
    */
   def cached[T <: AnyRef](path: Path, converter: Converter[T], depth: Int): Directory[T] =
     new Directory(path, path, converter, depth, Filters.AllPass).init()
@@ -124,16 +124,16 @@ object Directory {
   trait Entry[T] extends TypedPath {
 
     /**
-     * Get the value associated with this entry
+     * Return the value associated with this entry.
      *
-     * @return the value associated with this entry
+     * @return the value associated with this entry.
      */
     def getValue(): Either[IOException, T]
 
     /**
-     * Get the path associated with this entry
+     * Return the path associated with this entry.
      *
-     * @return the path associated with this entry
+     * @return the path associated with this entry.
      */
     def getPath(): Path
 
@@ -176,66 +176,105 @@ object Directory {
   }
 
   /**
-   * Filter [[Directory.Entry]] elements
+   * A Filter for [[Directory.Entry]] elements.
    *
-   * @tparam T The data value type for the [[Directory.Entry]]
+   * @tparam T the data value type for the [[Directory.Entry]]
    */
   trait EntryFilter[T] {
 
+    /**
+     * Evaluates the filter for a given entry.
+     *
+     * @param entry the entry type
+     * @return true if the [[com.swoval.files.Directory.Entry]] is accepted.
+     */
     def accept(entry: Entry[_ <: T]): Boolean
 
   }
 
   /**
-   * Callback to fire when a file in a monitored directory is created or deleted
+   * A callback to fire when a file in a monitored directory is created or deleted.
    *
    * @tparam T The cached value associated with the path
    */
   trait OnChange[T] {
 
+    /**
+     * The callback to run when the path changes.
+     *
+     * @param entry the entry for the updated path
+     */
     def apply(entry: Entry[T]): Unit
 
   }
 
   /**
-   * Callback to fire when a file in a monitor is updated
+   * A callback to fire when a file in a monitor is updated.
    *
-   * @tparam T The cached value associated with the path
+   * @tparam T the cached value associated with the path
    */
   trait OnUpdate[T] {
 
+    /**
+     * The callback to run when a path is updated.
+     *
+     * @param oldEntry the previous entry for the updated path
+     * @param newEntry the new entry for the updated path
+     */
     def apply(oldEntry: Entry[T], newEntry: Entry[T]): Unit
 
   }
 
   /**
-   * Callback to fire when an error is encountered. This will generally be a [[java.nio.file.FileSystemLoopException]].
+   * A callback to fire when an error is encountered. This will generally be a [[java.nio.file.FileSystemLoopException]].
    */
   trait OnError {
 
     /**
-     * Apply callback for error
+     * Apply callback for error.
      *
-     * @param path The path that induced the error
-     * @param exception The encountered error
+     * @param path the path that induced the error
+     * @param exception the encountered error
      */
     def apply(path: Path, exception: IOException): Unit
 
   }
 
   /**
-   * Provides callbacks to run when different types of file events are detected by the cache
+   * Provides callbacks to run when different types of file events are detected by the cache.
    *
-   * @tparam T The type for the [[Directory.Entry]] data
+   * @tparam T the type for the [[Directory.Entry]] data
    */
   trait Observer[T] {
 
+    /**
+     * Callback to fire when a new path is created.
+     *
+     * @param newEntry the [[com.swoval.files.Directory.Entry]] for the newly created file
+     */
     def onCreate(newEntry: Entry[T]): Unit
 
+    /**
+     * Callback to fire when a path is deleted.
+     *
+     * @param oldEntry the [[com.swoval.files.Directory.Entry]] for the deleted.
+     */
     def onDelete(oldEntry: Entry[T]): Unit
 
+    /**
+     * Callback to fire when a path is modified.
+     *
+     * @param oldEntry the [[com.swoval.files.Directory.Entry]] for the updated path
+     * @param newEntry the [[com.swoval.files.Directory.Entry]] for the deleted path
+     */
     def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit
 
+    /**
+     * Callback to fire when an error is encountered generating while updating a path.
+     *
+     * @param path The path that triggered the exception
+     * @param exception The exception thrown by the computation
+     */
     def onError(path: Path, exception: IOException): Unit
 
   }
@@ -256,7 +295,7 @@ object Directory {
  * directory. In the event that a loop is created by symlinks, the Directory will include the
  * symlink that completes the loop, but will not descend further (inducing a loop).
  *
- * @tparam T The cache value type
+ * @tparam T the cache value type.
  */
 class Directory[T <: AnyRef](@BeanProperty val path: Path,
                              private val realPath: Path,
@@ -288,9 +327,9 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
   }
 
   /**
-   * The cache entry for the underlying path of this directory
+   * The cache entry for the underlying path of this directory.
    *
-   * @return The Entry for the directory itself
+   * @return the Entry for the directory itself.
    */
   def entry(): Entry[T] = _cacheEntry.get
 
@@ -299,10 +338,10 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
   this._cacheEntry.set(Entries.get(path, kind, converter, realPath))
 
   /**
-   * List all of the files for the {@code path}
+   * List all of the files for the {@code path}.
    *
-   * @param maxDepth The maximum depth of subdirectories to query
-   * @return a List of Entry instances accepted by the filter
+   * @param maxDepth the maximum depth of subdirectories to query
+   * @return a List of Entry instances accepted by the filter.
    */
   def list(maxDepth: Int): List[Entry[T]] = {
     val result: List[Entry[T]] = new ArrayList[Entry[T]]()
@@ -311,10 +350,10 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
   }
 
   /**
-   * List all of the files for the {@code path}
+   * List all of the files for the {@code path}.
    *
-   * @param recursive Toggles whether or not the children of subdirectories are returned
-   * @return a List of Entry instances accepted by the filter
+   * @param recursive toggles whether or not the children of subdirectories are returned
+   * @return a List of Entry instances accepted by the filter.
    */
   def list(recursive: Boolean): List[Entry[T]] = {
     val result: List[Entry[T]] = new ArrayList[Entry[T]]()
@@ -323,12 +362,12 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
   }
 
   /**
-   * List all of the files for the {@code path}, returning only those files that are accepted by
-   * the provided filter.
+   * List all of the files for the {@code path}, returning only those files that are accepted by the
+   * provided filter.
    *
-   * @param maxDepth The maximum depth of subdirectories to query
-   * @param filter Include only entries accepted by the filter
-   * @return a List of Entry instances accepted by the filter
+   * @param maxDepth the maximum depth of subdirectories to query
+   * @param filter include only entries accepted by the filter
+   * @return a List of Entry instances accepted by the filter.
    */
   def list(maxDepth: Int, filter: EntryFilter[_ >: T]): List[Entry[T]] = {
     val result: List[Entry[T]] = new ArrayList[Entry[T]]()
@@ -337,11 +376,11 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
   }
 
   /**
-   * List all of the files for the {@code path}
+   * List all of the files for the {@code path}.
    *
-   * @param recursive Toggles whether to include the children of subdirectories
-   * @param filter Include only entries accepted by the filter
-   * @return a List of Entry instances accepted by the filter
+   * @param recursive toggles whether to include the children of subdirectories
+   * @param filter include only entries accepted by the filter
+   * @return a list of Entry instances accepted by the filter.
    */
   def list(recursive: Boolean, filter: EntryFilter[_ >: T]): List[Entry[T]] = {
     val result: List[Entry[T]] = new ArrayList[Entry[T]]()
@@ -352,10 +391,10 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
   /**
    * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
    *
-   * @param path The path to list. If this is a file, returns a list containing the Entry for the
+   * @param path the path to list. If this is a file, returns a list containing the Entry for the
    *     file or an empty list if the file is not monitored by the path.
-   * @param maxDepth The maximum depth of subdirectories to return
-   * @param filter Include only paths accepted by this
+   * @param maxDepth the maximum depth of subdirectories to return
+   * @param filter include only paths accepted by this
    * @return a List of Entry instances accepted by the filter. The list will be empty if the path is
    *     not a subdirectory of this Directory or if it is a subdirectory, but the Directory was
    *     created without the recursive flag.
@@ -379,10 +418,10 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
   /**
    * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
    *
-   * @param path The path to list. If this is a file, returns a list containing the Entry for the
+   * @param path the path to list. If this is a file, returns a list containing the Entry for the
    *     file or an empty list if the file is not monitored by the path.
-   * @param recursive Toggles whether or not to include children of subdirectories in the results
-   * @param filter Include only paths accepted by this
+   * @param recursive toggles whether or not to include children of subdirectories in the results
+   * @param filter include only paths accepted by this.
    * @return a List of Entry instances accepted by the filter. The list will be empty if the path is
    *     not a subdirectory of this Directory or if it is a subdirectory, but the Directory was
    *     created without the recursive flag.
@@ -393,13 +432,13 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
   /**
    * Updates the Directory entry for a particular path.
    *
-   * @param path The path to update
-   * @param kind Specifies the type of file. This can be DIRECTORY, FILE with an optional LINK bit
-   *     set if the file is a symbolic link.
-   * @return A list of updates for the path. When the path is new, the updates have the
+   * @param path the path to update
+   * @param kind specifies the type of file. This can be DIRECTORY, FILE with an optional LINK bit
+   *     set if the file is a symbolic link
+   * @return a list of updates for the path. When the path is new, the updates have the
    *     oldCachedPath field set to null and will contain all of the children of the new path when
    *     it is a directory. For an existing path, the List contains a single Updates that contains
-   *     the previous and new [[Directory.Entry]]
+   *     the previous and new [[Directory.Entry]].
    *     traversing the directory.
    */
   def update(path: Path, kind: Int): Updates[T] =
@@ -410,11 +449,11 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
     else new Updates[T]()
 
   /**
-   * Remove a path from the directory
+   * Remove a path from the directory.
    *
-   * @param path The path to remove
-   * @return List containing the Entry instances for the removed path. Also contains the cache
-   *     entries for any children of the path when the path is a non-empty directory
+   * @param path the path to remove
+   * @return a List containing the Entry instances for the removed path. The result also contains
+   *     the cache entries for any children of the path when the path is a non-empty directory.
    */
   def remove(path: Path): List[Entry[T]] =
     if (path.isAbsolute && path.startsWith(this.path)) {
@@ -422,8 +461,6 @@ class Directory[T <: AnyRef](@BeanProperty val path: Path,
     } else {
       new ArrayList()
     }
-
-  def recursive(): Boolean = depth == java.lang.Integer.MAX_VALUE
 
   override def toString(): String =
     "Directory(" + path + ", maxDepth = " + depth + ")"

@@ -15,12 +15,13 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Container class that wraps multiple {@link Observer} and runs the callbacks for each whenever the
- * {@link FileCache} detects an event.
+ * Container class that wraps multiple {@link com.swoval.files.Directory.Observer} and runs the
+ * callbacks for each whenever the {@link com.swoval.files.FileCache} detects an event.
  *
- * @param <T> The data type for the {@link FileCache} to which the observers correspond
+ * @param <T> the data type for the {@link com.swoval.files.FileCache} to which the observers
+ *     correspond
  */
-public class Observers<T> implements Observer<T>, AutoCloseable {
+class Observers<T> implements Observer<T>, AutoCloseable {
   private final AtomicInteger counter = new AtomicInteger(0);
   private final Map<Integer, Observer<T>> observers = new HashMap<>();
 
@@ -64,6 +65,13 @@ public class Observers<T> implements Observer<T>, AutoCloseable {
     while (it.hasNext()) it.next().onError(path, exception);
   }
 
+  /**
+   * Add an observer to receive events.
+   *
+   * @param observer the new observer
+   * @return a handle to the added observer that can be used to halt observation using {@link
+   *     com.swoval.files.Observers#removeObserver(int)} .
+   */
   public int addObserver(Observer<T> observer) {
     final int key = counter.getAndIncrement();
     synchronized (observers) {
@@ -72,6 +80,12 @@ public class Observers<T> implements Observer<T>, AutoCloseable {
     return key;
   }
 
+  /**
+   * Remove an instance of {@link com.swoval.files.Directory.Observer} that was previously added
+   * using {@link com.swoval.files.Observers#addObserver(Observer)}.
+   *
+   * @param handle the handle to remove
+   */
   public void removeObserver(int handle) {
     synchronized (observers) {
       observers.remove(handle);
@@ -81,62 +95,5 @@ public class Observers<T> implements Observer<T>, AutoCloseable {
   @Override
   public void close() {
     observers.clear();
-  }
-
-  /**
-   * Simple observer that fires the same callback for all regular events and ignores any errors.
-   *
-   * @param onchange The callback to fire when a file is created/updated/deleted
-   * @param <T> The generic type of the {@link Directory.Entry}
-   * @return An {@link Observer} instance
-   */
-  public static <T> Observer<T> apply(final OnChange<T> onchange) {
-    return new Observer<T>() {
-      @Override
-      public void onCreate(final Entry<T> newEntry) {
-        onchange.apply(newEntry);
-      }
-
-      @Override
-      public void onDelete(final Entry<T> oldEntry) {
-        onchange.apply(oldEntry);
-      }
-
-      @Override
-      public void onUpdate(final Entry<T> oldEntry, Entry<T> newEntry) {
-        onchange.apply(newEntry);
-      }
-
-      @Override
-      public void onError(final Path path, final IOException e) {}
-    };
-  }
-
-  public static <T> Observer<T> apply(
-      final OnChange<T> oncreate,
-      final OnUpdate<T> onupdate,
-      final OnChange<T> ondelete,
-      final OnError onerror) {
-    return new Observer<T>() {
-      @Override
-      public void onCreate(final Entry<T> newEntry) {
-        oncreate.apply(newEntry);
-      }
-
-      @Override
-      public void onDelete(final Entry<T> oldEntry) {
-        ondelete.apply(oldEntry);
-      }
-
-      @Override
-      public void onUpdate(final Entry<T> oldEntry, final Entry<T> newEntry) {
-        onupdate.apply(oldEntry, newEntry);
-      }
-
-      @Override
-      public void onError(final Path path, final IOException ex) {
-        onerror.apply(path, ex);
-      }
-    };
   }
 }

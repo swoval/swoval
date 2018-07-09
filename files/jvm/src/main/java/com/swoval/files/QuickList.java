@@ -21,9 +21,9 @@ import java.util.List;
  * java.nio.file.Files#readAttributes(Path, Class, LinkOption...)}) returned by the {@link
  * QuickList#list}, explaining the difference in performance.
  *
- * <p>The implementation may be controlled using the system property -Dswoval.quicklister. For
- * example, to make this class use the java nio based implementation, the application could be
- * started with -Dswoval.quicklister=com.swoval.files.NioQuickLister.
+ * <p>The implementation may be controlled using the system property <code>swoval.quicklister</code>
+ * . For example, to make this class use the java nio based implementation, the application could be
+ * started with <code>-Dswoval.quicklister=com.swoval.files.NioQuickLister</code>.
  */
 @SuppressWarnings({"unchecked", "EmptyCatchBlock"})
 public abstract class QuickList {

@@ -14,9 +14,9 @@ import java.nio.file.Path;
  */
 public interface QuickFile extends TypedPath {
   /**
-   * Returns the fully resolved file name
+   * Returns the fully resolved file name.
    *
-   * @return the fully resolved file name
+   * @return the fully resolved file name.
    */
   String getFileName();
 
@@ -27,7 +27,7 @@ public interface QuickFile extends TypedPath {
    * returned by readdir (posix) or FindNextFile (windows). This makes the result generically
    * unsuitable for caching. Instead, use {@link QuickFile#toFile}.
    *
-   * @return An instance of {@link java.io.File}
+   * @return an instance of {@link java.io.File}.
    */
   File asFile();
 
@@ -35,14 +35,14 @@ public interface QuickFile extends TypedPath {
    * Returns an instance of {@link java.io.File}. The instance should not override {@link
    * java.io.File#isDirectory} or {@link java.io.File#isFile} which makes it safe to persist.
    *
-   * @return an instance of {@link java.io.File}
+   * @return an instance of {@link java.io.File}.
    */
   File toFile();
 
   /**
    * Returns an instance of {@link java.nio.file.Path}.
    *
-   * @return an instance of {@link java.nio.file.Path}
+   * @return an instance of {@link java.nio.file.Path}.
    */
   Path toPath();
 }

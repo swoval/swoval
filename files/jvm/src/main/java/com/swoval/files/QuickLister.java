@@ -16,9 +16,41 @@ import java.util.Set;
 
 /** Implementation class for {@link QuickList#list} */
 public interface QuickLister {
+  /**
+   * Lists the files and directories in {@code path}. If followLinks is true, then for a symbolic
+   * link to a directory, the results will contain the children of the symbolic link target relative
+   * to the symbolic link base. For example, if /foo contains a symbolic link called dir-link that
+   * links to /bar where /bar contains a file named baz, then the results will include a {@link
+   * QuickFile} for /foo/dir-link/baz (provided that the {@code maxDepth >= 1}).
+   *
+   * @param path The path to list
+   * @param maxDepth The maximum maxDepth of the file system tree to traverse
+   * @param followLinks toggles whether or not to include the target of a symbolic link or the link
+   *     itself in the results.
+   * @return a List of {@link QuickFile} instances.
+   * @throws IOException when the path isn't listable because it isn't a directory, access is denied
+   *     or the path doesn't exist. May also throw due to any io error.
+   */
   List<QuickFile> list(final Path path, final int maxDepth, final boolean followLinks)
       throws IOException;
 
+  /**
+   * Lists the files and directories in {@code path} and keeping only those files that are accepted
+   * by the provided {@link com.swoval.functional.Filter}. If followLinks is true, then for a
+   * symbolic link to a directory, the results will contain the children of the symbolic link target
+   * relative to the symbolic link base. For example, if /foo contains a symbolic link called
+   * dir-link that links to /bar where /bar contains a file named baz, then the results will include
+   * a {@link QuickFile} for /foo/dir-link/baz (provided that the {@code maxDepth >= 1}).
+   *
+   * @param path The path to list
+   * @param maxDepth The maximum maxDepth of the file system tree to traverse
+   * @param followLinks toggles whether or not to include the target of a symbolic link or the link
+   *     itself in the results.
+   * @param filter include only files accepted by this parameter.
+   * @return a List of {@link QuickFile} instances.
+   * @throws IOException when the path isn't listable because it isn't a directory, access is denied
+   *     or the path doesn't exist. May also throw due to any io error.
+   */
   List<QuickFile> list(
       final Path path,
       final int maxDepth,
