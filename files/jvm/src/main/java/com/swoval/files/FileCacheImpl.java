@@ -332,13 +332,13 @@ class FileCacheImpl<T> implements FileCache<T> {
   }
 
   private boolean diff(Directory<T> left, Directory<T> right) {
-    List<Directory.Entry<T>> oldEntries = left.list(left.recursive(), AllPass);
+    List<Directory.Entry<T>> oldEntries = left.list(left.getDepth(), AllPass);
     Set<Path> oldPaths = new HashSet<>();
     final Iterator<Directory.Entry<T>> oldEntryIterator = oldEntries.iterator();
     while (oldEntryIterator.hasNext()) {
       oldPaths.add(oldEntryIterator.next().getPath());
     }
-    List<Directory.Entry<T>> newEntries = right.list(left.recursive(), AllPass);
+    List<Directory.Entry<T>> newEntries = right.list(left.getDepth(), AllPass);
     Set<Path> newPaths = new HashSet<>();
     final Iterator<Directory.Entry<T>> newEntryIterator = newEntries.iterator();
     while (newEntryIterator.hasNext()) {
@@ -386,13 +386,13 @@ class FileCacheImpl<T> implements FileCache<T> {
           final Map<Path, Directory.Entry<T>> oldEntries = new HashMap<>();
           final Map<Path, Directory.Entry<T>> newEntries = new HashMap<>();
           final Iterator<Directory.Entry<T>> oldEntryIterator =
-              currentDir.list(currentDir.recursive(), AllPass).iterator();
+              currentDir.list(currentDir.getDepth(), AllPass).iterator();
           while (oldEntryIterator.hasNext()) {
             final Directory.Entry<T> entry = oldEntryIterator.next();
             oldEntries.put(entry.getPath(), entry);
           }
           final Iterator<Directory.Entry<T>> newEntryIterator =
-              newDir.list(currentDir.recursive(), AllPass).iterator();
+              newDir.list(currentDir.getDepth(), AllPass).iterator();
           while (newEntryIterator.hasNext()) {
             final Directory.Entry<T> entry = newEntryIterator.next();
             newEntries.put(entry.getPath(), entry);

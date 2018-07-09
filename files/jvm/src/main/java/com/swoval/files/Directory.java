@@ -256,10 +256,6 @@ public class Directory<T> implements AutoCloseable {
     }
   }
 
-  public boolean recursive() {
-    return depth == Integer.MAX_VALUE;
-  }
-
   @Override
   public String toString() {
     return "Directory(" + path + ", maxDepth = " + depth + ")";
