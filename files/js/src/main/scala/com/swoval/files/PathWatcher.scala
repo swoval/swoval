@@ -2,6 +2,7 @@
 
 package com.swoval.files
 
+import com.swoval.files.FileTreeViews.Observable
 import com.swoval.files.PathWatchers.Event
 import com.swoval.functional.Either
 import java.io.IOException
@@ -16,7 +17,7 @@ import java.nio.file.Path
  * file creation and modify events, so the [[Event.Kind]] is best effort, but should not be
  * relied upon to accurately reflect the state of the file.
  */
-trait PathWatcher extends AutoCloseable {
+trait PathWatcher[T] extends Observable[T] with AutoCloseable {
 
   /**
    * Register a path to monitor for file events. The watcher will only watch child subdirectories up

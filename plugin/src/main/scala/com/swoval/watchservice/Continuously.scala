@@ -1,12 +1,15 @@
-package com.swoval.watchservice
+package com.swoval
+package watchservice
 
 import java.lang.System.currentTimeMillis
 import java.nio.file.{ Files, Path }
 import java.util.concurrent.{ ArrayBlockingQueue, BlockingQueue, ExecutorService, Executors }
 
 import com.swoval.concurrent.ThreadFactory
-import com.swoval.files.Directory.{ Entry, Observer, OnChange }
+import com.swoval.files.FileTreeDataViews.Entry
+import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files._
+import com.swoval.watchservice.CloseWatchPlugin.PathWatcherOps
 import com.swoval.watchservice.CloseWatchPlugin.autoImport._
 import sbt.BasicCommandStrings._
 import sbt.BasicCommands._
@@ -16,7 +19,6 @@ import sbt._
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
-import CloseWatchPlugin.PathWatcherOps
 
 object Continuously {
   def continuous: Command =
@@ -35,7 +37,7 @@ object Continuously {
   case class State(
       command: String,
       sources: Seq[SourcePath],
-      cache: FileCache[Path],
+      cache: FileTreeRepository[Path],
       logger: Logger,
       antiEntropy: Duration,
       onTrigger: State => Unit
@@ -64,16 +66,18 @@ object Continuously {
       }
     }
 
-    private[this] val onChange: OnChange[Path] = new OnChange[Path] {
-      override def apply(cacheEntry: Entry[Path]): Unit = {
-        if (sources.exists(s => s.filter.accept(cacheEntry))) {
+    private[this] val onChange: Observer[Entry[Path]] = new Observer[Entry[Path]] {
+      override def onNext(cacheEntry: Entry[Path]): Unit = {
+        if (sources.exists(s => s.filter.accept(cacheEntry.getPath))) {
           offer(Triggered(cacheEntry.getPath))
         } else {
           debug(s"No source filter found for ${cacheEntry.getPath}")
         }
       }
+
+      override def onError(t: Throwable): Unit = {}
     }
-    private[this] val callbackHandle = cache.addCallback(onChange)
+    private[this] val callbackHandle = cache.addObserver(onChange)
     private[this] val tag = "[com.swoval.watchservice]"
     private[this] val events: BlockingQueue[TriggerEvent] = new ArrayBlockingQueue(1)
     private[this] val executor: ExecutorService = Executors.newSingleThreadExecutor(
@@ -88,9 +92,9 @@ object Continuously {
         case dir if Files.isDirectory(dir) => dir -> p.recursive
         case f                             => f.getParent -> p.recursive
       }
-      val filter = new Directory.EntryFilter[Path] {
-        override def accept(cacheEntry: Entry[_ <: Path]): Boolean =
-          sources.exists(_.filter.accept(cacheEntry))
+      val filter = new functional.Filter[Path] {
+        override def accept(path: Path): Boolean =
+          sources.exists(_.filter.accept(path))
       }
       sources.map(sanitized).distinct.foreach { case (s, r) => cache.register(s, r) }
       executor.submit(new Runnable { override def run() { signalExit() } })

@@ -2,276 +2,101 @@
 
 package com.swoval.files
 
-import com.swoval.files.Entries.DIRECTORY
-import com.swoval.files.EntryFilters.AllPass
 import com.swoval.files.PathWatchers.Event.Kind.Create
-import com.swoval.files.PathWatchers.Event.Kind.Overflow
-import com.swoval.files.Directory.Converter
-import com.swoval.files.Directory.Entry
-import com.swoval.files.Directory.EntryFilter
-import com.swoval.files.Directory.Observer
+import com.swoval.files.PathWatchers.Event.Kind.Delete
+import com.swoval.files.PathWatchers.Event.Kind.Modify
+import com.swoval.functional.Filters.AllPass
+import java.util.Map.Entry
+import com.swoval.files.FileTreeDataViews.Converter
+import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
+import com.swoval.files.PathWatchers.Event.Kind
+import com.swoval.files.PathWatchers.Overflow
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
+import com.swoval.runtime.Platform
 import java.io.IOException
-import java.nio.file.FileSystemLoopException
-import java.nio.file.Files
-import java.nio.file.NoSuchFileException
 import java.nio.file.Path
-import java.util.HashMap
+import java.util.ArrayList
 import java.util.HashSet
 import java.util.Iterator
 import java.util.List
-import java.util.Map
 import java.util.Set
-import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicBoolean
+
+class RootDirectories extends LockableMap[Path, CachedDirectory[WatchedDirectory]]
 
 /**
  Provides a PathWatcher that is backed by a [[java.nio.file.WatchService]].
  */
-class NioPathWatcher(callback: Consumer[Event],
-                     registerableWatchService: RegisterableWatchService,
-                     private val callbackExecutor: Executor,
-                     private val internalExecutor: Executor,
-                     managedDirectoryRegistry: DirectoryRegistry)
-    extends PathWatcher {
+class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
+                     watchService: RegisterableWatchService)
+    extends PathWatcher[PathWatchers.Event]
+    with AutoCloseable {
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
 
-  private val rootDirectories: Map[Path, Directory[WatchedDirectory]] =
-    new HashMap()
+  private val observers: Observers[PathWatchers.Event] = new Observers()
 
-  private val managed: Boolean = managedDirectoryRegistry != null
-
-  private val directoryRegistry: DirectoryRegistry =
-    if (managedDirectoryRegistry == null) new DirectoryRegistry()
-    else managedDirectoryRegistry
+  private val rootDirectories: RootDirectories = new RootDirectories()
 
   private val converter: Converter[WatchedDirectory] =
     new Converter[WatchedDirectory]() {
-      override def apply(path: Path): WatchedDirectory =
-        Either.getOrElse(nioPathWatcherService.register(path), WatchedDirectories.INVALID)
+      override def apply(typedPath: TypedPath): WatchedDirectory =
+        if (typedPath.isDirectory)
+          Either.getOrElse(service.register(typedPath.getPath), WatchedDirectories.INVALID)
+        else WatchedDirectories.INVALID
     }
 
-  private val nioPathWatcherService: NioPathWatcherService =
-    new NioPathWatcherService(
-      new Consumer[Event]() {
-        override def accept(event: Event): Unit = {
-          handleEvent(callback, event)
-        }
-      },
-      new Consumer[Path]() {
-        override def accept(path: Path): Unit = {
-          handleOverflow(callback, path)
-        }
-      },
-      registerableWatchService,
-      internalExecutor
-    )
+  private def updateCacheObserver(
+      events: List[Event]): FileTreeViews.CacheObserver[WatchedDirectory] =
+    new FileTreeViews.CacheObserver[WatchedDirectory]() {
+      override def onCreate(newEntry: FileTreeDataViews.Entry[WatchedDirectory]): Unit = {
+        events.add(new Event(newEntry, Create))
+        try {
+          val it: Iterator[TypedPath] = FileTreeViews
+            .list(newEntry.getPath, 0, new Filter[TypedPath]() {
+              override def accept(typedPath: TypedPath): Boolean =
+                directoryRegistry.accept(typedPath.getPath)
+            })
+            .iterator()
+          while (it.hasNext) {
+            val tp: TypedPath = it.next()
+            events.add(new Event(tp, Create))
+          }
+        } catch {
+          case e: IOException => {}
 
-  private val updateObserver: Directory.Observer[WatchedDirectory] =
-    new Observer[WatchedDirectory]() {
-      override def onCreate(newEntry: Directory.Entry[WatchedDirectory]): Unit = {}
-
-      override def onDelete(oldEntry: Directory.Entry[WatchedDirectory]): Unit = {
-        close(oldEntry.getValue)
+        }
       }
 
-      override def onUpdate(oldEntry: Directory.Entry[WatchedDirectory],
-                            newEntry: Directory.Entry[WatchedDirectory]): Unit = {}
+      override def onDelete(oldEntry: FileTreeDataViews.Entry[WatchedDirectory]): Unit = {
+        if (oldEntry.getValue.isRight) oldEntry.getValue.get.close()
+        events.add(new Event(oldEntry, Delete))
+      }
 
-      override def onError(path: Path, exception: IOException): Unit = {}
+      override def onUpdate(oldEntry: FileTreeDataViews.Entry[WatchedDirectory],
+                            newEntry: FileTreeDataViews.Entry[WatchedDirectory]): Unit = {}
+
+      override def onError(exception: IOException): Unit = {}
     }
 
-  /**
-   * Register a path to monitor for file events
-   *
-   * @param path The directory to watch for file events
-   * @param maxDepth The maximum maxDepth of subdirectories to watch
-   * @return an [[com.swoval.functional.Either]] containing the result of the registration or an
-   *     IOException if registration fails. This method should be idempotent and return true the
-   *     first time the directory is registered or when the depth is changed. Otherwise it should
-   *     return false.
-   */
-  override def register(path: Path,
-                        maxDepth: Int): com.swoval.functional.Either[IOException, Boolean] =
-    internalExecutor
-      .block(new Callable[Boolean]() {
-        override def call(): Boolean = registerImpl(path, maxDepth)
-      })
-      .castLeft(classOf[IOException])
-
-  /**
-   * Stop watching a directory
-   *
-   * @param path The directory to remove from monitoring
-   */
-  override def unregister(path: Path): Unit = {
-    internalExecutor.block(new Runnable() {
-      override def run(): Unit = {
-        if (!managed) directoryRegistry.removeDirectory(path)
-        val dir: Directory[WatchedDirectory] = getRoot(path.getRoot)
-        if (dir != null) {
-          val toRemove: List[Directory.Entry[WatchedDirectory]] = dir.list(
-            dir.getMaxDepth,
-            new EntryFilter[WatchedDirectory]() {
-              override def accept(entry: Entry[_ <: WatchedDirectory]): Boolean =
-                !directoryRegistry.accept(entry.getPath)
-            }
-          )
-          val it: Iterator[Directory.Entry[WatchedDirectory]] =
-            toRemove.iterator()
-          while (it.hasNext) {
-            val entry: Directory.Entry[WatchedDirectory] = it.next()
-            if (!directoryRegistry.accept(entry.getPath)) {
-              val toCancel: Iterator[Directory.Entry[WatchedDirectory]] =
-                dir.remove(entry.getPath).iterator()
-              while (toCancel.hasNext) close(toCancel.next().getValue)
-            }
+  private val service: NioPathWatcherService = new NioPathWatcherService(
+    new Consumer[Either[Overflow, Event]]() {
+      override def accept(either: Either[Overflow, Event]): Unit = {
+        if (!closed.get) {
+          if (either.isRight) {
+            val event: Event = either.get
+            handleEvent(event)
+          } else {
+            handleOverflow(Either.leftProjection(either).getValue)
           }
         }
       }
-    })
-  }
-
-  override def close(): Unit = {
-    if (closed.compareAndSet(false, true)) {
-      internalExecutor.block(new Runnable() {
-        override def run(): Unit = {
-          callbackExecutor.close()
-          val it: Iterator[Directory[WatchedDirectory]] =
-            rootDirectories.values.iterator()
-          while (it.hasNext) {
-            val dir: Directory[WatchedDirectory] = it.next()
-            close(dir.entry().getValue)
-            val entries: Iterator[Directory.Entry[WatchedDirectory]] =
-              dir.list(dir.getMaxDepth, AllPass).iterator()
-            while (entries.hasNext) close(entries.next().getValue)
-          }
-          nioPathWatcherService.close()
-        }
-      })
-      internalExecutor.close()
-    }
-  }
-
-  private def maybeRunCallback(callback: Consumer[Event], event: Event): Unit = {
-    if (directoryRegistry.accept(event.getPath)) {
-      callbackExecutor.run(new Runnable() {
-        override def run(): Unit = {
-          callback.accept(event)
-        }
-      })
-    }
-  }
-
-  private def processPath(callback: Consumer[Event],
-                          path: Path,
-                          kind: Event.Kind,
-                          processedDirs: HashSet[QuickFile],
-                          processedFiles: HashSet[Path]): Unit = {
-    val newFiles: Set[QuickFile] = new HashSet[QuickFile]()
-    add(path, newFiles)
-    if (processedFiles.add(path)) {
-      maybeRunCallback(callback, new Event(path, kind))
-      val it: Iterator[QuickFile] = newFiles.iterator()
-      while (it.hasNext) {
-        val file: QuickFile = it.next()
-        if (file.isDirectory && processedDirs.add(file)) {
-          processPath(callback, file.toPath(), Create, processedDirs, processedFiles)
-        } else if (processedFiles.add(file.toPath())) {
-          maybeRunCallback(callback, new Event(file.toPath(), Create))
-        }
-      }
-    }
-  }
-
-  private def handleEvent(callback: Consumer[Event], event: Event): Unit = {
-    if (directoryRegistry.accept(event.getPath)) {
-      if (!Files.exists(event.getPath)) {
-        val root: Directory[WatchedDirectory] =
-          rootDirectories.get(event.getPath.getRoot)
-        if (root != null) {
-          val it: Iterator[Directory.Entry[WatchedDirectory]] =
-            root.remove(event.getPath).iterator()
-          while (it.hasNext) close(it.next().getValue)
-        }
-      }
-      if (Files.isDirectory(event.getPath)) {
-        processPath(callback,
-                    event.getPath,
-                    event.getKind,
-                    new HashSet[QuickFile](),
-                    new HashSet[Path]())
-      } else {
-        maybeRunCallback(callback, event)
-      }
-    }
-  }
-
-  private def handleOverflow(callback: Consumer[Event], path: Path): Unit = {
-    val maxDepth: Int = directoryRegistry.maxDepthFor(path)
-    var stop: Boolean = false
-    while (!stop && maxDepth > 0) try {
-      var registered: Boolean = false
-      val files: Set[QuickFile] = new HashSet[QuickFile]()
-      val directoryIterator: Iterator[Path] =
-        directoryRegistry.registeredDirectories().iterator()
-      while (directoryIterator.hasNext) files.add(
-        new QuickFileImpl(directoryIterator.next().toString, DIRECTORY))
-      maybePoll(path, files)
-      val it: Iterator[QuickFile] = files.iterator()
-      while (it.hasNext) {
-        val file: QuickFile = it.next()
-        if (file.isDirectory) {
-          val regResult: Boolean = registerImpl(file.toPath(),
-                                                if (maxDepth == java.lang.Integer.MAX_VALUE)
-                                                  java.lang.Integer.MAX_VALUE
-                                                else maxDepth - 1)
-          registered = registered || regResult
-          if (regResult) callbackExecutor.run(new Runnable() {
-            override def run(): Unit = {
-              callback.accept(new Event(file.toPath(), Create))
-            }
-          })
-        }
-      }
-      stop = !registered
-    } catch {
-      case e: NoSuchFileException => stop = false
-
-      case e: IOException => stop = true
-
-    }
-    callbackExecutor.run(new Runnable() {
-      override def run(): Unit = {
-        callback.accept(new Event(path, Overflow))
-      }
-    })
-  }
-
-  private def maybePoll(path: Path, files: Set[QuickFile]): Unit = {
-    if (!managed) {
-      var result: Boolean = false
-      do {
-        result = false
-        val it: Iterator[QuickFile] = QuickList
-          .list(
-            path,
-            0,
-            false,
-            new Filter[QuickFile]() {
-              override def accept(quickFile: QuickFile): Boolean =
-                !quickFile.isDirectory || directoryRegistry.accept(quickFile.toPath())
-            }
-          )
-          .iterator()
-        while (it.hasNext) result = files.add(it.next()) || result
-      } while (!Thread.currentThread().isInterrupted && result);
-    }
-  }
+    },
+    watchService
+  )
 
   /**
    * Similar to register, but tracks all of the new files found in the directory. It polls the
@@ -282,92 +107,253 @@ class NioPathWatcher(callback: Consumer[Event],
    * before we registered it with the watch service. If this happened, then no callback would be
    * invoked for that file.
    *
-   * @param path The newly created directory to add
-   * @param newFiles The set of files that are found for the newly created directory
-   * @return true if no exception is thrown
+   * @param typedPath The newly created directory to add
    */
-  private def add(path: Path, newFiles: Set[QuickFile]): Boolean = {
-    var result: Boolean = true
-    try {
-      if (directoryRegistry.maxDepthFor(path) >= 0) {
-        val dir: Directory[WatchedDirectory] = getRoot(path.getRoot)
-        if (dir != null) {
-          update(dir, path)
-        }
-      }
-      maybePoll(path, newFiles)
-    } catch {
-      case e: IOException => result = false
-
-    }
-    result
-  }
-
-  private def getRoot(root: Path): Directory[WatchedDirectory] = {
-    var result: Directory[WatchedDirectory] = rootDirectories.get(root)
-    if (result == null) {
-      try {
-        result = new Directory(
-          root,
-          root,
-          converter,
-          java.lang.Integer.MAX_VALUE,
-          new Filter[QuickFile]() {
-            override def accept(quickFile: QuickFile): Boolean =
-              directoryRegistry.accept(quickFile.toPath())
-          }
-        ).init()
-        rootDirectories.put(root, result)
-      } catch {
-        case e: IOException => {}
-
+  def add(typedPath: TypedPath, events: List[Event]): Unit = {
+    if (directoryRegistry.maxDepthFor(typedPath.getPath) >= 0) {
+      val dir: CachedDirectory[WatchedDirectory] = getOrAdd(typedPath.getPath)
+      if (dir != null) {
+        update(dir, typedPath, events)
       }
     }
-    result
   }
 
-  private def registerImpl(path: Path, maxDepth: Int): Boolean = {
+  override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] = {
     val existingMaxDepth: Int = directoryRegistry.maxDepthFor(path)
     val result: Boolean = existingMaxDepth < maxDepth
-    var realPath: Path = null
-    try realPath = path.toRealPath()
-    catch {
-      case e: IOException => realPath = path
-
+    val typedPath: TypedPath = TypedPaths.get(path)
+    val realPath: Path = typedPath.toRealPath()
+    if (result) {
+      directoryRegistry.addDirectory(typedPath.getPath, maxDepth)
     }
-    if (result && !managed) {
-      directoryRegistry.addDirectory(path, maxDepth)
-    } else if (path != realPath) {
-      /*
-       * Note that watchedDir is not null, which means that this path has been
-       * registered with a different alias.
-       */
-
-      throw new FileSystemLoopException(path.toString)
-    }
-    val dir: Directory[WatchedDirectory] = getRoot(realPath.getRoot)
+    val dir: CachedDirectory[WatchedDirectory] = getOrAdd(realPath)
+    val events: List[Event] = new ArrayList[Event]()
     if (dir != null) {
-      val directories: List[Directory.Entry[WatchedDirectory]] =
-        dir.list(path, -1, AllPass)
-      if (result || directories.isEmpty || !isValid(directories.get(0).getValue)) {
-        var toUpdate: Path = path
-        while (toUpdate != null && !Files.isDirectory(toUpdate)) toUpdate = toUpdate.getParent
-        if (toUpdate != null) update(dir, toUpdate)
+      val directories: List[FileTreeDataViews.Entry[WatchedDirectory]] =
+        dir.listEntries(typedPath.getPath, -1, AllPass)
+      if (result || directories.isEmpty || directories
+            .get(0)
+            .getValue
+            .isRight) {
+        val toUpdate: Path = typedPath.getPath
+        if (toUpdate != null) update(dir, typedPath, events)
       }
+    }
+    runCallbacks(events)
+    Either.right(result)
+  }
+
+  private def find(rawPath: Path, toRemove: List[Path]): CachedDirectory[WatchedDirectory] = {
+    val parent: Path = if (Platform.isMac) rawPath else rawPath.getRoot
+    val path: Path = if (parent == null) rawPath.getRoot else parent
+    assert((path != null))
+    if (rootDirectories.lock()) {
+      try {
+        val it: Iterator[Entry[Path, CachedDirectory[WatchedDirectory]]] =
+          rootDirectories.iterator()
+        var result: CachedDirectory[WatchedDirectory] = null
+        while (result == null && it.hasNext) {
+          val entry: Entry[Path, CachedDirectory[WatchedDirectory]] = it.next()
+          val root: Path = entry.getKey
+          if (path.startsWith(root)) {
+            result = entry.getValue
+          } else if (root.startsWith(path) && path != root) {
+            toRemove.add(root)
+          }
+        }
+        result
+      } finally rootDirectories.unlock()
+    } else {
+      null
+    }
+  }
+
+  private def findOrAddRoot(rawPath: Path): CachedDirectory[WatchedDirectory] = {
+    val parent: Path = if (Platform.isMac) rawPath else rawPath.getRoot
+    val path: Path = if (parent == null) rawPath.getRoot else parent
+    assert((path != null))
+    val toRemove: List[Path] = new ArrayList[Path]()
+    var result: CachedDirectory[WatchedDirectory] = find(rawPath, toRemove)
+    if (result == null) {
+      var toAdd: Path = path
+      var init: Boolean = false
+      while (!init && toAdd != null) try {
+        result = new CachedDirectoryImpl(
+          toAdd,
+          toAdd,
+          converter,
+          java.lang.Integer.MAX_VALUE,
+          new Filter[TypedPath]() {
+            override def accept(typedPath: TypedPath): Boolean =
+              typedPath.isDirectory && directoryRegistry.acceptPrefix(typedPath.getPath)
+          },
+          FileTreeViews.getDefault(false)
+        ).init()
+        init = true
+        rootDirectories.put(toAdd, result)
+      } catch {
+        case e: IOException => toAdd = toAdd.getParent
+
+      }
+    }
+    val toRemoveIterator: Iterator[Path] = toRemove.iterator()
+    while (toRemoveIterator.hasNext) rootDirectories.remove(toRemoveIterator.next())
+    result
+  }
+
+  private def getOrAdd(path: Path): CachedDirectory[WatchedDirectory] = {
+    var result: CachedDirectory[WatchedDirectory] = null
+    if (rootDirectories.lock()) {
+      try if (!closed.get) {
+        result = findOrAddRoot(path)
+      } finally rootDirectories.unlock()
     }
     result
   }
 
-  private def update(dir: Directory[WatchedDirectory], path: Path): Unit = {
-    dir.update(path, DIRECTORY).observe(updateObserver)
+  override def unregister(path: Path): Unit = {
+    directoryRegistry.removeDirectory(path)
+    if (rootDirectories.lock()) {
+      try {
+        val dir: CachedDirectory[WatchedDirectory] =
+          rootDirectories.get(path.getRoot)
+        if (dir != null) {
+          val depth: Int = dir.getPath.relativize(path).getNameCount
+          val toRemove: List[FileTreeDataViews.Entry[WatchedDirectory]] =
+            dir.listEntries(
+              depth,
+              new Filter[FileTreeDataViews.Entry[WatchedDirectory]]() {
+                override def accept(entry: FileTreeDataViews.Entry[WatchedDirectory]): Boolean =
+                  !directoryRegistry.acceptPrefix(entry.getPath)
+              }
+            )
+          val it: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
+            toRemove.iterator()
+          while (it.hasNext) {
+            val entry: FileTreeDataViews.Entry[WatchedDirectory] = it.next()
+            if (!directoryRegistry.acceptPrefix(entry.getPath)) {
+              val toCancel: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
+                dir.remove(entry.getPath).iterator()
+              while (toCancel.hasNext) {
+                val either: Either[IOException, WatchedDirectory] =
+                  toCancel.next().getValue
+                if (either.isRight) either.get.close()
+              }
+            }
+          }
+        }
+      } finally rootDirectories.unlock()
+    }
   }
 
-  private def close(either: com.swoval.functional.Either[IOException, WatchedDirectory]): Unit = {
-    if (either.isRight) either.get.close()
+  override def close(): Unit = {
+    if (closed.compareAndSet(false, true)) {
+      service.close()
+      rootDirectories.clear()
+    }
   }
 
-  private def isValid(
-      either: com.swoval.functional.Either[IOException, WatchedDirectory]): Boolean =
-    either.isRight && either.get.isValid
+  private def update(dir: CachedDirectory[WatchedDirectory],
+                     typedPath: TypedPath,
+                     events: List[Event]): Unit = {
+    dir.update(typedPath).observe(updateCacheObserver(events))
+  }
+
+  private def handleOverflow(overflow: Overflow): Unit = {
+    val path: Path = overflow.getPath
+    val events: List[Event] = new ArrayList[Event]()
+    if (rootDirectories.lock()) {
+      try {
+        val root: CachedDirectory[WatchedDirectory] =
+          find(path, new ArrayList[Path]())
+        if (root != null) {
+          try {
+            val it: Iterator[TypedPath] = FileTreeViews
+              .list(
+                path,
+                0,
+                new Filter[TypedPath]() {
+                  override def accept(typedPath: TypedPath): Boolean =
+                    typedPath.isDirectory && directoryRegistry.acceptPrefix(typedPath.getPath)
+                }
+              )
+              .iterator()
+            while (it.hasNext) {
+              val file: TypedPath = it.next()
+              add(file, events)
+            }
+          } catch {
+            case e: IOException => {
+              val removed: List[FileTreeDataViews.Entry[WatchedDirectory]] =
+                root.remove(path)
+              val removedIt: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
+                removed.iterator()
+              while (removedIt.hasNext) events.add(
+                new Event(Entries.setExists(removedIt.next(), false), Delete))
+            }
+
+          }
+        }
+      } finally rootDirectories.unlock()
+    }
+    val tp: TypedPath = TypedPaths.get(path)
+    events.add(new Event(tp, if (tp.exists()) Modify else Delete))
+    runCallbacks(events)
+  }
+
+  private def runCallbacks(events: List[Event]): Unit = {
+    val it: Iterator[Event] = events.iterator()
+    val handled: Set[Path] = new HashSet[Path]()
+    while (it.hasNext) {
+      val event: Event = it.next()
+      if (directoryRegistry.accept(event.getPath) && handled.add(event.getPath)) {
+        observers.onNext(new Event(TypedPaths.get(event.getPath), event.getKind))
+      }
+    }
+  }
+
+  private def handleEvent(event: Event): Unit = {
+    val events: List[Event] = new ArrayList[Event]()
+    if (!closed.get && rootDirectories.lock()) {
+      try if (directoryRegistry.acceptPrefix(event.getPath)) {
+        val typedPath: TypedPath = TypedPaths.get(event.getPath)
+        if (!typedPath.exists()) {
+          val root: CachedDirectory[WatchedDirectory] = getOrAdd(event.getPath)
+          if (root != null) {
+            val isRoot: Boolean = root.getPath == event.getPath
+            val it: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
+              if (isRoot)
+                root.listEntries(root.getMaxDepth, AllPass).iterator()
+              else root.remove(event.getPath).iterator()
+            while (it.hasNext) {
+              val entry: FileTreeDataViews.Entry[WatchedDirectory] = it.next()
+              val either: Either[IOException, WatchedDirectory] =
+                entry.getValue
+              if (either.isRight) {
+                either.get.close()
+              }
+              events.add(new Event(Entries.setExists(entry, false), Kind.Delete))
+            }
+            if (isRoot) {
+              rootDirectories.remove(root.getPath)
+              getOrAdd(event.getPath)
+            }
+          }
+        }
+        events.add(event)
+        if (typedPath.isDirectory) {
+          add(typedPath, events)
+        }
+      } finally rootDirectories.unlock()
+    }
+    runCallbacks(events)
+  }
+
+  override def addObserver(observer: Observer[Event]): Int =
+    observers.addObserver(observer)
+
+  override def removeObserver(handle: Int): Unit = {
+    observers.removeObserver(handle)
+  }
 
 }

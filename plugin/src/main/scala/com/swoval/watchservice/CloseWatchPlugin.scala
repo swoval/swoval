@@ -1,9 +1,10 @@
-package com.swoval.watchservice
+package com.swoval
+package watchservice
 
 import java.io.FileFilter
 import java.nio.file.Path
 
-import com.swoval.files.Directory.{ Converter, Entry, EntryFilter }
+import com.swoval.files.FileTreeDataViews.{ Converter, Entry }
 import com.swoval.files._
 import com.swoval.runtime.ShutdownHooks
 import sbt.Keys._
@@ -17,20 +18,21 @@ import scala.util.Try
 
 object CloseWatchPlugin extends AutoPlugin {
   override def trigger = allRequirements
-  implicit class PathWatcherOps(val watcher: PathWatcher) {
+  implicit class PathWatcherOps(val watcher: PathWatcher[_]) {
     def register(path: Path, recursive: Boolean): Unit =
       watcher.register(path, if (recursive) Integer.MAX_VALUE else 0)
     def register(path: Path): Unit = register(path, recursive = true)
   }
-  private implicit class FileFilterOps(val fileFilter: FileFilter) extends EntryFilter[Path] {
-    override def accept(entry: Entry[_ <: Path]): Boolean = fileFilter.accept(entry.getPath.toFile)
+  private implicit class FileFilterOps(val fileFilter: FileFilter)
+      extends functional.Filter[TypedPath] {
+    override def accept(t: TypedPath): Boolean = fileFilter.accept(t.getPath.toFile)
   }
-  private[watchservice] var _internalFileCache: FileCache[Path] = _
+  private[watchservice] var _internalFileCache: FileTreeRepository[Path] = _
   object autoImport {
     lazy val closeWatchAntiEntropy = settingKey[Duration](
       "Set watch anti-entropy period for source files. For a given file that has triggered a" +
         "build, any updates occuring before the last event time plus this duration will be ignored.")
-    lazy val closeWatchFileCache = taskKey[FileCache[Path]]("Set the file cache to use.")
+    lazy val closeWatchFileCache = taskKey[FileTreeRepository[Path]]("Set the file cache to use.")
     lazy val closeWatchLegacyWatchLatency =
       settingKey[Duration]("Set the watch latency of the sbt watch service")
     lazy val closeWatchLegacyQueueSize =
@@ -64,7 +66,9 @@ object CloseWatchPlugin extends AutoPlugin {
         val path = f.toPath()
         _internalFileCache.register(path, recursive)
         _internalFileCache
-          .list(path, if (recursive) Integer.MAX_VALUE else 0, filter)
+          .list(path, if (recursive) Integer.MAX_VALUE else 0, new functional.Filter[TypedPath] {
+            override def accept(t: TypedPath): Boolean = filter.accept(t.getPath.toFile)
+          })
           .asScala
           .map(_.getPath.toFile)
       }
@@ -94,8 +98,8 @@ object CloseWatchPlugin extends AutoPlugin {
 
     val baseSources: Seq[Compat.WatchSource] =
       if (sourcesInBase.value && config != ConfigKey(Test.name)) {
-        val pathFilter = new EntryFilter[Path] {
-          override def accept(cacheEntry: Entry[_ <: Path]): Boolean = {
+        val pathFilter = new functional.Filter[Entry[Path]] {
+          override def accept(cacheEntry: Entry[Path]): Boolean = {
             val f = cacheEntry.getPath.toFile
             cacheEntry.getPath.getParent == baseDir && include.accept(f) && !exclude.accept(f)
           }
@@ -195,8 +199,8 @@ object CloseWatchPlugin extends AutoPlugin {
         case None    => ef
       }
       def filter(dir: File): SourceFilter = {
-        val pathFilter = new EntryFilter[Path] {
-          override def accept(cacheEntry: Entry[_ <: Path]): Boolean = {
+        val pathFilter = new functional.Filter[Entry[Path]] {
+          override def accept(cacheEntry: Entry[Path]): Boolean = {
             val f = cacheEntry.getPath.toFile
             include.accept(f) && !exclude.accept(f)
           }
@@ -234,8 +238,8 @@ object CloseWatchPlugin extends AutoPlugin {
     parsed.fold(_ => commands(taskDef.mkString(" ").trim), paths)
   }
   override lazy val globalSettings: Seq[Def.Setting[_]] = super.globalSettings ++ Seq(
-    closeWatchFileCache := FileCaches.get(new Converter[Path] {
-      override def apply(path: Path): Path = path
+    closeWatchFileCache := FileTreeRepositories.get(new Converter[Path] {
+      override def apply(path: TypedPath): Path = path.getPath
     }),
     closeWatchUseDefaultWatchService := false,
     closeWatchTransitiveSources := Def

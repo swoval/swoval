@@ -19,10 +19,10 @@ import java.util.concurrent.atomic.AtomicReference
 
 class NioDirectoryLister extends DirectoryLister {
 
-  override def apply(dir: String, followLinks: Boolean): QuickListerImpl.ListResults = {
+  override def apply(dir: String, followLinks: Boolean): SimpleFileTreeView.ListResults = {
     val basePath: Path = Paths.get(dir)
-    val results: QuickListerImpl.ListResults =
-      new QuickListerImpl.ListResults()
+    val results: SimpleFileTreeView.ListResults =
+      new SimpleFileTreeView.ListResults()
     val linkOptions: Set[FileVisitOption] = new HashSet[FileVisitOption]()
     val exception: AtomicReference[IOException] =
       new AtomicReference[IOException]()

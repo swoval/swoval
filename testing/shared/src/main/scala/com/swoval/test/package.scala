@@ -107,14 +107,19 @@ package object test {
       val oDiff = oSet diff tSet
       Seq(tDiff -> "extra", oDiff -> "missing") foreach {
         case (s, c) if s.nonEmpty =>
+          val comp = truncate(s)
           println(
-            s"The actual result had $c fields $s compared to the expected result.\n" +
-              s"Found: $t\nExpected: $other ")
-          s ==> Set.empty
+            s"The actual result had $c fields $comp compared to the expected result.\n" +
+              s"Found: ${truncate(tSet)}\nExpected: ${truncate(oSet)} ")
+          comp.toSet ==> Set.empty
         case _ =>
       }
       tSet ==> oSet
     }
+  }
+  private def truncate(set: Traversable[_]): Seq[String] = {
+    if (set.size < 10) set.map(_.toString).toSeq.sorted
+    else set.toSeq.map(_.toString).sorted.take(10) :+ "..."
   }
   implicit class RichOption[T](val t: Option[T]) {
     def ===(other: Option[T]): Unit = t ==> other

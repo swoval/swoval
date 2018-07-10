@@ -30,16 +30,17 @@ package object platform {
   def createTempFile(dir: String, prefix: String): (String, Thread) = {
     val path = s"$dir$sep$prefix${new scala.util.Random().alphanumeric.take(10).mkString}"
     Fs.closeSync(Fs.openSync(path, "w"))
-    (path, null)
+    (path, thread)
   }
+  private val thread = new Thread
 
   def createTempDirectory(): (String, Thread) = {
     if (!Fs.existsSync("/tmp/swoval")) util.Try(Fs.mkdirSync("/tmp/swoval"))
-    (Fs.realpathSync(Fs.mkdtempSync("/tmp/swoval/")), null)
+    (Fs.realpathSync(Fs.mkdtempSync("/tmp/swoval/")), thread)
   }
 
   def createTempSubdirectory(dir: String): (String, Thread) =
-    (Fs.realpathSync(Fs.mkdtempSync(s"$dir$sep")), null)
+    (Fs.realpathSync(Fs.mkdtempSync(s"$dir$sep")), thread)
 
   def delete(dir: String): Unit = {
     if (Fs.existsSync(dir)) {

@@ -3,7 +3,7 @@ package com.swoval.files
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ CountDownLatch, TimeUnit }
 
-import com.swoval.files.apple.FileEventApiTest
+import com.swoval.files.apple.FileEventMonitorTest
 import utest._
 
 import scala.util.Try
@@ -15,20 +15,26 @@ object AllTests {
       println(s"Iteration $i:")
       run()
     }
+    println("finished")
+    System.exit(0)
   }
   def run(): Unit = {
     def test[T <: TestSuite](t: T): (Tests, String) =
       (t.tests, t.getClass.getName.replaceAll("[$]", ""))
     val tests = Seq(
-      test(DefaultFileCacheTest),
-      test(EntryFilterTest),
-      test(FileEventApiTest),
+      test(BasicFileCacheTest),
+      test(NioBasicFileCacheTest),
+      test(FileCacheSymlinkTest),
+      test(NioFileCacheSymlinkTest),
+      test(FileCacheOverflowTest),
+      test(NioFileCacheOverflowTest),
+      test(FileEventMonitorTest),
+      test(DataViewTest),
+      test(CachedFileTreeViewTest),
       test(PathTest),
-      test(NativeQuickListTest),
       test(NioPathWatcherTest),
-      test(NioFileCacheTest),
-      test(NioQuickListTest),
-      test(RepositoryTest)
+      test(DirectoryFileTreeViewTest),
+      test(ApplePathWatcherTest)
     )
     val latch = new CountDownLatch(tests.size)
     val failed = new AtomicBoolean(false)
@@ -45,14 +51,14 @@ object AllTests {
             latch.countDown()
           }
         }
-        thread.setDaemon(true)
         thread.start()
         thread
     }
-    latch.await(10, TimeUnit.SECONDS)
+    latch.await(30, TimeUnit.SECONDS)
     if (failed.get()) {
       throw new Exception("Tests failed")
     }
+    println("joining threads")
     threads.foreach { t =>
       t.interrupt()
       t.join(5000)

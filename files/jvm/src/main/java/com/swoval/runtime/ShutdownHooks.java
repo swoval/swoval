@@ -3,6 +3,7 @@ package com.swoval.runtime;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -65,13 +66,14 @@ public class ShutdownHooks {
   }
 
   /**
-   * Add a hook to run at shutdown.
+   * Add a removable hook to run at shutdown.
    *
    * @param priority controls the ordering of this hook. Lower values run first.
    * @param runnable the shutdown task to run
+   * @return an id that can be used to later remove the runnable if it is no longer needed.
    */
   public static int addHook(final int priority, final Runnable runnable) {
-    synchronized(lock) {
+    synchronized (lock) {
       final int id = hookID.getAndIncrement();
       hooks.put(id, new Hook(priority, runnable));
       return id;

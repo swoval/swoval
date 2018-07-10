@@ -1,15 +1,19 @@
-package com.swoval.watchservice
+package com.swoval
+package watchservice
 
 import java.io.{ File, IOException }
 import java.nio.file.{ Files, Path }
 
-import com.swoval.files.Directory.{ Entry, EntryFilter }
+import com.swoval.files.FileTreeDataViews.Entry
+import com.swoval.files.TypedPath
 import com.swoval.functional
 import sbt.SourceWrapper._
 import sbt._
 import sbt.internal.BuildStructure
 import sbt.internal.io.Source
 import sbt.io.NothingFilter
+
+import scala.util.Try
 
 object Compat {
   object internal {
@@ -37,12 +41,12 @@ object Compat {
     override def isDirectory: Boolean = Files.isDirectory(getPath)
     override def isFile: Boolean = Files.isRegularFile(getPath)
     override def isSymbolicLink: Boolean = Files.isSymbolicLink(getPath)
+    override def exists(): Boolean = Files.exists(getPath)
+    override def toRealPath: Path = Try(getPath.toRealPath()).getOrElse(getPath)
+    override def compareTo(other: Entry[Path]): Int = getPath.compareTo(other.getPath)
   }
-  private class PathFileFilter(val pathFilter: EntryFilter[Path]) extends FileFilter {
-    override def accept(file: File): Boolean = pathFilter.accept {
-      val p = file.toPath
-      EntryImpl(p)
-    }
+  private class PathFileFilter(val pathFilter: functional.Filter[Path]) extends FileFilter {
+    override def accept(file: File): Boolean = pathFilter.accept(file.toPath)
     override def equals(o: Any): Boolean = o match {
       case that: PathFileFilter => this.pathFilter == that.pathFilter
       case _                    => false
@@ -50,12 +54,12 @@ object Compat {
     override def hashCode(): Int = pathFilter.hashCode()
     override def toString: String = pathFilter.toString
   }
-  def makeSource(p: Path, f: EntryFilter[Path]): WatchSource =
+  def makeSource(p: Path, f: functional.Filter[Path]): WatchSource =
     Source(p.toFile, new PathFileFilter(f), NothingFilter)
   case class SourceEntryFilter(base: Path, include: Option[FileFilter], exclude: Option[FileFilter])
-      extends EntryFilter[Path] {
-    override def accept(p: Entry[_ <: Path]): Boolean = p.getPath.startsWith(base) && {
-      val f = p.getPath.toFile
+      extends functional.Filter[Path] {
+    override def accept(p: Path): Boolean = p.startsWith(base) && {
+      val f = p.toFile
       include.fold(true)(_.accept(f)) && !exclude.fold(false)(_.accept(f))
     }
   }
@@ -82,7 +86,7 @@ object Compat {
       }
       override val recursive: Boolean = file.exclude != BaseFilter
       override val base: Path = file.base
-      override val filter: EntryFilter[Path] = SourceEntryFilter(base, include, exclude)
+      override val filter: functional.Filter[Path] = SourceEntryFilter(base, include, exclude)
       override lazy val toString: String = {
         if (isDirectory) {
           (if (file.exclude == BaseFilter) {
@@ -101,9 +105,9 @@ object Compat {
     override def accept(p: File): Boolean = false
     override def toString = "NothingFilter"
   }
-  def filter(files: Seq[WatchSource]): Seq[SourcePath] = files map sourcePath
+  def filter(files: Seq[WatchSource], id: Filter.ID): Seq[SourcePath] = files map sourcePath
   def makeScopedSource(p: Path,
-                       pathFilter: EntryFilter[Path],
+                       pathFilter: functional.Filter[Entry[Path]],
                        id: Def.ScopedKey[_]): WatchSource = {
     Source(p.toFile, new SourceFilter(p, pathFilter, id) {
       override lazy val toString: String = pathFilter.toString

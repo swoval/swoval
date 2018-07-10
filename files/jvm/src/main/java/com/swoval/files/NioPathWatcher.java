@@ -1,331 +1,117 @@
 package com.swoval.files;
 
-import static com.swoval.files.Entries.DIRECTORY;
-import static com.swoval.files.EntryFilters.AllPass;
 import static com.swoval.files.PathWatchers.Event.Kind.Create;
-import static com.swoval.files.PathWatchers.Event.Kind.Overflow;
+import static com.swoval.files.PathWatchers.Event.Kind.Delete;
+import static com.swoval.files.PathWatchers.Event.Kind.Modify;
+import static com.swoval.functional.Filters.AllPass;
+import static java.util.Map.Entry;
 
-import com.swoval.files.Directory.Converter;
-import com.swoval.files.Directory.Entry;
-import com.swoval.files.Directory.EntryFilter;
-import com.swoval.files.Directory.Observer;
+import com.swoval.files.FileTreeDataViews.Converter;
+import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
+import com.swoval.files.PathWatchers.Event.Kind;
+import com.swoval.files.PathWatchers.Overflow;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
+import com.swoval.runtime.Platform;
 import java.io.IOException;
-import java.nio.file.FileSystemLoopException;
-import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+class RootDirectories extends LockableMap<Path, CachedDirectory<WatchedDirectory>> {}
 /** Provides a PathWatcher that is backed by a {@link java.nio.file.WatchService}. */
-class NioPathWatcher implements PathWatcher {
+class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private final Executor callbackExecutor;
-  private final Executor internalExecutor;
-  private final Map<Path, Directory<WatchedDirectory>> rootDirectories = new HashMap<>();
-  private final boolean managed;
+  private final Observers<PathWatchers.Event> observers = new Observers<>();
+  private final RootDirectories rootDirectories = new RootDirectories();
   private final DirectoryRegistry directoryRegistry;
   private final Converter<WatchedDirectory> converter;
-  private final NioPathWatcherService nioPathWatcherService;
-  private final Directory.Observer<WatchedDirectory> updateObserver =
-      new Observer<WatchedDirectory>() {
-        @Override
-        public void onCreate(final Directory.Entry<WatchedDirectory> newEntry) {}
 
-        @Override
-        public void onDelete(final Directory.Entry<WatchedDirectory> oldEntry) {
-          close(oldEntry.getValue());
+  private FileTreeViews.CacheObserver<WatchedDirectory> updateCacheObserver(
+      final List<Event> events) {
+    return new FileTreeViews.CacheObserver<WatchedDirectory>() {
+      @Override
+      @SuppressWarnings("EmptyCatchBlock")
+      public void onCreate(final FileTreeDataViews.Entry<WatchedDirectory> newEntry) {
+        events.add(new Event(newEntry, Create));
+        try {
+          final Iterator<TypedPath> it =
+              FileTreeViews.list(
+                      newEntry.getPath(),
+                      0,
+                      new Filter<TypedPath>() {
+                        @Override
+                        public boolean accept(final TypedPath typedPath) {
+                          return directoryRegistry.accept(typedPath.getPath());
+                        }
+                      })
+                  .iterator();
+          while (it.hasNext()) {
+            final TypedPath tp = it.next();
+            events.add(new Event(tp, Create));
+          }
+        } catch (final IOException e) {
+          // This likely means the directory was deleted, which should be handle by the downstream
+          // NioPathWatcherService.
         }
+      }
 
-        @Override
-        public void onUpdate(
-            Directory.Entry<WatchedDirectory> oldEntry,
-            Directory.Entry<WatchedDirectory> newEntry) {}
+      @Override
+      public void onDelete(final FileTreeDataViews.Entry<WatchedDirectory> oldEntry) {
+        if (oldEntry.getValue().isRight()) oldEntry.getValue().get().close();
+        events.add(new Event(oldEntry, Delete));
+      }
 
-        @Override
-        public void onError(Path path, IOException exception) {}
-      };
+      @Override
+      public void onUpdate(
+          final FileTreeDataViews.Entry<WatchedDirectory> oldEntry,
+          final FileTreeDataViews.Entry<WatchedDirectory> newEntry) {}
 
-  /**
-   * Instantiate a NioPathWatcher.
-   *
-   * @param callback The callback to run for updates to monitored paths
-   * @param registerableWatchService The underlying watchservice
-   * @param callbackExecutor The Executor to invoke callbacks on
-   * @param internalExecutor The Executor to internally manage the watcher
-   * @param managedDirectoryRegistry The nullable registry of directories to monitor. If this is
-   *     non-null, then registrations are handled by an outer class and this watcher should not call
-   *     add or remove directory.
-   */
+      @Override
+      public void onError(final IOException exception) {}
+    };
+  }
+
+  private final NioPathWatcherService service;
+
   NioPathWatcher(
-      final Consumer<Event> callback,
-      final RegisterableWatchService registerableWatchService,
-      final Executor callbackExecutor,
-      final Executor internalExecutor,
-      final DirectoryRegistry managedDirectoryRegistry)
+      final DirectoryRegistry directoryRegistry, final RegisterableWatchService watchService)
       throws InterruptedException {
-    this.directoryRegistry =
-        managedDirectoryRegistry == null ? new DirectoryRegistry() : managedDirectoryRegistry;
-    this.managed = managedDirectoryRegistry != null;
-    this.callbackExecutor = callbackExecutor;
-    this.internalExecutor = internalExecutor;
-    this.nioPathWatcherService =
+    this.directoryRegistry = directoryRegistry;
+    this.service =
         new NioPathWatcherService(
-            new Consumer<Event>() {
+            new Consumer<Either<Overflow, Event>>() {
               @Override
-              public void accept(Event event) {
-                handleEvent(callback, event);
+              public void accept(final Either<Overflow, Event> either) {
+                if (!closed.get()) {
+                  if (either.isRight()) {
+                    final Event event = either.get();
+                    handleEvent(event);
+                  } else {
+                    handleOverflow(Either.leftProjection(either).getValue());
+                  }
+                }
               }
             },
-            new Consumer<Path>() {
-              @Override
-              public void accept(Path path) {
-                handleOverflow(callback, path);
-              }
-            },
-            registerableWatchService,
-            internalExecutor);
+            watchService);
     this.converter =
         new Converter<WatchedDirectory>() {
           @Override
-          public WatchedDirectory apply(final Path path) {
-            return Either.getOrElse(
-                nioPathWatcherService.register(path), WatchedDirectories.INVALID);
+          public WatchedDirectory apply(final TypedPath typedPath) {
+            return typedPath.isDirectory()
+                ? Either.getOrElse(
+                    service.register(typedPath.getPath()), WatchedDirectories.INVALID)
+                : WatchedDirectories.INVALID;
           }
         };
   }
 
-  /**
-   * Register a path to monitor for file events
-   *
-   * @param path The directory to watch for file events
-   * @param maxDepth The maximum maxDepth of subdirectories to watch
-   * @return an {@link com.swoval.functional.Either} containing the result of the registration or an
-   *     IOException if registration fails. This method should be idempotent and return true the
-   *     first time the directory is registered or when the depth is changed. Otherwise it should
-   *     return false.
-   */
-  @Override
-  public com.swoval.functional.Either<IOException, Boolean> register(
-      final Path path, final int maxDepth) {
-    return internalExecutor
-        .block(
-            new Callable<Boolean>() {
-              @Override
-              public Boolean call() throws IOException {
-                return registerImpl(path, maxDepth);
-              }
-            })
-        .castLeft(IOException.class);
-  }
-
-  /**
-   * Stop watching a directory
-   *
-   * @param path The directory to remove from monitoring
-   */
-  @Override
-  @SuppressWarnings("EmptyCatchBlock")
-  public void unregister(final Path path) {
-    internalExecutor.block(
-        new Runnable() {
-          @Override
-          public void run() {
-            if (!managed) directoryRegistry.removeDirectory(path);
-            final Directory<WatchedDirectory> dir = getRoot(path.getRoot());
-            if (dir != null) {
-              List<Directory.Entry<WatchedDirectory>> toRemove =
-                  dir.list(
-                      dir.getMaxDepth(),
-                      new EntryFilter<WatchedDirectory>() {
-                        @Override
-                        public boolean accept(final Entry<? extends WatchedDirectory> entry) {
-                          return !directoryRegistry.accept(entry.getPath());
-                        }
-                      });
-              final Iterator<Directory.Entry<WatchedDirectory>> it = toRemove.iterator();
-              while (it.hasNext()) {
-                final Directory.Entry<WatchedDirectory> entry = it.next();
-                if (!directoryRegistry.accept(entry.getPath())) {
-                  final Iterator<Directory.Entry<WatchedDirectory>> toCancel =
-                      dir.remove(entry.getPath()).iterator();
-                  while (toCancel.hasNext()) {
-                    close(toCancel.next().getValue());
-                  }
-                }
-              }
-            }
-          }
-        });
-  }
-
-  @SuppressWarnings("EmptyCatchBlock")
-  @Override
-  public void close() {
-    if (closed.compareAndSet(false, true)) {
-      internalExecutor.block(
-          new Runnable() {
-            @Override
-            public void run() {
-              callbackExecutor.close();
-              final Iterator<Directory<WatchedDirectory>> it = rootDirectories.values().iterator();
-              while (it.hasNext()) {
-                final Directory<WatchedDirectory> dir = it.next();
-                close(dir.entry().getValue());
-                final Iterator<Directory.Entry<WatchedDirectory>> entries =
-                    dir.list(dir.getMaxDepth(), AllPass).iterator();
-                while (entries.hasNext()) {
-                  close(entries.next().getValue());
-                }
-              }
-              nioPathWatcherService.close();
-            }
-          });
-      internalExecutor.close();
-    }
-  }
-
-  private void maybeRunCallback(final Consumer<Event> callback, final Event event) {
-    if (directoryRegistry.accept(event.getPath())) {
-      callbackExecutor.run(
-          new Runnable() {
-            @Override
-            public void run() {
-              callback.accept(event);
-            }
-          });
-    }
-  }
-
-  private void processPath(
-      final Consumer<Event> callback,
-      final Path path,
-      final Event.Kind kind,
-      HashSet<QuickFile> processedDirs,
-      HashSet<Path> processedFiles) {
-    final Set<QuickFile> newFiles = new HashSet<>();
-    add(path, newFiles);
-    if (processedFiles.add(path)) {
-      maybeRunCallback(callback, new Event(path, kind));
-      final Iterator<QuickFile> it = newFiles.iterator();
-      while (it.hasNext()) {
-        final QuickFile file = it.next();
-        if (file.isDirectory() && processedDirs.add(file)) {
-          processPath(callback, file.toPath(), Create, processedDirs, processedFiles);
-        } else if (processedFiles.add(file.toPath())) {
-          maybeRunCallback(callback, new Event(file.toPath(), Create));
-        }
-      }
-    }
-  }
-
-  private void handleEvent(final Consumer<Event> callback, final Event event) {
-    if (directoryRegistry.accept(event.getPath())) {
-      if (!Files.exists(event.getPath())) {
-        final Directory<WatchedDirectory> root = rootDirectories.get(event.getPath().getRoot());
-        if (root != null) {
-          final Iterator<Directory.Entry<WatchedDirectory>> it =
-              root.remove(event.getPath()).iterator();
-          while (it.hasNext()) {
-            close(it.next().getValue());
-          }
-        }
-      }
-      if (Files.isDirectory(event.getPath())) {
-        processPath(
-            callback,
-            event.getPath(),
-            event.getKind(),
-            new HashSet<QuickFile>(),
-            new HashSet<Path>());
-      } else {
-        maybeRunCallback(callback, event);
-      }
-    }
-  }
-
-  private void handleOverflow(final Consumer<Event> callback, final Path path) {
-    final int maxDepth = directoryRegistry.maxDepthFor(path);
-    boolean stop = false;
-    while (!stop && maxDepth > 0) {
-      try {
-        boolean registered = false;
-        final Set<QuickFile> files = new HashSet<>();
-        final Iterator<Path> directoryIterator =
-            directoryRegistry.registeredDirectories().iterator();
-        while (directoryIterator.hasNext()) {
-          files.add(new QuickFileImpl(directoryIterator.next().toString(), DIRECTORY));
-        }
-        maybePoll(path, files);
-        final Iterator<QuickFile> it = files.iterator();
-        while (it.hasNext()) {
-          final QuickFile file = it.next();
-          if (file.isDirectory()) {
-            boolean regResult =
-                registerImpl(
-                    file.toPath(),
-                    maxDepth == Integer.MAX_VALUE ? Integer.MAX_VALUE : maxDepth - 1);
-            registered = registered || regResult;
-            if (regResult)
-              callbackExecutor.run(
-                  new Runnable() {
-                    @Override
-                    public void run() {
-                      callback.accept(new Event(file.toPath(), Create));
-                    }
-                  });
-          }
-        }
-        stop = !registered;
-      } catch (NoSuchFileException e) {
-        stop = false;
-      } catch (IOException e) {
-        stop = true;
-      }
-    }
-    callbackExecutor.run(
-        new Runnable() {
-          @Override
-          public void run() {
-            callback.accept(new Event(path, Overflow));
-          }
-        });
-  }
-
-  private void maybePoll(final Path path, final Set<QuickFile> files) throws IOException {
-    if (!managed) {
-      boolean result;
-      do {
-        result = false;
-        final Iterator<QuickFile> it =
-            QuickList.list(
-                    path,
-                    0,
-                    false,
-                    new Filter<QuickFile>() {
-                      @Override
-                      public boolean accept(QuickFile quickFile) {
-                        return !quickFile.isDirectory()
-                            || directoryRegistry.accept(quickFile.toPath());
-                      }
-                    })
-                .iterator();
-        while (it.hasNext()) {
-          result = files.add(it.next()) || result;
-        }
-      } while (!Thread.currentThread().isInterrupted() && result);
-    }
-  }
   /**
    * Similar to register, but tracks all of the new files found in the directory. It polls the
    * directory until the contents stop changing to ensure that a callback is fired for each path in
@@ -335,92 +121,274 @@ class NioPathWatcher implements PathWatcher {
    * before we registered it with the watch service. If this happened, then no callback would be
    * invoked for that file.
    *
-   * @param path The newly created directory to add
-   * @param newFiles The set of files that are found for the newly created directory
-   * @return true if no exception is thrown
+   * @param typedPath The newly created directory to add
    */
-  private boolean add(final Path path, final Set<QuickFile> newFiles) {
-    boolean result = true;
-    try {
-      if (directoryRegistry.maxDepthFor(path) >= 0) {
-        final Directory<WatchedDirectory> dir = getRoot(path.getRoot());
-        if (dir != null) {
-          update(dir, path);
-        }
-      }
-      maybePoll(path, newFiles);
-    } catch (IOException e) {
-      result = false;
-    }
-    return result;
-  }
-
-  private Directory<WatchedDirectory> getRoot(final Path root) {
-    Directory<WatchedDirectory> result = rootDirectories.get(root);
-    if (result == null) {
-      try {
-        result =
-            new Directory<>(
-                    root,
-                    root,
-                    converter,
-                    Integer.MAX_VALUE,
-                    new Filter<QuickFile>() {
-                      @Override
-                      public boolean accept(QuickFile quickFile) {
-                        return directoryRegistry.accept(quickFile.toPath());
-                      }
-                    })
-                .init();
-        rootDirectories.put(root, result);
-      } catch (final IOException e) {
+  void add(final TypedPath typedPath, final List<Event> events) {
+    if (directoryRegistry.maxDepthFor(typedPath.getPath()) >= 0) {
+      final CachedDirectory<WatchedDirectory> dir = getOrAdd(typedPath.getPath());
+      if (dir != null) {
+        update(dir, typedPath, events);
       }
     }
-    return result;
   }
 
-  private boolean registerImpl(final Path path, final int maxDepth) throws IOException {
+  @Override
+  public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
     final int existingMaxDepth = directoryRegistry.maxDepthFor(path);
     boolean result = existingMaxDepth < maxDepth;
-    Path realPath;
-    try {
-      realPath = path.toRealPath();
-    } catch (IOException e) {
-      realPath = path;
+    final TypedPath typedPath = TypedPaths.get(path);
+    final Path realPath = typedPath.toRealPath();
+    if (result) {
+      directoryRegistry.addDirectory(typedPath.getPath(), maxDepth);
     }
-    if (result && !managed) {
-      directoryRegistry.addDirectory(path, maxDepth);
-    } else if (!path.equals(realPath)) {
-      /*
-       * Note that watchedDir is not null, which means that this path has been
-       * registered with a different alias.
-       */
-      throw new FileSystemLoopException(path.toString());
-    }
-    final Directory<WatchedDirectory> dir = getRoot(realPath.getRoot());
+    final CachedDirectory<WatchedDirectory> dir = getOrAdd(realPath);
+    final List<Event> events = new ArrayList<>();
     if (dir != null) {
-      final List<Directory.Entry<WatchedDirectory>> directories = dir.list(path, -1, AllPass);
-      if (result || directories.isEmpty() || !isValid(directories.get(0).getValue())) {
-        Path toUpdate = path;
-        while (toUpdate != null && !Files.isDirectory(toUpdate)) {
-          toUpdate = toUpdate.getParent();
+      final List<FileTreeDataViews.Entry<WatchedDirectory>> directories =
+          dir.listEntries(typedPath.getPath(), -1, AllPass);
+      if (result || directories.isEmpty() || directories.get(0).getValue().isRight()) {
+        Path toUpdate = typedPath.getPath();
+        if (toUpdate != null) update(dir, typedPath, events);
+      }
+    }
+    runCallbacks(events);
+    return Either.right(result);
+  }
+
+  private CachedDirectory<WatchedDirectory> find(final Path rawPath, final List<Path> toRemove) {
+    final Path parent = Platform.isMac() ? rawPath : rawPath.getRoot();
+    final Path path = parent == null ? rawPath.getRoot() : parent;
+    assert (path != null);
+    if (rootDirectories.lock()) {
+      try {
+        final Iterator<Entry<Path, CachedDirectory<WatchedDirectory>>> it =
+            rootDirectories.iterator();
+        CachedDirectory<WatchedDirectory> result = null;
+        while (result == null && it.hasNext()) {
+          final Entry<Path, CachedDirectory<WatchedDirectory>> entry = it.next();
+          final Path root = entry.getKey();
+          if (path.startsWith(root)) {
+            result = entry.getValue();
+          } else if (root.startsWith(path) && !path.equals(root)) {
+            toRemove.add(root);
+          }
         }
-        if (toUpdate != null) update(dir, toUpdate);
+        return result;
+      } finally {
+        rootDirectories.unlock();
+      }
+    } else {
+      return null;
+    }
+  }
+
+  private CachedDirectory<WatchedDirectory> findOrAddRoot(final Path rawPath) {
+    final Path parent = Platform.isMac() ? rawPath : rawPath.getRoot();
+    final Path path = parent == null ? rawPath.getRoot() : parent;
+    assert (path != null);
+    final List<Path> toRemove = new ArrayList<>();
+    CachedDirectory<WatchedDirectory> result = find(rawPath, toRemove);
+    if (result == null) {
+      Path toAdd = path;
+      boolean init = false;
+      while (!init && toAdd != null) {
+        try {
+          result =
+              new CachedDirectoryImpl<>(
+                      toAdd,
+                      toAdd,
+                      converter,
+                      Integer.MAX_VALUE,
+                      new Filter<TypedPath>() {
+                        @Override
+                        public boolean accept(final TypedPath typedPath) {
+                          return typedPath.isDirectory()
+                              && directoryRegistry.acceptPrefix(typedPath.getPath());
+                        }
+                      },
+                      FileTreeViews.getDefault(false))
+                  .init();
+          init = true;
+          rootDirectories.put(toAdd, result);
+        } catch (final IOException e) {
+          toAdd = toAdd.getParent();
+        }
+      }
+    }
+    final Iterator<Path> toRemoveIterator = toRemove.iterator();
+    while (toRemoveIterator.hasNext()) {
+      rootDirectories.remove(toRemoveIterator.next());
+    }
+    return result;
+  }
+
+  private CachedDirectory<WatchedDirectory> getOrAdd(final Path path) {
+    CachedDirectory<WatchedDirectory> result = null;
+    if (rootDirectories.lock()) {
+      try {
+        if (!closed.get()) {
+          result = findOrAddRoot(path);
+        }
+      } finally {
+        rootDirectories.unlock();
       }
     }
     return result;
   }
 
-  private void update(final Directory<WatchedDirectory> dir, final Path path) throws IOException {
-    dir.update(path, DIRECTORY).observe(updateObserver);
+  @Override
+  @SuppressWarnings("EmptyCatchBlock")
+  public void unregister(final Path path) {
+    directoryRegistry.removeDirectory(path);
+    if (rootDirectories.lock()) {
+      try {
+        final CachedDirectory<WatchedDirectory> dir = rootDirectories.get(path.getRoot());
+        if (dir != null) {
+          final int depth = dir.getPath().relativize(path).getNameCount();
+          List<FileTreeDataViews.Entry<WatchedDirectory>> toRemove =
+              dir.listEntries(
+                  depth,
+                  new Filter<FileTreeDataViews.Entry<WatchedDirectory>>() {
+                    @Override
+                    public boolean accept(final FileTreeDataViews.Entry<WatchedDirectory> entry) {
+                      return !directoryRegistry.acceptPrefix(entry.getPath());
+                    }
+                  });
+          final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> it = toRemove.iterator();
+          while (it.hasNext()) {
+            final FileTreeDataViews.Entry<WatchedDirectory> entry = it.next();
+            if (!directoryRegistry.acceptPrefix(entry.getPath())) {
+              final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> toCancel =
+                  dir.remove(entry.getPath()).iterator();
+              while (toCancel.hasNext()) {
+                final Either<IOException, WatchedDirectory> either = toCancel.next().getValue();
+                if (either.isRight()) either.get().close();
+              }
+            }
+          }
+        }
+      } finally {
+        rootDirectories.unlock();
+      }
+    }
   }
 
-  private void close(final com.swoval.functional.Either<IOException, WatchedDirectory> either) {
-    if (either.isRight()) either.get().close();
+  @Override
+  @SuppressWarnings("EmptyCatchBlock")
+  public void close() {
+    if (closed.compareAndSet(false, true)) {
+      service.close();
+      rootDirectories.clear();
+    }
   }
 
-  private boolean isValid(
-      final com.swoval.functional.Either<IOException, WatchedDirectory> either) {
-    return either.isRight() && either.get().isValid();
+  private void update(
+      final CachedDirectory<WatchedDirectory> dir,
+      final TypedPath typedPath,
+      final List<Event> events) {
+    dir.update(typedPath).observe(updateCacheObserver(events));
+  }
+
+  private void handleOverflow(final Overflow overflow) {
+    final Path path = overflow.getPath();
+    final List<Event> events = new ArrayList<>();
+    if (rootDirectories.lock()) {
+      try {
+        final CachedDirectory<WatchedDirectory> root = find(path, new ArrayList<Path>());
+        if (root != null) {
+          try {
+            final Iterator<TypedPath> it =
+                FileTreeViews.list(
+                        path,
+                        0,
+                        new Filter<TypedPath>() {
+                          @Override
+                          public boolean accept(TypedPath typedPath) {
+                            return typedPath.isDirectory()
+                                && directoryRegistry.acceptPrefix(typedPath.getPath());
+                          }
+                        })
+                    .iterator();
+            while (it.hasNext()) {
+              final TypedPath file = it.next();
+              add(file, events);
+            }
+          } catch (final IOException e) {
+            final List<FileTreeDataViews.Entry<WatchedDirectory>> removed = root.remove(path);
+            final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> removedIt =
+                removed.iterator();
+            while (removedIt.hasNext()) {
+              events.add(new Event(Entries.setExists(removedIt.next(), false), Delete));
+            }
+          }
+        }
+      } finally {
+        rootDirectories.unlock();
+      }
+    }
+    final TypedPath tp = TypedPaths.get(path);
+    events.add(new Event(tp, tp.exists() ? Modify : Delete));
+    runCallbacks(events);
+  }
+
+  private void runCallbacks(final List<Event> events) {
+    final Iterator<Event> it = events.iterator();
+    final Set<Path> handled = new HashSet<>();
+    while (it.hasNext()) {
+      final Event event = it.next();
+      if (directoryRegistry.accept(event.getPath()) && handled.add(event.getPath())) {
+        observers.onNext(new Event(TypedPaths.get(event.getPath()), event.getKind()));
+      }
+    }
+  }
+
+  private void handleEvent(final Event event) {
+    final List<Event> events = new ArrayList<>();
+    if (!closed.get() && rootDirectories.lock()) {
+      try {
+        if (directoryRegistry.acceptPrefix(event.getPath())) {
+          final TypedPath typedPath = TypedPaths.get(event.getPath());
+          if (!typedPath.exists()) {
+            final CachedDirectory<WatchedDirectory> root = getOrAdd(event.getPath());
+            if (root != null) {
+              final boolean isRoot = root.getPath().equals(event.getPath());
+              final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> it =
+                  isRoot
+                      ? root.listEntries(root.getMaxDepth(), AllPass).iterator()
+                      : root.remove(event.getPath()).iterator();
+              while (it.hasNext()) {
+                final FileTreeDataViews.Entry<WatchedDirectory> entry = it.next();
+                final Either<IOException, WatchedDirectory> either = entry.getValue();
+                if (either.isRight()) {
+                  either.get().close();
+                }
+                events.add(new Event(Entries.setExists(entry, false), Kind.Delete));
+              }
+              if (isRoot) {
+                rootDirectories.remove(root.getPath());
+                getOrAdd(event.getPath());
+              }
+            }
+          }
+          events.add(event);
+          if (typedPath.isDirectory()) {
+            add(typedPath, events);
+          }
+        }
+      } finally {
+        rootDirectories.unlock();
+      }
+    }
+    runCallbacks(events);
+  }
+
+  @Override
+  public int addObserver(final Observer<Event> observer) {
+    return observers.addObserver(observer);
+  }
+
+  @Override
+  public void removeObserver(final int handle) {
+    observers.removeObserver(handle);
   }
 }
