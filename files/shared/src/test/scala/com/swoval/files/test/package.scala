@@ -3,11 +3,12 @@ package com.swoval.files
 import java.nio.file.{ Path, Paths }
 
 import com.swoval.test.Implicits.executionContext
+import com.swoval.test.NotFuture
+
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ Future, Promise }
 import scala.util.{ Success, Try }
-import com.swoval.test.NotFuture
 
 package object test {
   class CountDownLatch(private[this] var i: Int) {

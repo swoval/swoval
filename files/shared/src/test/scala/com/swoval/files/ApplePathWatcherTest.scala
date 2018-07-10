@@ -7,9 +7,9 @@ import com.swoval.files.apple.Flags
 import com.swoval.files.test._
 import com.swoval.functional.Consumer
 import com.swoval.test._
+import utest._
 
 import scala.concurrent.duration._
-import utest._
 
 object ApplePathWatcherTest extends TestSuite {
   val DEFAULT_LATENCY = 5.milliseconds

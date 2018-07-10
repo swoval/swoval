@@ -2,24 +2,23 @@ package com.swoval.files
 
 import java.io.IOException
 import java.nio.file.attribute.FileTime
-import java.nio.file.{ FileSystemLoopException, Files, Path, Paths }
+import java.nio.file.{ Files, Path, Paths }
 
 import com.swoval.files.Directory._
 import com.swoval.files.EntryOps._
 import com.swoval.files.FileCacheTest.FileCacheOps
-import com.swoval.files.PathWatchers.{ DEFAULT_FACTORY, Event, Factory }
-import com.swoval.files.WatchServices.get
+import com.swoval.files.PathWatchers.{ Event, Factory }
 import com.swoval.files.test._
+import com.swoval.files.test.platform.Bool
 import com.swoval.functional.{ Consumer, Either => SEither }
+import com.swoval.runtime.Platform
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
-import com.swoval.files.test.platform.Bool
-import com.swoval.runtime.Platform
 import utest._
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.concurrent.{ Future, TimeoutException }
+import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
 
