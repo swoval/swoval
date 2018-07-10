@@ -53,7 +53,7 @@ private[files] class NioPathWatcherService(eventConsumer: Consumer[Event],
                 case "rename" if !exists => Delete
                 case _                   => Modify
               }
-              eventConsumer.accept(new Event(watchPath, kind))
+              eventConsumer.accept(new Event(TypedPaths.get(watchPath), kind))
             }
 
           val closed = new AtomicBoolean(false)
@@ -62,7 +62,7 @@ private[files] class NioPathWatcherService(eventConsumer: Consumer[Event],
             closed.set(true)
             watcher.close()
             watchedDirectoriesByPath += path -> WatchedDirectories.INVALID
-            eventConsumer.accept(new Event(path, Error))
+            eventConsumer.accept(new Event(TypedPaths.get(path), Error))
           }
           val watchedDirectory: WatchedDirectory = new WatchedDirectory {
 

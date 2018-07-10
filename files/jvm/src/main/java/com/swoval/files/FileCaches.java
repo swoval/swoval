@@ -1,100 +1,199 @@
 package com.swoval.files;
 
-import static com.swoval.files.PathWatchers.DEFAULT_FACTORY;
-
-import com.swoval.files.Directory.Converter;
-import com.swoval.files.Directory.Observer;
+import com.swoval.files.DataViews.Converter;
+import com.swoval.files.DataViews.OnError;
+import com.swoval.files.FileTreeViews.Observer;
+import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Factory;
+import com.swoval.functional.Consumer;
+import com.swoval.functional.Either;
 import java.io.IOException;
+import java.nio.file.Path;
 
-/** Provides factory methods for generating instances of {@link com.swoval.files.FileCache}. */
+/** Provides factory methods for generating instances of {@link FileTreeRepository}. */
 public class FileCaches {
+  private FileCaches() {}
   /**
-   * Create a file cache.
+   * Create a file cache with a CacheObserver of events.
    *
    * @param converter converts a path to the cached value type T
-   * @param options options for the cache
    * @param <T> the value type of the cache entries
    * @return a file cache.
-   * @throws IOException if the {@link com.swoval.files.PathWatcher} cannot be initialized.
-   * @throws InterruptedException if the {@link com.swoval.files.PathWatcher} cannot be initialized.
    */
-  public static <T> FileCache<T> get(final Converter<T> converter, final Option... options)
-      throws IOException, InterruptedException {
-    return new FileCacheImpl<>(converter, DEFAULT_FACTORY, null, options);
+  public static <T> FileTreeRepository<T> getCached(final Converter<T> converter) {
+    final Executor executor = Executor.make("FileTreeRepository-internal-executor");
+    final FileCacheDirectoryTree<T> tree =
+        new FileCacheDirectoryTree<>(
+            converter, Executor.make("FileTreeRepository-callback-executor"));
+    final BiConsumer<Event, Executor.Thread> symlinkHandler =
+        executor.delegate(new EventHandler(null, tree));
+    final SymlinkWatcher symlinkWatcher =
+        new SymlinkWatcher(
+            symlinkHandler,
+            DEFAULT_SYMLINK_FACTORY,
+            new OnError() {
+              @Override
+              public void apply(final IOException exception) {}
+            },
+            executor.copy());
+    final BiConsumer<Event, Executor.Thread> eventHandler =
+        executor.delegate(new EventHandler(symlinkWatcher, tree));
+    final ManagedPathWatcher pathWatcher =
+        DEFAULT_PATH_WATCHER_FACTORY.create(
+            eventHandler, executor.copy(), tree.readOnlyDirectoryRegistry());
+    final FileCachePathWatcher<T> watcher = new FileCachePathWatcher<>(symlinkWatcher, pathWatcher);
+    return new FileTreeRepositoryImpl<>(tree, watcher, executor);
+  }
+
+  static class EventHandler implements BiConsumer<Event, Executor.Thread> {
+    private final SymlinkWatcher symlinkWatcher;
+    private final FileCacheDirectoryTree<?> tree;
+    private final DirectoryRegistry registry;
+    EventHandler(final SymlinkWatcher symlinkWatcher, final FileCacheDirectoryTree<?> tree) {
+      this.symlinkWatcher = symlinkWatcher;
+      this.tree = tree;
+      this.registry = tree.readOnlyDirectoryRegistry();
+    }
+
+    @Override
+    public void accept(final Event event, final Executor.Thread thread) {
+      final Event newEvent =
+          new Event(TypedPaths.get(event.getPath()), event.getKind());
+      if (symlinkWatcher != null && newEvent.isSymbolicLink()) {
+        if (newEvent.isSymbolicLink()) {
+          if (newEvent.exists()) {
+            symlinkWatcher.addSymlink(
+                newEvent.getPath(),
+                registry.maxDepthFor(newEvent.getPath()));
+          } else {
+            symlinkWatcher.remove(newEvent.getPath());
+          }
+        }
+      }
+      tree.handleEvent(newEvent, thread);
+    }
   }
 
   /**
-   * Create a file cache with an Observer of events.
+   * Create a file cache with a CacheObserver of events.
    *
    * @param converter converts a path to the cached value type T
-   * @param observer observer of events for this cache
-   * @param options options for the cache
    * @param <T> the value type of the cache entries
    * @return a file cache.
-   * @throws IOException if the {@link PathWatcher} cannot be initialized.
-   * @throws InterruptedException if the {@link PathWatcher} cannot be initialized.
    */
-  public static <T> FileCache<T> get(
-      final Converter<T> converter, final Observer<T> observer, final Option... options)
+  public static <T> FileTreeRepository<T> get(final Converter<T> converter)
       throws IOException, InterruptedException {
-    FileCache<T> res = new FileCacheImpl<>(converter, DEFAULT_FACTORY, null, options);
-    res.addObserver(observer);
-    return res;
+    final Executor executor = Executor.make("FileTreeRepository-internal-executor");
+    final PathWatcher<T> watcher =
+        new PathWatcher<T>() {
+          final Observers<T> observers = new Observers<>();
+          final PathWatcher<PathWatchers.Event> watcher =
+              PathWatchers.get(
+                  new Consumer<Event>() {
+                    @Override
+                    public void accept(final Event event) {
+                      try {
+                        observers.onNext(converter.apply(event));
+                      } catch (final IOException e) {
+                        observers.onError(e);
+                      }
+                    }
+                  });
+
+          @Override
+          public Either<IOException, Boolean> register(Path path, int maxDepth) {
+            return watcher.register(path, maxDepth);
+          }
+
+          @Override
+          public void unregister(Path path) {
+            watcher.unregister(path);
+          }
+
+          @Override
+          public void close() {
+            observers.close();
+            watcher.close();
+          }
+
+          @Override
+          public int addObserver(final Observer<T> observer) {
+            return observers.addObserver(observer);
+          }
+
+          @Override
+          public void removeObserver(int handle) {
+            observers.removeObserver(handle);
+          }
+        };
+    throw new UnsupportedOperationException();
+    //    new MonitoredFileTreeViewImpl<>(watcher, new DataView<T>() {
+    //      @Override
+    //      public void close() throws Exception {
+    //
+    //      }
+    //
+    //      @Override
+    //      public List<TypedPath> list(Path path, int maxDepth,
+    //          Filter<? super TypedPath> filter) throws IOException {
+    //        return null;
+    //      }
+    //
+    //      @Override
+    //      public List<Entry<T>> listEntries(Path path, int maxDepth,
+    //          Filter<? super Entry<T>> filter) {
+    //        return null;
+    //      }
+    //    });
+    //    final BiConsumer<Event, Executor.Thread> eventHandler =
+    //        executor.delegate(
+    //            new BiConsumer<Event, Executor.Thread>() {
+    //              @Override
+    //              public void accept(final Event typedPath, final Executor.Thread thread) {
+    //                tree.handleEvent(typedPath, thread);
+    //              }
+    //            });
+    //    final SymlinkWatcher symlinkWatcher =
+    //        new SymlinkWatcher(
+    //            eventHandler,
+    //            DEFAULT_SYMLINK_FACTORY,
+    //            new OnError() {
+    //              @Override
+    //              public void apply(final IOException exception) {}
+    //            },
+    //            executor.copy());
+    //    final ManagedPathWatcher pathWatcher =
+    //        DEFAULT_PATH_WATCHER_FACTORY.create(
+    //            eventHandler, executor.copy(), tree.readOnlyDirectoryRegistry());
+    //    final FileCachePathWatcher<T> watcher = new FileCachePathWatcher<>(symlinkWatcher,
+    // pathWatcher);
+    //    return res;
   }
 
-  /**
-   * Create a file cache using a factory to provide an instance of{@link
-   * com.swoval.files.PathWatcher}.
-   *
-   * @param converter converts a path to the cached value type T
-   * @param factory creates a {@link com.swoval.files.PathWatcher}
-   * @param options options for the cache
-   * @param <T> The value type of the cache entries
-   * @return A file cache
-   * @throws IOException if the {@link PathWatcher} cannot be initialized
-   * @throws InterruptedException if the {@link PathWatcher} cannot be initialized
-   */
-  static <T> FileCache<T> get(
-      final Converter<T> converter, final PathWatchers.Factory factory, final Option... options)
-      throws IOException, InterruptedException {
-    return new FileCacheImpl<>(converter, factory, null, options);
-  }
+  static TotalFunction<Consumer<Event>, PathWatcher<PathWatchers.Event>> DEFAULT_SYMLINK_FACTORY =
+      new TotalFunction<Consumer<Event>, PathWatcher<PathWatchers.Event>>() {
+        @Override
+        public PathWatcher<PathWatchers.Event> apply(final Consumer<Event> consumer) {
+          try {
+            return PathWatchers.get(consumer);
+          } catch (final Exception e) {
+            throw new RuntimeException(e);
+          }
+        }
+      };
 
-  /**
-   * Create a file cache with an Observer of events.
-   *
-   * @param converter converts a path to the cached value type T
-   * @param factory a factory to create a path watcher
-   * @param observer an observer of events for this cache
-   * @param options options for the cache
-   * @param <T> the value type of the cache entries
-   * @return a file cache.
-   * @throws IOException if the {@link PathWatcher} cannot be initialized.
-   * @throws InterruptedException if the {@link PathWatcher} cannot be initialized.
-   */
-  static <T> FileCache<T> get(
-      final Converter<T> converter,
-      final Factory factory,
-      final Observer<T> observer,
-      final Option... options)
-      throws IOException, InterruptedException {
-    FileCache<T> res = new FileCacheImpl<>(converter, factory, null, options);
-    res.addObserver(observer);
-    return res;
-  }
-
-  /** Options for the implementation of a {@link FileCache}. */
-  public static class Option {
-    /** This constructor is needed for code gen. Otherwise only the companion is generated */
-    Option() {}
-    /**
-     * When the FileCache encounters a symbolic link with a path as target, treat the symbolic link
-     * like a path. Note that it is possible to create a loop if two directories mutually link to
-     * each other symbolically. When this happens, the FileCache will throw a {@link
-     * java.nio.file.FileSystemLoopException} when attempting to register one of these directories
-     * or if the link that completes the loop is added to a registered path.
-     */
-    static final FileCaches.Option NOFOLLOW_LINKS = new Option();
-  }
+  static Factory DEFAULT_PATH_WATCHER_FACTORY =
+      new Factory() {
+        @Override
+        public ManagedPathWatcher create(
+            final BiConsumer<Event, Executor.Thread> consumer,
+            final Executor executor,
+            final DirectoryRegistry registry) {
+          try {
+            return PathWatchers.get(consumer, executor, registry);
+          } catch (final Exception e) {
+            throw new RuntimeException(e);
+          }
+        }
+      };
 }

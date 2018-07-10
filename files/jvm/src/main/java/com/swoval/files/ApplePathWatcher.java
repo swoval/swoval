@@ -3,9 +3,9 @@ package com.swoval.files;
 import static com.swoval.files.PathWatchers.Event.Kind.Create;
 import static com.swoval.files.PathWatchers.Event.Kind.Delete;
 import static com.swoval.files.PathWatchers.Event.Kind.Modify;
-import static com.swoval.files.PathWatchers.Event.Kind.Overflow;
 import static com.swoval.functional.Either.leftProjection;
 
+import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.apple.FileEvent;
 import com.swoval.files.apple.FileEventsApi;
@@ -14,7 +14,6 @@ import com.swoval.files.apple.Flags;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -23,24 +22,33 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Implements the PathWatcher for Mac OSX using the <a
  * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/UsingtheFSEventsFramework/UsingtheFSEventsFramework.html"
- * target="_blank">Apple File System Events Api</a>
+ * target="_blank">Apple File System Events Api</a>.
  */
-public class ApplePathWatcher implements PathWatcher {
+public class ApplePathWatcher implements ManagedPathWatcher {
   private final DirectoryRegistry directoryRegistry;
   private final Map<Path, Stream> streams = new HashMap<>();
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final double latency;
-  private final Executor callbackExecutor;
   private final Executor internalExecutor;
   private final Flags.Create flags;
   private final FileEventsApi fileEventsApi;
   private static final DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
+
+  @Override
+  public void update(TypedPath path) {}
+
+  @Override
+  public int addObserver(Observer<Event> observer) {
+    return 0;
+  }
+
+  @Override
+  public void removeObserver(int handle) {}
 
   private static class Stream {
     public final int id;
@@ -80,16 +88,16 @@ public class ApplePathWatcher implements PathWatcher {
       final Path path, final Flags.Create flags, final int maxDepth) {
     final Either<Exception, Boolean> either =
         internalExecutor.block(
-            new Callable<Boolean>() {
+            new TotalFunction<Executor.Thread, Boolean>() {
               @Override
-              public Boolean call() {
+              public Boolean apply(final Executor.Thread thread) {
                 return registerImpl(path, flags, maxDepth);
               }
             });
     if (either.isLeft() && !(leftProjection(either).getValue() instanceof IOException)) {
       throw new RuntimeException(leftProjection(either).getValue());
     }
-    return either.castLeft(IOException.class);
+    return either.castLeft(IOException.class, false);
   }
 
   private boolean registerImpl(final Path path, final Flags.Create flags, final int maxDepth) {
@@ -153,25 +161,24 @@ public class ApplePathWatcher implements PathWatcher {
   @Override
   public void unregister(final Path path) {
     internalExecutor.block(
-        new Runnable() {
+        new Consumer<Executor.Thread>() {
           @Override
-          public void run() {
+          public void accept(final Executor.Thread thread) {
             unregisterImpl(path);
           }
         });
   }
 
-  /** Closes the FileEventsApi and shuts down the {@code callbackExecutor}. */
+  /** Closes the FileEventsApi and shuts down the {@code internalExecutor}. */
   @Override
   public void close() {
     if (closed.compareAndSet(false, true)) {
       internalExecutor.block(
-          new Runnable() {
+          new Consumer<Executor.Thread>() {
             @Override
-            public void run() {
+            public void accept(final Executor.Thread thread) {
               streams.clear();
               fileEventsApi.close();
-              callbackExecutor.close();
             }
           });
       internalExecutor.close();
@@ -179,22 +186,21 @@ public class ApplePathWatcher implements PathWatcher {
   }
 
   /** A no-op callback to invoke when streams are removed. */
-  static class DefaultOnStreamRemoved implements Consumer<String> {
+  static class DefaultOnStreamRemoved implements BiConsumer<String, Executor.Thread> {
     DefaultOnStreamRemoved() {}
 
     @Override
-    public void accept(String stream) {}
+    public void accept(final String stream, final Executor.Thread thread) {}
   }
 
   public ApplePathWatcher(
-      final Consumer<Event> onFileEvent,
+      final BiConsumer<Event, Executor.Thread> onFileEvent,
       final Executor executor,
       final DirectoryRegistry directoryRegistry)
       throws InterruptedException {
     this(
         0.01,
         new Flags.Create().setNoDefer().setFileEvents(),
-        Executor.make("com.swoval.files.ApplePathWatcher-callback-executor"),
         onFileEvent,
         DefaultOnStreamRemoved,
         executor,
@@ -208,7 +214,6 @@ public class ApplePathWatcher implements PathWatcher {
    *
    * @param latency specified in fractional seconds
    * @param flags Native flags
-   * @param callbackExecutor Executor to run callbacks on
    * @param onFileEvent {@link com.swoval.functional.Consumer} to run on file events
    * @param onStreamRemoved {@link com.swoval.functional.Consumer} to run when a redundant stream is
    *     removed from the underlying native file events implementation
@@ -219,60 +224,49 @@ public class ApplePathWatcher implements PathWatcher {
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
    */
-  public ApplePathWatcher(
+  ApplePathWatcher(
       final double latency,
       final Flags.Create flags,
-      final Executor callbackExecutor,
-      final Consumer<Event> onFileEvent,
-      final Consumer<String> onStreamRemoved,
+      final BiConsumer<Event, Executor.Thread> onFileEvent,
+      final BiConsumer<String, Executor.Thread> onStreamRemoved,
       final Executor executor,
       final DirectoryRegistry managedDirectoryRegistry)
       throws InterruptedException {
     this.latency = latency;
     this.flags = flags;
-    this.callbackExecutor = callbackExecutor;
     this.internalExecutor =
         executor == null
             ? Executor.make("com.swoval.files.ApplePathWatcher-internalExecutor")
             : executor;
     this.directoryRegistry =
-        managedDirectoryRegistry == null ? new DirectoryRegistry() : managedDirectoryRegistry;
+        managedDirectoryRegistry == null ? new DirectoryRegistryImpl() : managedDirectoryRegistry;
     fileEventsApi =
         FileEventsApi.apply(
             new Consumer<FileEvent>() {
               @Override
               public void accept(final FileEvent fileEvent) {
                 internalExecutor.run(
-                    new Runnable() {
+                    new Consumer<Executor.Thread>() {
                       @Override
-                      public void run() {
+                      public void accept(final Executor.Thread thread) {
                         final String fileName = fileEvent.fileName;
-                        final Path path = Paths.get(fileName);
-                        if (directoryRegistry.accept(path)) {
+                        final TypedPath path = TypedPaths.get(Paths.get(fileName));
+                        if (directoryRegistry.accept(path.getPath())) {
                           Event event;
-                          if (fileEvent.mustScanSubDirs()) {
-                            event = new Event(path, Overflow);
-                          } else if (fileEvent.itemIsFile()) {
-                            if (fileEvent.isNewFile() && Files.exists(path)) {
+                          if (fileEvent.itemIsFile()) {
+                            if (fileEvent.isNewFile() && path.exists()) {
                               event = new Event(path, Create);
-                            } else if (fileEvent.isRemoved() || !Files.exists(path)) {
+                            } else if (fileEvent.isRemoved() || !path.exists()) {
                               event = new Event(path, Delete);
                             } else {
                               event = new Event(path, Modify);
                             }
-                          } else if (Files.exists(path)) {
+                          } else if (path.exists()) {
                             event = new Event(path, Modify);
                           } else {
                             event = new Event(path, Delete);
                           }
-                          final Event callbackEvent = event;
-                          callbackExecutor.run(
-                              new Runnable() {
-                                @Override
-                                public void run() {
-                                  onFileEvent.accept(callbackEvent);
-                                }
-                              });
+                          onFileEvent.accept(event, thread);
                         }
                       }
                     });
@@ -282,22 +276,16 @@ public class ApplePathWatcher implements PathWatcher {
               @Override
               public void accept(final String stream) {
                 internalExecutor.block(
-                    new Runnable() {
+                    new Consumer<Executor.Thread>() {
                       @Override
-                      public void run() {
+                      public void accept(final Executor.Thread thread) {
                         new Runnable() {
                           @Override
                           public void run() {
                             streams.remove(Paths.get(stream));
+                            onStreamRemoved.accept(stream, thread);
                           }
                         }.run();
-                      }
-                    });
-                callbackExecutor.run(
-                    new Runnable() {
-                      @Override
-                      public void run() {
-                        onStreamRemoved.accept(stream);
                       }
                     });
               }

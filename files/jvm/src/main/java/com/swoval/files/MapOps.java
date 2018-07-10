@@ -11,50 +11,52 @@ import java.util.Map;
 
 /**
  * Provides a utility method for diffing two maps of directory entries. It is not in {@link
- * Directory} because of a name class with java.util.Map.Entry and com.swoval.files.Directory.Entry
- * that breaks code-gen.
+ * CachedDirectoryImpl} because of a name class with java.util.Map.Entry and
+ * com.swoval.files.CachedDirectory.Entry that breaks code-gen.
  */
 class MapOps {
+  private MapOps() {}
+
   static <T> void diffDirectoryEntries(
-      final List<Directory.Entry<T>> oldEntries,
-      final List<Directory.Entry<T>> newEntries,
-      final Directory.Observer<T> observer) {
-    final Map<Path, Directory.Entry<T>> oldMap = new HashMap<>();
-    final Iterator<Directory.Entry<T>> oldIterator = oldEntries.iterator();
+      final List<DataViews.Entry<T>> oldEntries,
+      final List<DataViews.Entry<T>> newEntries,
+      final FileTreeViews.CacheObserver<T> cacheObserver) {
+    final Map<Path, DataViews.Entry<T>> oldMap = new HashMap<>();
+    final Iterator<DataViews.Entry<T>> oldIterator = oldEntries.iterator();
     while (oldIterator.hasNext()) {
-      final Directory.Entry<T> entry = oldIterator.next();
+      final DataViews.Entry<T> entry = oldIterator.next();
       oldMap.put(entry.getPath(), entry);
     }
-    final Map<Path, Directory.Entry<T>> newMap = new HashMap<>();
-    final Iterator<Directory.Entry<T>> newIterator = newEntries.iterator();
+    final Map<Path, DataViews.Entry<T>> newMap = new HashMap<>();
+    final Iterator<DataViews.Entry<T>> newIterator = newEntries.iterator();
     while (newIterator.hasNext()) {
-      final Directory.Entry<T> entry = newIterator.next();
+      final DataViews.Entry<T> entry = newIterator.next();
       newMap.put(entry.getPath(), entry);
     }
-    diffDirectoryEntries(oldMap, newMap, observer);
+    diffDirectoryEntries(oldMap, newMap, cacheObserver);
   }
 
   static <K, V> void diffDirectoryEntries(
-      final Map<K, Directory.Entry<V>> oldMap,
-      final Map<K, Directory.Entry<V>> newMap,
-      final Directory.Observer<V> observer) {
-    final Iterator<Entry<K, Directory.Entry<V>>> newIterator =
+      final Map<K, DataViews.Entry<V>> oldMap,
+      final Map<K, DataViews.Entry<V>> newMap,
+      final FileTreeViews.CacheObserver<V> cacheObserver) {
+    final Iterator<Entry<K, DataViews.Entry<V>>> newIterator =
         new ArrayList<>(newMap.entrySet()).iterator();
-    final Iterator<Entry<K, Directory.Entry<V>>> oldIterator =
+    final Iterator<Entry<K, DataViews.Entry<V>>> oldIterator =
         new ArrayList<>(oldMap.entrySet()).iterator();
     while (newIterator.hasNext()) {
-      final Entry<K, Directory.Entry<V>> entry = newIterator.next();
-      final Directory.Entry<V> oldValue = oldMap.get(entry.getKey());
+      final Entry<K, DataViews.Entry<V>> entry = newIterator.next();
+      final DataViews.Entry<V> oldValue = oldMap.get(entry.getKey());
       if (oldValue != null) {
-        observer.onUpdate(oldValue, entry.getValue());
+        cacheObserver.onUpdate(oldValue, entry.getValue());
       } else {
-        observer.onCreate(entry.getValue());
+        cacheObserver.onCreate(entry.getValue());
       }
     }
     while (oldIterator.hasNext()) {
-      final Entry<K, Directory.Entry<V>> entry = oldIterator.next();
+      final Entry<K, DataViews.Entry<V>> entry = oldIterator.next();
       if (!newMap.containsKey(entry.getKey())) {
-        observer.onDelete(entry.getValue());
+        cacheObserver.onDelete(entry.getValue());
       }
     }
   }

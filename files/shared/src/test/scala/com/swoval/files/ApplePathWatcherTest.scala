@@ -5,7 +5,6 @@ import java.nio.file.Paths
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.apple.Flags
 import com.swoval.files.test._
-import com.swoval.functional.Consumer
 import com.swoval.test._
 import utest._
 
@@ -14,15 +13,14 @@ import scala.concurrent.duration._
 object ApplePathWatcherTest extends TestSuite {
   val DEFAULT_LATENCY = 5.milliseconds
   val dirFlags = new Flags.Create().setNoDefer()
-  def defaultWatcher(callback: Consumer[PathWatchers.Event]): PathWatcher =
+  def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] =
     new ApplePathWatcher(
       0.01,
       dirFlags,
-      Executor.make("ApplePathWatcher-callback-executor"),
-      callback,
-      (s: String) => {},
+      (e: PathWatchers.Event, _: Executor#Thread) => callback(e),
+      (_: String, _: Executor#Thread) => {},
       Executor.make("ApplePathWatcher-internal-executor"),
-      new DirectoryRegistry
+      new DirectoryRegistryImpl
     )
   val tests = testOn(MacOS) {
     val events = new ArrayBlockingQueue[Event](10)
@@ -31,8 +29,7 @@ object ApplePathWatcherTest extends TestSuite {
       'onCreate - {
         withTempDirectory { dir =>
           assert(dir.exists)
-          val callback: Consumer[Event] =
-            (e: Event) => events.add(e)
+          val callback = (e: Event) => events.add(e)
 
           usingAsync(defaultWatcher(callback)) { w =>
             w.register(dir)
@@ -42,8 +39,7 @@ object ApplePathWatcherTest extends TestSuite {
         }
       }
       'onModify - withTempDirectory { dir =>
-        val callback: Consumer[Event] =
-          (e: Event) => events.add(e)
+        val callback = (e: Event) => events.add(e)
 
         usingAsync(defaultWatcher(callback)) { w =>
           val f = dir.resolve(Paths.get("foo")).createFile()
@@ -55,8 +51,7 @@ object ApplePathWatcherTest extends TestSuite {
         }
       }
       'onDelete - withTempDirectory { dir =>
-        val callback: Consumer[Event] =
-          (e: Event) => events.add(e)
+        val callback = (e: Event) => events.add(e)
 
         usingAsync(defaultWatcher(callback)) { w =>
           val f = dir.resolve(Paths.get("foo")).createFile()
@@ -68,8 +63,7 @@ object ApplePathWatcherTest extends TestSuite {
       'subdirectories - {
         'onCreate - withTempDirectory { dir =>
           withTempDirectory(dir) { subdir =>
-            val callback: Consumer[Event] =
-              (e: Event) => if (e.getPath != dir) events.add(e)
+            val callback = (e: Event) => if (e.getPath != dir) events.add(e)
 
             usingAsync(defaultWatcher(callback)) { w =>
               w.register(dir)

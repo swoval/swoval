@@ -20,15 +20,19 @@ object AllTests {
     def test[T <: TestSuite](t: T): (Tests, String) =
       (t.tests, t.getClass.getName.replaceAll("[$]", ""))
     val tests = Seq(
-      test(DefaultFileCacheTest),
-      test(EntryFilterTest),
+      test(BasicFileCacheTest),
+      test(NioBasicFileCacheTest),
+      test(FileCacheSymlinkTest),
+      test(NioFileCacheSymlinkTest),
+      test(FileCacheOverflowTest),
+      test(NioFileCacheOverflowTest),
       test(FileEventApiTest),
+      test(DataViewTest),
+      test(CachedRepositoryTest),
       test(PathTest),
-      test(NativeQuickListTest),
       test(NioPathWatcherTest),
-      test(NioFileCacheTest),
-      test(NioQuickListTest),
-      test(RepositoryTest)
+      test(DirectoryFileTreeViewTest),
+      test(ApplePathWatcherTest)
     )
     val latch = new CountDownLatch(tests.size)
     val failed = new AtomicBoolean(false)
@@ -45,11 +49,10 @@ object AllTests {
             latch.countDown()
           }
         }
-        thread.setDaemon(true)
         thread.start()
         thread
     }
-    latch.await(10, TimeUnit.SECONDS)
+    latch.await(30, TimeUnit.SECONDS)
     if (failed.get()) {
       throw new Exception("Tests failed")
     }

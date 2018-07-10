@@ -1,9 +1,10 @@
-package com.swoval.watchservice
+package com.swoval
+package watchservice
 
 import java.io.File
 import java.nio.file.Path
 
-import com.swoval.files.Directory.{ Entry, EntryFilter }
+import com.swoval.files.DataViews.Entry
 import com.swoval.watchservice.Compat.EntryImpl
 import com.swoval.watchservice.Compat.io._
 import com.swoval.watchservice.Filter._
@@ -24,7 +25,7 @@ object Filter {
     })
 }
 
-trait Filter extends EntryFilter[Path] {
+trait Filter extends functional.Filter[Path] {
   def id: ID
   def base: Path
   override def equals(o: Any): Boolean = o match {
@@ -36,12 +37,14 @@ trait Filter extends EntryFilter[Path] {
   override lazy val hashCode: Int = (base :: id :: Nil).hashCode()
 }
 
-class SourceFilter(override val base: Path, filter: EntryFilter[Path], override val id: ID)
+class SourceFilter(override val base: Path,
+                   filter: functional.Filter[Entry[Path]],
+                   override val id: ID)
     extends Filter
     with Compat.FileFilter {
-  override def accept(cacheEntry: Entry[_ <: Path]): Boolean = apply(cacheEntry.getPath)
-  override def accept(file: File): Boolean = apply(file.toPath)
-  def apply(p: Path): Boolean = p.startsWith(base) && filter.accept(EntryImpl(p))
+  override def accept(path: Path): Boolean = apply(EntryImpl(path))
+  override def accept(file: File): Boolean = apply(EntryImpl(file.toPath))
+  def apply(p: Entry[Path]): Boolean = p.getPath.startsWith(base) && filter.accept(p)
   override lazy val toString: String = {
     val filterStr = Filter.show(filter, 0) match {
       case f if f.length > 80 =>

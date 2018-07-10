@@ -17,7 +17,7 @@ A collection of small developer libraries.
 Files
 =
 A cross platform (scala.js and jvm) project that provides a number of helpful utilities,
-including a reactive file system cache and a fast tool for listing the contents of a directory.
+including a reactive file system cache and a fast tool for listing the contents of a cachedDirectoryImpl.
 See documentation: [files](files/README.md).
 
 CloseWatch

@@ -2,27 +2,17 @@
 
 package com.swoval.files
 
-import com.swoval.functional.Either.getOrElse
-import com.swoval.functional.Either.leftProjection
-import java.util.Map.Entry
-import com.swoval.files.Directory.OnError
-import com.swoval.files.PathWatchers.Event
-import com.swoval.files.PathWatchers.Factory
-import com.swoval.functional.Consumer
-import com.swoval.functional.Either
 import java.io.IOException
-import java.nio.file.FileSystemLoopException
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.ArrayList
-import java.util.HashMap
-import java.util.HashSet
-import java.util.Iterator
-import java.util.List
-import java.util.Map
-import java.util.Set
+import java.nio.file.{ FileSystemLoopException, Files, Path }
+import java.util.Map.Entry
+import java.util.{ ArrayList, HashMap, HashSet, Iterator, List, Map, Set }
 import java.util.concurrent.atomic.AtomicBoolean
-import SymlinkWatcher._
+
+import com.swoval.files.CachedDirectories.OnError
+import com.swoval.files.PathWatchers.{ Event, Factory }
+import com.swoval.files.SymlinkWatcher._
+import com.swoval.functional.{ Consumer, Either }
+import com.swoval.functional.Either.{ getOrElse, leftProjection }
 
 object SymlinkWatcher {
 
@@ -130,7 +120,7 @@ class SymlinkWatcher(handleEvent: Consumer[Path],
    */
 
   private val watcher: PathWatcher =
-    factory.create(callback, internalExecutor.copy())
+    factory.create(callback, internalExecutor.copy(), null)
 
   override def close(): Unit = {
     internalExecutor.block(new Runnable() {
@@ -178,16 +168,16 @@ class SymlinkWatcher(handleEvent: Consumer[Path],
                   watchedSymlinksByTarget
                     .put(realPath, new RegisteredPath(realPath, path))
                 } else if (result.isLeft) {
-                  onError.apply(path, leftProjection(result).getValue)
+                  onError.apply(leftProjection(result).getValue)
                 }
               }
             } else if (Files.isDirectory(realPath)) {
-              onError.apply(path, new FileSystemLoopException(path.toString))
+              onError.apply(new FileSystemLoopException(path.toString))
             } else {
               targetRegistrationPath.paths.add(path)
             }
           } catch {
-            case e: IOException => onError.apply(path, e)
+            case e: IOException => onError.apply(e)
 
           }
         }

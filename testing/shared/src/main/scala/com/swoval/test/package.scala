@@ -18,7 +18,7 @@ import scala.util.Try
 
 package object test {
   final val DEFAULT_TIMEOUT =
-    Try(System.getProperty("swoval.test.timeout", "5").toInt).getOrElse(5).seconds
+    Try(System.getProperty("swoval.test.timeout", "1").toInt).getOrElse(1).seconds
 
   implicit class PathOps(val path: Path) {
     def getBytes: Array[Byte] = Files.readAllBytes(path)

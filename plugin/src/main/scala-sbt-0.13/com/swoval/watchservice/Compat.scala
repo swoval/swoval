@@ -76,7 +76,7 @@ object Compat {
   val global = Scope(Global, Global, Global, Global)
   def extraProjectSettings: Seq[Def.Setting[_]] = Seq(
     pollInterval := 75,
-    closeWatchFileCache := FileCaches.get(new Directory.Converter[Path] {
+    closeWatchFileCache := FileCaches.getCached(new Directory.Converter[Path] {
       override def apply(p: Path): Path = p
     })
   )

@@ -5,7 +5,6 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
-import com.swoval.concurrent.ThreadFactory;
 import com.swoval.files.RegisterableWatchService;
 import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
 import com.swoval.functional.Consumer;
@@ -29,15 +28,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Provides an alternative @{link java.nio.file.WatchService} for mac that uses native file system
+ * Provides an alternative {@link java.nio.file.WatchService} for mac that uses native file system
  * events rather than polling for file changes.
  */
 public class MacOSXWatchService implements WatchService, AutoCloseable, RegisterableWatchService {
@@ -47,9 +44,6 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
   private final LinkedBlockingQueue<MacOSXWatchKey> readyKeys = new LinkedBlockingQueue<>();
   private final Map<Path, MacOSXWatchKey> registered = new HashMap<>();
 
-  private final ExecutorService executor =
-      Executors.newSingleThreadExecutor(
-          new ThreadFactory("com.swoval.files.apple.MacOSXWatchService-executor-thread"));
   private final Set<Path> streams = new HashSet<>();
   private final Consumer<String> dropEvent =
       new Consumer<String>() {
@@ -69,24 +63,17 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
       new Consumer<FileEvent>() {
         @Override
         public void accept(final FileEvent fileEvent) {
-          executor.submit(
-              new Runnable() {
-                @Override
-                public void run() {
-                  final Path path = Paths.get(fileEvent.fileName);
-                  synchronized (registered) {
-                    final MacOSXWatchKey childKey = registered.get(path);
-                    final MacOSXWatchKey key =
-                        childKey == null ? registered.get(path.getParent()) : childKey;
-                    final boolean exists = Files.exists(path, LinkOption.NOFOLLOW_LINKS);
-                    if (key != null) {
-                      if (exists && key.reportModifyEvents()) createEvent(key, ENTRY_MODIFY, path);
-                      else if (!exists && key.reportDeleteEvents())
-                        createEvent(key, ENTRY_DELETE, path);
-                    }
-                  }
-                }
-              });
+          final Path path = Paths.get(fileEvent.fileName);
+          synchronized (registered) {
+            final MacOSXWatchKey childKey = registered.get(path);
+            final MacOSXWatchKey key =
+                childKey == null ? registered.get(path.getParent()) : childKey;
+            final boolean exists = Files.exists(path, LinkOption.NOFOLLOW_LINKS);
+            if (key != null) {
+              if (exists && key.reportModifyEvents()) createEvent(key, ENTRY_MODIFY, path);
+              else if (!exists && key.reportDeleteEvents()) createEvent(key, ENTRY_DELETE, path);
+            }
+          }
         }
       };
   private final FileEventsApi watcher = FileEventsApi.apply(onFileEvent, dropEvent);
@@ -109,16 +96,11 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
     synchronized (watcher) {
       if (open.compareAndSet(true, false)) {
         watcher.close();
-        executor.shutdownNow();
         final Iterator<Path> it = new ArrayList<>(registered.keySet()).iterator();
         while (it.hasNext()) {
           unregisterImpl(it.next());
         }
         registered.clear();
-        try {
-          executor.awaitTermination(5, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-        }
       }
     }
   }

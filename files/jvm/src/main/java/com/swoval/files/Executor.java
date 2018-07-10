@@ -1,12 +1,12 @@
 package com.swoval.files;
 
 import com.swoval.concurrent.ThreadFactory;
+import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
+import java.util.PriorityQueue;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -20,12 +20,46 @@ import java.util.concurrent.atomic.AtomicBoolean;
 abstract class Executor implements AutoCloseable {
   Executor() {}
 
+  public class Thread {
+    private Thread() {}
+  }
+
+  private final Thread thread = new Thread();
+
+  Thread getThread() {
+    return thread;
+  }
+
+  <T> BiConsumer<T, Thread> delegate(final BiConsumer<T, Thread> consumer) {
+    return new BiConsumer<T, Thread>() {
+      @Override
+      public void accept(final T t, final Thread thread) {
+        run(
+            new Consumer<Thread>() {
+              @Override
+              public void accept(Thread thread) {
+                consumer.accept(t, thread);
+              }
+            });
+      }
+    };
+  }
+
   /**
    * Runs the task on a thread.
    *
-   * @param runnable task to run
+   * @param threadConsumer task to run
    */
-  abstract void run(final Runnable runnable);
+  void run(final Consumer<Thread> threadConsumer) {
+    run(threadConsumer, Integer.MAX_VALUE);
+  }
+
+  /**
+   * Runs the task on a thread with a given priority.
+   *
+   * @param threadConsumer task to run
+   */
+  abstract void run(final Consumer<Thread> threadConsumer, final int priority);
 
   /**
    * Returns a copy of the executor. The purpose of this is to provide the executor to a class or
@@ -37,8 +71,8 @@ abstract class Executor implements AutoCloseable {
     final Executor self = this;
     return new Executor() {
       @Override
-      public void run(final Runnable runnable) {
-        self.run(runnable);
+      public void run(final Consumer<Thread> consumer, final int priority) {
+        self.run(consumer, priority);
       }
     };
   }
@@ -50,20 +84,21 @@ abstract class Executor implements AutoCloseable {
    * @param <T> The result type of the Callable
    * @return The result evaluated by the Callable
    */
-  <T> Either<Exception, T> block(final Callable<T> callable) {
+  <T> Either<Exception, T> block(final Function<Thread, T> callable) {
     final ArrayBlockingQueue<Either<Exception, T>> queue = new ArrayBlockingQueue<>(1);
     try {
       run(
-          new Runnable() {
+          new Consumer<Thread>() {
             @Override
-            public void run() {
+            public void accept(final Thread thread) {
               try {
-                queue.add(Either.<Exception, T, T>right(callable.call()));
+                queue.add(Either.<Exception, T, T>right(callable.apply(thread)));
               } catch (Exception e) {
                 queue.add(Either.<Exception, T, Exception>left(e));
               }
             }
-          });
+          },
+          0);
       try {
         return queue.take();
       } catch (InterruptedException e) {
@@ -77,17 +112,17 @@ abstract class Executor implements AutoCloseable {
   /**
    * Blocks the current thread until the executor runs the provided Runnable.
    *
-   * @param runnable The Runnable to invoke.
+   * @param consumer The consumer to invoke.
    */
   @SuppressWarnings("EmptyCatchBlock")
-  void block(final Runnable runnable) {
+  void block(final Consumer<Thread> consumer) {
     final CountDownLatch latch = new CountDownLatch(1);
     try {
       run(
-          new Runnable() {
+          new Consumer<Thread>() {
             @Override
-            public void run() {
-              runnable.run();
+            public void accept(final Thread thread) {
+              consumer.accept(thread);
               latch.countDown();
             }
           });
@@ -105,7 +140,7 @@ abstract class Executor implements AutoCloseable {
 
     final ThreadFactory factory;
     final ExecutorService service;
-    final LinkedBlockingQueue<Either<Integer, Runnable>> runnables = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<PriorityConsumer> consumers = new LinkedBlockingQueue<>();
 
     ExecutorImpl(final ThreadFactory factory, final ExecutorService service) {
       this.factory = factory;
@@ -115,20 +150,19 @@ abstract class Executor implements AutoCloseable {
             @Override
             public void run() {
               boolean stop = false;
-              while (!stop && !closed.get() && !Thread.currentThread().isInterrupted()) {
+              while (!stop && !closed.get() && !java.lang.Thread.currentThread().isInterrupted()) {
                 try {
-                  final List<Either<Integer, Runnable>> eithers = new ArrayList<>();
-                  eithers.add(runnables.take());
-                  synchronized (runnables) {
-                    runnables.drainTo(eithers);
-                  }
-                  final Iterator<Either<Integer, Runnable>> it = eithers.iterator();
-                  while (!stop && it.hasNext()) {
-                    final Either<Integer, Runnable> runnable = it.next();
-                    stop = runnable.isLeft();
+                  final PriorityQueue<PriorityConsumer> queue = new PriorityQueue<>();
+                  queue.add(consumers.take());
+                  drainRunnables(queue);
+                  while (queue.peek() != null && !stop) {
+                    drainRunnables(queue);
+                    final PriorityConsumer consumer = queue.poll();
+                    assert (consumer != null);
+                    stop = consumer.priority < 0;
                     if (!stop) {
                       try {
-                        runnable.get().run();
+                        consumer.accept(getThread());
                       } catch (final Exception e) {
                         e.printStackTrace();
                       }
@@ -147,10 +181,9 @@ abstract class Executor implements AutoCloseable {
     public void close() {
       if (closed.compareAndSet(false, true)) {
         super.close();
-        final Either<Integer, Runnable> stop = Either.left(1);
-        synchronized (runnables) {
-          runnables.clear();
-          runnables.offer(stop);
+        synchronized (consumers) {
+          consumers.clear();
+          consumers.offer(STOP);
         }
         service.shutdownNow();
         try {
@@ -163,24 +196,35 @@ abstract class Executor implements AutoCloseable {
       }
     }
 
-    void run(final Runnable runnable) {
-      if (factory.created(Thread.currentThread())) {
+    @Override
+    void run(final Consumer<Thread> consumer, final int priority) {
+      if (factory.created(java.lang.Thread.currentThread())) {
         try {
-          runnable.run();
+          consumer.accept(getThread());
         } catch (final Exception e) {
           e.printStackTrace();
         }
       } else {
-        synchronized (runnables) {
-          final Either<Integer, Runnable> either = Either.right(runnable);
-          if (!runnables.offer(either)) {
+        synchronized (consumers) {
+          if (!consumers.offer(new PriorityConsumer(consumer, priority))) {
             throw new IllegalStateException(
-                "Couldn't run task due to full queue (" + runnables.size() + ")");
+                "Couldn't run task due to full queue (" + consumers.size() + ")");
           }
         }
       }
     }
+
+    private void drainRunnables(final PriorityQueue<PriorityConsumer> queue) {
+      synchronized (consumers) {
+        if (consumers.size() > 0) {
+          final List<PriorityConsumer> list = new ArrayList<>();
+          consumers.drainTo(list);
+          queue.addAll(list);
+        }
+      }
+    }
   }
+
   /**
    * Make a new instance of an Executor
    *
@@ -209,4 +253,33 @@ abstract class Executor implements AutoCloseable {
         };
     return new ExecutorImpl(factory, service);
   }
+
+  private static final class PriorityConsumer
+      implements Consumer<Thread>, Comparable<PriorityConsumer> {
+    private final Consumer<Thread> consumer;
+    private final int priority;
+
+    PriorityConsumer(final Consumer<Thread> consumer, final int priority) {
+      this.consumer = consumer;
+      this.priority = priority < 0 ? priority : 0;
+    }
+
+    @Override
+    public int compareTo(final PriorityConsumer that) {
+      return Integer.compare(this.priority, that.priority);
+    }
+
+    @Override
+    public void accept(final Thread thread) {
+      consumer.accept(thread);
+    }
+  }
+
+  private static final PriorityConsumer STOP =
+      new PriorityConsumer(
+          new Consumer<Thread>() {
+            @Override
+            public void accept(final Thread thread) {}
+          },
+          -1);
 }

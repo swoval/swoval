@@ -2,12 +2,8 @@
 
 package com.swoval.files
 
-import com.swoval.files.PathWatchers.DEFAULT_FACTORY
-import com.swoval.files.Directory.Converter
-import com.swoval.files.Directory.Observer
-import com.swoval.files.PathWatchers.Factory
-import java.io.IOException
-import Option._
+import com.swoval.files.DataViews.Converter
+import com.swoval.files.PathWatchers.{ DEFAULT_FACTORY, Factory }
 
 object FileCaches {
 
@@ -23,20 +19,20 @@ object FileCaches {
     new FileCacheImpl(converter, DEFAULT_FACTORY, null, options: _*)
 
   /**
-   * Create a file cache with an Observer of events.
+   * Create a file cache with an CacheObserver of events.
    *
    * @param converter converts a path to the cached value type T
-   * @param observer observer of events for this cache
+   * @param cacheObserver cacheObserver of events for this cache
    * @param options options for the cache
    * @tparam T the value type of the cache entries
    * @return a file cache.
    */
   def get[T <: AnyRef](converter: Converter[T],
-                       observer: Observer[T],
+                       cacheObserver: FileTreeViews.CacheObserver[T],
                        options: Option*): FileCache[T] = {
     val res: FileCache[T] =
       new FileCacheImpl[T](converter, DEFAULT_FACTORY, null, options: _*)
-    res.addObserver(observer)
+    res.addCacheObserver(cacheObserver)
     res
   }
 
@@ -55,22 +51,22 @@ object FileCaches {
     new FileCacheImpl(converter, factory, null, options: _*)
 
   /**
-   * Create a file cache with an Observer of events.
+   * Create a file cache with an CacheObserver of events.
    *
    * @param converter converts a path to the cached value type T
    * @param factory a factory to create a path watcher
-   * @param observer an observer of events for this cache
+   * @param cacheObserver an cacheObserver of events for this cache
    * @param options options for the cache
    * @tparam T the value type of the cache entries
    * @return a file cache.
    */
   def get[T <: AnyRef](converter: Converter[T],
                        factory: Factory,
-                       observer: Observer[T],
+                       cacheObserver: FileTreeViews.CacheObserver[T],
                        options: Option*): FileCache[T] = {
     val res: FileCache[T] =
       new FileCacheImpl[T](converter, factory, null, options: _*)
-    res.addObserver(observer)
+    res.addCacheObserver(cacheObserver)
     res
   }
 

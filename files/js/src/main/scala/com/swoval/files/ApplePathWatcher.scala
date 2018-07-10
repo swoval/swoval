@@ -2,31 +2,20 @@
 
 package com.swoval.files
 
-import com.swoval.files.PathWatchers.Event.Kind.Create
-import com.swoval.files.PathWatchers.Event.Kind.Delete
-import com.swoval.files.PathWatchers.Event.Kind.Modify
-import com.swoval.files.PathWatchers.Event.Kind.Overflow
-import com.swoval.functional.Either.leftProjection
-import com.swoval.files.PathWatchers.Event
-import com.swoval.files.apple.FileEvent
-import com.swoval.files.apple.FileEventsApi
-import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException
-import com.swoval.files.apple.Flags
-import com.swoval.functional.Consumer
-import com.swoval.functional.Either
 import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
-import java.util.ArrayList
-import java.util.HashMap
-import java.util.Iterator
-import java.util.List
-import java.util.Map
+import java.nio.file.{ Path, Paths }
+import java.util.{ ArrayList, HashMap, Iterator, List, Map }
 import java.util.Map.Entry
 import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicBoolean
-import ApplePathWatcher._
+
+import com.swoval.files.ApplePathWatcher._
+import com.swoval.files.PathWatchers.Event
+import com.swoval.files.PathWatchers.Event.Kind.{ Create, Delete, Modify, Overflow }
+import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException
+import com.swoval.files.apple.{ FileEvent, FileEventsApi, Flags }
+import com.swoval.functional.{ Consumer, Either }
+import com.swoval.functional.Either.leftProjection
 
 object ApplePathWatcher {
 
@@ -51,7 +40,6 @@ object ApplePathWatcher {
  */
 class ApplePathWatcher(private val latency: Double,
                        private val flags: Flags.Create,
-                       private val callbackExecutor: Executor,
                        onFileEvent: Consumer[Event],
                        onStreamRemoved: Consumer[String],
                        executor: Executor,
@@ -77,25 +65,20 @@ class ApplePathWatcher(private val latency: Double,
         internalExecutor.run(new Runnable() {
           override def run(): Unit = {
             val fileName: String = fileEvent.fileName
-            val path: Path = Paths.get(fileName)
-            if (directoryRegistry.accept(path)) {
+            val path: TypedPath = TypedPaths.get(Paths.get(fileName))
+            if (directoryRegistry.accept(path.getPath)) {
               var event: Event = null
               event =
                 if (fileEvent.mustScanSubDirs()) new Event(path, Overflow)
                 else if (fileEvent.itemIsFile())
-                  if (fileEvent.isNewFile && Files.exists(path))
+                  if (fileEvent.isNewFile && path.exists())
                     new Event(path, Create)
-                  else if (fileEvent.isRemoved || !Files.exists(path))
+                  else if (fileEvent.isRemoved || !path.exists())
                     new Event(path, Delete)
                   else new Event(path, Modify)
-                else if (Files.exists(path)) new Event(path, Modify)
+                else if (path.exists()) new Event(path, Modify)
                 else new Event(path, Delete)
-              val callbackEvent: Event = event
-              callbackExecutor.run(new Runnable() {
-                override def run(): Unit = {
-                  onFileEvent.accept(callbackEvent)
-                }
-              })
+              onFileEvent.accept(event)
             }
           }
         })
@@ -112,11 +95,7 @@ class ApplePathWatcher(private val latency: Double,
             }.run()
           }
         })
-        callbackExecutor.run(new Runnable() {
-          override def run(): Unit = {
-            onStreamRemoved.accept(stream)
-          }
-        })
+        onStreamRemoved.accept(stream)
       }
     }
   )
@@ -227,7 +206,7 @@ class ApplePathWatcher(private val latency: Double,
   }
 
   /**
- Closes the FileEventsApi and shuts down the {@code callbackExecutor}.
+ Closes the FileEventsApi and shuts down the {@code internalExecutor}.
    */
   override def close(): Unit = {
     if (closed.compareAndSet(false, true)) {
@@ -235,7 +214,6 @@ class ApplePathWatcher(private val latency: Double,
         override def run(): Unit = {
           streams.clear()
           fileEventsApi.close()
-          callbackExecutor.close()
         }
       })
       internalExecutor.close()
@@ -243,15 +221,12 @@ class ApplePathWatcher(private val latency: Double,
   }
 
   def this(onFileEvent: Consumer[Event], executor: Executor, directoryRegistry: DirectoryRegistry) =
-    this(
-      0.01,
-      new Flags.Create().setNoDefer().setFileEvents(),
-      Executor.make("com.swoval.files.ApplePathWatcher-callback-executor"),
-      onFileEvent,
-      DefaultOnStreamRemoved,
-      executor,
-      directoryRegistry
-    )
+    this(0.01,
+         new Flags.Create().setNoDefer().setFileEvents(),
+         onFileEvent,
+         DefaultOnStreamRemoved,
+         executor,
+         directoryRegistry)
 
   private def find(path: Path): Entry[Path, Stream] = {
     val it: Iterator[Entry[Path, Stream]] = streams.entrySet().iterator()

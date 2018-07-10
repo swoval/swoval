@@ -2,8 +2,9 @@
 
 package com.swoval.functional
 
-import Either._
-import scala.beans.{ BeanProperty, BooleanBeanProperty }
+import com.swoval.functional.Either._
+
+import scala.beans.BeanProperty
 
 object Either {
 

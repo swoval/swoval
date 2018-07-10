@@ -1,7 +1,8 @@
 package com.swoval.files
 
 import java.util.concurrent.Callable
-import com.swoval.functional.Either
+
+import com.swoval.functional.{ Consumer, Either }
 
 /**
  * Provides an execution context to run tasks. Exists to allow source interoperability with the jvm
@@ -11,6 +12,8 @@ abstract class Executor extends AutoCloseable {
   private[this] var _closed = false
 
   def copy(): Executor = this
+
+  def delegate[T](consumer: Consumer[T]): Consumer[T] = consumer
 
   /**
    * Runs the task on a thread

@@ -14,33 +14,26 @@ import java.nio.file.attribute.BasicFileAttributes;
 class NativeDirectoryLister implements DirectoryLister {
   public NativeDirectoryLister() {}
 
-  static final int UNKNOWN = QuickListerImpl.UNKNOWN;
-  static final int DIRECTORY = QuickListerImpl.DIRECTORY;
-  static final int FILE = QuickListerImpl.FILE;
-  static final int LINK = QuickListerImpl.LINK;
+  static final int UNKNOWN = SimpleFileTreeView.UNKNOWN;
+  static final int DIRECTORY = SimpleFileTreeView.DIRECTORY;
+  static final int FILE = SimpleFileTreeView.FILE;
+  static final int LINK = SimpleFileTreeView.LINK;
   static final int EOF = 8;
   static final int ENOENT = -1;
   static final int EACCES = -2;
   static final int ENOTDIR = -3;
   static final int ESUCCESS = -4;
 
-  private static boolean loaded;
-
-  public static boolean available() {
-    return loaded;
-  }
-
   static {
     try {
       NativeLoader.loadPackaged();
-      loaded = true;
     } catch (IOException | UnsatisfiedLinkError e) {
-      loaded = false;
+      throw new RuntimeException(e);
     }
   }
 
   @Override
-  public QuickListerImpl.ListResults apply(final String dir, final boolean followLinks)
+  public SimpleFileTreeView.ListResults apply(final String dir, final boolean followLinks)
       throws IOException {
     return fillResults(dir, followLinks, 0);
   }
@@ -60,9 +53,9 @@ class NativeDirectoryLister implements DirectoryLister {
   private native String getName(long fileHandle);
 
   @SuppressWarnings("EmptyCatchBlock")
-  private QuickListerImpl.ListResults fillResults(
+  private SimpleFileTreeView.ListResults fillResults(
       final String dir, final boolean followLinks, final int attempt) throws IOException {
-    final QuickListerImpl.ListResults results = new QuickListerImpl.ListResults();
+    final SimpleFileTreeView.ListResults results = new SimpleFileTreeView.ListResults();
     final long handle = Platform.isWin() ? openDir(dir + "\\*") : openDir(dir);
     final int err = errno(handle);
     switch (err) {
@@ -109,7 +102,8 @@ class NativeDirectoryLister implements DirectoryLister {
               final String name = getName(fileHandle);
               final Path file = path.resolve(name);
               final BasicFileAttributes attrs =
-                  Files.readAttributes(file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+                  Files.readAttributes(
+                      file, BasicFileAttributes.class, java.nio.file.LinkOption.NOFOLLOW_LINKS);
               if (attrs.isDirectory()) results.addDir(name);
               else if (attrs.isSymbolicLink()) results.addSymlink(name);
               else results.addFile(name);

@@ -3,21 +3,17 @@ package com.swoval.files.apple
 import java.nio.file.Files
 
 import com.swoval.files.test.{ CountDownLatch, _ }
-import com.swoval.functional.Consumer
 import com.swoval.test._
 import utest._
 import utest.framework.ExecutionContext.RunNow
 
 object FileEventApiTest extends TestSuite {
 
-  def getFileEventsApi(onFileEvent: FileEvent => Unit, onStreamClosed: String => Unit = _ => {}) =
-    FileEventsApi.apply(new Consumer[FileEvent] {
-      override def accept(fe: FileEvent): Unit = onFileEvent(fe)
-    }, new Consumer[String] {
-      override def accept(s: String): Unit = onStreamClosed(s)
-    })
+  def getFileEventsApi(onFileEvent: FileEvent => Unit,
+                       onStreamClosed: String => Unit = _ => {}): FileEventsApi =
+    FileEventsApi.apply((fe: FileEvent) => onFileEvent(fe), (s: String) => onStreamClosed(s))
 
-  val tests = testOn(MacOS) {
+  val tests: Tests = testOn(MacOS) {
     'register - withTempDirectory { dir =>
       val latch = new CountDownLatch(1)
       val file = dir.resolve("file")
@@ -26,7 +22,7 @@ object FileEventApiTest extends TestSuite {
         Files.deleteIfExists(file)
         latch.countDown()
       })
-      api.createStream(dir.toString, 0.05, new Flags.Create().setNoDefer.getValue)
+      api.createStream(dir.toString, 0.05, new Flags.Create().setNoDefer().getValue)
       Files.createFile(file)
 
       latch
@@ -42,8 +38,8 @@ object FileEventApiTest extends TestSuite {
           assert(s == subdir.toString)
           latch.countDown()
         })
-        api.createStream(subdir.toString, 0.05, new Flags.Create().setNoDefer.getValue)
-        api.createStream(dir.toString, 0.05, new Flags.Create().setNoDefer.getValue)
+        api.createStream(subdir.toString, 0.05, new Flags.Create().setNoDefer().getValue)
+        api.createStream(dir.toString, 0.05, new Flags.Create().setNoDefer().getValue)
         latch
           .waitFor(DEFAULT_TIMEOUT) {}
           .andThen {

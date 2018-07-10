@@ -5,36 +5,39 @@ import com.swoval.functional.Consumer;
 import java.io.IOException;
 
 class PlatformWatcher {
-  static PathWatcher make(
-      final Consumer<Event> callback,
-      final Executor executor,
+  static ManagedPathWatcher make(
+      final BiConsumer<Event, Executor.Thread> callback,
+      final Executor internalExecutor,
       final DirectoryRegistry directoryRegistry)
       throws IOException, InterruptedException {
-    return make(callback, WatchServices.get(), executor, directoryRegistry);
+    return make(callback, WatchServices.get(), internalExecutor, directoryRegistry);
   }
 
-  static PathWatcher make(
-      final Consumer<Event> callback,
+  static ManagedPathWatcher make(
+      final BiConsumer<Event, Executor.Thread> callback,
       final RegisterableWatchService registerableWatchService,
-      final Executor executor,
-      final DirectoryRegistry directoryRegistry)
-      throws InterruptedException {
-    return make(
-        callback,
-        registerableWatchService,
-        Executor.make("com.swoval.files.NioPathWatcher-callback-thread"),
-        executor,
-        directoryRegistry);
-  }
-
-  static PathWatcher make(
-      final Consumer<Event> callback,
-      final RegisterableWatchService registerableWatchService,
-      final Executor callbackExecutor,
       final Executor internalExecutor,
       final DirectoryRegistry directoryRegistry)
       throws InterruptedException {
-    return new NioPathWatcher(
-        callback, registerableWatchService, callbackExecutor, internalExecutor, directoryRegistry);
+    final Observers<PathWatchers.Event> observers = new Observers<>();
+    final NioPathWatcherDirectoryTree tree =
+        new NioPathWatcherDirectoryTree(
+            observers,
+            directoryRegistry,
+            registerableWatchService,
+            new Consumer<Event>() {
+              @Override
+              public void accept(final Event event) {
+                internalExecutor.run(
+                    new Consumer<Executor.Thread>() {
+                      @Override
+                      public void accept(Executor.Thread thread) {
+                        callback.accept(event, thread);
+                      }
+                    });
+              }
+            },
+            internalExecutor);
+    return new NioPathWatcher(tree, internalExecutor);
   }
 }

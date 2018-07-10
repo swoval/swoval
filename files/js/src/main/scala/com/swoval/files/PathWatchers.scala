@@ -2,19 +2,20 @@
 
 package com.swoval.files
 
+import java.nio.file.Path
+
 import com.swoval.functional.Consumer
 import com.swoval.runtime.Platform
-import java.io.IOException
-import java.nio.file.Path
-import scala.beans.{ BeanProperty, BooleanBeanProperty }
+
+import scala.beans.BeanProperty
 
 object PathWatchers {
 
   val DEFAULT_FACTORY: Factory = new Factory() {
     override def create(callback: Consumer[Event],
-                        executor: Executor,
+                        internalExecutor: Executor,
                         directoryRegistry: DirectoryRegistry): PathWatcher =
-      get(callback, executor, directoryRegistry)
+      get(callback, internalExecutor, directoryRegistry)
   }
 
   /**
@@ -32,23 +33,13 @@ object PathWatchers {
    *
    * @param callback [[Consumer]] to run on file events
    * @param executor provides a single threaded context to manage state
-   * @return PathWatcher for the runtime platform
-   *     initialized
-   */
-  def get(callback: Consumer[Event], executor: Executor): PathWatcher =
-    get(callback, executor, null)
-
-  /**
-   * Create a PathWatcher for the runtime platform.
-   *
-   * @param callback [[Consumer]] to run on file events
-   * @param executor provides a single threaded context to manage state
    * @param registry The registry of directories to monitor
    * @return PathWatcher for the runtime platform
    *     initialized
    */
   def get(callback: Consumer[Event], executor: Executor, registry: DirectoryRegistry): PathWatcher =
-    if (Platform.isMac) new ApplePathWatcher(callback, executor, registry)
+    if (Platform.isMac)
+      new ApplePathWatcher(executor.delegate(callback), executor, registry)
     else PlatformWatcher.make(callback, executor, registry)
 
   /**
@@ -61,26 +52,14 @@ object PathWatchers {
      * Creates a new PathWatcher.
      *
      * @param callback the callback to invoke on directory updates
-     * @param executor the executor on which internal updates are invoked
-     * @return a PathWatcher instance.
-     *     can occur on mac.
-     *     and windows.
-     */
-    def create(callback: Consumer[Event], executor: Executor): PathWatcher =
-      create(callback, executor, null)
-
-    /**
-     * Creates a new PathWatcher.
-     *
-     * @param callback the callback to invoke on directory updates
-     * @param executor the executor on which internal updates are invoked
+     * @param internalExecutor the internalExecutor on which internal updates are invoked
      * @param directoryRegistry the registry of directories to monitor
      * @return A PathWatcher instance
      *     can occur on mac
      *     and windows
      */
     def create(callback: Consumer[Event],
-               executor: Executor,
+               internalExecutor: Executor,
                directoryRegistry: DirectoryRegistry): PathWatcher
 
   }
@@ -142,20 +121,43 @@ object PathWatchers {
   /**
  Container for [[PathWatcher]] events
    */
-  class Event(@BeanProperty val path: Path, @BeanProperty val kind: Event.Kind) {
+  class Event(path: TypedPath, @BeanProperty val kind: Event.Kind) extends TypedPath {
+
+    private val typedPath: TypedPath = path
+
+    /**
+     * Returns the path that triggered the event.
+     *
+     * @return the path that triggered the event.
+     */
+    def getPath(): Path = typedPath.getPath
+
+    override def exists(): Boolean = typedPath.exists()
+
+    override def isDirectory(): Boolean = typedPath.isDirectory
+
+    override def isFile(): Boolean = typedPath.isFile
+
+    override def isSymbolicLink(): Boolean = typedPath.isSymbolicLink
+
+    override def toRealPath(): Path = typedPath.toRealPath()
 
     override def equals(other: Any): Boolean = other match {
       case other: Event => {
         val that: Event = other
-        this.path == that.path && this.kind == that.kind
+        this.typedPath == that.typedPath && this.kind == that.kind
       }
       case _ => false
 
     }
 
-    override def hashCode(): Int = path.hashCode ^ kind.hashCode
+    override def hashCode(): Int = typedPath.hashCode ^ kind.hashCode
 
-    override def toString(): String = "Event(" + path + ", " + kind + ")"
+    override def toString(): String =
+      "Event(" + typedPath.getPath + ", " + kind + ")"
+
+    override def compareTo(that: TypedPath): Int =
+      this.getPath.compareTo(that.getPath)
 
   }
 

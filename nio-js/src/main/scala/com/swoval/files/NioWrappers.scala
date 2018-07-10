@@ -1,6 +1,6 @@
 package com.swoval.files
 
-import java.nio.file.{ Files, Path }
+import java.nio.file.Path
 import java.nio.file.attribute.{ BasicFileAttributes, BasicFileAttributesImpl }
 
 object NioWrappers {

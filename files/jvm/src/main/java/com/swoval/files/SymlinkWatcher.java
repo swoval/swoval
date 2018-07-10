@@ -4,9 +4,8 @@ import static com.swoval.functional.Either.getOrElse;
 import static com.swoval.functional.Either.leftProjection;
 import static java.util.Map.Entry;
 
-import com.swoval.files.Directory.OnError;
+import com.swoval.files.DataViews.OnError;
 import com.swoval.files.PathWatchers.Event;
-import com.swoval.files.PathWatchers.Factory;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import java.io.IOException;
@@ -68,11 +67,10 @@ class SymlinkWatcher implements AutoCloseable {
   }
 
   SymlinkWatcher(
-      final Consumer<Path> handleEvent,
-      final Factory factory,
+      final BiConsumer<Event, Executor.Thread> handleEvent,
+      final TotalFunction<Consumer<Event>, PathWatcher<PathWatchers.Event>> newWatcher,
       final OnError onError,
-      final Executor executor)
-      throws IOException, InterruptedException {
+      final Executor executor) {
     this.onError = onError;
     this.internalExecutor =
         executor == null
@@ -84,9 +82,9 @@ class SymlinkWatcher implements AutoCloseable {
           @Override
           public void accept(final Event event) {
             SymlinkWatcher.this.internalExecutor.run(
-                new Runnable() {
+                new Consumer<Executor.Thread>() {
                   @Override
-                  public void run() {
+                  public void accept(final Executor.Thread thread) {
 
                     final List<Runnable> callbacks = new ArrayList<>();
                     final Path path = event.getPath();
@@ -102,7 +100,9 @@ class SymlinkWatcher implements AutoCloseable {
                                 new Runnable() {
                                   @Override
                                   public void run() {
-                                    handleEvent.accept(rawPath);
+                                    handleEvent.accept(
+                                        new Event(TypedPaths.get(rawPath), event.getKind()),
+                                        thread);
                                   }
                                 });
                           }
@@ -129,20 +129,20 @@ class SymlinkWatcher implements AutoCloseable {
                 });
           }
         };
-    this.watcher = factory.create(callback, internalExecutor.copy());
+    this.watcher = newWatcher.apply(callback);
   }
 
   /*
    * This declaration must go below the constructor for javascript codegen.
    */
-  private final PathWatcher watcher;
+  private final PathWatcher<PathWatchers.Event> watcher;
 
   @Override
   public void close() {
     internalExecutor.block(
-        new Runnable() {
+        new Consumer<Executor.Thread>() {
           @Override
-          public void run() {
+          public void accept(final Executor.Thread thread) {
             if (isClosed.compareAndSet(false, true)) {
               watcher.close();
               watchedSymlinksByTarget.clear();
@@ -150,6 +150,7 @@ class SymlinkWatcher implements AutoCloseable {
             }
           }
         });
+    internalExecutor.close();
   }
 
   /**
@@ -164,14 +165,14 @@ class SymlinkWatcher implements AutoCloseable {
   @SuppressWarnings("EmptyCatchBlock")
   void addSymlink(final Path path, final int maxDepth) {
     internalExecutor.run(
-        new Runnable() {
+        new Consumer<Executor.Thread>() {
           @Override
           public String toString() {
             return "Add symlink " + path;
           }
 
           @Override
-          public void run() {
+          public void accept(final Executor.Thread thread) {
             if (!isClosed.get()) {
               try {
                 final Path realPath = path.toRealPath();
@@ -188,16 +189,16 @@ class SymlinkWatcher implements AutoCloseable {
                       watchedSymlinksByDirectory.put(realPath, new RegisteredPath(path, realPath));
                       watchedSymlinksByTarget.put(realPath, new RegisteredPath(realPath, path));
                     } else if (result.isLeft()) {
-                      onError.apply(path, leftProjection(result).getValue());
+                      onError.apply(leftProjection(result).getValue());
                     }
                   }
                 } else if (Files.isDirectory(realPath)) {
-                  onError.apply(path, new FileSystemLoopException(path.toString()));
+                  onError.apply(new FileSystemLoopException(path.toString()));
                 } else {
                   targetRegistrationPath.paths.add(path);
                 }
               } catch (IOException e) {
-                onError.apply(path, e);
+                onError.apply(e);
               }
             }
           }
@@ -212,9 +213,9 @@ class SymlinkWatcher implements AutoCloseable {
    */
   void remove(final Path path) {
     internalExecutor.block(
-        new Runnable() {
+        new Consumer<Executor.Thread>() {
           @Override
-          public void run() {
+          public void accept(final Executor.Thread thread) {
             if (!isClosed.get()) {
               Path target = null;
               {

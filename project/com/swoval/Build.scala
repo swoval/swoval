@@ -453,28 +453,31 @@ object Build {
               convertSources(
                 "com/swoval/files",
                 "ApplePathWatcher",
-                "DataRepository",
-                "Directory",
-                "DirectoryRepository",
+                "CachedDirectory",
+                "CachedDirectoryImpl",
+                "CachedDirectories",
+                "DataView",
+                "DataViews",
+                "DirectoryLister",
+                "DirectoryView",
                 "DirectoryRegistry",
                 "Entries",
-                "EntryFilters",
                 "FileCache",
                 "FileCacheImpl",
                 "FileCaches",
+                "FileTreeView",
+                "FileTreeViews",
                 "MapOps",
                 "NioPathWatcher",
                 "NioDirectoryLister",
                 "Observers",
                 "PathWatcher",
                 "PathWatchers",
-                "QuickFile",
-                "QuickLister",
                 "RegisterableWatchService",
-                "Repository",
-                "Repositories",
+                "SimpleFileTreeView",
                 "SymlinkWatcher",
                 "TypedPath",
+                "UpdatableDataView",
                 "WatchedDirectory"
               ).value
               convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
@@ -494,7 +497,8 @@ object Build {
                            "-target",
                            "1.7",
                            "-h",
-                           sourceDirectory.value.toPath.resolve("main/native/include").toString) ++
+                           sourceDirectory.value.toPath.resolve("main/native/include").toString,
+                           "") ++
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty) ++
         Seq("-Xlint:unchecked"),
       jacocoReportSettings in Test := JacocoReportSettings()
@@ -507,6 +511,9 @@ object Build {
                            method = 84)),
       jacocoExcludes in Test := Seq(
         "com.swoval.runtime.*",
+        "com.swoval.files.CachedDirectories*",
+        "com.swoval.files.CacheObservers*",
+        "com.swoval.files.DataViews*",
         "com.swoval.files.WatchServices*",
         "com.swoval.files.apple.Event*",
         "com.swoval.files.apple.Flag*",
@@ -544,7 +551,7 @@ object Build {
           .parsed
           .headOption
           .flatMap(a => Try(a.toInt).toOption)
-          .getOrElse(1)
+          .getOrElse(Try(System.getProperty("swoval.alltests.iterations", "1").toInt).getOrElse(1))
         val cp = (fullClasspath in Test).value
           .map(_.data)
           .filterNot(_.toString.contains("jacoco"))
@@ -552,6 +559,7 @@ object Build {
         val pb = new java.lang.ProcessBuilder("java",
                                               "-classpath",
                                               cp,
+                                              "-verbose:gc",
                                               "com.swoval.files.AllTests",
                                               count.toString)
         val process = pb.inheritIO().start()

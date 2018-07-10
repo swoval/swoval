@@ -2,15 +2,12 @@
 
 package com.swoval.files
 
-import java.util.Map.Entry
-import com.swoval.functional.Filter
 import java.nio.file.Path
-import java.util.ArrayList
-import java.util.HashMap
-import java.util.Iterator
-import java.util.List
-import java.util.Map
-import DirectoryRegistry._
+import java.util.{ ArrayList, HashMap, Iterator, List, Map }
+import java.util.Map.Entry
+
+import com.swoval.files.DirectoryRegistry._
+import com.swoval.functional.Filter
 
 object DirectoryRegistry {
 

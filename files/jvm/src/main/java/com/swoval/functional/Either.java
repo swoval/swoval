@@ -99,11 +99,14 @@ public abstract class Either<L, R> {
    * @throws ClassCastException if the wrapped value is not a subtype of T.
    */
   @SuppressWarnings("unchecked")
-  public <L, R, T extends L> Either<T, R> castLeft(final Class<T> clazz) {
-    if (isRight()) return (Either<T, R>) this;
-    else if (clazz.isAssignableFrom(leftProjection(this).getValue().getClass()))
+  public <L, R, T extends L> Either<T, R> castLeft(final Class<T> clazz, final R defaultValue) {
+    if (isRight()) {
       return (Either<T, R>) this;
-    else throw new ClassCastException(leftProjection(this) + " is not an instance of " + clazz);
+    } else if (clazz.isAssignableFrom(leftProjection(this).getValue().getClass())) {
+      return (Either<T, R>) this;
+    } else {
+      return Either.right(defaultValue);
+    }
   }
 
   /**

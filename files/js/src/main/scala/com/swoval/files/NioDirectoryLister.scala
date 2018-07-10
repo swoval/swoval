@@ -3,26 +3,17 @@
 package com.swoval.files
 
 import java.io.IOException
-import java.nio.file.FileSystemException
-import java.nio.file.FileVisitOption
-import java.nio.file.FileVisitResult
-import java.nio.file.FileVisitor
-import java.nio.file.Files
-import java.nio.file.NotDirectoryException
-import java.nio.file.Path
-import java.nio.file.Paths
+import java.nio.file._
 import java.nio.file.attribute.BasicFileAttributes
-import java.util.HashSet
-import java.util.Set
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
+import java.util.{ HashSet, Set }
+import java.util.concurrent.atomic.{ AtomicBoolean, AtomicReference }
 
 class NioDirectoryLister extends DirectoryLister {
 
-  override def apply(dir: String, followLinks: Boolean): QuickListerImpl.ListResults = {
+  override def apply(dir: String, followLinks: Boolean): SimpleFileTreeView.ListResults = {
     val basePath: Path = Paths.get(dir)
-    val results: QuickListerImpl.ListResults =
-      new QuickListerImpl.ListResults()
+    val results: SimpleFileTreeView.ListResults =
+      new SimpleFileTreeView.ListResults()
     val linkOptions: Set[FileVisitOption] = new HashSet[FileVisitOption]()
     val exception: AtomicReference[IOException] =
       new AtomicReference[IOException]()

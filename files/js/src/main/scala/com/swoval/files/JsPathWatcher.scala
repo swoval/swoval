@@ -14,14 +14,14 @@ class JsPathWatcher(callback: js.UndefOr[js.Function2[String, String, Unit]]) ex
   private[this] val callbacks = new Callbacks()
   callback.toOption.foreach(addCallback)
   private[this] val inner: PathWatcher =
-    PathWatchers.get(callbacks, Executor.make(""))
+    PathWatchers.get(callbacks)
   def close(): Unit = inner.close()
   def register(path: String, recursive: Boolean = true): Unit =
     inner.register(Paths.get(path), if (recursive) Integer.MAX_VALUE else 0)
   def addCallback(callback: js.Function2[String, String, Unit]): Int =
     callbacks.addCallback(new Consumer[Event] {
       override def accept(event: Event): Unit =
-        callback.apply(event.path.toString, event.kind.toString)
+        callback.apply(event.getPath().toString, event.getKind().toString)
     })
   def removeCallback(handle: Int): Unit = callbacks.removeCallback(handle)
 }

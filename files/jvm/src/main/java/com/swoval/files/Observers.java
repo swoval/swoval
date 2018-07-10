@@ -1,75 +1,51 @@
 package com.swoval.files;
 
-import com.swoval.files.Directory.Entry;
-import com.swoval.files.Directory.Observer;
-import java.io.IOException;
-import java.nio.file.Path;
+import com.swoval.files.FileTreeViews.Observer;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Container class that wraps multiple {@link com.swoval.files.Directory.Observer} and runs the
- * callbacks for each whenever the {@link com.swoval.files.FileCache} detects an event.
+ * Container class that wraps multiple {@link FileTreeViews.Observer} and runs the callbacks for
+ * each whenever the {@link PathWatcher} detects an event.
  *
- * @param <T> the data type for the {@link com.swoval.files.FileCache} to which the observers
- *     correspond
+ * @param <T> the data type for the {@link PathWatcher} to which the observers correspond
  */
-class Observers<T> implements Observer<T>, AutoCloseable {
+class Observers<T> implements FileTreeViews.Observer<T>, AutoCloseable {
   private final AtomicInteger counter = new AtomicInteger(0);
-  private final Map<Integer, Observer<T>> observers = new HashMap<>();
+  private final Map<Integer, FileTreeViews.Observer<T>> observers = new LinkedHashMap<>();
 
   @Override
-  public void onCreate(final Entry<T> newEntry) {
-    final List<Observer<T>> cbs;
+  public void onNext(final T t) {
+    final List<FileTreeViews.Observer<T>> cbs;
     synchronized (observers) {
       cbs = new ArrayList<>(observers.values());
     }
-    final Iterator<Observer<T>> it = cbs.iterator();
-    while (it.hasNext()) it.next().onCreate(newEntry);
+    final Iterator<FileTreeViews.Observer<T>> it = cbs.iterator();
+    while (it.hasNext()) it.next().onNext(t);
   }
 
   @Override
-  public void onDelete(final Entry<T> oldEntry) {
-    final List<Observer<T>> cbs;
+  public void onError(final Throwable throwable) {
+    final List<FileTreeViews.Observer<T>> cbs;
     synchronized (observers) {
       cbs = new ArrayList<>(observers.values());
     }
-    final Iterator<Observer<T>> it = cbs.iterator();
-    while (it.hasNext()) it.next().onDelete(oldEntry);
-  }
-
-  @Override
-  public void onUpdate(final Entry<T> oldEntry, final Entry<T> newEntry) {
-    final List<Observer<T>> cbs;
-    synchronized (observers) {
-      cbs = new ArrayList<>(observers.values());
-    }
-    final Iterator<Observer<T>> it = cbs.iterator();
-    while (it.hasNext()) it.next().onUpdate(oldEntry, newEntry);
-  }
-
-  @Override
-  public void onError(Path path, IOException exception) {
-    final List<Observer<T>> cbs;
-    synchronized (observers) {
-      cbs = new ArrayList<>(observers.values());
-    }
-    final Iterator<Observer<T>> it = cbs.iterator();
-    while (it.hasNext()) it.next().onError(path, exception);
+    final Iterator<FileTreeViews.Observer<T>> it = cbs.iterator();
+    while (it.hasNext()) it.next().onError(throwable);
   }
 
   /**
-   * Add an observer to receive events.
+   * Add an cacheObserver to receive events.
    *
-   * @param observer the new observer
-   * @return a handle to the added observer that can be used to halt observation using {@link
+   * @param observer the new cacheObserver
+   * @return a handle to the added cacheObserver that can be used to halt observation using {@link
    *     com.swoval.files.Observers#removeObserver(int)} .
    */
-  public int addObserver(Observer<T> observer) {
+  int addObserver(final Observer<T> observer) {
     final int key = counter.getAndIncrement();
     synchronized (observers) {
       observers.put(key, observer);
@@ -78,12 +54,12 @@ class Observers<T> implements Observer<T>, AutoCloseable {
   }
 
   /**
-   * Remove an instance of {@link com.swoval.files.Directory.Observer} that was previously added
-   * using {@link com.swoval.files.Observers#addObserver(Observer)}.
+   * Remove an instance of {@link FileTreeViews.CacheObserver} that was previously added using
+   * {@link com.swoval.files.Observers#addObserver(FileTreeViews.Observer)}.
    *
    * @param handle the handle to remove
    */
-  public void removeObserver(int handle) {
+  void removeObserver(int handle) {
     synchronized (observers) {
       observers.remove(handle);
     }

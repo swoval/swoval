@@ -1,0 +1,113 @@
+package com.swoval.files;
+
+import static java.util.Map.Entry;
+
+import com.swoval.functional.Filter;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+interface DirectoryRegistry extends Filter<Path> {
+  boolean addDirectory(final Path path, final int maxDepth);
+
+  int maxDepthFor(final Path path);
+
+  List<Path> registered();
+
+  void removeDirectory(final Path path);
+
+  boolean acceptPrefix(final Path path);
+}
+
+class DirectoryRegistryImpl implements DirectoryRegistry {
+  private final Map<Path, RegisteredDirectory> registeredDirectoriesByPath = new HashMap<>();
+
+  @Override
+  public boolean addDirectory(final Path path, final int maxDepth) {
+    final RegisteredDirectory registeredDirectory = registeredDirectoriesByPath.get(path);
+    if (registeredDirectory == null || maxDepth > registeredDirectory.maxDepth) {
+      registeredDirectoriesByPath.put(path, new RegisteredDirectory(path, maxDepth));
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  @Override
+  public int maxDepthFor(final Path path) {
+    int maxDepth = Integer.MIN_VALUE;
+    final Iterator<RegisteredDirectory> it = registeredDirectoriesByPath.values().iterator();
+    while (it.hasNext()) {
+      final RegisteredDirectory dir = it.next();
+      if (path.startsWith(dir.path)) {
+        final int depth = dir.path.equals(path) ? 0 : dir.path.relativize(path).getNameCount();
+        final int possibleMaxDepth = dir.maxDepth - depth;
+        if (possibleMaxDepth > maxDepth) {
+          maxDepth = possibleMaxDepth;
+        }
+      }
+    }
+    return maxDepth;
+  }
+
+  @Override
+  public List<Path> registered() {
+    return new ArrayList<>(registeredDirectoriesByPath.keySet());
+  }
+
+  @Override
+  public void removeDirectory(final Path path) {
+    registeredDirectoriesByPath.remove(path);
+  }
+
+  private boolean acceptImpl(final Path path, final boolean acceptPrefix) {
+    boolean result = false;
+    final Iterator<Entry<Path, RegisteredDirectory>> it =
+        registeredDirectoriesByPath.entrySet().iterator();
+    while (!result && it.hasNext()) {
+      final Entry<Path, RegisteredDirectory> entry = it.next();
+      final RegisteredDirectory registeredDirectory = entry.getValue();
+      final Path watchPath = entry.getKey();
+      if (acceptPrefix && watchPath.startsWith(path)) {
+        result = true;
+      } else if (path.startsWith(watchPath)) {
+        result = registeredDirectory.accept(path);
+      }
+    }
+    return result;
+  }
+
+  @Override
+  public boolean accept(final Path path) {
+    return acceptImpl(path, false);
+  }
+
+  public boolean acceptPrefix(final Path path) {
+    return acceptImpl(path, true);
+  }
+
+  private static class RegisteredDirectory {
+    final Path path;
+    final int maxDepth;
+    final int compMaxDepth;
+
+    RegisteredDirectory(final Path path, final int maxDepth) {
+      this.path = path;
+      this.maxDepth = maxDepth;
+      compMaxDepth = maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth + 1;
+    }
+
+    public boolean accept(final Path path) {
+      return path.startsWith(this.path)
+          && (path.equals(this.path) || this.path.relativize(path).getNameCount() <= compMaxDepth);
+    }
+
+    @Override
+    public String toString() {
+      return "RegisteredDirectory(path = " + path + ", depth = " + maxDepth + ")";
+    }
+  }
+}

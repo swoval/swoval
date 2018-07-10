@@ -2,23 +2,22 @@
 
 package com.swoval.files
 
-import com.swoval.files.Directory.EntryFilter
-import com.swoval.files.Directory.Observer
-import com.swoval.files.Directory.OnChange
-import com.swoval.functional.Either
 import java.io.IOException
 import java.nio.file.Path
-import java.util.List
+
+import com.swoval.files.DataViews.{ Converter, Entry }
+import com.swoval.files.FileTreeViews.ObservableCache
+import com.swoval.functional.Either
 
 /**
  * Provides an in memory cache of portions of the file system. Directories are added to the cache
  * using the [[com.swoval.files.FileCache.register]] method. Once a Path is added the cache, its
  * contents may be retrieved using the [[com.swoval.files.FileCache.list]] method. The cache
- * stores the path information in [[com.swoval.files.Directory.Entry]] instances.
+ * stores the path information in [[Entry]] instances.
  *
  * <p>A default implementation is provided by [[com.swoval.files.FileCaches.get]]. The user may
- * cache arbitrary information in the cache by customizing the [[Directory.Converter]] that is
- * passed into the factory [[FileCaches.get]].
+ * cache arbitrary information in the cache by customizing the [[Converter]] that is passed into
+ * the factory [[FileCaches.get]].
  *
  * <p>The cache allows the user to register a regular file, directory or symbolic link. After
  * registration, the cache should monitor the path (and in the case of symbolic links, the target of
@@ -36,32 +35,22 @@ import java.util.List
  * directory is empty. Listing a file, however, will return the entry for the file if it exists and
  * the empty list otherwise.
  *
- * @tparam T the type of data stored in the [[Directory.Entry]] instances for the cache
+ * @tparam T the type of data stored in the [[Entry]] instances for the cache
  */
-trait FileCache[T] extends DataRepository[T] with PathWatcher with AutoCloseable {
+trait FileCache[T] extends DataView[T] with PathWatcher with ObservableCache[T] with AutoCloseable {
 
   /**
-   * Add observer of file events.
+   * Register a path with the cache. A successful call to this method will both start monitoring of
+   * the path add will fill the cache for this path.
    *
-   * @param observer The new observer
-   * @return handle that can be used to remove the callback using [[removeObserver]]
+   * @param path the directory to watch for file events and to add to the cache
+   * @param maxDepth the maximum maxDepth of subdirectories to watch
+   * @return an [[com.swoval.functional.Either]] that will return a right value when no
+   *     exception is thrown. The right value will be true if the path has not been previously
+   *     registered. The [[com.swoval.functional.Either]] will be a left if any IOException is
+   *     thrown attempting to register the path.
    */
-  def addObserver(observer: Observer[T]): Int
-
-  /**
-   * Add callback to fire when a file event is detected by the monitor.
-   *
-   * @param onChange The callback to fire on file events
-   * @return handle that can be used to remove the callback using [[removeObserver]]
-   */
-  def addCallback(onChange: OnChange[T]): Int
-
-  /**
-   * Stop firing the previously registered callback where {@code handle} is returned by [[addObserver]].
-   *
-   * @param handle A handle to the observer added by [[addObserver]]
-   */
-  def removeObserver(handle: Int): Unit
+  def register(path: Path, maxDepth: Int): Either[IOException, Boolean]
 
   /**
    * Unregister a path from the cache. This removes the path from monitoring and from the cache so

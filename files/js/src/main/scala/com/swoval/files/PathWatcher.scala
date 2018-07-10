@@ -2,10 +2,11 @@
 
 package com.swoval.files
 
-import com.swoval.files.PathWatchers.Event
-import com.swoval.functional.Either
 import java.io.IOException
 import java.nio.file.Path
+
+import com.swoval.files.PathWatchers.Event
+import com.swoval.functional.Either
 
 /**
  * Watches directories for file changes. The api permits recursive watching of directories unlike
