@@ -507,6 +507,7 @@ object Build {
                            method = 84)),
       jacocoExcludes in Test := Seq(
         "com.swoval.runtime.*",
+        "com.swoval.files.WatchServices*",
         "com.swoval.files.apple.Event*",
         "com.swoval.files.apple.Flag*",
         "com.swoval.files.apple.Native*"
