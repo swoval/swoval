@@ -11,17 +11,18 @@ import java.util.Iterator;
 class FileCachePathWatcher<T> {
   private final SymlinkWatcher symlinkWatcher;
   private final PathWatcher<PathWatchers.Event> pathWatcher;
+  private final FileCacheDirectoryTree<T> tree;
 
   FileCachePathWatcher(
-      final SymlinkWatcher symlinkWatcher, final PathWatcher<PathWatchers.Event> pathWatcher) {
-    this.symlinkWatcher = symlinkWatcher;
+      final FileCacheDirectoryTree<T> tree, final PathWatcher<PathWatchers.Event> pathWatcher) {
+    this.symlinkWatcher = tree.symlinkWatcher;
     this.pathWatcher = pathWatcher;
+    this.tree = tree;
   }
 
-  <T> boolean register(
+  boolean register(
       final Path path,
       final int maxDepth,
-      final FileCacheDirectoryTree<T> tree,
       final Executor.Thread thread) {
     Either<IOException, CachedDirectory<T>> treeResult;
     try {
@@ -46,8 +47,7 @@ class FileCachePathWatcher<T> {
     return treeResult.isRight();
   }
 
-  <T> void unregister(
-      final Path path, final FileCacheDirectoryTree<T> tree, final Executor.Thread thread) {
+  void unregister(final Path path, final Executor.Thread thread) {
     tree.unregister(path, thread);
     pathWatcher.unregister(path);
   }

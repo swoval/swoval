@@ -212,8 +212,9 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
             new FileTreeViews.CacheObserver[Path] {
               override def onCreate(newEntry: Entry[Path]): Unit = {}
 
-              override def onDelete(oldEntry: Entry[Path]): Unit =
+              override def onDelete(oldEntry: Entry[Path]): Unit = {
                 if (oldEntry.getPath == link) linkLatch.countDown()
+              }
 
               override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
 

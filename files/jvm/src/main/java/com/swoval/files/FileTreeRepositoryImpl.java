@@ -107,7 +107,7 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
             new Function<Executor.Thread, Boolean>() {
               @Override
               public Boolean apply(final Executor.Thread thread) {
-                return watcher.register(path, maxDepth, directoryTree, thread);
+                return watcher.register(path, maxDepth, thread);
               }
             })
         .castLeft(IOException.class, false);
@@ -119,7 +119,7 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
         new Consumer<Thread>() {
           @Override
           public void accept(final Executor.Thread thread) {
-            watcher.unregister(path, directoryTree, thread);
+            watcher.unregister(path, thread);
           }
         });
   }

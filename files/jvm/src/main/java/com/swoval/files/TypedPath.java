@@ -56,6 +56,7 @@ public interface TypedPath extends Comparable<TypedPath> {
 }
 
 class TypedPaths {
+  private TypedPaths() {}
   private abstract static class TypedPathImpl implements TypedPath {
     private final Path path;
 
@@ -96,23 +97,6 @@ class TypedPaths {
     public int compareTo(TypedPath that) {
       return this.path.compareTo(that.getPath());
     }
-  }
-
-  @SuppressWarnings("unchecked")
-  static <C extends Collection<Path>> C paths(final Collection<TypedPath> c, final Class<?> clazz) {
-    Collection<Path> result;
-    if (Set.class.isAssignableFrom(clazz)) {
-      result = new HashSet<>();
-    } else if (List.class.isAssignableFrom(clazz)) {
-      result = new ArrayList<>();
-    } else {
-      throw new ClassCastException(clazz + " is neither a set or list type");
-    }
-    final Iterator<TypedPath> it = c.iterator();
-    while (it.hasNext()) {
-      result.add(it.next().getPath());
-    }
-    return (C) result;
   }
 
   static TypedPath getDelegate(final Path path, final TypedPath typedPath) {

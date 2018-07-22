@@ -1,7 +1,6 @@
 package com.swoval.files;
 
 import com.swoval.files.DataViews.Converter;
-import com.swoval.files.DataViews.OnError;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Factory;
@@ -24,52 +23,24 @@ public class FileCaches {
     final Executor executor = Executor.make("FileTreeRepository-internal-executor");
     final FileCacheDirectoryTree<T> tree =
         new FileCacheDirectoryTree<>(
-            converter, Executor.make("FileTreeRepository-callback-executor"));
-    final BiConsumer<Event, Executor.Thread> symlinkHandler =
-        executor.delegate(new EventHandler(null, tree));
-    final SymlinkWatcher symlinkWatcher =
-        new SymlinkWatcher(
-            symlinkHandler,
-            DEFAULT_SYMLINK_FACTORY,
-            new OnError() {
-              @Override
-              public void apply(final IOException exception) {}
-            },
-            executor.copy());
-    final BiConsumer<Event, Executor.Thread> eventHandler =
-        executor.delegate(new EventHandler(symlinkWatcher, tree));
+            converter, Executor.make("FileTreeRepository-callback-executor"), executor);
     final PathWatcher<Event> pathWatcher =
         DEFAULT_PATH_WATCHER_FACTORY.create(
-            eventHandler, executor.copy(), tree.readOnlyDirectoryRegistry());
-    final FileCachePathWatcher<T> watcher = new FileCachePathWatcher<>(symlinkWatcher, pathWatcher);
+            new EventHandler(tree), executor.copy(), tree.readOnlyDirectoryRegistry());
+    final FileCachePathWatcher<T> watcher = new FileCachePathWatcher<>(tree, pathWatcher);
     return new FileTreeRepositoryImpl<>(tree, watcher, executor);
   }
 
   static class EventHandler implements BiConsumer<Event, Executor.Thread> {
-    private final SymlinkWatcher symlinkWatcher;
     private final FileCacheDirectoryTree<?> tree;
-    private final DirectoryRegistry registry;
-    EventHandler(final SymlinkWatcher symlinkWatcher, final FileCacheDirectoryTree<?> tree) {
-      this.symlinkWatcher = symlinkWatcher;
+
+    EventHandler(final FileCacheDirectoryTree<?> tree) {
       this.tree = tree;
-      this.registry = tree.readOnlyDirectoryRegistry();
     }
 
     @Override
     public void accept(final Event event, final Executor.Thread thread) {
-      final Event newEvent =
-          new Event(TypedPaths.get(event.getPath()), event.getKind());
-      if (symlinkWatcher != null && newEvent.isSymbolicLink()) {
-        if (newEvent.isSymbolicLink()) {
-          if (newEvent.exists()) {
-            symlinkWatcher.addSymlink(
-                newEvent.getPath(),
-                registry.maxDepthFor(newEvent.getPath()));
-          } else {
-            symlinkWatcher.remove(newEvent.getPath());
-          }
-        }
-      }
+      final Event newEvent = new Event(TypedPaths.get(event.getPath()), event.getKind());
       tree.handleEvent(newEvent, thread);
     }
   }

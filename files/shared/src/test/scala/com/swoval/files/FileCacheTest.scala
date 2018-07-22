@@ -82,25 +82,15 @@ object FileCacheTest {
     val executor = Executor.make("FileTreeRepository-internal-executor")
     val tree =
       new FileCacheDirectoryTree[T](converter,
-                                    Executor.make("FileTreeRepository-callback-executor"))
-    val eventHandler: BiConsumer[PathWatchers.Event, Executor#Thread] =
-      executor.delegate(
-        (event: PathWatchers.Event, thread: Executor#Thread) =>
-          tree.handleEvent(new PathWatchers.Event(TypedPaths.get(event.getPath), event.getKind),
-                           thread))
-    val symlinkWatcher =
-      new SymlinkWatcher(new EventHandler(null, tree), DEFAULT_SYMLINK_FACTORY, new OnError() {
-        override def apply(exception: IOException): Unit = {}
-      }, executor.copy)
-
+                                    Executor.make("FileTreeRepository-callback-executor"),
+                                    executor)
     val factory = either match {
       case Left(func) => func(tree)
       case Right(f)   => f
     }
-    val pathWatcher = factory.create(new EventHandler(symlinkWatcher, tree),
-                                     executor.copy,
-                                     tree.readOnlyDirectoryRegistry)
-    val watcher = new FileCachePathWatcher[T](symlinkWatcher, pathWatcher)
+    val pathWatcher =
+      factory.create(new EventHandler(tree), executor.copy, tree.readOnlyDirectoryRegistry)
+    val watcher = new FileCachePathWatcher[T](tree, pathWatcher)
     val res = new FileTreeRepositoryImpl[T](tree, watcher, executor)
     tree.addCacheObserver(cacheObserver)
     res
