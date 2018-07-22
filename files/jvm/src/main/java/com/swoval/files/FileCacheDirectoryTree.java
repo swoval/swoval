@@ -220,7 +220,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
     }
     observers.close();
     callbackExecutor.close();
-    symlinkWatcher.close();
+    if (symlinkWatcher != null) symlinkWatcher.close();
     directories.clear();
   }
 

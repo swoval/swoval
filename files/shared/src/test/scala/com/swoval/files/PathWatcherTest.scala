@@ -309,9 +309,7 @@ object PathWatcherTest extends PathWatcherTest {
 
   def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] = {
     val executor = Executor.make("DirectoryWatcherTestExecutor-internal")
-    PathWatchers.get((e: PathWatchers.Event, _: Executor#Thread) => callback(e),
-                     executor,
-                     new DirectoryRegistryImpl())
+    PathWatchers.get((e: PathWatchers.Event) => callback(e))
   }
 }
 
@@ -327,8 +325,6 @@ object NioPathWatcherTest extends PathWatcherTest {
 
   def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] = {
     val executor = Executor.make("DirectoryWatcherTestExecutor-internal")
-    PlatformWatcher.make((e: PathWatchers.Event, _: Executor#Thread) => callback(e),
-                         executor,
-                         new DirectoryRegistryImpl())
+    PathWatchers.get((e: PathWatchers.Event) => callback(e))
   }
 }
