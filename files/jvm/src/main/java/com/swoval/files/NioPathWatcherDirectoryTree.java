@@ -39,8 +39,29 @@ class NioPathWatcherDirectoryTree
   private final FileTreeViews.CacheObserver<WatchedDirectory> updateCacheObserver =
       new FileTreeViews.CacheObserver<WatchedDirectory>() {
         @Override
+        @SuppressWarnings("EmptyCatchBlock")
         public void onCreate(final Entry<WatchedDirectory> newEntry) {
           maybeRunCallback(new Event(newEntry, Create));
+          try {
+            final Iterator<TypedPath> it =
+                FileTreeViews.list(
+                        newEntry.getPath(),
+                        0,
+                        new Filter<TypedPath>() {
+                          @Override
+                          public boolean accept(final TypedPath typedPath) {
+                            return !typedPath.isDirectory()
+                                && directoryRegistry.accept(typedPath.getPath());
+                          }
+                        })
+                    .iterator();
+            while (it.hasNext()) {
+              maybeRunCallback(new Event(it.next(), Create));
+            }
+          } catch (final IOException e) {
+            // This likely means the directory was deleted, which should be handle by the downstream
+            // NioPathWatcherService.
+          }
         }
 
         @Override
@@ -51,8 +72,7 @@ class NioPathWatcherDirectoryTree
 
         @Override
         public void onUpdate(
-            final Entry<WatchedDirectory> oldEntry, final Entry<WatchedDirectory> newEntry) {
-        }
+            final Entry<WatchedDirectory> oldEntry, final Entry<WatchedDirectory> newEntry) {}
 
         @Override
         public void onError(final IOException exception) {}
@@ -312,7 +332,7 @@ class NioPathWatcherDirectoryTree
 
   private void handleOverflow(final Overflow overflow, final Executor.Thread thread) {
     final Path path = overflow.getPath();
-    if (path.toString().contains("NioFile")) System.out.println("handle overflow for " + path);
+    //if (path.toString().contains("NioFile")) System.out.println("handle overflow for " + path);
     final int maxDepth = directoryRegistry.maxDepthFor(path);
     final CachedDirectory<WatchedDirectory> root = rootDirectories.get(path.getRoot());
     if (root != null) {

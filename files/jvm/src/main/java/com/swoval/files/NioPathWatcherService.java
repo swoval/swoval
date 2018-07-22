@@ -90,6 +90,7 @@ class NioPathWatcherService implements AutoCloseable {
                                       : watchKey.resolve((Path) e.context());
                               final Either<Overflow, Event> result =
                                   Either.right(new Event(TypedPaths.get(path, UNKNOWN), kind));
+                              //System.out.println(result);
                               eventConsumer.accept(result);
                             }
                           }
