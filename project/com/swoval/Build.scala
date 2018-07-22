@@ -497,10 +497,9 @@ object Build {
                            "-target",
                            "1.7",
                            "-h",
-                           sourceDirectory.value.toPath.resolve("main/native/include").toString,
-                           "") ++
+                           sourceDirectory.value.toPath.resolve("main/native/include").toString) ++
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty) ++
-        Seq("-Xlint:unchecked"),
+        Seq("-Xlint:unchecked", "-Xlint:deprecation"),
       jacocoReportSettings in Test := JacocoReportSettings()
         .withThresholds(
           JacocoThresholds(instruction = 82,
