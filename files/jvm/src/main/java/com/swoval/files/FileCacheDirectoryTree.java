@@ -132,7 +132,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
         final List<DataViews.Entry<T>> paths =
             dir.listEntries(
                 typedPath.getPath(),
-                0,
+                -1,
                 new Filter<Entry<T>>() {
                   @Override
                   public boolean accept(DataViews.Entry<T> entry) {

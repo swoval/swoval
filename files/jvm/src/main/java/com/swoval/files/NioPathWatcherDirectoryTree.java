@@ -3,7 +3,7 @@ package com.swoval.files;
 import static com.swoval.files.Entries.DIRECTORY;
 import static com.swoval.files.PathWatchers.Event.Kind.Create;
 import static com.swoval.files.PathWatchers.Event.Kind.Delete;
-import static com.swoval.files.PathWatchers.Event.Kind.Refresh;
+import static com.swoval.files.PathWatchers.Event.Kind.Modify;
 import static com.swoval.functional.Filters.AllPass;
 
 import com.swoval.files.DataViews.Converter;
@@ -344,6 +344,7 @@ class NioPathWatcherDirectoryTree
         }
       }
     }
+    maybeRunCallback(new Event(TypedPaths.get(path), Modify));
   }
 
   private void maybeRunCallback(final Event event) {

@@ -149,7 +149,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
                 else
                   println(
                     s"$this Deletion latch not triggered, but still being decremented $newCount")
-                println((allFiles diff deletedFiles.toSet).toSeq.sorted take 10 mkString "\n")
+                println((allFiles diff deletedFiles.toSet).toSeq.sorted take 50 mkString "\n")
               }
               executor.close()
             case _ =>

@@ -178,8 +178,6 @@ public class PathWatchers {
       public static final Kind Error = new Kind("Error", 4);
       /** An existing file was modified. */
       public static final Kind Modify = new Kind("Modify", 3);
-      /** This path might have changed. */
-      public static final Kind Refresh = new Kind("Refresh", 4);
 
       private final String name;
       private final int priority;
