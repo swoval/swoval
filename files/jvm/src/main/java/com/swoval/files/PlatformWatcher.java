@@ -19,10 +19,7 @@ class PlatformWatcher {
       final Executor internalExecutor,
       final DirectoryRegistry directoryRegistry)
       throws InterruptedException {
-    final Observers<PathWatchers.Event> observers = new Observers<>();
-    final NioPathWatcherDirectoryTree tree =
-        new NioPathWatcherDirectoryTree(
-            observers,
+        return new NioPathWatcher(
             directoryRegistry,
             registerableWatchService,
             new Consumer<Event>() {
@@ -38,6 +35,5 @@ class PlatformWatcher {
               }
             },
             internalExecutor);
-    return new NioPathWatcher(tree, internalExecutor);
   }
 }

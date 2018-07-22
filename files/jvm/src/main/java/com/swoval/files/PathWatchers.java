@@ -62,8 +62,6 @@ public class PathWatchers {
    * @param executor provides a single threaded context to manage state
    * @param registry The registry of directories to monitor
    * @return PathWatcher for the runtime platform
-   * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
-   *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
   static PathWatcher<Event> get(
