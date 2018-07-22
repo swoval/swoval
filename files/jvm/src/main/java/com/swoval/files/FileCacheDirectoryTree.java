@@ -45,35 +45,35 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
   }
 
   private final DirectoryRegistry READ_ONLY_DIRECTORY_REGISTRY =
-    new DirectoryRegistry() {
-    @Override
-    public boolean addDirectory(final Path path, final int maxDepth) {
-      return false;
-    }
+      new DirectoryRegistry() {
+        @Override
+        public boolean addDirectory(final Path path, final int maxDepth) {
+          return false;
+        }
 
-    @Override
-    public int maxDepthFor(final Path path) {
-      return directoryRegistry.maxDepthFor(path);
-    }
+        @Override
+        public int maxDepthFor(final Path path) {
+          return directoryRegistry.maxDepthFor(path);
+        }
 
-    @Override
-    public List<Path> registered() {
-      return directoryRegistry.registered();
-    }
+        @Override
+        public List<Path> registered() {
+          return directoryRegistry.registered();
+        }
 
-    @Override
-    public void removeDirectory(final Path path) {}
+        @Override
+        public void removeDirectory(final Path path) {}
 
-    @Override
-    public boolean acceptPrefix(final Path path) {
-      return directoryRegistry.acceptPrefix(path);
-    }
+        @Override
+        public boolean acceptPrefix(final Path path) {
+          return directoryRegistry.acceptPrefix(path);
+        }
 
-    @Override
-    public boolean accept(final Path path) {
-      return directoryRegistry.accept(path);
-    }
-  };
+        @Override
+        public boolean accept(final Path path) {
+          return directoryRegistry.accept(path);
+        }
+      };
 
   DirectoryRegistry readOnlyDirectoryRegistry() {
     return READ_ONLY_DIRECTORY_REGISTRY;
@@ -125,25 +125,13 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
   @SuppressWarnings("EmptyCatchBlock")
   void handleEvent(final TypedPath typedPath, final Executor.Thread thread) {
     final Path path = typedPath.getPath();
+
     final List<Callback> callbacks = new ArrayList<>();
     if (typedPath.exists()) {
       final CachedDirectory<T> dir = find(typedPath.getPath());
       if (dir != null) {
-        final List<DataViews.Entry<T>> paths =
-            dir.listEntries(
-                typedPath.getPath(),
-                -1,
-                new Filter<Entry<T>>() {
-                  @Override
-                  public boolean accept(DataViews.Entry<T> entry) {
-                    return path.equals(entry.getPath());
-                  }
-                });
-        if (!paths.isEmpty() || !path.equals(dir.getPath())) {
-          final TypedPath toUpdate = paths.isEmpty() ? typedPath : paths.get(0);
-          final Updates<T> updates = dir.update(toUpdate, thread);
-          updates.observe(callbackObserver(callbacks));
-        }
+        final Updates<T> updates = dir.update(typedPath, thread);
+        updates.observe(callbackObserver(callbacks));
       } else if (pendingFiles.remove(path)) {
         try {
           CachedDirectory<T> cachedDirectory;

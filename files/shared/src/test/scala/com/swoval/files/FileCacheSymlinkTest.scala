@@ -92,7 +92,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
         'added - {
           'original - {
             withTempDirectory { root =>
-              val dir = Files.createDirectory(root.resolve("FOO"))
+              val dir = Files.createDirectory(root.resolve("original"))
               withTempDirectory { otherDir =>
                 Files.createSymbolicLink(otherDir.resolve("dir"), dir)
                 val latch = new CountDownLatch(1)
