@@ -10,8 +10,10 @@ import java.util.Iterator;
 
 class FileCachePathWatcher<T> {
   private final SymlinkWatcher symlinkWatcher;
-  private final ManagedPathWatcher pathWatcher;
-  FileCachePathWatcher(final SymlinkWatcher symlinkWatcher, final ManagedPathWatcher pathWatcher) {
+  private final PathWatcher<PathWatchers.Event> pathWatcher;
+
+  FileCachePathWatcher(
+      final SymlinkWatcher symlinkWatcher, final PathWatcher<PathWatchers.Event> pathWatcher) {
     this.symlinkWatcher = symlinkWatcher;
     this.pathWatcher = pathWatcher;
   }

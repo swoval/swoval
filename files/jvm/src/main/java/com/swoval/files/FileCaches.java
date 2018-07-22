@@ -38,7 +38,7 @@ public class FileCaches {
             executor.copy());
     final BiConsumer<Event, Executor.Thread> eventHandler =
         executor.delegate(new EventHandler(symlinkWatcher, tree));
-    final ManagedPathWatcher pathWatcher =
+    final PathWatcher<Event> pathWatcher =
         DEFAULT_PATH_WATCHER_FACTORY.create(
             eventHandler, executor.copy(), tree.readOnlyDirectoryRegistry());
     final FileCachePathWatcher<T> watcher = new FileCachePathWatcher<>(symlinkWatcher, pathWatcher);
@@ -162,7 +162,7 @@ public class FileCaches {
     //              public void apply(final IOException exception) {}
     //            },
     //            executor.copy());
-    //    final ManagedPathWatcher pathWatcher =
+    //    final PathWatcher<Event> pathWatcher =
     //        DEFAULT_PATH_WATCHER_FACTORY.create(
     //            eventHandler, executor.copy(), tree.readOnlyDirectoryRegistry());
     //    final FileCachePathWatcher<T> watcher = new FileCachePathWatcher<>(symlinkWatcher,
@@ -185,7 +185,7 @@ public class FileCaches {
   static Factory DEFAULT_PATH_WATCHER_FACTORY =
       new Factory() {
         @Override
-        public ManagedPathWatcher create(
+        public PathWatcher<Event> create(
             final BiConsumer<Event, Executor.Thread> consumer,
             final Executor executor,
             final DirectoryRegistry registry) {

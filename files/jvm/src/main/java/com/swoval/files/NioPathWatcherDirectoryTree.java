@@ -292,32 +292,6 @@ class NioPathWatcherDirectoryTree
         });
   }
 
-  void update(final TypedPath typedPath) {
-    executor.block(
-        new Consumer<Executor.Thread>() {
-          @Override
-          public void accept(Executor.Thread thread) {
-            final CachedDirectory<WatchedDirectory> dir =
-                rootDirectories.get(typedPath.getPath().getRoot());
-            if (dir != null) {
-              if (!typedPath.exists()) {
-                final Iterator<Entry<WatchedDirectory>> it =
-                    dir.remove(typedPath.getPath(), thread).iterator();
-                while (it.hasNext()) {
-                  Either.getOrElse(it.next().getValue(), WatchedDirectories.INVALID).close();
-                }
-              } else {
-                final List<Entry<WatchedDirectory>> entries =
-                    dir.listEntries(typedPath.getPath(), -1, AllPass);
-                if (entries.isEmpty() || entries.get(0).getValue().isLeft()) {
-                  update(dir, typedPath, thread);
-                }
-              }
-            }
-          }
-        });
-  }
-
   private void update(
       final CachedDirectory<WatchedDirectory> dir,
       final TypedPath typedPath,
@@ -378,27 +352,6 @@ class NioPathWatcherDirectoryTree
     }
   }
 
-//  private void processPath(
-//      final TypedPath path,
-//      final Event.Kind kind,
-//      final Executor.Thread thread,
-//      //HashSet<TypedPath> processedDirs,
-//      HashSet<TypedPath> processedFiles) {
-//    add(path, thread);
-//    if (processedFiles.add(path)) {
-//      maybeRunCallback(new Event(path, kind));
-////      final Iterator<TypedPath> it = newFiles.iterator();
-////      while (it.hasNext()) {
-////        final TypedPath file = it.next();
-////        if (file.isDirectory() && processedDirs.add(file)) {
-////          processPath(file, Create, thread, processedDirs, processedFiles);
-////        } else if (processedFiles.add(file)) {
-////          maybeRunCallback(new Event(file, Create));
-////        }
-////      }
-//    }
-//  }
-
   private void handleEvent(final Event event, final Executor.Thread thread) {
     if (directoryRegistry.accept(event.getPath())) {
       final TypedPath typedPath = TypedPaths.get(event.getPath());
@@ -416,10 +369,11 @@ class NioPathWatcherDirectoryTree
       }
       if (typedPath.isDirectory()) {
         add(typedPath, thread);
-      } else {
-        maybeRunCallback(event);
       }
-    }
+      maybeRunCallback(event);
+    } else {
+     // System.out.println("Rejected " + event);
+      }
   }
 
   @Override

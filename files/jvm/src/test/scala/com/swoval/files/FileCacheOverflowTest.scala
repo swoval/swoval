@@ -105,7 +105,6 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
               }
               .flatMap { _ =>
                 executor.run((_: Executor#Thread) => {
-                  println(s"START DELETING $name ${"\n" * 20}")
                   files.foreach(Files.deleteIfExists)
                   subdirs.foreach(Files.deleteIfExists)
                 })

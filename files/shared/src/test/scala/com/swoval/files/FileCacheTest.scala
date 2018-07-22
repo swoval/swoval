@@ -16,7 +16,7 @@ import utest._
 import scala.collection.JavaConverters._
 
 trait FileCacheTest { self: TestSuite =>
-  val factory: (Consumer[Event], Executor, DirectoryRegistry) => ManagedPathWatcher
+  val factory: (Consumer[Event], Executor, DirectoryRegistry) => PathWatcher[Event]
   def identity: Converter[Path] = _.getPath
 
   def simpleCache(f: Entry[Path] => Unit): FileTreeRepository[Path] =
@@ -47,11 +47,11 @@ object FileCacheTest {
   }
 
   implicit class FactoryOps(
-      val f: (Consumer[PathWatchers.Event], Executor, DirectoryRegistry) => ManagedPathWatcher)
+      val f: (Consumer[PathWatchers.Event], Executor, DirectoryRegistry) => PathWatcher[Event])
       extends PathWatchers.Factory {
     override def create(consumer: BiConsumer[PathWatchers.Event, Executor#Thread],
                         executor: Executor,
-                        registry: DirectoryRegistry): ManagedPathWatcher =
+                        registry: DirectoryRegistry): PathWatcher[Event] =
       f((e: PathWatchers.Event) => consumer.accept(e, null), executor, registry)
   }
 

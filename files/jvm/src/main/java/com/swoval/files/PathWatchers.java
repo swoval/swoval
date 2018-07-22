@@ -45,7 +45,7 @@ public class PathWatchers {
    *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
-  static ManagedPathWatcher get(
+  static PathWatcher<Event> get(
       final BiConsumer<Event, Executor.Thread> callback,
       final Executor executor,
       final DirectoryRegistry registry)
@@ -66,7 +66,7 @@ public class PathWatchers {
    *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
-  static ManagedPathWatcher get(
+  static PathWatcher<Event> get(
       final BiConsumer<Event, Executor.Thread> callback,
       final RegisterableWatchService service,
       final Executor executor,
@@ -212,7 +212,7 @@ public class PathWatchers {
   }
 
   interface Factory {
-    ManagedPathWatcher create(
+    PathWatcher<Event> create(
         final BiConsumer<Event, Executor.Thread> consumer,
         final Executor executor,
         final DirectoryRegistry registry);

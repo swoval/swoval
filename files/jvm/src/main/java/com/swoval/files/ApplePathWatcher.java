@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/UsingtheFSEventsFramework/UsingtheFSEventsFramework.html"
  * target="_blank">Apple File System Events Api</a>.
  */
-public class ApplePathWatcher implements ManagedPathWatcher {
+public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   private final DirectoryRegistry directoryRegistry;
   private final Map<Path, Stream> streams = new HashMap<>();
   private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -38,9 +38,6 @@ public class ApplePathWatcher implements ManagedPathWatcher {
   private final Flags.Create flags;
   private final FileEventsApi fileEventsApi;
   private static final DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
-
-  @Override
-  public void update(TypedPath path) {}
 
   @Override
   public int addObserver(Observer<Event> observer) {

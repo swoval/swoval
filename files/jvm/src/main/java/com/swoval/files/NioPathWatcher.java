@@ -10,7 +10,7 @@ import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Provides a PathWatcher that is backed by a {@link java.nio.file.WatchService}. */
-class NioPathWatcher implements ManagedPathWatcher {
+class NioPathWatcher implements PathWatcher<PathWatchers.Event> {
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final Executor internalExecutor;
   private final NioPathWatcherDirectoryTree nioPathWatcherDirectoryTree;
@@ -26,11 +26,6 @@ class NioPathWatcher implements ManagedPathWatcher {
       final Executor internalExecutor) {
     this.internalExecutor = internalExecutor;
     this.nioPathWatcherDirectoryTree = nioPathWatcherDirectoryTree;
-  }
-
-  @Override
-  public void update(final TypedPath typedPath) {
-    nioPathWatcherDirectoryTree.update(typedPath);
   }
 
   /**

@@ -5,7 +5,7 @@ import com.swoval.functional.Consumer;
 import java.io.IOException;
 
 class PlatformWatcher {
-  static ManagedPathWatcher make(
+  static PathWatcher<Event> make(
       final BiConsumer<Event, Executor.Thread> callback,
       final Executor internalExecutor,
       final DirectoryRegistry directoryRegistry)
@@ -13,7 +13,7 @@ class PlatformWatcher {
     return make(callback, WatchServices.get(), internalExecutor, directoryRegistry);
   }
 
-  static ManagedPathWatcher make(
+  static PathWatcher<Event> make(
       final BiConsumer<Event, Executor.Thread> callback,
       final RegisterableWatchService registerableWatchService,
       final Executor internalExecutor,
