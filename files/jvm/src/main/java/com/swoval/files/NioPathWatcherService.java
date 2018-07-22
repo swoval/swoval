@@ -64,40 +64,35 @@ class NioPathWatcherService implements AutoCloseable {
                 if (!key.reset()) {
                   key.cancel();
                 }
-                boolean submitted = false;
-                while (!submitted) {
-                  internalExecutor.run(
-                      new Consumer<Executor.Thread>() {
-                        @Override
-                        public void accept(final Executor.Thread thread) {
-                          final Iterator<WatchEvent<?>> it = events.iterator();
-                          while (it.hasNext()) {
-                            final WatchEvent<?> e = it.next();
-                            final WatchEvent.Kind<?> k = e.kind();
-                            if (k.equals(OVERFLOW)) {
-                              final Either<Overflow, Event> result =
-                                  Either.left(new Overflow((Path) key.watchable()));
-                              eventConsumer.accept(result);
-                            } else {
-                              final Event.Kind kind =
-                                  k.equals(ENTRY_DELETE)
-                                      ? Delete
-                                      : k.equals(ENTRY_CREATE) ? Create : Modify;
-                              final Path watchKey = (Path) key.watchable();
-                              final Path path =
-                                  e.context() == null
-                                      ? watchKey
-                                      : watchKey.resolve((Path) e.context());
-                              final Either<Overflow, Event> result =
-                                  Either.right(new Event(TypedPaths.get(path, UNKNOWN), kind));
-                              //System.out.println(result);
-                              eventConsumer.accept(result);
-                            }
+                internalExecutor.run(
+                    new Consumer<Executor.Thread>() {
+                      @Override
+                      public void accept(final Executor.Thread thread) {
+                        final Iterator<WatchEvent<?>> it = events.iterator();
+                        while (it.hasNext()) {
+                          final WatchEvent<?> e = it.next();
+                          final WatchEvent.Kind<?> k = e.kind();
+                          if (k.equals(OVERFLOW)) {
+                            final Either<Overflow, Event> result =
+                                Either.left(new Overflow((Path) key.watchable()));
+                            eventConsumer.accept(result);
+                          } else {
+                            final Event.Kind kind =
+                                k.equals(ENTRY_DELETE)
+                                    ? Delete
+                                    : k.equals(ENTRY_CREATE) ? Create : Modify;
+                            final Path watchKey = (Path) key.watchable();
+                            final Path path =
+                                e.context() == null
+                                    ? watchKey
+                                    : watchKey.resolve((Path) e.context());
+                            final Either<Overflow, Event> result =
+                                Either.right(new Event(TypedPaths.get(path, UNKNOWN), kind));
+                            eventConsumer.accept(result);
                           }
                         }
-                      });
-                  submitted = true;
-                }
+                      }
+                    });
               } catch (ClosedWatchServiceException | InterruptedException e) {
                 stop = true;
               }
