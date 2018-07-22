@@ -226,10 +226,18 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
 
   @SuppressWarnings({"unchecked", "EmptyCatchBlock"})
   private void addDirectory(
-      final CachedDirectoryImpl<T> currentDir, final Path path, final Updates<T> updates) {
+      final CachedDirectoryImpl<T> currentDir,
+      final TypedPath typedPath,
+      final Updates<T> updates) {
+    final Path path = typedPath.getPath();
     final CachedDirectoryImpl<T> dir =
         new CachedDirectoryImpl<>(
-            path, path, converter, currentDir.subdirectoryDepth(), pathFilter, fileTreeView);
+            path,
+            typedPath.toRealPath(),
+            converter,
+            currentDir.subdirectoryDepth(),
+            pathFilter,
+            fileTreeView);
     boolean exists = true;
     try {
       dir.init();
@@ -319,7 +327,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
               }
               return result;
             } else {
-              addDirectory(currentDir, resolved, result);
+              addDirectory(currentDir, typedPath, result);
               return result;
             }
           }
@@ -327,7 +335,10 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
           synchronized (currentDir.lock) {
             final CachedDirectoryImpl<T> dir = currentDir.subdirectories.get(p);
             if (dir == null && currentDir.depth > 0) {
-              addDirectory(currentDir, currentDir.path.resolve(p), result);
+              addDirectory(
+                  currentDir,
+                  TypedPaths.getDelegate(currentDir.path.resolve(p), typedPath),
+                  result);
             }
             currentDir = dir;
           }
@@ -459,7 +470,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
   CachedDirectoryImpl<T> init() throws IOException {
     subdirectories.clear();
     files.clear();
-    if (depth >= 0) {
+    if (depth >= 0 && (!path.startsWith(realPath) || path.equals(realPath))) {
       synchronized (lock) {
         final Iterator<TypedPath> it = fileTreeView.list(path, 0, pathFilter).iterator();
         while (it.hasNext()) {
