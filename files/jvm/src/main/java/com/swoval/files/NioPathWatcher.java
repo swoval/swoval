@@ -258,7 +258,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
   @Override
   public void close() {
-    internalExecutor.run(
+    internalExecutor.block(
         new Consumer<Thread>() {
           @Override
           public void accept(Thread thread) {
@@ -274,6 +274,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
             }
           }
         });
+    internalExecutor.close();
   }
 
   private void update(
