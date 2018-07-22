@@ -99,22 +99,17 @@ public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
 
   private boolean registerImpl(final Path path, final Flags.Create flags, final int maxDepth) {
     boolean result = true;
-    Path realPath = path;
-    try {
-      realPath = path.toRealPath();
-    } catch (IOException e) {
-    }
-    final Entry<Path, Stream> entry = find(realPath);
+    final Entry<Path, Stream> entry = find(path);
     directoryRegistry.addDirectory(path, maxDepth);
     if (entry == null) {
       try {
-        int id = fileEventsApi.createStream(realPath.toString(), latency, flags.getValue());
+        int id = fileEventsApi.createStream(path.toString(), latency, flags.getValue());
         if (id == -1) {
           result = false;
-          System.err.println("Error watching " + realPath + ".");
+          System.err.println("Error watching " + path + ".");
         } else {
-          removeRedundantStreams(realPath);
-          streams.put(realPath, new Stream(id));
+          removeRedundantStreams(path);
+          streams.put(path, new Stream(id));
         }
       } catch (ClosedFileEventsApiException e) {
         close();

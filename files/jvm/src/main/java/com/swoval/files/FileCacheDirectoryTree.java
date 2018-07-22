@@ -63,7 +63,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
                   @Override
                   public void apply(IOException exception) {}
                 },
-                symlinkExecutor)
+                symlinkExecutor.copy())
             : null;
   }
 
@@ -201,8 +201,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
       while (it.hasNext()) {
         final Iterator<DataViews.Entry<T>> removeIterator = it.next();
         while (removeIterator.hasNext()) {
-          final DataViews.Entry<T> entry = removeIterator.next();
-          addCallback(callbacks, entry, Entries.setExists(entry, false), null, Delete, null);
+          final DataViews.Entry<T> entry = Entries.setExists(removeIterator.next(), false);
+          addCallback(callbacks, entry, entry, null, Delete, null);
         }
       }
     }
@@ -220,6 +220,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
     }
     observers.close();
     callbackExecutor.close();
+    symlinkWatcher.close();
     directories.clear();
   }
 

@@ -172,7 +172,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
     this.depth = depth;
     this._cacheEntry = new AtomicReference<>(null);
     this.pathFilter = filter;
-    final TypedPath typedPath = TypedPaths.get(realPath);
+    final TypedPath typedPath = TypedPaths.get(path);
     this._cacheEntry.set(
         Entries.get(TypedPaths.getDelegate(path, typedPath), converter, typedPath));
     this.fileTreeView = fileTreeView;
