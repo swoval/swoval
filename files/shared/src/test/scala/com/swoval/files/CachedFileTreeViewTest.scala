@@ -6,7 +6,7 @@ import java.nio.file.{ Files, Path }
 import com.swoval.files.DataViews.Entry
 import com.swoval.files.EntryOps._
 import com.swoval.files.FileTreeViewTest.RepositoryOps
-import com.swoval.files.FileTreeViews.CacheObserver
+import com.swoval.files.FileTreeViews.{ CacheObserver, Observer }
 import com.swoval.files.test._
 import com.swoval.functional.{ Consumer, Filter }
 import com.swoval.functional.Filters.AllPass
@@ -14,8 +14,9 @@ import com.swoval.test._
 import utest._
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
-object CachedRepositoryTest extends TestSuite {
+object CachedFileTreeViewTest extends TestSuite {
   def newCachedView(path: Path): CachedDirectory[Path] = newCachedView(path, Integer.MAX_VALUE)
   def newCachedView(path: Path, maxDepth: Int): CachedDirectory[Path] =
     newCachedView(path, maxDepth, followLinks = true)
@@ -43,7 +44,7 @@ object CachedRepositoryTest extends TestSuite {
     def updates: Seq[(Entry[T], Entry[T])] = _updates
   }
   implicit class UpdateOps[T](val u: FileTreeViews.Updates[T]) extends AnyVal {
-    def toUpdates: CachedRepositoryTest.Updates[T] = new CachedRepositoryTest.Updates(u)
+    def toUpdates: CachedFileTreeViewTest.Updates[T] = new CachedFileTreeViewTest.Updates(u)
   }
 
   val executor = new Executor {
@@ -174,6 +175,22 @@ object CachedRepositoryTest extends TestSuite {
               updates.deletions === Set(nestedSubdir, nestedFile)
             }
           }
+        }
+        'subfiles - withTempDirectorySync { dir =>
+          val directory = newCachedView(dir)
+          directory.list(Integer.MAX_VALUE, AllPass).asScala.toSeq === Seq.empty[TypedPath]
+          val subdir: Path = Files.createDirectories(dir.resolve("subdir").resolve("nested"))
+          val files = 1 to 2 map (i => subdir.resolve(s"file-$i").createFile())
+          val found = mutable.Set.empty[Path]
+          val updates = directory.update(TypedPaths.get(files.last, Entries.FILE))
+          updates.observe(CacheObservers.fromObserver(new Observer[Entry[Path]] {
+            override def onError(t: Throwable): Unit = {}
+            override def onNext(t: Entry[Path]): Unit = found.add(t.getPath())
+          }))
+          val expected = (files :+ subdir :+ subdir.getParent).toSet
+          found.toSet === expected
+          directory.update(TypedPaths.get(subdir.getParent, Entries.DIRECTORY))
+          directory.list(Integer.MAX_VALUE, AllPass).asScala.toSeq.map(_.getPath) === expected
         }
       }
       'depth - withTempDirectory { dir =>

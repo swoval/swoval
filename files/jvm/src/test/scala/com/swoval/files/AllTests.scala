@@ -28,7 +28,7 @@ object AllTests {
       test(NioFileCacheOverflowTest),
       test(FileEventApiTest),
       test(DataViewTest),
-      test(CachedRepositoryTest),
+      test(CachedFileTreeViewTest),
       test(PathTest),
       test(NioPathWatcherTest),
       test(DirectoryFileTreeViewTest),
