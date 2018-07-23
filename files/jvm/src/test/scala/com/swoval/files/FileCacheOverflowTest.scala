@@ -22,7 +22,6 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
       converter: DataViews.Converter[T],
       cacheObserver: FileTreeViews.CacheObserver[T]
   ): FileTreeRepository[T] = FileCacheTest.get[T](converter, cacheObserver, Left(nioFactory))
-  val boundedQueueSize = 4
   val name = getClass.getSimpleName
 
   private def nioFactory[T]: FileCacheDirectoryTree[T] => Factory =
@@ -34,20 +33,27 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
           executor,
           registry
     )
+  val boundedQueueSize = System.getProperty("swoval.test.queue.size") match {
+    case null => 4
+    case c    => Try(c.toInt).getOrElse(4)
+  }
+  val subdirsToAdd = System.getProperty("swoval.test.subdir.count") match {
+    case null =>
+      if (!Platform.isJVM) {
+        if (Platform.isWin) 5 else 50
+      } else 200
+    case c => Try(c.toInt).getOrElse(200)
+  }
+  val filesPerSubdir = System.getProperty("swoval.test.files.count") match {
+    case null => 5
+    case c    => Try(c.toInt).getOrElse(5)
+  }
+  val timeout = DEFAULT_TIMEOUT * 1
 
-  val filesPerSubdir = 5
   val testsImpl = Tests {
     'overflow - withTempDirectory { root =>
       val dir = Files.createDirectories(root.resolve("overflow").resolve(name))
       // Windows is slow (at least on my vm)
-      val subdirsToAdd = System.getProperty("swoval.test.subdir-count") match {
-        case null =>
-          if (!Platform.isJVM) {
-            if (Platform.isWin) 5 else 50
-          } else 200
-        case c => Try(c.toInt).getOrElse(200)
-      }
-      val timeout = DEFAULT_TIMEOUT * 1
       val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
       val creationLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
       val deletionLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
