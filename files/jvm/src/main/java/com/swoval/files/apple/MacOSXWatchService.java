@@ -28,7 +28,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -41,8 +43,24 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
   private final double watchLatency;
   private final int queueSize;
   private final AtomicBoolean open = new AtomicBoolean(true);
-  private final LinkedBlockingQueue<MacOSXWatchKey> readyKeys = new LinkedBlockingQueue<>();
+  private final PriorityBlockingQueue<MacOSXWatchKey> readyKeys = new PriorityBlockingQueue<>();
   private final Map<Path, MacOSXWatchKey> registered = new HashMap<>();
+  private final LinkedBlockingQueue<String> logMessages = new LinkedBlockingQueue<>();
+  private final Thread loggingThread =
+      new Thread("logging thread") {
+        @Override
+        public void run() {
+          boolean stop = false;
+          while (!stop) {
+            try {
+              final String string = logMessages.take();
+              System.err.println(string);
+            } catch (final InterruptedException e) {
+              stop = true;
+            }
+          }
+        }
+      };
 
   private final Set<Path> streams = new HashSet<>();
   private final Consumer<String> dropEvent =
@@ -64,6 +82,7 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
         @Override
         public void accept(final FileEvent fileEvent) {
           final Path path = Paths.get(fileEvent.fileName);
+          if (path.toString().contains("NioFile")) logMessages.offer("CB for " + path);
           synchronized (registered) {
             final MacOSXWatchKey childKey = registered.get(path);
             final MacOSXWatchKey key =
@@ -82,6 +101,8 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
       throws InterruptedException {
     this.watchLatency = watchLatency;
     this.queueSize = queueSize;
+    loggingThread.setDaemon(true);
+    loggingThread.start();
   }
 
   @SuppressWarnings("unused")
@@ -96,6 +117,11 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
     synchronized (watcher) {
       if (open.compareAndSet(true, false)) {
         watcher.close();
+        loggingThread.interrupt();
+        try {
+          loggingThread.join(5000);
+        } catch (final InterruptedException e) {
+        }
         final Iterator<Path> it = new ArrayList<>(registered.keySet()).iterator();
         while (it.hasNext()) {
           unregisterImpl(it.next());
@@ -200,7 +226,7 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
     }
   }
 
-  private static class MacOSXWatchKey implements WatchKey {
+  private static class MacOSXWatchKey implements WatchKey, Comparable<MacOSXWatchKey> {
     private final ArrayBlockingQueue<WatchEvent<?>> events;
     private final AtomicInteger overflow = new AtomicInteger(0);
     private final AtomicBoolean valid = new AtomicBoolean(true);
@@ -304,6 +330,11 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
           overflow.incrementAndGet();
         }
       }
+    }
+
+    @Override
+    public int compareTo(MacOSXWatchKey o) {
+      return this.watchable.compareTo(o.watchable);
     }
   }
 

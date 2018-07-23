@@ -36,7 +36,9 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         @Override
         @SuppressWarnings("EmptyCatchBlock")
         public void onCreate(final Entry<WatchedDirectory> newEntry) {
-          System.out.println("OK ADDED DIR " + newEntry.getPath());
+          //boolean log = newEntry.getPath().toString().contains("NioFile");
+          StringBuilder result = new StringBuilder();
+          //if (log) result.append("OK ADDED DIR ").append(newEntry.getPath()).append("\n");
           maybeRunCallback(new Event(newEntry, Create));
           try {
             final Iterator<TypedPath> it =
@@ -52,13 +54,14 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                     .iterator();
             while (it.hasNext()) {
               final TypedPath tp = it.next();
-              System.out.println("OK ADD " + tp.getPath());
+         //     if (log) result.append("OK ADD ").append(tp.getPath()).append("\n");
               maybeRunCallback(new Event(tp, Create));
             }
           } catch (final IOException e) {
             // This likely means the directory was deleted, which should be handle by the downstream
             // NioPathWatcherService.
           }
+          //if (log) System.out.println(result.toString());
         }
 
         @Override
