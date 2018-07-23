@@ -150,23 +150,11 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
     final Path path = typedPath.getPath();
 
     final List<Callback> callbacks = new ArrayList<>();
-    final CallbackObserver cbo = new CallbackObserver(callbacks);
     if (typedPath.exists()) {
       final CachedDirectory<T> dir = find(typedPath.getPath());
       if (dir != null) {
         final Updates<T> updates = dir.update(typedPath, thread);
-        updates.observe(cbo);
-        final List<TypedPath> creations = cbo.creations;
-        if (!creations.isEmpty()) {
-          callbackExecutor.run(new Consumer<Thread>() {
-            @Override
-            public void accept(Thread thread) {
-              if (creations.get(0).getPath().toString().contains("NioFile") && creations.size() != 6) {
-                System.err.println("FUCKING HELL " + creations);
-              }
-            }
-          });
-        }
+        updates.observe(callbackObserver(callbacks));
       } else if (pendingFiles.remove(path)) {
         try {
           CachedDirectory<T> cachedDirectory;
@@ -360,37 +348,28 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
     }
   }
 
-  private class CallbackObserver implements CacheObserver<T> {
-    final List<Callback> callbacks;
-    private final List<TypedPath> creations = new ArrayList<>();
+  private FileTreeViews.CacheObserver<T> callbackObserver(final List<Callback> callbacks) {
+    return new FileTreeViews.CacheObserver<T>() {
+      @Override
+      public void onCreate(final DataViews.Entry<T> newEntry) {
+        addCallback(callbacks, newEntry, null, newEntry, Create, null);
+      }
 
-    CallbackObserver(final List<Callback> callbacks) {
-      this.callbacks = callbacks;
-    }
+      @Override
+      public void onDelete(final DataViews.Entry<T> oldEntry) {
+        addCallback(callbacks, oldEntry, oldEntry, null, Delete, null);
+      }
 
-    @Override
-    public void onCreate(final DataViews.Entry<T> newEntry) {
-      assert (newEntry.exists());
-      creations.add(newEntry);
-      addCallback(callbacks, newEntry, null, newEntry, Create, null);
-    }
+      @Override
+      public void onUpdate(final DataViews.Entry<T> oldEntry, final DataViews.Entry<T> newEntry) {
+        addCallback(callbacks, oldEntry, oldEntry, newEntry, Modify, null);
+      }
 
-    @Override
-    public void onDelete(final DataViews.Entry<T> oldEntry) {
-      assert (!oldEntry.exists());
-      addCallback(callbacks, oldEntry, oldEntry, null, Delete, null);
-    }
-
-    @Override
-    public void onUpdate(final DataViews.Entry<T> oldEntry, final DataViews.Entry<T> newEntry) {
-      assert (newEntry.exists());
-      addCallback(callbacks, oldEntry, oldEntry, newEntry, Modify, null);
-    }
-
-    @Override
-    public void onError(final IOException exception) {
-      addCallback(callbacks, null, null, null, Error, exception);
-    }
+      @Override
+      public void onError(final IOException exception) {
+        addCallback(callbacks, null, null, null, Error, exception);
+      }
+    };
   }
 
   @Override

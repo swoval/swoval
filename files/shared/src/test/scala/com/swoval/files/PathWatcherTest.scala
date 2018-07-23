@@ -313,15 +313,14 @@ object PathWatcherTest extends PathWatcherTest {
 }
 
 object NioPathWatcherTest extends PathWatcherTest {
-  val tests = Tests {}
-//  val tests =
-//    if (Platform.isJVM && Platform.isMac) testsImpl
-//    else
-//      Tests {
-//        'ignore - {
-//          println("Not running NioDirectoryWatcherTest on platform other than osx on the jvm")
-//        }
-//      }
+  val tests =
+    if (Platform.isJVM && Platform.isMac) testsImpl
+    else
+      Tests {
+        'ignore - {
+          println("Not running NioDirectoryWatcherTest on platform other than osx on the jvm")
+        }
+      }
 
   def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] = {
     new NioPathWatcher(new DirectoryRegistryImpl(),
