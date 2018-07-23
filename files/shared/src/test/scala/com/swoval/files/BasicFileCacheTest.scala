@@ -384,22 +384,18 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
     'callbacks - {
       'add - withTempDirectory { dir =>
         val file = dir.resolve("file")
-        usingAsync(simpleCache((_: Entry[Path]) => {})) { c =>
-          val creationLatch = new CountDownLatch(1)
-          val updateLatch = new CountDownLatch(1)
-          val deletionLatch = new CountDownLatch(1)
-          c.addCacheObserver(new FileTreeViews.CacheObserver[Path] {
-            override def onCreate(newEntry: Entry[Path]): Unit = creationLatch.countDown()
-
-            override def onDelete(oldEntry: Entry[Path]): Unit =
-              if (oldEntry.getPath == file) deletionLatch.countDown
-
-            override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
-              if (newEntry.getPath.lastModified == 3000) updateLatch.countDown()
-            }
-
-            override def onError(exception: IOException): Unit = {}
-          })
+        val creationLatch = new CountDownLatch(1)
+        val updateLatch = new CountDownLatch(1)
+        val deletionLatch = new CountDownLatch(1)
+        usingAsync(
+          lastModifiedCache(
+            (_: Entry[LastModified]) => creationLatch.countDown(),
+            (_: Entry[LastModified], newEntry: Entry[LastModified]) =>
+              if (newEntry.getValue.isRight && newEntry.getValue.get.lastModified == 3000)
+                updateLatch.countDown(),
+            (oldEntry: Entry[LastModified]) =>
+              if (oldEntry.getPath == file) deletionLatch.countDown()
+          )) { c =>
           c.reg(dir)
           file.createFile()
           creationLatch
