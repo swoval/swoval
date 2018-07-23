@@ -25,7 +25,13 @@ class Observers<T> implements FileTreeViews.Observer<T>, AutoCloseable {
       cbs = new ArrayList<>(observers.values());
     }
     final Iterator<FileTreeViews.Observer<T>> it = cbs.iterator();
-    while (it.hasNext()) it.next().onNext(t);
+    while (it.hasNext()) {
+      try {
+        it.next().onNext(t);
+      } catch (final Exception e) {
+        e.printStackTrace();
+      }
+    }
   }
 
   @Override
@@ -35,7 +41,13 @@ class Observers<T> implements FileTreeViews.Observer<T>, AutoCloseable {
       cbs = new ArrayList<>(observers.values());
     }
     final Iterator<FileTreeViews.Observer<T>> it = cbs.iterator();
-    while (it.hasNext()) it.next().onError(throwable);
+    while (it.hasNext()) {
+      try {
+        it.next().onError(throwable);
+      } catch (final Exception e) {
+        e.printStackTrace();
+      }
+    }
   }
 
   /**

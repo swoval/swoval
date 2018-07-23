@@ -304,14 +304,18 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
         new Callback(typedPath, kind) {
           @Override
           public void run() {
-            if (ioException != null) {
-              observers.onError(ioException);
-            } else if (kind.equals(Create)) {
-              observers.onCreate(newEntry);
-            } else if (kind.equals(Delete)) {
-              observers.onDelete(Entries.setExists(oldEntry, false));
-            } else if (kind.equals(Modify)) {
-              observers.onUpdate(oldEntry, newEntry);
+            try {
+              if (ioException != null) {
+                observers.onError(ioException);
+              } else if (kind.equals(Create)) {
+                observers.onCreate(newEntry);
+              } else if (kind.equals(Delete)) {
+                observers.onDelete(Entries.setExists(oldEntry, false));
+              } else if (kind.equals(Modify)) {
+                observers.onUpdate(oldEntry, newEntry);
+              }
+            } catch (final Exception e) {
+              e.printStackTrace();
             }
           }
         });

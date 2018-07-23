@@ -22,7 +22,13 @@ class CacheObservers<T> implements FileTreeViews.CacheObserver<T>, AutoCloseable
       cbs = new ArrayList<>(observers.values());
     }
     final Iterator<CacheObserver<T>> it = cbs.iterator();
-    while (it.hasNext()) it.next().onCreate(newEntry);
+    while (it.hasNext()) {
+      try {
+        it.next().onCreate(newEntry);
+      } catch (final Exception e) {
+        e.printStackTrace();
+      }
+    }
   }
 
   @Override
@@ -32,7 +38,13 @@ class CacheObservers<T> implements FileTreeViews.CacheObserver<T>, AutoCloseable
       cbs = new ArrayList<>(observers.values());
     }
     final Iterator<FileTreeViews.CacheObserver<T>> it = cbs.iterator();
-    while (it.hasNext()) it.next().onDelete(oldEntry);
+    while (it.hasNext()) {
+      try {
+        it.next().onDelete(oldEntry);
+      } catch (final Exception e) {
+        e.printStackTrace();
+      }
+    }
   }
 
   @Override
@@ -42,7 +54,13 @@ class CacheObservers<T> implements FileTreeViews.CacheObserver<T>, AutoCloseable
       cbs = new ArrayList<>(observers.values());
     }
     final Iterator<FileTreeViews.CacheObserver<T>> it = cbs.iterator();
-    while (it.hasNext()) it.next().onUpdate(oldEntry, newEntry);
+    while (it.hasNext()) {
+      try {
+        it.next().onUpdate(oldEntry, newEntry);
+      } catch (final Exception e) {
+        e.printStackTrace();
+      }
+    }
   }
 
   @Override
