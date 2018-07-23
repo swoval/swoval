@@ -1,4 +1,5 @@
 #include <CoreServices/CoreServices.h>
+#include <algorithm>
 #include <condition_variable>
 #include <execinfo.h>
 #include <iostream>
@@ -28,9 +29,14 @@ struct service_handle {
 
 typedef handle<service_handle> JNIHandle;
 
+static bool sortEvents(std::pair<std::string, int32_t> left, std::pair<std::string, int32_t> right) {
+    return left.first.compare(right.first) < 0;
+}
+
 static void jni_callback(std::unique_ptr<Events> events, JNIHandle *h, Lock lock) {
     JNIEnv *env = h->data->env;
     if (!h->stopped) {
+        std::sort(events->begin(), events->end(), sortEvents);
         for (auto e : *events) {
             jstring string = env->NewStringUTF(e.first.c_str());
             jobject event =
