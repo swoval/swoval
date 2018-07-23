@@ -36,7 +36,6 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         @Override
         @SuppressWarnings("EmptyCatchBlock")
         public void onCreate(final Entry<WatchedDirectory> newEntry) {
-          System.out.println("OK ADDED DIR " + newEntry.getPath());
           maybeRunCallback(new Event(newEntry, Create));
           try {
             final Iterator<TypedPath> it =
@@ -52,7 +51,6 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                     .iterator();
             while (it.hasNext()) {
               final TypedPath tp = it.next();
-              System.out.println("OK ADD " + tp.getPath());
               maybeRunCallback(new Event(tp, Create));
             }
           } catch (final IOException e) {

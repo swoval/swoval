@@ -350,7 +350,8 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
   }
 }
 object FileCacheSymlinkTest extends FileCacheSymlinkTest with DefaultFileCacheTest {
-  val tests = Tests {}
+  //val tests = Tests {}
+  val tests = testsImpl
 }
 object NioFileCacheSymlinkTest extends FileCacheSymlinkTest with NioFileCacheTest {
   override val tests = Tests {}

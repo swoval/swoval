@@ -153,8 +153,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
     if (typedPath.exists()) {
       final CachedDirectory<T> dir = find(typedPath.getPath());
       if (dir != null) {
-        final Updates<T> updates = dir.update(typedPath, thread);
-        updates.observe(callbackObserver(callbacks));
+        dir.update(typedPath, thread).observe(callbackObserver(callbacks));
+        dir.update(typedPath, thread).observe(callbackObserver(callbacks));
       } else if (pendingFiles.remove(path)) {
         try {
           CachedDirectory<T> cachedDirectory;
