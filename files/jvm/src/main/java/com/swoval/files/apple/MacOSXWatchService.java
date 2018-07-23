@@ -69,6 +69,12 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
             final MacOSXWatchKey key =
                 childKey == null ? registered.get(path.getParent()) : childKey;
             final boolean exists = Files.exists(path, LinkOption.NOFOLLOW_LINKS);
+            if (key != null || path.toString().endsWith("file-initial")) {
+              if (path.toString().contains("initial"))
+                System.err.println(System.currentTimeMillis() + " " + MacOSXWatchService.this + " osx cb " + path);
+              if (path.toString().contains("initial"))
+                System.err.println(System.currentTimeMillis() + " " + MacOSXWatchService.this + " osx key? " + key + " " + path);
+            }
             if (key != null) {
               if (exists && key.reportModifyEvents()) createEvent(key, ENTRY_MODIFY, path);
               else if (!exists && key.reportDeleteEvents()) createEvent(key, ENTRY_DELETE, path);

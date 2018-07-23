@@ -9,8 +9,7 @@ import com.swoval.runtime.ShutdownHooks;
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -36,13 +35,11 @@ public class FileEventsApi implements AutoCloseable {
 
   private long handle;
   private final ExecutorService executor =
-      new ThreadPoolExecutor(
-          2,
-          10,
-          5,
-          TimeUnit.SECONDS,
-          new LinkedBlockingDeque<Runnable>(8192),
+      Executors.newSingleThreadExecutor(
           new ThreadFactory("com.swoval.files.apple.FileEventsApi.run-loop-thread"));
+  private final ExecutorService callbackExecutor =
+      Executors.newSingleThreadExecutor(
+          new ThreadFactory("com.swoval.files.apple.FileEventsApi.callback-thread"));
 
   private FileEventsApi(final Consumer<FileEvent> c, final Consumer<String> pc)
       throws InterruptedException {
@@ -63,26 +60,42 @@ public class FileEventsApi implements AutoCloseable {
                 new Consumer<FileEvent>() {
                   @Override
                   public void accept(final FileEvent fileEvent) {
-                    executor.submit(
-                        new Runnable() {
-                          @Override
-                          public void run() {
-                            c.accept(fileEvent);
-                          }
-                        });
+                    try {
+                      callbackExecutor.submit(
+                          new Runnable() {
+                            @Override
+                            public void run() {
+                              try {
+                                c.accept(fileEvent);
+                              } catch (final Exception e) {
+                                e.printStackTrace();
+                              }
+                            }
+                          });
+                    } catch (final java.lang.Exception ex) {
+                      ex.printStackTrace();
+                    }
                   }
                 };
             final Consumer<String> streamConsumer =
                 new Consumer<String>() {
                   @Override
                   public void accept(final String s) {
-                    executor.submit(
-                        new Runnable() {
-                          @Override
-                          public void run() {
-                            pc.accept(s);
-                          }
-                        });
+                    try {
+                      callbackExecutor.submit(
+                          new Runnable() {
+                            @Override
+                            public void run() {
+                              try {
+                                pc.accept(s);
+                              } catch (final Exception e) {
+                                e.printStackTrace();
+                              }
+                            }
+                          });
+                    } catch (final java.lang.Exception ex) {
+                      ex.printStackTrace();
+                    }
                   }
                 };
             FileEventsApi.this.handle = FileEventsApi.init(eventConsumer, streamConsumer);
@@ -100,8 +113,10 @@ public class FileEventsApi implements AutoCloseable {
     if (closed.compareAndSet(false, true)) {
       stopLoop(handle);
       executor.shutdownNow();
+      callbackExecutor.shutdownNow();
       try {
         executor.awaitTermination(5, TimeUnit.SECONDS);
+        callbackExecutor.awaitTermination(5, TimeUnit.SECONDS);
         close(handle);
       } catch (InterruptedException e) {
       }

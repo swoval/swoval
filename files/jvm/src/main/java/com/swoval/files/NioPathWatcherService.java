@@ -88,6 +88,13 @@ class NioPathWatcherService implements AutoCloseable {
                                     : watchKey.resolve((Path) e.context());
                             final Either<Overflow, Event> result =
                                 Either.right(new Event(TypedPaths.get(path, UNKNOWN), kind));
+                            if (path.toString().contains("initial"))
+                              System.err.println(
+                                  System.currentTimeMillis()
+                                      + " "
+                                      + NioPathWatcherService.this
+                                      + " event "
+                                      + result);
                             eventConsumer.accept(result);
                           }
                         }
@@ -113,6 +120,8 @@ class NioPathWatcherService implements AutoCloseable {
     CachedWatchDirectory(final Path path) throws IOException {
       this.path = path;
       this.key = watchService.register(path, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
+      if (path.toString().contains("initial"))
+        System.err.println(NioPathWatcherService.this + " registered " + path);
     }
 
     @Override

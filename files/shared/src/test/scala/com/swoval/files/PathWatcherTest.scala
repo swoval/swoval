@@ -15,6 +15,7 @@ import utest._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.{ Failure, Success }
 
 trait PathWatcherTest extends TestSuite {
   type Event = PathWatchers.Event
@@ -172,7 +173,7 @@ trait PathWatcherTest extends TestSuite {
           val dirLatch = new CountDownLatch(1)
           val fileLatch = new CountDownLatch(1)
           val subdir = dir.resolve("subdir")
-          val file = subdir.resolve("file")
+          val file = subdir.resolve("file-initial")
           val callback = (e: PathWatchers.Event) => {
             if (e.getPath == subdir && e.exists) dirLatch.countDown()
             else if (e.getPath == file && e.exists) fileLatch.countDown()
@@ -184,6 +185,7 @@ trait PathWatcherTest extends TestSuite {
             dirLatch
               .waitFor(DEFAULT_TIMEOUT) {
                 assert(Files.exists(subdir))
+                System.err.println(s"WTF create file $file")
                 file.createFile()
               }
               .flatMap { _ =>
@@ -191,6 +193,9 @@ trait PathWatcherTest extends TestSuite {
                   assert(Files.exists(file))
                 }
               }
+          }.andThen {
+            case Success(_) =>
+            case Failure(_) => System.out.println(s"absent.initially failed for $file")
           }
         }
         'afterRemoval - {}

@@ -20,23 +20,24 @@ object AllTests {
     def test[T <: TestSuite](t: T): (Tests, String) =
       (t.tests, t.getClass.getName.replaceAll("[$]", ""))
     val tests = Seq(
-//      test(NioPathWatcherTest),
-//      test(NioPathWatcherTest),
-//      test(NioPathWatcherTest),
-//      test(NioPathWatcherTest),
-//      test(NioPathWatcherTest),
-//      test(NioPathWatcherTest),
-//      test(NioPathWatcherTest),
-//      test(NioPathWatcherTest),
-//      test(NioPathWatcherTest),
-//      test(NioPathWatcherTest),
+      test(NioPathWatcherTest),
+      test(NioPathWatcherTest),
+      test(NioPathWatcherTest),
+      test(NioPathWatcherTest),
+      test(NioPathWatcherTest),
+      test(NioPathWatcherTest),
+      test(NioPathWatcherTest),
+      test(NioPathWatcherTest),
+      test(NioPathWatcherTest),
+      test(NioPathWatcherTest),
 //      test(NioFileCacheOverflowTest),
 //      test(NioFileCacheOverflowTest),
       test(FileCacheOverflowTest),
       test(FileCacheOverflowTest),
       test(FileCacheOverflowTest),
       test(FileCacheOverflowTest),
-      test(NioFileCacheOverflowTest)
+      test(FileCacheOverflowTest)
+      //test(NioFileCacheOverflowTest)
 //      test(BasicFileCacheTest),
 //      test(NioBasicFileCacheTest),
 //      test(FileCacheSymlinkTest),
