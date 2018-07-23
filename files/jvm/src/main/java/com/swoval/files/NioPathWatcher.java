@@ -291,10 +291,8 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
   private void handleOverflow(final Overflow overflow, final Thread thread) {
     final Path path = overflow.getPath();
-    final int maxDepth = directoryRegistry.maxDepthFor(path);
     final CachedDirectory<WatchedDirectory> root = rootDirectories.get(path.getRoot());
     if (root != null) {
-      if (maxDepth >= 0) {
         try {
           final Iterator<TypedPath> it =
               FileTreeViews.list(
@@ -310,15 +308,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                   .iterator();
           while (it.hasNext()) {
             final TypedPath file = it.next();
-            final boolean regResult =
-                Either.getOrElse(
-                    register(
-                        file.getPath(),
-                        maxDepth == Integer.MAX_VALUE ? Integer.MAX_VALUE : maxDepth - 1),
-                    false);
-            if (regResult) {
-              maybeRunCallback(new Event(file, Create));
-            }
+            add(file, thread);
           }
         } catch (final IOException e) {
           final Iterator<Entry<WatchedDirectory>> removed = root.remove(path, thread).iterator();
@@ -326,7 +316,6 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
             maybeRunCallback(new Event(Entries.setExists(removed.next(), false), Delete));
           }
         }
-      }
     }
     maybeRunCallback(new Event(TypedPaths.get(path), Modify));
   }

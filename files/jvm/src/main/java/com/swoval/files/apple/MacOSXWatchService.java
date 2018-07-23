@@ -76,8 +76,15 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
                 System.err.println(System.currentTimeMillis() + " " + MacOSXWatchService.this + " osx key? " + key + " " + path);
             }
             if (key != null) {
-              if (exists && key.reportModifyEvents()) createEvent(key, ENTRY_MODIFY, path);
-              else if (!exists && key.reportDeleteEvents()) createEvent(key, ENTRY_DELETE, path);
+              if (fileEvent.mustScanSubDirs()) {
+                key.events.add(new Event<>(OVERFLOW, 1, null));
+                if (!readyKeys.contains(key)) {
+                  readyKeys.offer(key);
+                }
+              } else {
+                if (exists && key.reportModifyEvents()) createEvent(key, ENTRY_MODIFY, path);
+                else if (!exists && key.reportDeleteEvents()) createEvent(key, ENTRY_DELETE, path);
+              }
             }
           }
         }
