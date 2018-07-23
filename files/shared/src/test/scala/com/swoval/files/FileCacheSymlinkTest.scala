@@ -350,13 +350,14 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
   }
 }
 object FileCacheSymlinkTest extends FileCacheSymlinkTest with DefaultFileCacheTest {
-  val tests = testsImpl
+  val tests = Tests {}
 }
 object NioFileCacheSymlinkTest extends FileCacheSymlinkTest with NioFileCacheTest {
-  override val tests =
-    if (Platform.isJVM && Platform.isMac) testsImpl
-    else
-      Tests('ignore - {
-        println("Not running NioFileCacheTest on platform other than the jvm on osx")
-      })
+  override val tests = Tests {}
+//  override val tests =
+//    if (Platform.isJVM && Platform.isMac) testsImpl
+//    else
+//      Tests('ignore - {
+//        println("Not running NioFileCacheTest on platform other than the jvm on osx")
+//      })
 }

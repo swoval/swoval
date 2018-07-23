@@ -36,6 +36,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         @Override
         @SuppressWarnings("EmptyCatchBlock")
         public void onCreate(final Entry<WatchedDirectory> newEntry) {
+          System.out.println("OK ADDED DIR " + newEntry.getPath());
           maybeRunCallback(new Event(newEntry, Create));
           try {
             final Iterator<TypedPath> it =
@@ -45,13 +46,14 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                     new Filter<TypedPath>() {
                       @Override
                       public boolean accept(final TypedPath typedPath) {
-                        return !typedPath.isDirectory()
-                            && directoryRegistry.accept(typedPath.getPath());
+                        return directoryRegistry.accept(typedPath.getPath());
                       }
                     })
                     .iterator();
             while (it.hasNext()) {
-              maybeRunCallback(new Event(it.next(), Create));
+              final TypedPath tp = it.next();
+              System.out.println("OK ADD " + tp.getPath());
+              maybeRunCallback(new Event(tp, Create));
             }
           } catch (final IOException e) {
             // This likely means the directory was deleted, which should be handle by the downstream
