@@ -167,7 +167,8 @@ trait PathWatcherTest extends TestSuite {
 
       }
       'absent - {
-        'initially - withTempDirectory { dir =>
+        'initially - withTempDirectory { root =>
+          val dir = Files.createDirectory(root.resolve("initial"))
           val dirLatch = new CountDownLatch(1)
           val fileLatch = new CountDownLatch(1)
           val subdir = dir.resolve("subdir")
