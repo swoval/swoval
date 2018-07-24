@@ -8,6 +8,7 @@ import com.swoval.files.apple.GlobalFileEventMonitor.Consumers;
 import com.swoval.functional.Consumer;
 import com.swoval.runtime.NativeLoader;
 import java.io.IOException;
+import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -34,7 +35,8 @@ public class FileEventMonitors {
   }
 
   public static FileEventMonitor getGlobal(
-      final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer) throws InterruptedException {
+      final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer)
+      throws InterruptedException {
     synchronized (lock) {
       GlobalFileEventMonitor monitor = global.get();
       if (monitor == null) {
@@ -46,11 +48,12 @@ public class FileEventMonitors {
   }
 
   public static FileEventMonitor get(
-      final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer) throws InterruptedException {
+      final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer)
+      throws InterruptedException {
     return new FileEventMonitorImpl(eventConsumer, streamConsumer);
   }
 
- static void clearGlobal(final GlobalFileEventMonitor globalFileEventMonitor) {
+  static void clearGlobal(final GlobalFileEventMonitor globalFileEventMonitor) {
     if (global.compareAndSet(globalFileEventMonitor, null)) {
       globalFileEventMonitor.close();
     }
@@ -115,19 +118,26 @@ class FileEventMonitorImpl implements FileEventMonitor {
   }
 
   @Override
-  public Handle createStream(final Path path, final long latency, TimeUnit timeUnit, Create flags) {
-    final int res = createStream(path.toString(), timeUnit.toNanos(latency) / 1.0e9, flags.getValue(), handle);
-    return res == -1 ? Handles.INVALID : new NativeHandle(res);
+  public Handle createStream(final Path path, final long latency, TimeUnit timeUnit, Create flags)
+      throws ClosedFileEventMonitorException {
+    if (!closed.get()) {
+      final int res =
+          createStream(
+              path.toString(), timeUnit.toNanos(latency) / 1.0e9, flags.getValue(), handle);
+      return res == -1 ? Handles.INVALID : new NativeHandle(res);
+    } else {
+      throw new ClosedFileEventMonitorException();
+    }
   }
 
   @Override
-  public void stopStream(final Handle streamHandle) {
+  public void stopStream(final Handle streamHandle) throws ClosedFileEventMonitorException {
     if (!closed.get()) {
       assert (streamHandle instanceof NativeHandle);
       stopStream(handle, ((NativeHandle) streamHandle).handle);
     } else {
-      new Exception("stop stream").printStackTrace();
-      }
+      throw new ClosedFileEventMonitorException();
+    }
   }
 
   @Override
@@ -184,7 +194,8 @@ class GlobalFileEventMonitor extends FileEventMonitorImpl {
     this.streamConsumers = streamConsumers;
   }
 
-  private int addConsumers(final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer) {
+  private int addConsumers(
+      final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer) {
     synchronized (lock) {
       final int id = currentConsumerId.getAndIncrement();
       eventConsumers.addConsumer(id, eventConsumer);
@@ -231,7 +242,8 @@ class GlobalFileEventMonitor extends FileEventMonitorImpl {
     void addConsumer(final int id, final Consumer<T> consumer) {
       synchronized (lock) {
         if (consumers.put(id, consumer) != null) {
-          throw new IllegalStateException("Tried to add duplicate consumer " + consumer + " with id " + id);
+          throw new IllegalStateException(
+              "Tried to add duplicate consumer " + consumer + " with id " + id);
         }
       }
     }
@@ -260,18 +272,17 @@ class GlobalFileEventMonitor extends FileEventMonitorImpl {
     private final int consumerId;
 
     DelegateFileEventMonitor(
-        final Consumer<FileEvent> eventConsumer,
-        final Consumer<String> streamConsumer) {
+        final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer) {
       this.consumerId = GlobalFileEventMonitor.this.addConsumers(eventConsumer, streamConsumer);
     }
 
     @Override
-    public Handle createStream(Path path, long latency, TimeUnit timeUnit, Create flags) {
+    public Handle createStream(Path path, long latency, TimeUnit timeUnit, Create flags) throws ClosedFileEventMonitorException {
       return GlobalFileEventMonitor.this.createStream(path, latency, timeUnit, flags);
     }
 
     @Override
-    public void stopStream(Handle streamHandle) {
+    public void stopStream(Handle streamHandle) throws ClosedFileEventMonitorException {
       GlobalFileEventMonitor.this.stopStream(streamHandle);
     }
 

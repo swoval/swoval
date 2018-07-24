@@ -73,9 +73,17 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
             final boolean exists = Files.exists(path, LinkOption.NOFOLLOW_LINKS);
             if (key != null || path.toString().endsWith("file-initial")) {
               if (path.toString().contains("initial"))
-                System.err.println(System.currentTimeMillis() + " " + MacOSXWatchService.this + " osx cb " + path);
+                System.err.println(
+                    System.currentTimeMillis() + " " + MacOSXWatchService.this + " osx cb " + path);
               if (path.toString().contains("initial"))
-                System.err.println(System.currentTimeMillis() + " " + MacOSXWatchService.this + " osx key? " + key + " " + path);
+                System.err.println(
+                    System.currentTimeMillis()
+                        + " "
+                        + MacOSXWatchService.this
+                        + " osx key? "
+                        + key
+                        + " "
+                        + path);
             }
             if (key != null) {
               if (fileEvent.mustScanSubDirs()) {
@@ -95,7 +103,9 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
 
   /**
    * Creates a new MacOSXWatchService.
-   * @param watchLatency the minimum latency between watch events specified in units of <code>timeUnit</code>
+   *
+   * @param watchLatency the minimum latency between watch events specified in units of <code>
+   *     timeUnit</code>
    * @param timeUnit the time unit the latency is specified with
    * @param queueSize the maximum number of events to queue per watch key
    * @throws InterruptedException if the native file events api initialization is interrupted.
@@ -110,6 +120,7 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
   /**
    * Create a new MacOSXWatchService with a minimum latency of 10 milliseconds and a maximum queue
    * size of <code>1024</code> per watch key.
+   *
    * @throws InterruptedException if the native file events api initialization is interrupted.
    */
   @SuppressWarnings("unused")
@@ -190,12 +201,13 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
             }
             if (handle != Handles.INVALID) {
               streams.add(realPath);
-           //   try {
-                handle = fileEventMonitor.createStream(realPath, watchLatency, watchTimeUnit, flags);
-//              } catch (ClosedFileEventsApiException e) {
-//                close();
-//                throw e;
-//              }
+              try {
+                handle =
+                    fileEventMonitor.createStream(realPath, watchLatency, watchTimeUnit, flags);
+              } catch (final ClosedFileEventMonitorException e) {
+                close();
+                throw e;
+              }
             }
             result = new MacOSXWatchKey(this, realPath, queueSize, handle, kinds);
             registered.put(realPath, result);
@@ -215,7 +227,13 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
       final MacOSXWatchKey key = registered.get(path);
       if (key != null) {
         registered.remove(path);
-        if (key.getHandle() != Handles.INVALID) fileEventMonitor.stopStream(key.getHandle());
+        if (key.getHandle() != Handles.INVALID) {
+          try {
+            fileEventMonitor.stopStream(key.getHandle());
+          } catch (final ClosedFileEventMonitorException e) {
+            e.printStackTrace(System.err);
+          }
+        }
         key.setHandle(Handles.INVALID);
       }
     }

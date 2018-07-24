@@ -17,9 +17,11 @@ public interface FileEventMonitor extends AutoCloseable {
    * @param timeUnit the unit in which the latency is specified
    * @param flags the flags specified to create the stream
    * @return an opaque handle to the native stream object
+   * @throws ClosedFileEventMonitorException if the {@link FileEventMonitor} has been closed
    */
   FileEventMonitors.Handle createStream(
-      Path path, long latency, TimeUnit timeUnit, Flags.Create flags);
+      Path path, long latency, TimeUnit timeUnit, Flags.Create flags)
+      throws ClosedFileEventMonitorException;
 
   /**
    * Stop monitoring a path previously registered with {@link FileEventMonitor#createStream(Path,
@@ -27,8 +29,9 @@ public interface FileEventMonitor extends AutoCloseable {
    *
    * @param streamHandle the handle returned by {@link FileEventMonitor#createStream(Path, long,
    *     TimeUnit, Create)}
+   * @throws ClosedFileEventMonitorException if the {@link FileEventMonitor} has been closed
    */
-  void stopStream(FileEventMonitors.Handle streamHandle);
+  void stopStream(FileEventMonitors.Handle streamHandle) throws ClosedFileEventMonitorException;
 
   /** Handle all exceptions. */
   @Override
