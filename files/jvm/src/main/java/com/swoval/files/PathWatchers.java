@@ -51,7 +51,7 @@ public class PathWatchers {
       final DirectoryRegistry registry)
       throws IOException, InterruptedException {
     return Platform.isMac()
-        ? new ApplePathWatcher(executor.delegate(callback), executor, registry)
+        ? ApplePathWatchers.get(executor.delegate(callback), executor, registry)
         : PlatformWatcher.make(callback, executor, registry);
   }
 

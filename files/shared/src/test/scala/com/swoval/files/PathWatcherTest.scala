@@ -69,7 +69,7 @@ trait PathWatcherTest extends TestSuite {
           }
         }
       }
-      "remove redundant watchers" - withTempDirectory { dir =>
+      'redundant - withTempDirectory { dir =>
         if (Platform.isMac) {
           val events = new ArrayBlockingQueue[String](10)
           val callback: BiConsumer[String, Executor#Thread] =
