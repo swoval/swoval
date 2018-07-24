@@ -22,11 +22,13 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Implements the PathWatcher for Mac OSX using the <a
@@ -306,5 +308,190 @@ public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
       }
     }
     return result;
+  }
+}
+
+class GlobalApplePathWatcher implements PathWatcher<PathWatchers.Event> {
+  private final DirectoryRegistries directoryRegistries = new DirectoryRegistries();
+  private final Executor executor =
+      Executor.make("com.swoval.files.GlobalApplePathWatcher.executor");
+  private final BiConsumer<PathWatchers.Event, Executor.Thread> biConsumer =
+      new BiConsumer<Event, Executor.Thread>() {
+        @Override
+        public void accept(final Event event, final Executor.Thread thread) {}
+      };
+  private final ApplePathWatcher pathWatcher =
+      new ApplePathWatcher(biConsumer, executor, directoryRegistries);
+
+  GlobalApplePathWatcher() throws InterruptedException {}
+
+  @Override
+  public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
+    return Either.right(true);
+  }
+
+  @Override
+  public void unregister(final Path path) {}
+
+  @Override
+  public void close() {}
+
+  @Override
+  public int addObserver(final Observer<Event> observer) {
+    return 0;
+  }
+
+  @Override
+  public void removeObserver(final int handle) {}
+
+  private class DelegatePathWatcher implements PathWatcher<PathWatchers.Event> {
+    private final DirectoryRegistry directoryRegistry;
+    private final Executor executor;
+    private final BiConsumer<PathWatchers.Event, Executor.Thread> biConsumer;
+
+    DelegatePathWatcher(
+        final BiConsumer<PathWatchers.Event, Executor.Thread> biConsumer,
+        final Executor executor,
+        final DirectoryRegistry directoryRegistry) {
+      this.biConsumer = biConsumer;
+      this.executor = executor;
+      this.directoryRegistry = directoryRegistry;
+      directoryRegistries.addDirectoryRegister(directoryRegistry);
+    }
+
+    @Override
+    public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
+      return executor
+          .block(
+              new Function<Executor.Thread, Boolean>() {
+                @Override
+                public Boolean apply(Executor.Thread thread) {
+                  return true;
+                }
+              })
+          .castLeft(IOException.class, false);
+    }
+
+    @Override
+    public void unregister(final Path path) {}
+
+    @Override
+    public void close() {}
+
+    @Override
+    public int addObserver(final Observer<Event> observer) {
+      return 0;
+    }
+
+    @Override
+    public void removeObserver(int handle) {}
+  }
+
+  private static class DelegatePathWatchers implements PathWatcher<PathWatchers.Event> {
+    private static final Map<Integer, DelegatePathWatcher> pathWatchers = new LinkedHashMap<>();
+    private final Object lock = new Object();
+    private final AtomicInteger watcherID = new AtomicInteger(1);
+
+    /*
+     * No-op
+     */
+    @Override
+    public boolean addDirectory(final Path path, final int maxDepth) {
+      return false;
+    }
+
+    @Override
+    public int maxDepthFor(final Path path) {
+      int maxDepth = Integer.MIN_VALUE;
+      final Iterator<DirectoryRegistry> it = registryIterator();
+      while (it.hasNext() && maxDepth < Integer.MAX_VALUE) {
+        final DirectoryRegistry registry = it.next();
+        final int depth = registry.maxDepthFor(path);
+        if (depth > maxDepth) maxDepth = depth;
+      }
+      return maxDepth;
+    }
+
+    @Override
+    public List<Path> registered() {
+      final List<Path> paths = new ArrayList<>();
+      final Iterator<DirectoryRegistry> it = registryIterator();
+      while (it.hasNext()) {
+        paths.addAll(it.next().registered());
+      }
+      return paths;
+    }
+
+    /*
+     * No-op.
+     */
+    @Override
+    public void removeDirectory(final Path path) {}
+
+    @Override
+    public boolean acceptPrefix(final Path path) {
+      boolean result = false;
+      final Iterator<DirectoryRegistry> it = registryIterator();
+      while (!result && it.hasNext()) {
+        result = it.next().acceptPrefix(path);
+      }
+      return result;
+    }
+
+    @Override
+    public boolean accept(Path path) {
+      boolean result = false;
+      final Iterator<DirectoryRegistry> it = registryIterator();
+      while (!result && it.hasNext()) {
+        result = it.next().accept(path);
+      }
+      return result;
+    }
+
+    int addDirectoryRegister(final DirectoryRegistry registry) {
+      synchronized (lock) {
+        final int id = watcherID.incrementAndGet();
+        registries.put(id, registry);
+        return id;
+      }
+    }
+
+    boolean removeDirectoryRegister(final int id) {
+      synchronized (lock) {
+        return (registries.remove(id) != null) && registries.isEmpty();
+      }
+    }
+
+
+    @Override
+    public Either<IOException, Boolean> register(Path path, int maxDepth) {
+      return null;
+    }
+
+    @Override
+    public void unregister(Path path) {
+
+    }
+
+    @Override
+    public void close() {
+
+    }
+
+    @Override
+    public int addObserver(Observer<Event> observer) {
+      return 0;
+    }
+
+    @Override
+    public void removeObserver(int handle) {
+
+    }
+
+    private Iterator<DirectoryRegistry> registryIterator() {
+      synchronized (lock) {
+        return new ArrayList<>(registries.values()).iterator();
+      }
+    }
   }
 }
