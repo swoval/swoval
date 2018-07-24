@@ -30,7 +30,6 @@ import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Implements the PathWatcher for Mac OSX using the <a
@@ -313,29 +312,29 @@ public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
 }
 
 class ApplePathWatchers {
-  private ApplePathWatchers() {};
-  private static AtomicReference<GlobalApplePathWatcher> global = new AtomicReference<>(null);
-  private static Object lock = new Object();
+  private ApplePathWatchers() {}
+
+  private static final GlobalApplePathWatcher GLOBAL_APPLE_PATH_WATCHER;
+
+  static {
+    try {
+      GLOBAL_APPLE_PATH_WATCHER = new GlobalApplePathWatcher();
+    } catch (final InterruptedException e) {
+      throw new ExceptionInInitializerError();
+    }
+  }
 
   public static PathWatcher<PathWatchers.Event> get(
       final BiConsumer<PathWatchers.Event, Executor.Thread> biConsumer,
       final Executor executor,
-      final DirectoryRegistry directoryRegistry) throws InterruptedException {
-    synchronized (lock) {
-      GlobalApplePathWatcher watcher = global.get();
-      if (watcher == null || watcher.isClosed()) {
-        watcher = new GlobalApplePathWatcher();
-        global.set(watcher);
-      }
-      return watcher.newDelegate(biConsumer, executor, directoryRegistry);
-    }
+      final DirectoryRegistry directoryRegistry)
+      throws InterruptedException {
+    return GLOBAL_APPLE_PATH_WATCHER.newDelegate(biConsumer, executor, directoryRegistry);
   }
 }
 
-class GlobalApplePathWatcher implements PathWatcher<PathWatchers.Event> {
+class GlobalApplePathWatcher implements AutoCloseable {
   private final DelegatePathWatchers pathWatchers = new DelegatePathWatchers();
-  private final Executor executor =
-      Executor.make("com.swoval.files.GlobalApplePathWatcher.executor");
   private final BiConsumer<PathWatchers.Event, Executor.Thread> biConsumer =
       new BiConsumer<Event, Executor.Thread>() {
         @Override
@@ -406,77 +405,53 @@ class GlobalApplePathWatcher implements PathWatcher<PathWatchers.Event> {
           return result;
         }
       };
-  private final ApplePathWatcher pathWatcher = new ApplePathWatcher(biConsumer, executor, registry);
-  private final AtomicBoolean closed = new AtomicBoolean(false);
+  private ApplePathWatcher pathWatcher;
+  private final AtomicBoolean closed = new AtomicBoolean(true);
+  private final Object lock = new Object();
 
   GlobalApplePathWatcher() throws InterruptedException {}
 
-  public boolean isClosed() {
-    return closed.get();
+  private void maybeInit() throws InterruptedException {
+    if (closed.getAndSet(false)) {
+      pathWatcher =
+          new ApplePathWatcher(
+              biConsumer,
+              Executor.make("com.swoval.files.ApplePathWatcher.global.executor"),
+              registry);
+    }
   }
 
-  public PathWatcher<PathWatchers.Event> newDelegate(
+  PathWatcher<PathWatchers.Event> newDelegate(
       final BiConsumer<PathWatchers.Event, Executor.Thread> biConsumer,
       final Executor executor,
-      final DirectoryRegistry registry) {
-    final int id = pathWatchers.watcherID.incrementAndGet();
-    final DelegatePathWatcher watcher = new DelegatePathWatcher(id, biConsumer, executor, registry);
-    pathWatchers.addPathWatcher(id, watcher);
-    return watcher;
-  }
-
-  @Override
-  public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
-    return executor
-        .block(
-            new Function<Thread, Boolean>() {
-              @Override
-              public Boolean apply(Executor.Thread thread) {
-                return Either.getOrElse(pathWatcher.register(path, maxDepth), false);
-              }
-            })
-        .castLeft(IOException.class, false);
-  }
-
-  @Override
-  public void unregister(final Path path) {
-    executor.block(
-        new Consumer<Executor.Thread>() {
-          @Override
-          public void accept(Executor.Thread thread) {
-            pathWatcher.unregister(path);
-          }
-        });
+      final DirectoryRegistry registry)
+      throws InterruptedException {
+    synchronized (lock) {
+      maybeInit();
+      final int id = pathWatchers.watcherID.incrementAndGet();
+      final DelegatePathWatcher watcher =
+          new DelegatePathWatcher(id, biConsumer, executor, registry);
+      pathWatchers.addPathWatcher(id, watcher);
+      return watcher;
+    }
   }
 
   @Override
   public void close() {
-    final Either<Exception, Boolean> result =
-        executor.block(
-            new Function<Executor.Thread, Boolean>() {
-              @Override
-              public Boolean apply(final Executor.Thread thread) {
-                boolean result = false;
-                if (pathWatchers.isEmpty()) {
-                  if (closed.compareAndSet(false, true)) {
-                    pathWatcher.close();
-                    result = true;
-                  }
-                }
-                return result;
-              }
-            });
-    if (Either.getOrElse(result, false)) executor.close();
+    synchronized (lock) {
+      if (pathWatchers.isEmpty()) {
+        if (closed.compareAndSet(false, true)) {
+          pathWatcher.close();
+          pathWatcher = null;
+        }
+      }
+    }
   }
 
-  @Override
-  public int addObserver(final Observer<Event> observer) {
-    return pathWatcher.addObserver(observer);
-  }
-
-  @Override
-  public void removeObserver(final int handle) {
-    pathWatcher.removeObserver(handle);
+  private PathWatcher<PathWatchers.Event> getPathWatcher() {
+    synchronized (lock) {
+      return pathWatcher;
+    }
   }
 
   private class DelegatePathWatcher implements PathWatcher<PathWatchers.Event> {
@@ -498,45 +473,60 @@ class GlobalApplePathWatcher implements PathWatcher<PathWatchers.Event> {
 
     @Override
     public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
-      final Either<IOException, Boolean> result = executor
-          .block(
-              new Function<Executor.Thread, Boolean>() {
-                @Override
-                public Boolean apply(final Executor.Thread thread) {
-                  directoryRegistry.addDirectory(path, maxDepth);
-                  return Either.getOrElse(GlobalApplePathWatcher.this.register(path, maxDepth), false);
-                }
-              })
-          .castLeft(IOException.class, false);
-      return result;
-    }
-
-    public BiConsumer<PathWatchers.Event, Executor.Thread> getBiConsumer() {
-      return biConsumer;
-    }
-
-    public DirectoryRegistry getDirectoryRegistry() {
-      return directoryRegistry;
+      return executor
+              .block(
+                  new Function<Executor.Thread, Boolean>() {
+                    @Override
+                    public Boolean apply(final Executor.Thread thread) {
+                      directoryRegistry.addDirectory(path, maxDepth);
+                      return Either.getOrElse(getPathWatcher().register(path, maxDepth), false);
+                    }
+                  })
+              .castLeft(IOException.class, false);
     }
 
     @Override
-    public void unregister(final Path path) {}
+    public void unregister(final Path path) {
+      executor.block(new Consumer<Executor.Thread>() {
+                       @Override
+                       public void accept(Executor.Thread thread) {
+                         directoryRegistry.removeDirectory(path);
+                         pathWatcher.unregister(path);
+                       }
+                     });
+    }
 
     @Override
     public void close() {
-      if (pathWatchers.removePathWatcher(id)) {
-        GlobalApplePathWatcher.this.close();
-      }
+      executor.block(new Consumer<Thread>() {
+        @Override
+        public void accept(Thread thread) {
+          if (pathWatchers.removePathWatcher(id)) {
+            GlobalApplePathWatcher.this.close();
+          }
+        }
+      });
+      executor.close();
     }
 
     @Override
     public int addObserver(final Observer<Event> observer) {
-      return GlobalApplePathWatcher.this.addObserver(observer);
+      return Either.getOrElse(executor.block(new Function<Executor.Thread, Integer>() {
+        @Override
+        public Integer apply(final Executor.Thread thread) {
+          return getPathWatcher().addObserver(observer);
+        }
+      }), -1);
     }
 
     @Override
-    public void removeObserver(int handle) {
-      GlobalApplePathWatcher.this.removeObserver(handle);
+    public void removeObserver(final int handle) {
+      executor.block(new Consumer<Executor.Thread>() {
+                       @Override
+                       public void accept(Executor.Thread thread) {
+                         getPathWatcher().removeObserver(handle);
+                       }
+                     });
     }
   }
 
@@ -546,11 +536,15 @@ class GlobalApplePathWatcher implements PathWatcher<PathWatchers.Event> {
     private final AtomicInteger watcherID = new AtomicInteger(1);
 
     void addPathWatcher(final int id, final DelegatePathWatcher pathWatcher) {
-      pathWatchers.put(id, pathWatcher);
+      synchronized (lock) {
+        pathWatchers.put(id, pathWatcher);
+      }
     }
 
     boolean isEmpty() {
-      return pathWatchers.isEmpty();
+      synchronized (lock) {
+        return pathWatchers.isEmpty();
+      }
     }
 
     boolean removePathWatcher(final int id) {
