@@ -3,6 +3,7 @@ package com.swoval.files;
 import com.swoval.concurrent.ThreadFactory;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
+import java.nio.file.ClosedWatchServiceException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -198,17 +199,23 @@ abstract class Executor implements AutoCloseable {
 
     @Override
     void run(final Consumer<Thread> consumer, final int priority) {
-      if (factory.created(java.lang.Thread.currentThread())) {
-        try {
-          consumer.accept(getThread());
-        } catch (final Exception e) {
-          e.printStackTrace();
-        }
+      if (closed.get()) {
+        System.out.println("FUCKING CUNT");
+//        final RuntimeException e = new RuntimeException("Tried to run block on closed executor");
+//        throw e;
       } else {
-        synchronized (consumers) {
-          if (!consumers.offer(new PriorityConsumer(consumer, priority))) {
-            throw new IllegalStateException(
-                "Couldn't run task due to full queue (" + consumers.size() + ")");
+        if (factory.created(java.lang.Thread.currentThread())) {
+          try {
+            consumer.accept(getThread());
+          } catch (final Exception e) {
+            e.printStackTrace();
+          }
+        } else {
+          synchronized (consumers) {
+            if (!consumers.offer(new PriorityConsumer(consumer, priority))) {
+              throw new IllegalStateException(
+                  "Couldn't run task due to full queue (" + consumers.size() + ")");
+            }
           }
         }
       }

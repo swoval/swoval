@@ -1,6 +1,5 @@
 package com.swoval.files;
 
-import com.swoval.files.apple.MacOSXWatchService;
 import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.FileSystems;
@@ -13,7 +12,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Provides a platform dependent implementation of {@link
  * com.swoval.files.RegisterableWatchService}. On osx, the implementation will be {@link
- * com.swoval.files.apple.MacOSXWatchService}. On linux and windows, it will be an object that
+ * MacOSXWatchService}. On linux and windows, it will be an object that
  * implements {@link com.swoval.files.RegisterableWatchService} by delegation with an instance of
  * {@link java.nio.file.WatchService}.
  */
@@ -28,7 +27,7 @@ public class WatchServices {
     }
   }
 
-  public static RegisterableWatchService get() throws IOException {
+  public static RegisterableWatchService get() throws IOException, InterruptedException {
     return Platform.isMac() ? global.newDelegate() : new RegisterableWatchServiceImpl();
   }
 

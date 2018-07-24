@@ -7,6 +7,7 @@ import com.swoval.files.apple.Flags.Create;
 import com.swoval.files.apple.GlobalFileEventMonitor.Consumers;
 import com.swoval.functional.Consumer;
 import com.swoval.runtime.NativeLoader;
+import com.swoval.runtime.ShutdownHooks;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.Path;
@@ -31,7 +32,13 @@ public class FileEventMonitors {
   public interface Handle {}
 
   public static class Handles {
-    public static final Handle INVALID = new Handle() {};
+    public static final Handle INVALID =
+        new Handle() {
+          @Override
+          public String toString() {
+            return "INVALID";
+          }
+        };
   }
 
   public static FileEventMonitor getGlobal(
@@ -86,6 +93,15 @@ class FileEventMonitorImpl implements FileEventMonitor {
     loopThread.start();
     initLatch.await(5, TimeUnit.SECONDS);
     assert (handle != -1);
+    final Exception e = new Exception("Failed to close FileEventMonitor");
+    ShutdownHooks.addHook(1, new Runnable() {
+      @Override
+      public void run() {
+        if (!closed.get()) {
+          e.printStackTrace(System.err);
+          }
+      }
+    });
   }
 
   private class NativeHandle implements Handle {
@@ -93,6 +109,11 @@ class FileEventMonitorImpl implements FileEventMonitor {
 
     NativeHandle(final int handle) {
       this.handle = handle;
+    }
+
+    @Override
+    public String toString() {
+      return "NativeHandle(" + handle + ")";
     }
   }
 
