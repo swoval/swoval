@@ -99,7 +99,7 @@ class FileEventMonitorImpl implements FileEventMonitor {
       public void run() {
         if (!closed.get()) {
           e.printStackTrace(System.err);
-          }
+        }
       }
     });
   }

@@ -10,13 +10,14 @@ import com.swoval.test._
 import utest._
 
 import scala.collection.mutable
+import scala.util.Failure
 
 object NioPathWatcherOverflowTest extends TestSuite {
   val tests = Tests {
     val subdirsToAdd = 200
     val executor = Executor.make("NioPathWatcherOverflowTest-executor")
-    withTempDirectory { dir =>
-      val subdirs = 1 until subdirsToAdd map { i =>
+    'overflows - withTempDirectory { dir =>
+      val subdirs = 1 to subdirsToAdd map { i =>
         dir.resolve(s"subdir-$i")
       }
       val subdirLatch = new CountDownLatch(subdirsToAdd)
@@ -28,7 +29,7 @@ object NioPathWatcherOverflowTest extends TestSuite {
         e.getPath.getFileName.toString match {
           case name if name.startsWith("subdir") && addedSubdirs.add(e.getPath) =>
             subdirLatch.countDown()
-          case name if name == "file" && addedSubdirs.add(e.getPath) =>
+          case name if name == "file" && addedFiles.add(e.getPath) =>
             fileLatch.countDown()
           case _ =>
         }
