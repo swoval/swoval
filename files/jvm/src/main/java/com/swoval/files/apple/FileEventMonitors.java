@@ -9,6 +9,7 @@ import com.swoval.functional.Consumer;
 import com.swoval.runtime.NativeLoader;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -24,7 +25,7 @@ public class FileEventMonitors {
   private FileEventMonitors() {}
 
   private static final Object lock = new Object();
-  private static AtomicReference<GlobalFileEventMonitor> global = new AtomicReference<>();
+  private static AtomicReference<GlobalFileEventMonitor> global = new AtomicReference<>(null);
 
   public interface Handle {}
 
@@ -32,7 +33,7 @@ public class FileEventMonitors {
     public static final Handle INVALID = new Handle() {};
   }
 
-  public static FileEventMonitor get(
+  public static FileEventMonitor getGlobal(
       final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer) throws InterruptedException {
     synchronized (lock) {
       GlobalFileEventMonitor monitor = global.get();
@@ -44,9 +45,15 @@ public class FileEventMonitors {
     }
   }
 
+  public static FileEventMonitor get(
+      final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer) throws InterruptedException {
+    return new FileEventMonitorImpl(eventConsumer, streamConsumer);
+  }
+
  static void clearGlobal(final GlobalFileEventMonitor globalFileEventMonitor) {
-    global.compareAndSet(globalFileEventMonitor, null);
-    globalFileEventMonitor.close();
+    if (global.compareAndSet(globalFileEventMonitor, null)) {
+      globalFileEventMonitor.close();
+    }
   }
 }
 
@@ -74,6 +81,7 @@ class FileEventMonitorImpl implements FileEventMonitor {
             super.run();
           }
         };
+    loopThread.start();
     initLatch.await(5, TimeUnit.SECONDS);
     assert (handle != -1);
   }
@@ -108,7 +116,7 @@ class FileEventMonitorImpl implements FileEventMonitor {
   }
 
   @Override
-  public Handle createStream(final Path path, final int latency, TimeUnit timeUnit, Create flags) {
+  public Handle createStream(final Path path, final long latency, TimeUnit timeUnit, Create flags) {
     final int res = createStream(path.toString(), timeUnit.toNanos(latency) / 1.0e9, flags.getValue(), handle);
     return res == -1 ? Handles.INVALID : new NativeHandle(res);
   }
@@ -132,12 +140,6 @@ class FileEventMonitorImpl implements FileEventMonitor {
       } catch (final InterruptedException e) {
         e.printStackTrace(System.err);
       }
-    }
-    callbackExecutor.shutdownNow();
-    try {
-      callbackExecutor.awaitTermination(5, TimeUnit.SECONDS);
-    } catch (final InterruptedException e) {
-      e.printStackTrace(System.err);
     }
   }
 
@@ -168,7 +170,8 @@ class FileEventMonitorImpl implements FileEventMonitor {
 class GlobalFileEventMonitor extends FileEventMonitorImpl {
   private final Consumers<FileEvent> eventConsumers;
   private final Consumers<String> streamConsumers;
-  private static final AtomicInteger currentConsumerId = new AtomicInteger(0);
+  private final AtomicInteger currentConsumerId = new AtomicInteger(0);
+  private final Object lock = new Object();
 
   GlobalFileEventMonitor(
       final Consumers<FileEvent> eventConsumers, final Consumers<String> streamConsumers)
@@ -179,22 +182,40 @@ class GlobalFileEventMonitor extends FileEventMonitorImpl {
   }
 
   private int addConsumers(final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer) {
-    final int id = currentConsumerId.getAndIncrement();
-    eventConsumers.addConsumer(id, eventConsumer);
-    streamConsumers.addConsumer(id, streamConsumer);
-    return id;
+    synchronized (lock) {
+      final int id = currentConsumerId.getAndIncrement();
+      eventConsumers.addConsumer(id, eventConsumer);
+      streamConsumers.addConsumer(id, streamConsumer);
+      return id;
+    }
   }
 
   private boolean removeConsumers(final int id) {
-    return eventConsumers.removeConsumer(id) && streamConsumers.removeConsumer(id);
+    synchronized (lock) {
+      boolean res = eventConsumers.removeConsumer(id) && streamConsumers.removeConsumer(id);
+      return res;
+    }
+  }
+
+  @Override
+  public void close() {
+    synchronized (lock) {
+      if (eventConsumers.isEmpty()) {
+        super.close();
+      }
+    }
   }
 
   static final class Consumers<T> implements Consumer<T> {
     private final Map<Integer, Consumer<T>> consumers = new LinkedHashMap<>();
+    private final Object lock = new Object();
 
     @Override
     public void accept(final T t) {
-      final Iterator<Consumer<T>> it = consumers.values().iterator();
+      Iterator<Consumer<T>> it;
+      synchronized (lock) {
+        it = new ArrayList<>(consumers.values()).iterator();
+      }
       while (it.hasNext()) {
         try {
           it.next().accept(t);
@@ -204,23 +225,32 @@ class GlobalFileEventMonitor extends FileEventMonitorImpl {
       }
     }
 
-    void addConsumer(final int id, Consumer<T> consumer) {
-      assert (consumers.put(id, consumer) == null);
+    void addConsumer(final int id, final Consumer<T> consumer) {
+      synchronized (lock) {
+        if (consumers.put(id, consumer) != null) {
+          throw new IllegalStateException("Tried to add duplicate consumer " + consumer + " with id " + id);
+        }
+      }
     }
 
     boolean removeConsumer(final int id) {
-      consumers.remove(id);
-      return consumers.isEmpty();
+      synchronized (lock) {
+        return consumers.remove(id) != null && consumers.isEmpty();
+      }
     }
 
     boolean isEmpty() {
-      return consumers.isEmpty();
+      synchronized (lock) {
+        return consumers.isEmpty();
+      }
     }
   }
 
   FileEventMonitor getDelegate(
       final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer) {
-    return new DelegateFileEventMonitor(eventConsumer, streamConsumer);
+    synchronized (lock) {
+      return new DelegateFileEventMonitor(eventConsumer, streamConsumer);
+    }
   }
 
   private class DelegateFileEventMonitor implements FileEventMonitor {
@@ -229,11 +259,11 @@ class GlobalFileEventMonitor extends FileEventMonitorImpl {
     DelegateFileEventMonitor(
         final Consumer<FileEvent> eventConsumer,
         final Consumer<String> streamConsumer) {
-      this.consumerId = addConsumers(eventConsumer, streamConsumer);
+      this.consumerId = GlobalFileEventMonitor.this.addConsumers(eventConsumer, streamConsumer);
     }
 
     @Override
-    public Handle createStream(Path path, int latency, TimeUnit timeUnit, Create flags) {
+    public Handle createStream(Path path, long latency, TimeUnit timeUnit, Create flags) {
       return GlobalFileEventMonitor.this.createStream(path, latency, timeUnit, flags);
     }
 
@@ -244,8 +274,10 @@ class GlobalFileEventMonitor extends FileEventMonitorImpl {
 
     @Override
     public void close() {
-      if (GlobalFileEventMonitor.this.removeConsumers(consumerId)) {
-        FileEventMonitors.clearGlobal(GlobalFileEventMonitor.this);
+      synchronized (lock) {
+        if (GlobalFileEventMonitor.this.removeConsumers(consumerId)) {
+          FileEventMonitors.clearGlobal(GlobalFileEventMonitor.this);
+        }
       }
     }
   }

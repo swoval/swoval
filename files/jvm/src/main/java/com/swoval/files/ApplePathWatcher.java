@@ -108,7 +108,7 @@ public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
     if (entry == null) {
    //   try {
         FileEventMonitors.Handle id = fileEventMonitor.createStream(path, latency,  timeUnit, flags);
-        if (id != Handles.INVALID) {
+        if (id == Handles.INVALID) {
           result = false;
           System.err.println("Error watching " + path + ".");
         } else {

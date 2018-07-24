@@ -12,6 +12,7 @@ object AllTests {
     val count = args.headOption.flatMap(a => Try(a.toInt).toOption).getOrElse(1)
     1 to count foreach { i =>
       println(s"Iteration $i:")
+
       run()
     }
   }
