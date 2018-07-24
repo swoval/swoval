@@ -8,8 +8,10 @@ import static com.swoval.functional.Either.leftProjection;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.apple.FileEvent;
-import com.swoval.files.apple.FileEventsApi;
-import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
+import com.swoval.files.apple.FileEventMonitor;
+import com.swoval.files.apple.FileEventMonitors;
+import com.swoval.files.apple.FileEventMonitors.Handle;
+import com.swoval.files.apple.FileEventMonitors.Handles;
 import com.swoval.files.apple.Flags;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
@@ -22,6 +24,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -33,10 +36,11 @@ public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   private final DirectoryRegistry directoryRegistry;
   private final Map<Path, Stream> streams = new HashMap<>();
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private final double latency;
+  private final long latency;
+  private final TimeUnit timeUnit;
   private final Executor internalExecutor;
   private final Flags.Create flags;
-  private final FileEventsApi fileEventsApi;
+  private final FileEventMonitor fileEventMonitor;
   private static final DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
 
   @Override
@@ -48,10 +52,10 @@ public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   public void removeObserver(int handle) {}
 
   private static class Stream {
-    public final int id;
+    public final Handle handle;
 
-    Stream(final int id) {
-      this.id = id;
+    Stream(final Handle handle) {
+      this.handle = handle;
     }
   }
 
@@ -102,19 +106,19 @@ public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
     final Entry<Path, Stream> entry = find(path);
     directoryRegistry.addDirectory(path, maxDepth);
     if (entry == null) {
-      try {
-        int id = fileEventsApi.createStream(path.toString(), latency, flags.getValue());
-        if (id == -1) {
+   //   try {
+        FileEventMonitors.Handle id = fileEventMonitor.createStream(path, latency,  timeUnit, flags);
+        if (id != Handles.INVALID) {
           result = false;
           System.err.println("Error watching " + path + ".");
         } else {
           removeRedundantStreams(path);
           streams.put(path, new Stream(id));
         }
-      } catch (ClosedFileEventsApiException e) {
-        close();
-        result = false;
-      }
+//      } catch (ClosedFileEventsApiException e) {
+//        close();
+//        result = false;
+//      }
     }
     return result;
   }
@@ -139,8 +143,8 @@ public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
     if (!closed.get()) {
       directoryRegistry.removeDirectory(path);
       final Stream stream = streams.remove(path);
-      if (stream != null && stream.id != -1) {
-        fileEventsApi.stopStream(stream.id);
+      if (stream != null && stream.handle != Handles.INVALID) {
+        fileEventMonitor.stopStream(stream.handle);
       }
     }
   }
@@ -170,7 +174,7 @@ public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
             @Override
             public void accept(final Executor.Thread thread) {
               streams.clear();
-              fileEventsApi.close();
+              fileEventMonitor.close();
             }
           });
       internalExecutor.close();
@@ -191,7 +195,8 @@ public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
       final DirectoryRegistry directoryRegistry)
       throws InterruptedException {
     this(
-        0.01,
+        10,
+        TimeUnit.MILLISECONDS,
         new Flags.Create().setNoDefer().setFileEvents(),
         onFileEvent,
         DefaultOnStreamRemoved,
@@ -199,7 +204,7 @@ public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
         directoryRegistry);
   }
   /**
-   * Creates a new ApplePathWatcher which is a wrapper around {@link FileEventsApi}, which in turn
+   * Creates a new ApplePathWatcher which is a wrapper around {@link FileEventMonitor}, which in turn
    * is a native wrapper around <a
    * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
    * Apple File System Events</a>
@@ -217,7 +222,8 @@ public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
    *     initialization
    */
   ApplePathWatcher(
-      final double latency,
+      final long latency,
+      final TimeUnit timeUnit,
       final Flags.Create flags,
       final BiConsumer<Event, Executor.Thread> onFileEvent,
       final BiConsumer<String, Executor.Thread> onStreamRemoved,
@@ -225,6 +231,7 @@ public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
       final DirectoryRegistry managedDirectoryRegistry)
       throws InterruptedException {
     this.latency = latency;
+    this.timeUnit = timeUnit;
     this.flags = flags;
     this.internalExecutor =
         executor == null
@@ -232,8 +239,8 @@ public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
             : executor;
     this.directoryRegistry =
         managedDirectoryRegistry == null ? new DirectoryRegistryImpl() : managedDirectoryRegistry;
-    fileEventsApi =
-        FileEventsApi.apply(
+    fileEventMonitor =
+        FileEventMonitors.get(
             new Consumer<FileEvent>() {
               @Override
               public void accept(final FileEvent fileEvent) {

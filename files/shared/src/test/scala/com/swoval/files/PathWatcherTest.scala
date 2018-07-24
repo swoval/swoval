@@ -3,7 +3,7 @@ package files
 
 import java.nio.file.attribute.FileTime
 import java.nio.file.{ Files, Paths }
-import java.util.concurrent.TimeoutException
+import java.util.concurrent.{ TimeUnit, TimeoutException }
 
 import com.swoval.files.PathWatchers.Event.Kind.{ Create, Delete, Modify }
 import com.swoval.files.apple.Flags
@@ -76,7 +76,8 @@ trait PathWatcherTest extends TestSuite {
             (stream: String, _: Executor#Thread) => events.add(stream)
           withTempDirectory(dir) { subdir =>
             val watcher = new ApplePathWatcher(
-              DEFAULT_LATENCY.toNanos / 1.0e9,
+              DEFAULT_LATENCY.toNanos,
+              TimeUnit.NANOSECONDS,
               fileFlags,
               (_: PathWatchers.Event, _: Executor#Thread) => {},
               callback,

@@ -2,6 +2,7 @@ package com.swoval.files.apple;
 
 import com.swoval.concurrent.ThreadFactory;
 import com.swoval.files.apple.FileEventMonitors.Handle;
+import com.swoval.files.apple.FileEventMonitors.Handles;
 import com.swoval.files.apple.Flags.Create;
 import com.swoval.files.apple.GlobalFileEventMonitor.Consumers;
 import com.swoval.functional.Consumer;
@@ -27,6 +28,10 @@ public class FileEventMonitors {
 
   public interface Handle {}
 
+  public static class Handles {
+    public static final Handle INVALID = new Handle() {};
+  }
+
   public static FileEventMonitor get(
       final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer) throws InterruptedException {
     synchronized (lock) {
@@ -40,9 +45,8 @@ public class FileEventMonitors {
   }
 
  static void clearGlobal(final GlobalFileEventMonitor globalFileEventMonitor) {
-    if (global.compareAndSet(globalFileEventMonitor, null)) {
-      globalFileEventMonitor.close();
-    }
+    global.compareAndSet(globalFileEventMonitor, null);
+    globalFileEventMonitor.close();
   }
 }
 
@@ -105,8 +109,8 @@ class FileEventMonitorImpl implements FileEventMonitor {
 
   @Override
   public Handle createStream(final Path path, final int latency, TimeUnit timeUnit, Create flags) {
-    return new NativeHandle(
-        createStream(path.toString(), timeUnit.toNanos(latency) / 1.0e9, flags.getValue(), handle));
+    final int res = createStream(path.toString(), timeUnit.toNanos(latency) / 1.0e9, flags.getValue(), handle);
+    return res == -1 ? Handles.INVALID : new NativeHandle(res);
   }
 
   @Override
@@ -174,14 +178,14 @@ class GlobalFileEventMonitor extends FileEventMonitorImpl {
     this.streamConsumers = streamConsumers;
   }
 
-  int addConsumers(final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer) {
+  private int addConsumers(final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer) {
     final int id = currentConsumerId.getAndIncrement();
     eventConsumers.addConsumer(id, eventConsumer);
     streamConsumers.addConsumer(id, streamConsumer);
     return id;
   }
 
-  boolean removeConsumers(final int id) {
+  private boolean removeConsumers(final int id) {
     return eventConsumers.removeConsumer(id) && streamConsumers.removeConsumer(id);
   }
 

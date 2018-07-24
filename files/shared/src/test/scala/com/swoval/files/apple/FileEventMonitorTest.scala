@@ -1,17 +1,18 @@
 package com.swoval.files.apple
 
 import java.nio.file.Files
+import java.util.concurrent.TimeUnit
 
 import com.swoval.files.test.{ CountDownLatch, _ }
 import com.swoval.test._
 import utest._
 import utest.framework.ExecutionContext.RunNow
 
-object FileEventApiTest extends TestSuite {
+object FileEventMonitorTest extends TestSuite {
 
   def getFileEventsApi(onFileEvent: FileEvent => Unit,
-                       onStreamClosed: String => Unit = _ => {}): FileEventsApi =
-    FileEventsApi.apply((fe: FileEvent) => onFileEvent(fe), (s: String) => onStreamClosed(s))
+                       onStreamClosed: String => Unit = _ => {}): FileEventMonitor =
+    FileEventMonitors.get((fe: FileEvent) => onFileEvent(fe), (s: String) => onStreamClosed(s))
 
   val tests: Tests = testOn(MacOS) {
     'register - withTempDirectory { dir =>
@@ -22,7 +23,7 @@ object FileEventApiTest extends TestSuite {
         Files.deleteIfExists(file)
         latch.countDown()
       })
-      api.createStream(dir.toString, 0.05, new Flags.Create().setNoDefer().getValue)
+      api.createStream(dir, 50, TimeUnit.MILLISECONDS, new Flags.Create().setNoDefer())
       Files.createFile(file)
 
       latch
@@ -38,8 +39,8 @@ object FileEventApiTest extends TestSuite {
           assert(s == subdir.toString)
           latch.countDown()
         })
-        api.createStream(subdir.toString, 0.05, new Flags.Create().setNoDefer().getValue)
-        api.createStream(dir.toString, 0.05, new Flags.Create().setNoDefer().getValue)
+        api.createStream(subdir, 50, TimeUnit.MICROSECONDS, new Flags.Create().setNoDefer())
+        api.createStream(dir, 50, TimeUnit.MILLISECONDS, new Flags.Create().setNoDefer())
         latch
           .waitFor(DEFAULT_TIMEOUT) {}
           .andThen {

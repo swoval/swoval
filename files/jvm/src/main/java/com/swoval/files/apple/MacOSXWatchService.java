@@ -6,7 +6,8 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
 import com.swoval.files.RegisterableWatchService;
-import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException;
+import com.swoval.files.apple.FileEventMonitors.Handle;
+import com.swoval.files.apple.FileEventMonitors.Handles;
 import com.swoval.functional.Consumer;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
@@ -38,7 +39,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * events rather than polling for file changes.
  */
 public class MacOSXWatchService implements WatchService, AutoCloseable, RegisterableWatchService {
-  private final double watchLatency;
+  private final int watchLatency;
+  private final TimeUnit watchTimeUnit;
   private final int queueSize;
   private final AtomicBoolean open = new AtomicBoolean(true);
   private final LinkedBlockingQueue<MacOSXWatchKey> readyKeys = new LinkedBlockingQueue<>();
@@ -54,7 +56,7 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
             streams.remove(path);
             final MacOSXWatchKey key = registered.get(path);
             if (key != null) {
-              key.setStreamId(-1);
+              key.setHandle(Handles.INVALID);
             }
           }
         }
@@ -89,26 +91,39 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
           }
         }
       };
-  private final FileEventsApi watcher = FileEventsApi.apply(onFileEvent, dropEvent);
+  private final FileEventMonitor fileEventMonitor = FileEventMonitors.get(onFileEvent, dropEvent);
 
-  public MacOSXWatchService(final double watchLatency, final int queueSize)
+  /**
+   * Creates a new MacOSXWatchService.
+   * @param watchLatency the minimum latency between watch events specified in units of <code>timeUnit</code>
+   * @param timeUnit the time unit the latency is specified with
+   * @param queueSize the maximum number of events to queue per watch key
+   * @throws InterruptedException if the native file events api initialization is interrupted.
+   */
+  public MacOSXWatchService(final int watchLatency, final TimeUnit timeUnit, final int queueSize)
       throws InterruptedException {
     this.watchLatency = watchLatency;
     this.queueSize = queueSize;
+    this.watchTimeUnit = timeUnit;
   }
 
+  /**
+   * Create a new MacOSXWatchService with a minimum latency of 10 milliseconds and a maximum queue
+   * size of <code>1024</code> per watch key.
+   * @throws InterruptedException if the native file events api initialization is interrupted.
+   */
   @SuppressWarnings("unused")
   public MacOSXWatchService() throws InterruptedException {
     // The FsEvents api doesn't seem to report events at lower than 10 millisecond intervals.
-    this(0.01, 1024);
+    this(10, TimeUnit.MILLISECONDS, 1024);
   }
 
   @Override
   @SuppressWarnings("EmptyCatchBlock")
   public void close() {
-    synchronized (watcher) {
+    synchronized (fileEventMonitor) {
       if (open.compareAndSet(true, false)) {
-        watcher.close();
+        fileEventMonitor.close();
         final Iterator<Path> it = new ArrayList<>(registered.keySet()).iterator();
         while (it.hasNext()) {
           unregisterImpl(it.next());
@@ -159,7 +174,7 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
   }
 
   public WatchKey register(final Path path, final WatchEvent.Kind<?>... kinds) throws IOException {
-    synchronized (watcher) {
+    synchronized (fileEventMonitor) {
       if (isOpen()) {
         synchronized (registered) {
           final Path realPath = path.toRealPath();
@@ -167,22 +182,22 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
           final MacOSXWatchKey key = registered.get(realPath);
           final MacOSXWatchKey result;
           if (key == null) {
-            final int flags = new Flags.Create().setNoDefer().setFileEvents().getValue();
-            int id = -2;
+            final Flags.Create flags = new Flags.Create().setNoDefer().setFileEvents();
+            Handle handle = null;
             final Iterator<Path> it = streams.iterator();
-            while (it.hasNext() && id != -1) {
-              if (realPath.startsWith(it.next())) id = -1;
+            while (it.hasNext() && handle != Handles.INVALID) {
+              if (realPath.startsWith(it.next())) handle = Handles.INVALID;
             }
-            if (id != -1) {
+            if (handle != Handles.INVALID) {
               streams.add(realPath);
-              try {
-                id = watcher.createStream(realPath.toString(), watchLatency, flags);
-              } catch (ClosedFileEventsApiException e) {
-                close();
-                throw e;
-              }
+           //   try {
+                handle = fileEventMonitor.createStream(realPath, watchLatency, watchTimeUnit, flags);
+//              } catch (ClosedFileEventsApiException e) {
+//                close();
+//                throw e;
+//              }
             }
-            result = new MacOSXWatchKey(this, realPath, queueSize, id, kinds);
+            result = new MacOSXWatchKey(this, realPath, queueSize, handle, kinds);
             registered.put(realPath, result);
           } else {
             result = key;
@@ -200,8 +215,8 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
       final MacOSXWatchKey key = registered.get(path);
       if (key != null) {
         registered.remove(path);
-        key.setStreamId(-1);
-        if (key.getStreamId() != -1) watcher.stopStream(key.getStreamId());
+        if (key.getHandle() != Handles.INVALID) fileEventMonitor.stopStream(key.getHandle());
+        key.setHandle(Handles.INVALID);
       }
     }
   }
@@ -219,15 +234,15 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
     private final AtomicBoolean valid = new AtomicBoolean(true);
     private final MacOSXWatchService service;
 
-    public int getStreamId() {
-      return streamId;
+    public Handle getHandle() {
+      return handle;
     }
 
-    public void setStreamId(final int streamId) {
-      this.streamId = streamId;
+    public void setHandle(final Handle handle) {
+      this.handle = handle;
     }
 
-    private int streamId;
+    private Handle handle;
     private final boolean reportCreateEvents;
     private final boolean reportModifyEvents;
 
@@ -251,11 +266,11 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
         final MacOSXWatchService service,
         final Path watchable,
         final int queueSize,
-        final int id,
+        final Handle handle,
         final WatchEvent.Kind<?>... kinds) {
       this.service = service;
       events = new ArrayBlockingQueue<>(queueSize);
-      streamId = id;
+      this.handle = handle;
       this.watchable = watchable;
       final Set<WatchEvent.Kind<?>> kindSet = new HashSet<>();
       int i = 0;

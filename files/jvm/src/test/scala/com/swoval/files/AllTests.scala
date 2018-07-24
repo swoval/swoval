@@ -3,7 +3,6 @@ package com.swoval.files
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ CountDownLatch, TimeUnit }
 
-import com.swoval.files.apple.FileEventApiTest
 import utest._
 
 import scala.util.Try

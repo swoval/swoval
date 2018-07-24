@@ -1,6 +1,7 @@
 package com.swoval.files
 
 import java.nio.file.Paths
+import java.util.concurrent.TimeUnit
 
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.apple.Flags
@@ -15,7 +16,8 @@ object ApplePathWatcherTest extends TestSuite {
   val dirFlags = new Flags.Create().setNoDefer()
   def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] =
     new ApplePathWatcher(
-      0.01,
+      10,
+      TimeUnit.MILLISECONDS,
       dirFlags,
       (e: PathWatchers.Event, _: Executor#Thread) => callback(e),
       (_: String, _: Executor#Thread) => {},
