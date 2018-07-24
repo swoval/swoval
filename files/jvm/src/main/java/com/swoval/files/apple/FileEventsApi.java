@@ -7,11 +7,16 @@ import com.swoval.functional.Consumer;
 import com.swoval.runtime.NativeLoader;
 import com.swoval.runtime.ShutdownHooks;
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Provides access to apple file system events. The class is created with two callbacks, one to run
@@ -157,6 +162,67 @@ public class FileEventsApi implements AutoCloseable {
     }
   }
 
+  private static final class Consumers<T> implements Consumer<T> {
+    private final Map<Integer, Consumer<T>> consumers = new LinkedHashMap<>();
+
+    @Override
+    public void accept(final T t) {
+      final Iterator<Consumer<T>> it = consumers.values().iterator();
+      while (it.hasNext()) {
+        try {
+          it.next().accept(t);
+        } catch (final Exception e) {
+          e.printStackTrace();
+        }
+      }
+    }
+
+    void addConsumer(final int id, Consumer<T> consumer) {
+      assert (consumers.put(id, consumer) == null);
+    }
+
+    boolean removeConsumer(final int id) {
+      consumers.remove(id);
+      return consumers.isEmpty();
+    }
+
+    boolean isEmpty() {
+      return consumers.isEmpty();
+    }
+  }
+
+  private static class GlobalFileEventsApi extends FileEventsApi{
+    private final Consumers<FileEvent> eventConsumers;
+    private final Consumers<String> streamConsumers;
+    GlobalFileEventsApi(
+        final Consumers<FileEvent> eventConsumers, final Consumers<String> streamConsumers) throws InterruptedException {
+      super(eventConsumers, streamConsumers);
+      this.eventConsumers = eventConsumers;
+      this.streamConsumers = streamConsumers;
+    }
+
+    void addConsumers(
+        final int id,
+        final Consumer<FileEvent> eventConsumer,
+        final Consumer<String> streamConsumer) {
+      eventConsumers.addConsumer(id, eventConsumer);
+      streamConsumers.addConsumer(id, streamConsumer);
+    }
+
+    void removeConsumers(final int id) {
+      if (eventConsumers.removeConsumer(id) && streamConsumers.removeConsumer(id)) {
+        global.set(null);
+        close();
+      }
+    }
+    @Override
+    public void close() {
+    }
+  }
+
+  private static final AtomicReference<FileEventsApi> global = new AtomicReference<>(null);
+  private static final AtomicInteger handleID = new AtomicInteger(0);
+
   /**
    * Creates a new {@link FileEventsApi} instance
    *
@@ -167,6 +233,9 @@ public class FileEventsApi implements AutoCloseable {
    */
   public static FileEventsApi apply(Consumer<FileEvent> consumer, Consumer<String> pathConsumer)
       throws InterruptedException {
+    synchronized (global) {
+      if (glo
+      }
     return new FileEventsApi(consumer, pathConsumer);
   }
 
