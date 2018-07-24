@@ -47,8 +47,7 @@ public class FileEventMonitors {
 
   public static FileEventMonitor get(
       final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer) throws InterruptedException {
-    return getGlobal(eventConsumer, streamConsumer);
-    //return new FileEventMonitorImpl(eventConsumer, streamConsumer);
+    return new FileEventMonitorImpl(eventConsumer, streamConsumer);
   }
 
  static void clearGlobal(final GlobalFileEventMonitor globalFileEventMonitor) {
