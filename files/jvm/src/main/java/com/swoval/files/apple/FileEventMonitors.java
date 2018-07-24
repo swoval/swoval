@@ -78,7 +78,6 @@ class FileEventMonitorImpl implements FileEventMonitor {
             handle = init(wrappedEventConsumer, wrappedStreamConsumer);
             initLatch.countDown();
             loop(handle);
-            super.run();
           }
         };
     loopThread.start();
@@ -123,8 +122,12 @@ class FileEventMonitorImpl implements FileEventMonitor {
 
   @Override
   public void stopStream(final Handle streamHandle) {
-    assert (streamHandle instanceof NativeHandle);
-    stopStream(handle, ((NativeHandle) streamHandle).handle);
+    if (!closed.get()) {
+      assert (streamHandle instanceof NativeHandle);
+      stopStream(handle, ((NativeHandle) streamHandle).handle);
+    } else {
+      new Exception("stop stream").printStackTrace();
+      }
   }
 
   @Override

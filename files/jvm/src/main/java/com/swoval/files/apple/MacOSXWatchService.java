@@ -123,12 +123,12 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
   public void close() {
     synchronized (fileEventMonitor) {
       if (open.compareAndSet(true, false)) {
-        fileEventMonitor.close();
         final Iterator<Path> it = new ArrayList<>(registered.keySet()).iterator();
         while (it.hasNext()) {
           unregisterImpl(it.next());
         }
         registered.clear();
+        fileEventMonitor.close();
       }
     }
   }
