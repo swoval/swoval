@@ -18,9 +18,18 @@ import java.util.concurrent.TimeUnit;
  * {@link java.nio.file.WatchService}.
  */
 public class WatchServices {
+  private static final MacOSXWatchService global;
 
-  public static RegisterableWatchService get() throws IOException, InterruptedException {
-    return Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchServiceImpl();
+  static {
+    try {
+      global = Platform.isMac() ? new MacOSXWatchService() : null;
+    } catch (final InterruptedException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  public static RegisterableWatchService get() throws IOException {
+    return Platform.isMac() ? global.newDelegate() : new RegisterableWatchServiceImpl();
   }
 
   /** Wraps a WatchService and implements {@link com.swoval.files.RegisterableWatchService} */
