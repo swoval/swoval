@@ -44,7 +44,7 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
   private final int queueSize;
   private final AtomicBoolean open = new AtomicBoolean(true);
   private final LinkedBlockingQueue<MacOSXWatchKey> readyKeys = new LinkedBlockingQueue<>();
-  private final Map<Path, MacOSXWatchKey> registered = new HashMap<>();
+  private final Map<Path, WatchKeys> registered = new HashMap<>();
 
   private final Set<Path> streams = new HashSet<>();
   private final Consumer<String> dropEvent =
@@ -54,9 +54,9 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
           synchronized (registered) {
             final Path path = Paths.get(s);
             streams.remove(path);
-            final MacOSXWatchKey key = registered.get(path);
-            if (key != null) {
-              key.setHandle(Handles.INVALID);
+            final WatchKeys watchKeys = registered.get(path);
+            if (watchKeys != null) {
+              watchKeys.handle = Handles.INVALID;
             }
           }
         }
@@ -67,33 +67,43 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
         public void accept(final FileEvent fileEvent) {
           final Path path = Paths.get(fileEvent.fileName);
           synchronized (registered) {
-            final MacOSXWatchKey childKey = registered.get(path);
-            final MacOSXWatchKey key =
-                childKey == null ? registered.get(path.getParent()) : childKey;
+            final WatchKeys childKeys = registered.get(path);
+            final WatchKeys watchKeys =
+                childKeys == null ? registered.get(path.getParent()) : childKeys;
             final boolean exists = Files.exists(path, LinkOption.NOFOLLOW_LINKS);
-            if (key != null || path.toString().endsWith("file-initial")) {
-              if (path.toString().contains("initial"))
-                System.err.println(
-                    System.currentTimeMillis() + " " + MacOSXWatchService.this + " osx cb " + path);
-              if (path.toString().contains("initial"))
-                System.err.println(
-                    System.currentTimeMillis()
-                        + " "
-                        + MacOSXWatchService.this
-                        + " osx key? "
-                        + key
-                        + " "
-                        + path);
-            }
-            if (key != null) {
+            //            if (keys != null || path.toString().endsWith("file-initial")) {
+            //              if (path.toString().contains("initial"))
+            //                System.err.println(
+            //                    System.currentTimeMillis() + " " + MacOSXWatchService.this + " osx
+            // cb " + path);
+            //              if (path.toString().contains("initial"))
+            //                System.err.println(
+            //                    System.currentTimeMillis()
+            //                        + " "
+            //                        + MacOSXWatchService.this
+            //                        + " osx key? "
+            //                        + keys
+            //                        + " "
+            //                        + path);
+            //            }
+            if (watchKeys != null) {
               if (fileEvent.mustScanSubDirs()) {
-                key.events.add(new Event<>(OVERFLOW, 1, null));
-                if (!readyKeys.contains(key)) {
-                  readyKeys.offer(key);
+                final Iterator<MacOSXWatchKey> it = watchKeys.keys.iterator();
+                while (it.hasNext()) {
+                  final MacOSXWatchKey key = it.next();
+                  key.events.add(new Event<>(OVERFLOW, 1, null));
+                  if (!readyKeys.contains(key)) {
+                    readyKeys.offer(key);
+                  }
                 }
               } else {
-                if (exists && key.reportModifyEvents()) createEvent(key, ENTRY_MODIFY, path);
-                else if (!exists && key.reportDeleteEvents()) createEvent(key, ENTRY_DELETE, path);
+                final Iterator<MacOSXWatchKey> it = watchKeys.keys.iterator();
+                while (it.hasNext()) {
+                  final MacOSXWatchKey key = it.next();
+                  if (exists && key.reportModifyEvents()) createEvent(key, ENTRY_MODIFY, path);
+                  else if (!exists && key.reportDeleteEvents())
+                    createEvent(key, ENTRY_DELETE, path);
+                }
               }
             }
           }
@@ -134,9 +144,21 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
   public void close() {
     synchronized (fileEventMonitor) {
       if (open.compareAndSet(true, false)) {
-        final Iterator<Path> it = new ArrayList<>(registered.keySet()).iterator();
+        final Iterator<WatchKeys> it = new ArrayList<>(registered.values()).iterator();
         while (it.hasNext()) {
-          unregisterImpl(it.next());
+          final WatchKeys watchKeys = it.next();
+          if (watchKeys.handle != Handles.INVALID) {
+            try {
+              fileEventMonitor.stopStream(watchKeys.handle);
+            } catch (final ClosedFileEventMonitorException e) {
+              e.printStackTrace(System.err);
+            }
+          }
+          final Iterator<MacOSXWatchKey> keys = watchKeys.keys.iterator();
+          while (keys.hasNext()) {
+            keys.next().cancel();
+          }
+          watchKeys.keys.clear();
         }
         registered.clear();
         fileEventMonitor.close();
@@ -190,9 +212,9 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
         synchronized (registered) {
           final Path realPath = path.toRealPath();
           if (!Files.isDirectory(realPath)) throw new NotDirectoryException(realPath.toString());
-          final MacOSXWatchKey key = registered.get(realPath);
+          final WatchKeys keys = registered.get(realPath);
           final MacOSXWatchKey result;
-          if (key == null) {
+          if (keys == null) {
             final Flags.Create flags = new Flags.Create().setNoDefer().setFileEvents();
             Handle handle = null;
             final Iterator<Path> it = streams.iterator();
@@ -210,9 +232,10 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
               }
             }
             result = new MacOSXWatchKey(this, realPath, queueSize, handle, kinds);
-            registered.put(realPath, result);
+            registered.put(realPath, new WatchKeys(handle, result));
           } else {
-            result = key;
+            result = new MacOSXWatchKey(this, realPath, queueSize, Handles.INVALID, kinds);
+            keys.keys.add(result);
           }
           return result;
         }
@@ -222,27 +245,23 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
     }
   }
 
-  private void unregisterImpl(final Path path) {
+  private void unregisterImpl(final MacOSXWatchKey key) {
     synchronized (registered) {
-      final MacOSXWatchKey key = registered.get(path);
-      if (key != null) {
-        registered.remove(path);
-        if (key.getHandle() != Handles.INVALID) {
-          try {
-            fileEventMonitor.stopStream(key.getHandle());
-          } catch (final ClosedFileEventMonitorException e) {
-            e.printStackTrace(System.err);
+      final WatchKeys watchKeys = registered.get(key.watchable);
+      if (watchKeys != null) {
+        watchKeys.keys.remove(key);
+        if (watchKeys.keys.isEmpty()) {
+          if (key.getHandle() != Handles.INVALID) {
+            try {
+              fileEventMonitor.stopStream(key.getHandle());
+            } catch (final ClosedFileEventMonitorException e) {
+              e.printStackTrace(System.err);
+            }
           }
+          key.setHandle(Handles.INVALID);
+          registered.remove(key.watchable);
         }
-        key.setHandle(Handles.INVALID);
       }
-    }
-  }
-
-  public void unregister(final Path path) {
-    if (isOpen()) unregisterImpl(path);
-    else {
-      throw new ClosedWatchServiceException();
     }
   }
 
@@ -303,11 +322,8 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
 
     @Override
     public void cancel() {
-      try {
-        service.unregister(watchable);
-      } catch (ClosedWatchServiceException e) {
-      }
       valid.set(false);
+      service.unregisterImpl(this);
     }
 
     @Override
@@ -382,6 +398,16 @@ public class MacOSXWatchService implements WatchService, AutoCloseable, Register
     @Override
     public String toString() {
       return "Event(" + _context + ", " + _kind + ")";
+    }
+  }
+
+  private class WatchKeys {
+    private Handle handle;
+    private final Set<MacOSXWatchKey> keys = new HashSet<>();
+
+    WatchKeys(final Handle handle, final MacOSXWatchKey key) {
+      this.handle = handle;
+      keys.add(key);
     }
   }
 }
