@@ -4,7 +4,6 @@ import com.swoval.concurrent.ThreadFactory;
 import com.swoval.files.ApplePathWatcher;
 import com.swoval.files.PathWatcher;
 import com.swoval.functional.Consumer;
-import com.swoval.runtime.NativeLoader;
 import com.swoval.runtime.ShutdownHooks;
 import java.io.IOException;
 import java.util.Iterator;
@@ -61,48 +60,6 @@ public class FileEventsApi implements AutoCloseable {
         new Runnable() {
           @Override
           public void run() {
-            final Consumer<FileEvent> eventConsumer =
-                new Consumer<FileEvent>() {
-                  @Override
-                  public void accept(final FileEvent fileEvent) {
-                    try {
-                      callbackExecutor.submit(
-                          new Runnable() {
-                            @Override
-                            public void run() {
-                              try {
-                                c.accept(fileEvent);
-                              } catch (final Exception e) {
-                                e.printStackTrace();
-                              }
-                            }
-                          });
-                    } catch (final java.lang.Exception ex) {
-                      ex.printStackTrace();
-                    }
-                  }
-                };
-            final Consumer<String> streamConsumer =
-                new Consumer<String>() {
-                  @Override
-                  public void accept(final String s) {
-                    try {
-                      callbackExecutor.submit(
-                          new Runnable() {
-                            @Override
-                            public void run() {
-                              try {
-                                pc.accept(s);
-                              } catch (final Exception e) {
-                                e.printStackTrace();
-                              }
-                            }
-                          });
-                    } catch (final java.lang.Exception ex) {
-                      ex.printStackTrace();
-                    }
-                  }
-                };
             FileEventsApi.this.handle = FileEventsApi.init(eventConsumer, streamConsumer);
             latch.countDown();
             loop();
@@ -162,35 +119,6 @@ public class FileEventsApi implements AutoCloseable {
     }
   }
 
-  private static final class Consumers<T> implements Consumer<T> {
-    private final Map<Integer, Consumer<T>> consumers = new LinkedHashMap<>();
-
-    @Override
-    public void accept(final T t) {
-      final Iterator<Consumer<T>> it = consumers.values().iterator();
-      while (it.hasNext()) {
-        try {
-          it.next().accept(t);
-        } catch (final Exception e) {
-          e.printStackTrace();
-        }
-      }
-    }
-
-    void addConsumer(final int id, Consumer<T> consumer) {
-      assert (consumers.put(id, consumer) == null);
-    }
-
-    boolean removeConsumer(final int id) {
-      consumers.remove(id);
-      return consumers.isEmpty();
-    }
-
-    boolean isEmpty() {
-      return consumers.isEmpty();
-    }
-  }
-
   private static class GlobalFileEventsApi extends FileEventsApi{
     private final Consumers<FileEvent> eventConsumers;
     private final Consumers<String> streamConsumers;
@@ -233,30 +161,7 @@ public class FileEventsApi implements AutoCloseable {
    */
   public static FileEventsApi apply(Consumer<FileEvent> consumer, Consumer<String> pathConsumer)
       throws InterruptedException {
-    synchronized (global) {
-      if (glo
-      }
     return new FileEventsApi(consumer, pathConsumer);
   }
 
-  private static native void loop(long handle);
-
-  private static native void close(long handle);
-
-  private static native long init(Consumer<FileEvent> consumer, Consumer<String> pathConsumer);
-
-  private static native int createStream(String path, double latency, int flags, long handle);
-
-  private static native void stopLoop(long handle);
-
-  private static native void stopStream(long handle, int streamHandle);
-
-  static {
-    try {
-      NativeLoader.loadPackaged();
-    } catch (IOException | UnsatisfiedLinkError e) {
-      System.err.println("Couldn't load native library " + e);
-      throw new ExceptionInInitializerError(e);
-    }
-  }
 }
