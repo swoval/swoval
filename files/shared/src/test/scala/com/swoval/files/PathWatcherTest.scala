@@ -186,11 +186,9 @@ trait PathWatcherTest extends TestSuite {
           usingAsync(defaultWatcher(callback)) { w =>
             w.register(subdir)
             Files.createDirectory(subdir)
-            println("created " + subdir);
             dirLatch
               .waitFor(DEFAULT_TIMEOUT) {
                 assert(Files.exists(subdir))
-                System.err.println(s"WTF create file $file")
                 file.createFile()
               }
               .flatMap { _ =>
