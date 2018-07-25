@@ -241,7 +241,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
               @Override
               public CachedDirectory<WatchedDirectory> apply(final Thread thread) {
                 if (!closed.get()) {
-                  return findOrAddRoot(path.getRoot());
+                  return findOrAddRoot(path);
                 } else {
                   return null;
                 }

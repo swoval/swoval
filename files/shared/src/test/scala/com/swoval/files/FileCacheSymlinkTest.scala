@@ -96,11 +96,14 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
               withTempDirectory { otherDir =>
                 Files.createSymbolicLink(otherDir.resolve("dir"), dir)
                 val latch = new CountDownLatch(1)
+                val loopLink = dir.resolve("other")
                 usingAsync(simpleCache((e: Entry[Path]) => {
-                  if (e.getPath.endsWith("dir")) latch.countDown()
+                  if (e.getPath == loopLink.resolve("dir")) {
+                    latch.countDown()
+                  }
                 })) { c =>
                   c.reg(dir)
-                  val loopLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
+                  Files.createSymbolicLink(loopLink, otherDir)
                   latch.waitFor(DEFAULT_TIMEOUT) {
                     c.ls(dir) === Set(loopLink, loopLink.resolve("dir"))
                   }
@@ -115,7 +118,9 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
                 val link = Files.createSymbolicLink(dir.resolve("other"), otherDir)
                 val latch = new CountDownLatch(1)
                 usingAsync(simpleCache((e: Entry[Path]) => {
-                  if (e.getPath.endsWith("dir")) latch.countDown()
+                  if (e.getPath.endsWith("dir")) {
+                    latch.countDown()
+                  }
                 })) { c =>
                   c.reg(dir)
                   val loopLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)

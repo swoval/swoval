@@ -15,7 +15,6 @@ import com.swoval.files.FileTreeRepositoryImpl.Callback;
 import com.swoval.files.FileTreeViews.CacheObserver;
 import com.swoval.files.FileTreeViews.ObservableCache;
 import com.swoval.files.FileTreeViews.Observer;
-import com.swoval.files.FileTreeViews.Updates;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Event.Kind;
 import com.swoval.functional.Consumer;
@@ -153,7 +152,6 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
     if (typedPath.exists()) {
       final CachedDirectory<T> dir = find(typedPath.getPath());
       if (dir != null) {
-        dir.update(typedPath, thread).observe(callbackObserver(callbacks));
         dir.update(typedPath, thread).observe(callbackObserver(callbacks));
       } else if (pendingFiles.remove(path)) {
         try {

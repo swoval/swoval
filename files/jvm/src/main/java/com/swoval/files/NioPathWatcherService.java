@@ -113,8 +113,11 @@ class NioPathWatcherService implements AutoCloseable {
     CachedWatchDirectory(final Path path) throws IOException {
       this.path = path;
       this.key = watchService.register(path, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
-      if (path.toString().contains("initial"))
-        System.err.println(NioPathWatcherService.this + " registered " + path);
+      if (key == null) {
+        final IOException e = new IOException("FUCK " + path);
+        e.printStackTrace(System.err);
+        throw e;
+      }
     }
 
     @Override

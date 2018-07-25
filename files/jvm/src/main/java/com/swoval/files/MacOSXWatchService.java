@@ -245,6 +245,10 @@ public class MacOSXWatchService implements AutoCloseable {
                       result = new MacOSXWatchKey(realPath, queueSize, Handles.INVALID, kinds);
                       watchKeys.keys.add(result);
                     }
+                    if (result == null) {
+                      System.err.println("WTF null result for " + realPath);
+                      throw new IOException("Couldn't register " + realPath);
+                    }
                     keys.add(result);
                     return result;
                   } else {
@@ -259,6 +263,7 @@ public class MacOSXWatchService implements AutoCloseable {
         if (e instanceof IOException) {
           throw (IOException) e;
         } else {
+          e.printStackTrace();
           return null;
         }
       }
