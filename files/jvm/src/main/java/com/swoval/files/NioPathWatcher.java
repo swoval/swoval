@@ -368,10 +368,10 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
           }
         }
       }
+      maybeRunCallback(event);
       if (typedPath.isDirectory()) {
         add(typedPath, thread);
       }
-      maybeRunCallback(event);
     }
   }
 
