@@ -3,6 +3,7 @@ package com.swoval.files
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ CountDownLatch, TimeUnit }
 
+import com.swoval.files.apple.FileEventMonitorTest
 import utest._
 
 import scala.util.Try
@@ -12,7 +13,6 @@ object AllTests {
     val count = args.headOption.flatMap(a => Try(a.toInt).toOption).getOrElse(1)
     1 to count foreach { i =>
       println(s"Iteration $i:")
-
       run()
     }
   }
@@ -20,37 +20,19 @@ object AllTests {
     def test[T <: TestSuite](t: T): (Tests, String) =
       (t.tests, t.getClass.getName.replaceAll("[$]", ""))
     val tests = Seq(
-      test(NioPathWatcherTest),
-      test(NioPathWatcherTest),
-      test(NioPathWatcherTest),
-      test(NioPathWatcherTest),
-      test(NioPathWatcherTest),
-      test(NioPathWatcherTest),
-      test(NioPathWatcherTest),
-      test(NioPathWatcherTest),
-      test(NioPathWatcherTest),
-      test(NioPathWatcherTest),
-//      test(NioFileCacheOverflowTest),
-//      test(NioFileCacheOverflowTest),
+      test(BasicFileCacheTest),
+      test(NioBasicFileCacheTest),
+      test(FileCacheSymlinkTest),
+      test(NioFileCacheSymlinkTest),
       test(FileCacheOverflowTest),
-      test(FileCacheOverflowTest),
-      test(FileCacheOverflowTest),
-      test(FileCacheOverflowTest),
-      test(FileCacheOverflowTest)
-      //test(NioFileCacheOverflowTest)
-//      test(BasicFileCacheTest),
-//      test(NioBasicFileCacheTest),
-//      test(FileCacheSymlinkTest),
-//      test(NioFileCacheSymlinkTest),
-//      test(FileCacheOverflowTest),
-//      test(NioFileCacheOverflowTest),
-//      test(FileEventApiTest),
-//      test(DataViewTest),
-//      test(CachedFileTreeViewTest),
-//      test(PathTest),
-//      test(NioPathWatcherTest),
-//      test(DirectoryFileTreeViewTest),
-//      test(ApplePathWatcherTest)
+      test(NioFileCacheOverflowTest),
+      test(FileEventMonitorTest),
+      test(DataViewTest),
+      test(CachedFileTreeViewTest),
+      test(PathTest),
+      test(NioPathWatcherTest),
+      test(DirectoryFileTreeViewTest),
+      test(ApplePathWatcherTest)
     )
     val latch = new CountDownLatch(tests.size)
     val failed = new AtomicBoolean(false)
