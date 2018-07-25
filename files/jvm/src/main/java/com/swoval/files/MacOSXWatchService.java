@@ -80,6 +80,7 @@ public class MacOSXWatchService implements AutoCloseable {
                 @Override
                 public void accept(final Executor.Thread thread) {
                   final Path path = Paths.get(fileEvent.fileName);
+                  if (fileEvent.fileName.contains("debug")) System.out.println("CB FOR " + fileEvent.fileName);
                   final WatchKeys childKeys = registered.get(path);
                   final WatchKeys watchKeys =
                       childKeys == null ? registered.get(path.getParent()) : childKeys;

@@ -33,6 +33,9 @@ static void jni_callback(std::unique_ptr<Events> events, JNIHandle *h, Lock lock
     if (!h->stopped) {
         for (auto e : *events) {
             jstring string = env->NewStringUTF(e.first.c_str());
+            if (strstr(e.first.c_str(), "debug")) {
+                fprintf(stderr, "WTF got native cb for %s\n", e.first.c_str());
+            }
             jobject event =
                 env->NewObject(h->data->fileEvent, h->data->fileEventCons, string, e.second);
             env->CallVoidMethod(h->data->callback, h->data->callbackApply, event);

@@ -88,6 +88,7 @@ template <typename T> class handle {
                 return pair->first;
             }
         }
+        fprintf(stderr, "WTF create stream for %p %s\n", this, path);
 
         CFStringRef mypath =
             CFStringCreateWithCStringNoCopy(nullptr, path, kCFStringEncodingUTF8, nullptr);

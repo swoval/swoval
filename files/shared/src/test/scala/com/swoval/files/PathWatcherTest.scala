@@ -69,32 +69,33 @@ trait PathWatcherTest extends TestSuite {
           }
         }
       }
-      'redundant - withTempDirectory { dir =>
-        if (Platform.isMac) {
-          val events = new ArrayBlockingQueue[String](10)
-          val callback: BiConsumer[String, Executor#Thread] =
-            (stream: String, _: Executor#Thread) => events.add(stream)
-          withTempDirectory(dir) { subdir =>
-            val watcher = new ApplePathWatcher(
-              DEFAULT_LATENCY.toNanos,
-              TimeUnit.NANOSECONDS,
-              fileFlags,
-              (_: PathWatchers.Event, _: Executor#Thread) => {},
-              callback,
-              null,
-              new DirectoryRegistryImpl
-            )
-            usingAsync(watcher) { w =>
-              w.register(subdir)
-              w.register(dir)
-              events.poll(DEFAULT_TIMEOUT)(_ ==> subdir.toString)
-            }
-          }
-        } else {
-          Future.successful(())
-        }
-      }
-      'unregister - withTempDirectory { dir =>
+//      'redundant - withTempDirectory { dir =>
+//        if (Platform.isMac) {
+//          val events = new ArrayBlockingQueue[String](10)
+//          val callback: BiConsumer[String, Executor#Thread] =
+//            (stream: String, _: Executor#Thread) => events.add(stream)
+//          withTempDirectory(dir) { subdir =>
+//            val watcher = new ApplePathWatcher(
+//              DEFAULT_LATENCY.toNanos,
+//              TimeUnit.NANOSECONDS,
+//              fileFlags,
+//              (_: PathWatchers.Event, _: Executor#Thread) => {},
+//              callback,
+//              null,
+//              new DirectoryRegistryImpl
+//            )
+//            usingAsync(watcher) { w =>
+//              w.register(subdir)
+//              w.register(dir)
+//              events.poll(DEFAULT_TIMEOUT)(_ ==> subdir.toString)
+//            }
+//          }
+//        } else {
+//          Future.successful(())
+//        }
+      // }
+      'unregister - withTempDirectory { root =>
+        val dir = Files.createDirectory(root.resolve("unregister"))
         val firstLatch = new CountDownLatch(1)
         val secondLatch = new CountDownLatch(2)
         val callback = (e: PathWatchers.Event) => {
@@ -141,7 +142,9 @@ trait PathWatcherTest extends TestSuite {
         }
 
       }
-      'change - withTempFile { file =>
+      'change - withTempDirectory { root =>
+        val dir = Files.createDirectories(root.resolve("change").resolve("debug"))
+        val file = dir.resolve("file").createFile()
         val dirLatch = new CountDownLatch(1)
         val fileLatch = new CountDownLatch(1)
         val subfile = file.resolve("subfile")
@@ -170,7 +173,7 @@ trait PathWatcherTest extends TestSuite {
       }
       'absent - {
         'initially - withTempDirectory { root =>
-          val dir = Files.createDirectory(root.resolve("initial"))
+          val dir = Files.createDirectories(root.resolve("initial").resolve("debug"))
           val dirLatch = new CountDownLatch(1)
           val fileLatch = new CountDownLatch(1)
           val subdir = dir.resolve("subdir")
@@ -183,6 +186,7 @@ trait PathWatcherTest extends TestSuite {
           usingAsync(defaultWatcher(callback)) { w =>
             w.register(subdir)
             Files.createDirectory(subdir)
+            println("created " + subdir);
             dirLatch
               .waitFor(DEFAULT_TIMEOUT) {
                 assert(Files.exists(subdir))
@@ -267,7 +271,8 @@ trait PathWatcherTest extends TestSuite {
             }
           }
         }
-        'extend - withTempDirectory { dir =>
+        'extend - withTempDirectory { root =>
+          val dir = Files.createDirectories(root.resolve("extend").resolve("debug"))
           withTempDirectory(dir) { subdir =>
             withTempDirectory(subdir) { secondSubdir =>
               withTempDirectory(secondSubdir) { thirdSubdir =>
@@ -289,17 +294,16 @@ trait PathWatcherTest extends TestSuite {
                       case _: TimeoutException =>
                         w.register(dir, 2)
                         Files.setLastModifiedTime(file, FileTime.fromMillis(3000))
-                        events
-                          .poll(DEFAULT_TIMEOUT) { e =>
-                            e.getPath ==> file
-                            e.getPath.lastModified ==> 3000
+                        val files = events.poll(DEFAULT_TIMEOUT) { e =>
+                          e.getPath ==> file
+                          e.getPath.lastModified ==> 3000
+                        }
+                        files.flatMap { _ =>
+                          val subdirFile = subdir.resolve("bar").createFile()
+                          subdirEvents.poll(DEFAULT_TIMEOUT) { e =>
+                            e.getPath ==> subdirFile
                           }
-                          .flatMap { _ =>
-                            val subdirFile = subdir.resolve("bar").createFile()
-                            subdirEvents.poll(DEFAULT_TIMEOUT) { e =>
-                              e.getPath ==> subdirFile
-                            }
-                          }
+                        }
                     }
                 }
               }
