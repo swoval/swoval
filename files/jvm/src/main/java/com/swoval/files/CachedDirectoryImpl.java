@@ -459,20 +459,12 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
     return result;
   }
 
-  private Path toRealPath(final Path path) {
-    try {
-      return path.toRealPath();
-    } catch (final IOException e) {
-      return path;
-    }
-  }
-
   CachedDirectoryImpl<T> init() throws IOException {
     subdirectories.clear();
     files.clear();
-    if (depth >= 0 && (!path.startsWith(realPath) || path.equals(realPath))) {
+    if (depth >= 0 && (!this.path.startsWith(this.realPath) || this.path.equals(this.realPath))) {
       synchronized (lock) {
-        final Iterator<TypedPath> it = fileTreeView.list(path, 0, pathFilter).iterator();
+        final Iterator<TypedPath> it = fileTreeView.list(this.path, 0, pathFilter).iterator();
         while (it.hasNext()) {
           final TypedPath file = it.next();
           if (pathFilter.accept(file)) {

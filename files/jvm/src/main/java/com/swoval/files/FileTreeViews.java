@@ -68,7 +68,7 @@ public class FileTreeViews {
   public static <T> CachedDirectory<T> cached(
       final Path path, final Converter<T> converter, final int depth) throws IOException {
     return new CachedDirectoryImpl<>(
-            path, path, converter, depth, Filters.AllPass, getDefault(false))
+            path, path, converter, depth, Filters.AllPass, getDefault(true))
         .init();
   }
 
