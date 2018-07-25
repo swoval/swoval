@@ -40,8 +40,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         @Override
         @SuppressWarnings("EmptyCatchBlock")
         public void onCreate(final DataViews.Entry<WatchedDirectory> newEntry) {
-          if (newEntry.getPath().toString().contains("initial"))
-            System.err.println(System.currentTimeMillis() + " on create " + newEntry.getPath());
+          maybeRunCallback(new Event(newEntry, Create));
           try {
             final Iterator<TypedPath> it =
                 FileTreeViews.list(
@@ -232,7 +231,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
     }
     final Iterator<Path> toRemoveIterator = toRemove.iterator();
     while (toRemoveIterator.hasNext()) {
-      System.out.println(rootDirectories.remove(toRemoveIterator.next()));
+      rootDirectories.remove(toRemoveIterator.next());
     }
     return result;
   }
@@ -321,7 +320,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
   private void handleOverflow(final Overflow overflow, final Thread thread) {
     final Path path = overflow.getPath();
-    final CachedDirectory<WatchedDirectory> root = rootDirectories.get(path.getRoot());
+    final CachedDirectory<WatchedDirectory> root = getOrAdd(path);
     if (root != null) {
       try {
         final Iterator<TypedPath> it =

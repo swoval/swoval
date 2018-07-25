@@ -38,14 +38,13 @@ private class BoundedWatchKey(val queueSize: Int, underlying: WatchKey) extends 
   override def pollEvents(): util.List[WatchEvent[_]] = {
     0.milliseconds.sleep // This makes it more likely that an overflow is triggered
     val raw = underlying.pollEvents
-//    if (raw.size() > queueSize) {
-//      val result = raw.asScala
-//        .take(queueSize)
-//        .asJava
-//      result.add(new OverflowWatchEvent)
-//      result
-//    } else raw
-    raw
+    if (raw.size() > queueSize) {
+      val result = raw.asScala
+        .take(queueSize)
+        .asJava
+      result.add(new OverflowWatchEvent)
+      result
+    } else raw
   }
 
   override def reset(): Boolean = underlying.reset()

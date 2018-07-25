@@ -517,7 +517,7 @@ object Build {
         "com.swoval.files.apple.Event*",
         "com.swoval.files.apple.Flag*",
         "com.swoval.files.apple.Native*"
-      ) ++ (if (!Properties.isMac) Seq("*apple*", "*Apple*")
+      ) ++ (if (!Properties.isMac) Seq("*apple*", "*Apple*", "*MacOS*")
             else Nil),
       javacOptions in (Compile, doc) :=
         Seq("-overview", baseDirectory.value.toPath.resolve("overview.html").toString),

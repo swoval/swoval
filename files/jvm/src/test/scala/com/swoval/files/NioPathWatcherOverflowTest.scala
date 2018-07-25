@@ -44,7 +44,7 @@ object NioPathWatcherOverflowTest extends TestSuite {
         c.register(dir, Integer.MAX_VALUE)
         executor.run((_: Executor#Thread) => subdirs.foreach(Files.createDirectory(_)))
         subdirLatch
-          .waitFor(DEFAULT_TIMEOUT) {
+          .waitFor(DEFAULT_TIMEOUT / 10) {
             subdirs.toSet === addedSubdirs.toSet
             executor.run((_: Executor#Thread) => files.foreach(Files.createFile(_)))
           }
@@ -52,6 +52,14 @@ object NioPathWatcherOverflowTest extends TestSuite {
             fileLatch.waitFor(DEFAULT_TIMEOUT) {
               files.toSet === addedFiles.toSet
             }
+          }
+          .andThen {
+            case Failure(_) =>
+              println(s"Test failed -- subdirLatch ${subdirLatch.getCount}, fileLatch ${fileLatch.getCount}")
+              if (addedSubdirs.size != subdirs.size) {
+                //println("missing subdirs:\n" + (subdirs.toSet diff addedSubdirs.toSet).mkString("\n"))
+              }
+            case _ =>
           }
       }
     }

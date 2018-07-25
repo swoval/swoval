@@ -48,7 +48,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
     case null => 5
     case c    => Try(c.toInt).getOrElse(5)
   }
-  val timeout = DEFAULT_TIMEOUT * 1
+  val timeout = DEFAULT_TIMEOUT * (if (Platform.isWin) 5 else 1)
 
   val testsImpl = Tests {
     'overflow - withTempDirectory { root =>
