@@ -90,24 +90,24 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           }
         }
         'added - {
-//          'original - {
-//            withTempDirectory { root =>
-//              val dir = Files.createDirectory(root.resolve("original"))
-//              withTempDirectory { otherDir =>
-//                Files.createSymbolicLink(otherDir.resolve("dir"), dir)
-//                val latch = new CountDownLatch(1)
-//                usingAsync(simpleCache((e: Entry[Path]) => {
-//                  if (e.getPath.endsWith("dir")) latch.countDown()
-//                })) { c =>
-//                  c.reg(dir)
-//                  val loopLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
-//                  latch.waitFor(DEFAULT_TIMEOUT) {
-//                    c.ls(dir) === Set(loopLink, loopLink.resolve("dir"))
-//                  }
-//                }
-//              }
-//            }
-//          }
+          'original - {
+            withTempDirectory { root =>
+              val dir = Files.createDirectory(root.resolve("original"))
+              withTempDirectory { otherDir =>
+                Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+                val latch = new CountDownLatch(1)
+                usingAsync(simpleCache((e: Entry[Path]) => {
+                  if (e.getPath.endsWith("dir")) latch.countDown()
+                })) { c =>
+                  c.reg(dir)
+                  val loopLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
+                  latch.waitFor(DEFAULT_TIMEOUT) {
+                    c.ls(dir) === Set(loopLink, loopLink.resolve("dir"))
+                  }
+                }
+              }
+            }
+          }
           'symlink - {
             withTempDirectory { root =>
               val dir = Files.createDirectory(root.resolve("symlink"))
@@ -350,15 +350,13 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
   }
 }
 object FileCacheSymlinkTest extends FileCacheSymlinkTest with DefaultFileCacheTest {
-  val tests = Tests {}
-  //val tests = testsImpl
+  val tests = testsImpl
 }
 object NioFileCacheSymlinkTest extends FileCacheSymlinkTest with NioFileCacheTest {
-  override val tests = Tests {}
-//  override val tests =
-//    if (Platform.isJVM && Platform.isMac) testsImpl
-//    else
-//      Tests('ignore - {
-//        println("Not running NioFileCacheTest on platform other than the jvm on osx")
-//      })
+  override val tests =
+    if (Platform.isJVM && Platform.isMac) testsImpl
+    else
+      Tests('ignore - {
+        println("Not running NioFileCacheTest on platform other than the jvm on osx")
+      })
 }

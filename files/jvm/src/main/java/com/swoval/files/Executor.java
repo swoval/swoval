@@ -138,6 +138,7 @@ abstract class Executor implements AutoCloseable {
 
   private static class ExecutorImpl extends Executor {
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final RuntimeException ex;
 
     final ThreadFactory factory;
     final ExecutorService service;
@@ -146,6 +147,7 @@ abstract class Executor implements AutoCloseable {
     ExecutorImpl(final ThreadFactory factory, final ExecutorService service) {
       this.factory = factory;
       this.service = service;
+      ex = new RuntimeException();
       service.submit(
           new Runnable() {
             @Override
@@ -200,9 +202,10 @@ abstract class Executor implements AutoCloseable {
     @Override
     void run(final Consumer<Thread> consumer, final int priority) {
       if (closed.get()) {
-        System.out.println("FUCKING CUNT");
-//        final RuntimeException e = new RuntimeException("Tried to run block on closed executor");
-//        throw e;
+        System.out.println("\n\n\n\n");
+        ex.printStackTrace(System.err);
+        new Exception("\n\n\n\n\ncalled from").printStackTrace(System.err);
+        throw ex;
       } else {
         if (factory.created(java.lang.Thread.currentThread())) {
           try {

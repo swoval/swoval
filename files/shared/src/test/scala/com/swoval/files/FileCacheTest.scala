@@ -83,7 +83,7 @@ object FileCacheTest {
     val tree =
       new FileCacheDirectoryTree[T](converter,
                                     Executor.make("FileTreeRepository-callback-executor"),
-                                    executor)
+                                    executor.copy())
     val factory = either match {
       case Left(func) => func(tree)
       case Right(f)   => f

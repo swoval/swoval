@@ -88,13 +88,6 @@ class NioPathWatcherService implements AutoCloseable {
                                     : watchKey.resolve((Path) e.context());
                             final Either<Overflow, Event> result =
                                 Either.right(new Event(TypedPaths.get(path, UNKNOWN), kind));
-                            if (path.toString().contains("initial"))
-                              System.err.println(
-                                  System.currentTimeMillis()
-                                      + " "
-                                      + NioPathWatcherService.this
-                                      + " event "
-                                      + result);
                             eventConsumer.accept(result);
                           }
                         }
