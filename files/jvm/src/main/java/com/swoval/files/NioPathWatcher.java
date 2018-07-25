@@ -14,6 +14,7 @@ import com.swoval.files.PathWatchers.Overflow;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
+import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.FileSystemLoopException;
 import java.nio.file.Path;
@@ -186,7 +187,9 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         .castLeft(IOException.class, false);
   }
 
-  private CachedDirectory<WatchedDirectory> findOrAddRoot(final Path path) {
+  private CachedDirectory<WatchedDirectory> findOrAddRoot(final Path rawPath) {
+    final Path parent = Platform.isMac() ? rawPath.getParent() : rawPath.getRoot();
+    final Path path = parent == null ? rawPath.getRoot() : parent;
     final Iterator<Entry<Path, CachedDirectory<WatchedDirectory>>> it =
         rootDirectories.entrySet().iterator();
     CachedDirectory<WatchedDirectory> result = null;
