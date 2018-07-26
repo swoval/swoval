@@ -74,6 +74,7 @@ class FileEventMonitorImpl implements FileEventMonitor {
       Executors.newSingleThreadExecutor(
           new ThreadFactory("com.swoval.files.apple.FileEventsMonitor.callback"));
   private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final int shutdownHookId;
 
   FileEventMonitorImpl(
       final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer)
@@ -93,12 +94,11 @@ class FileEventMonitorImpl implements FileEventMonitor {
     loopThread.start();
     initLatch.await(5, TimeUnit.SECONDS);
     assert (handle != -1);
-    final Exception e = new Exception("Failed to close FileEventMonitor");
-    ShutdownHooks.addHook(1, new Runnable() {
+    shutdownHookId = ShutdownHooks.addHook(1, new Runnable() {
       @Override
       public void run() {
         if (!closed.get()) {
-          e.printStackTrace(System.err);
+          close();
         }
       }
     });
@@ -164,6 +164,7 @@ class FileEventMonitorImpl implements FileEventMonitor {
   @Override
   public void close() {
     if (closed.compareAndSet(false, true)) {
+      ShutdownHooks.removeHook(shutdownHookId);
       stopLoop(handle);
       loopThread.interrupt();
       callbackExecutor.shutdownNow();

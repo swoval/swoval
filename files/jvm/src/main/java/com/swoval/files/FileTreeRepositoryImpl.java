@@ -20,7 +20,8 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
       final FileCacheDirectoryTree<T> directoryTree,
       final FileCachePathWatcher<T> watcher,
       final Executor executor) {
-    ShutdownHooks.addHook(
+    assert (executor != null);
+    this.shutdownHookId = ShutdownHooks.addHook(
         1,
         new Runnable() {
           @Override
@@ -28,7 +29,6 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
             close();
           }
         });
-    assert (executor != null);
     this.internalExecutor = executor;
     this.directoryTree = directoryTree;
     this.watcher = watcher;
@@ -38,6 +38,7 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
   private final Executor internalExecutor;
   private final FileCacheDirectoryTree<T> directoryTree;
   private final FileCachePathWatcher<T> watcher;
+  private final int shutdownHookId;
 
   /** Cleans up the path watcher and clears the directory cache. */
   @Override
@@ -47,6 +48,7 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
           new Consumer<Executor.Thread>() {
             @Override
             public void accept(final Executor.Thread thread) {
+              ShutdownHooks.removeHook(shutdownHookId);
               watcher.close(thread);
               directoryTree.close(thread);
             }

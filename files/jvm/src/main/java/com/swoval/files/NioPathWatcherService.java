@@ -36,6 +36,7 @@ class NioPathWatcherService implements AutoCloseable {
   private final CountDownLatch shutdownLatch = new CountDownLatch(1);
   private final Map<Path, WatchedDirectory> watchedDirectoriesByPath = new HashMap<>();
   private final RegisterableWatchService watchService;
+  private final int shutdownHookId;
 
   NioPathWatcherService(
       final Consumer<Either<Overflow, Event>> eventConsumer,
@@ -43,7 +44,7 @@ class NioPathWatcherService implements AutoCloseable {
       final Executor internalExecutor)
       throws InterruptedException {
     this.watchService = watchService;
-    ShutdownHooks.addHook(
+    this.shutdownHookId = ShutdownHooks.addHook(
         1,
         new Runnable() {
           @Override
@@ -159,6 +160,7 @@ class NioPathWatcherService implements AutoCloseable {
   @Override
   public void close() {
     if (isStopped.compareAndSet(false, true)) {
+      ShutdownHooks.removeHook(shutdownHookId);
       loopThread.interrupt();
       try {
         final Iterator<WatchedDirectory> it = new ArrayList<>(watchedDirectoriesByPath.values()).iterator();
