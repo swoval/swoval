@@ -149,29 +149,41 @@ package object test {
 
   object TestFiles {
     def withTempFile[R](dir: String)(f: String => Future[R]): Future[R] = {
-      val file: String = platform.createTempFile(dir, "file")
-      f(file).andThen { case _ => platform.delete(file) }
+      val (file: String, thread: Thread) = platform.createTempFile(dir, "file")
+      f(file).andThen {
+        case _ =>
+          platform.delete(file)
+          ShutdownHooks.remove(thread)
+      }
     }
 
     def withTempFile[R](f: String => Future[R]): Future[R] =
       withTempDirectory { dir =>
-        val file: String = platform.createTempFile(dir, "file")
-        f(file).andThen { case _ => platform.delete(file) }
+        val (file: String, thread: Thread) = platform.createTempFile(dir, "file")
+        f(file).andThen {
+          case _ =>
+            platform.delete(file)
+            ShutdownHooks.remove(thread)
+        }
       }
 
     def withTempDirectory[R](f: String => Future[R]): Future[R] = {
-      val dir = platform.createTempDirectory()
-      withDirectory(dir)(f(dir))
+      val (dir: String, thread: Thread) = platform.createTempDirectory()
+      withDirectory(dir, thread)(f(dir))
     }
 
     def withTempDirectory[R](dir: String)(f: String => Future[R]): Future[R] = {
-      val subDir: String = platform.createTempSubdirectory(dir)
-      withDirectory(subDir)(f(subDir))
+      val (subDir: String, thread: Thread) = platform.createTempSubdirectory(dir)
+      withDirectory(subDir, thread)(f(subDir))
     }
 
-    def withDirectory[R](path: String)(f: => Future[R]): Future[R] = {
+    def withDirectory[R](path: String, thread: Thread)(f: => Future[R]): Future[R] = {
       platform.mkdir(path)
-      f.andThen { case _ => platform.delete(path) }
+      f.andThen {
+        case _ =>
+          platform.delete(path)
+          ShutdownHooks.remove(thread)
+      }
     }
   }
   def testOn(desc: String, platforms: Platform*)(tests: Any): Tests = macro Macros.testOnWithDesc

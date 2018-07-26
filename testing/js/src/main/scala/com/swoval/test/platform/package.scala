@@ -10,6 +10,10 @@ import scala.scalajs.js.timers._
 
 package object platform {
   def sleep(duration: FiniteDuration): Unit = {}
+  val shutdownHooks = new ShutdownHooks {
+    override def add(thread: Thread): Unit = ()
+    override def remove(thread: Thread): Unit = ()
+  }
   object executionContext extends ExecutionContext {
     val callbacks: mutable.Queue[Runnable] = mutable.Queue.empty
     override def execute(runnable: Runnable): Unit = {

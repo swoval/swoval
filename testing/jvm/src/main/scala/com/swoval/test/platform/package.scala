@@ -17,17 +17,23 @@ import scala.concurrent.duration._
 package object platform {
   def sleep(duration: FiniteDuration) = Thread.sleep(duration.toMillis)
   def executionContext: ExecutionContext = ExecutionContext.global
-  def createTempFile(dir: String, prefix: String): String =
+  def createTempFile(dir: String, prefix: String): (String, Thread) =
     deleteOnExit(Files.createTempFile(Paths.get(dir), prefix, "").toRealPath())
 
-  def createTempDirectory(): String = {
+  def createTempDirectory(): (String, Thread) = {
     val base = Paths.get(System.getProperty("java.io.tmpdir")).resolve("swoval")
     Files.createDirectories(base)
     deleteOnExit(Files.createTempDirectory(base, "dir").toRealPath())
   }
 
-  def createTempSubdirectory(dir: String): String =
+  def createTempSubdirectory(dir: String): (String, Thread) =
     deleteOnExit(Files.createTempDirectory(Paths.get(dir), "subdir").toRealPath())
+
+  val shutdownHooks = new ShutdownHooks {
+    override def add(thread: Thread): Unit = Runtime.getRuntime.addShutdownHook(thread)
+
+    override def remove(thread: Thread): Unit = Runtime.getRuntime.removeShutdownHook(thread)
+  }
 
   def delete(dir: String): Unit = {
     Files.walkFileTree(
@@ -54,15 +60,14 @@ package object platform {
     )
   }
   def mkdir(path: String): String = Files.createDirectories(Paths.get(path)).toRealPath().toString
-  private def deleteOnExit(path: Path): String = {
-    Runtime
-      .getRuntime()
-      .addShutdownHook(new Thread() {
-        override def run(): Unit = {
-          delete(path.toString)
-        }
-      })
-    path.toString
+  private def deleteOnExit(path: Path): (String, Thread) = {
+    val thread = new Thread() {
+      override def run(): Unit = {
+        delete(path.toString)
+      }
+    }
+    Runtime.getRuntime().addShutdownHook(thread)
+    (path.toString, thread)
   }
 
 }
