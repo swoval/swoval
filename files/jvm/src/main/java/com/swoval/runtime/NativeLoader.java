@@ -1,10 +1,14 @@
 package com.swoval.runtime;
 
 import com.swoval.files.QuickLister;
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.lang.management.ManagementFactory;
 import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
@@ -44,9 +48,34 @@ public class NativeLoader {
             @Override
             public FileVisitResult visitFile(final Path file, final BasicFileAttributes attrs)
                 throws IOException {
-              if (file.toString().endsWith(".delete")) {
-                Files.deleteIfExists(Paths.get(file.toString().replaceAll(".delete", "")));
-                Files.deleteIfExists(file);
+              if (Platform.isWin()) {
+                try {
+                  Files.deleteIfExists(file);
+                } catch (final IOException e) {
+                }
+              } else if (file.toString().endsWith(".pid")) {
+                final String pid = new String(Files.readAllBytes(file));
+                boolean pidExists = true;
+                if (ShutdownHooks.isShutdown()) {
+                  pidExists = !pid.equals(ShutdownHooks.getPid());
+                } else {
+                  final Process process = new ProcessBuilder("ps", "-p", pid).start();
+                  try {
+                    process.waitFor();
+                    final InputStreamReader is = new InputStreamReader(process.getInputStream());
+                    final BufferedReader reader = new BufferedReader(is);
+                    String line = reader.readLine();
+                    while (line != null) {
+                      pidExists = line.contains(pid + " ");
+                      line = reader.readLine();
+                    }
+                  } catch (final InterruptedException e) {
+                  }
+                }
+                if (!pidExists) {
+                  Files.deleteIfExists(Paths.get(file.toString().replaceAll(".pid", "")));
+                  Files.deleteIfExists(file);
+                }
               }
               return FileVisitResult.CONTINUE;
             }
@@ -97,31 +126,26 @@ public class NativeLoader {
       out.close();
     }
 
-    try {
-      System.load(extractedPath.toString());
-      ShutdownHooks.addHook(
-          2,
-          new Runnable() {
-            public void run() {
-              try {
-                Files.createFile(
-                    swoval.resolve(extractedPath.getFileName().toString() + ".delete"));
-              } catch (IOException e) {
-                System.err.println("Error marking " + extractedPath + " for deletion: " + e);
-              }
-            }
-          });
-    } catch (final UnsatisfiedLinkError e) {
-      Files.deleteIfExists(extractedPath);
-      throw e;
-    }
-    final Thread thread =
-        new Thread("com.swoval.runtime.NativeLoader.cleanupThread") {
+    final Runnable cleanupRunnable =
+        new Runnable() {
           @Override
           public void run() {
             cleanupTask(swoval);
           }
         };
+    try {
+      System.load(extractedPath.toString());
+      if (!Platform.isWin()) {
+        Files.write(
+            Paths.get(extractedPath.toString() + ".pid"), ShutdownHooks.getPid().getBytes());
+        ShutdownHooks.addHook(1, cleanupRunnable);
+      }
+    } catch (final UnsatisfiedLinkError e) {
+      Files.deleteIfExists(extractedPath);
+      throw e;
+    }
+    final Thread thread =
+        new Thread(cleanupRunnable, "com.swoval.runtime.NativeLoader.cleanupThread");
     thread.setDaemon(true);
     thread.start();
   }
