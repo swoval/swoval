@@ -221,9 +221,9 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
     while (directoryIterator.hasNext()) {
       directoryIterator.next().close();
     }
+    if (symlinkWatcher != null) symlinkWatcher.close();
     observers.close();
     callbackExecutor.close();
-    if (symlinkWatcher != null) symlinkWatcher.close();
     directories.clear();
     directoryRegistry.close();
     pendingFiles.clear();
