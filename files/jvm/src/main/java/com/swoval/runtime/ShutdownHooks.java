@@ -1,8 +1,12 @@
 package com.swoval.runtime;
 
+import java.lang.management.ManagementFactory;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Vector;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Provides an api for adding shutdown hooks. This exists because there is no {@link
@@ -17,8 +21,10 @@ public class ShutdownHooks {
               @Override
               @SuppressWarnings("EmptyCatchBlock")
               public void run() {
-                Collections.sort(hooks);
-                for (final Hook hook : hooks) {
+                shutdown.set(true);
+                final List<Hook> hooksToRun = new ArrayList<>(hooks.values());
+                Collections.sort(hooksToRun);
+                for (final Hook hook : hooksToRun) {
                   try {
                     hook.runnable.run();
                   } catch (final NoClassDefFoundError e) {
@@ -28,7 +34,20 @@ public class ShutdownHooks {
             });
   }
 
-  private static final List<Hook> hooks = new Vector<>();
+  private static final Map<Integer, Hook> hooks = new LinkedHashMap<>();
+  private static final AtomicInteger hookID = new AtomicInteger(0);
+  private static final AtomicBoolean shutdown = new AtomicBoolean(false);
+  private static final String pid =
+      Platform.isWin() ? "" : ManagementFactory.getRuntimeMXBean().getName().replaceAll("@.*", "");
+  private static final Object lock = new Object();
+
+  static boolean isShutdown() {
+    return shutdown.get();
+  }
+
+  static String getPid() {
+    return pid;
+  }
 
   private static class Hook implements Comparable<Hook> {
     private final int priority;
@@ -51,7 +70,22 @@ public class ShutdownHooks {
    * @param priority controls the ordering of this hook. Lower values run first.
    * @param runnable the shutdown task to run
    */
-  public static void addHook(final int priority, final Runnable runnable) {
-    hooks.add(new Hook(priority, runnable));
+  public static int addHook(final int priority, final Runnable runnable) {
+    synchronized(lock) {
+      final int id = hookID.getAndIncrement();
+      hooks.put(id, new Hook(priority, runnable));
+      return id;
+    }
+  }
+
+  /**
+   * Remove a shutdown hook that was added via {@link ShutdownHooks#addHook(int, Runnable)}.
+   *
+   * @param id the id returned by {@link ShutdownHooks#addHook(int, Runnable)}
+   */
+  public static void removeHook(final int id) {
+    synchronized (lock) {
+      hooks.remove(id);
+    }
   }
 }

@@ -27,18 +27,19 @@ package object platform {
         s"Caught error running runnable $cause\n${cause.getStackTrace mkString "\n"}")
     }
   }
-  def createTempFile(dir: String, prefix: String): String = {
+  def createTempFile(dir: String, prefix: String): (String, Thread) = {
     val path = s"$dir$sep$prefix${new scala.util.Random().alphanumeric.take(10).mkString}"
     Fs.closeSync(Fs.openSync(path, "w"))
-    path
+    (path, null)
   }
 
-  def createTempDirectory(): String = {
+  def createTempDirectory(): (String, Thread) = {
     if (!Fs.existsSync("/tmp/swoval")) util.Try(Fs.mkdirSync("/tmp/swoval"))
-    Fs.realpathSync(Fs.mkdtempSync("/tmp/swoval/"))
+    (Fs.realpathSync(Fs.mkdtempSync("/tmp/swoval/")), null)
   }
 
-  def createTempSubdirectory(dir: String): String = Fs.realpathSync(Fs.mkdtempSync(s"$dir$sep"))
+  def createTempSubdirectory(dir: String): (String, Thread) =
+    (Fs.realpathSync(Fs.mkdtempSync(s"$dir$sep")), null)
 
   def delete(dir: String): Unit = {
     if (Fs.existsSync(dir)) {
