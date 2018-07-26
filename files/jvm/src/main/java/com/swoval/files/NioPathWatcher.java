@@ -174,7 +174,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                 if (dir != null) {
                   final List<DataViews.Entry<WatchedDirectory>> directories =
                       dir.listEntries(typedPath.getPath(), -1, AllPass);
-                  if (result || directories.isEmpty() || !isValid(directories.get(0).getValue())) {
+                  if (result || directories.isEmpty() || directories.get(0).getValue().isRight()) {
                     Path toUpdate = typedPath.getPath();
                     if (toUpdate != null) update(dir, typedPath, thread);
                   }
@@ -312,10 +312,6 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   private void update(
       final CachedDirectory<WatchedDirectory> dir, final TypedPath typedPath, final Thread thread) {
     dir.update(typedPath, thread).observe(updateCacheObserver);
-  }
-
-  private boolean isValid(final Either<IOException, WatchedDirectory> either) {
-    return either.isRight() && either.get().isValid();
   }
 
   private void handleOverflow(final Overflow overflow, final Thread thread) {

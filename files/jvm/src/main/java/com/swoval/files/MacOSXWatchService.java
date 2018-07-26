@@ -135,7 +135,6 @@ public class MacOSXWatchService implements RegisterableWatchService {
    *
    * @throws InterruptedException if the native file events api initialization is interrupted.
    */
-  @SuppressWarnings("unused")
   public MacOSXWatchService() throws InterruptedException {
     // The FsEvents api doesn't seem to report events at lower than 10 millisecond intervals.
     this(10, TimeUnit.MILLISECONDS, 1024);

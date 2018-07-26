@@ -69,31 +69,31 @@ trait PathWatcherTest extends TestSuite {
           }
         }
       }
-//      'redundant - withTempDirectory { dir =>
-//        if (Platform.isMac) {
-//          val events = new ArrayBlockingQueue[String](10)
-//          val callback: BiConsumer[String, Executor#Thread] =
-//            (stream: String, _: Executor#Thread) => events.add(stream)
-//          withTempDirectory(dir) { subdir =>
-//            val watcher = new ApplePathWatcher(
-//              DEFAULT_LATENCY.toNanos,
-//              TimeUnit.NANOSECONDS,
-//              fileFlags,
-//              (_: PathWatchers.Event, _: Executor#Thread) => {},
-//              callback,
-//              null,
-//              new DirectoryRegistryImpl
-//            )
-//            usingAsync(watcher) { w =>
-//              w.register(subdir)
-//              w.register(dir)
-//              events.poll(DEFAULT_TIMEOUT)(_ ==> subdir.toString)
-//            }
-//          }
-//        } else {
-//          Future.successful(())
-//        }
-      // }
+      'redundant - withTempDirectory { dir =>
+        if (Platform.isMac) {
+          val events = new ArrayBlockingQueue[String](10)
+          val callback: BiConsumer[String, Executor#Thread] =
+            (stream: String, _: Executor#Thread) => events.add(stream)
+          withTempDirectory(dir) { subdir =>
+            val watcher = new ApplePathWatcher(
+              DEFAULT_LATENCY.toNanos,
+              TimeUnit.NANOSECONDS,
+              fileFlags,
+              (_: PathWatchers.Event, _: Executor#Thread) => {},
+              callback,
+              null,
+              new DirectoryRegistryImpl
+            )
+            usingAsync(watcher) { w =>
+              w.register(subdir)
+              w.register(dir)
+              events.poll(DEFAULT_TIMEOUT)(_ ==> subdir.toString)
+            }
+          }
+        } else {
+          Future.successful(())
+        }
+      }
       'unregister - withTempDirectory { root =>
         val dir = Files.createDirectory(root.resolve("unregister"))
         val firstLatch = new CountDownLatch(1)

@@ -513,7 +513,9 @@ object Build {
         "com.swoval.files.CachedDirectories*",
         "com.swoval.files.CacheObservers*",
         "com.swoval.files.DataViews*",
+        "com.swoval.files.Observers*",
         "com.swoval.files.WatchServices*",
+        "com.swoval.files.WatchedDirectory*",
         "com.swoval.files.apple.Event*",
         "com.swoval.files.apple.Flag*",
         "com.swoval.files.apple.Native*"

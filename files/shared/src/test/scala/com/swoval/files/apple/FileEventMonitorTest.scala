@@ -39,10 +39,14 @@ object FileEventMonitorTest extends TestSuite {
           assert(s == subdir.toString)
           latch.countDown()
         })
-        api.createStream(subdir, 50, TimeUnit.MICROSECONDS, new Flags.Create().setNoDefer())
+        val handle =
+          api.createStream(subdir, 50, TimeUnit.MICROSECONDS, new Flags.Create().setNoDefer())
         api.createStream(dir, 50, TimeUnit.MILLISECONDS, new Flags.Create().setNoDefer())
         latch
-          .waitFor(DEFAULT_TIMEOUT) {}
+          .waitFor(DEFAULT_TIMEOUT) {
+            api.close()
+            intercept[ClosedFileEventMonitorException](api.stopStream(handle))
+          }
           .andThen {
             case _ => api.close()
           }(RunNow)

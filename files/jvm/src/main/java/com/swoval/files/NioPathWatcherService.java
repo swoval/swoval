@@ -118,11 +118,6 @@ class NioPathWatcherService implements AutoCloseable {
     }
 
     @Override
-    public boolean isValid() {
-      return true;
-    }
-
-    @Override
     public void close() {
       if (closed.compareAndSet(false, true)) {
         watchedDirectoriesByPath.remove(path);
