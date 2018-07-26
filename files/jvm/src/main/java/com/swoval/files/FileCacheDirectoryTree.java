@@ -1,6 +1,6 @@
 package com.swoval.files;
 
-import static com.swoval.files.FileCaches.DEFAULT_SYMLINK_FACTORY;
+import static com.swoval.files.FileTreeRepositories.DEFAULT_SYMLINK_FACTORY;
 import static com.swoval.files.PathWatchers.Event.Kind.Create;
 import static com.swoval.files.PathWatchers.Event.Kind.Delete;
 import static com.swoval.files.PathWatchers.Event.Kind.Error;
@@ -33,7 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
+class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<T> {
   private final Map<Path, CachedDirectory<T>> directories = new HashMap<>();
   private final DirectoryRegistry directoryRegistry = new DirectoryRegistryImpl();
   private final Set<Path> pendingFiles = new HashSet<>();

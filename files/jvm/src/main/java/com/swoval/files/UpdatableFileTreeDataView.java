@@ -4,7 +4,7 @@ import com.swoval.files.DataViews.Entry;
 import java.nio.file.Path;
 import java.util.List;
 
-interface UpdatableDataView<T> extends DataView<T> {
+interface UpdatableFileTreeDataView<T> extends FileTreeDataView<T> {
   /**
    * Updates the CachedDirectory entry for a particular typed path.
    *

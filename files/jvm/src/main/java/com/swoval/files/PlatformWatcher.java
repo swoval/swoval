@@ -10,7 +10,7 @@ class PlatformWatcher {
       final Executor internalExecutor,
       final DirectoryRegistry directoryRegistry)
       throws IOException, InterruptedException {
-    return make(callback, WatchServices.get(), internalExecutor, directoryRegistry);
+    return make(callback, RegisterableWatchServices.get(), internalExecutor, directoryRegistry);
   }
 
   static PathWatcher<Event> make(

@@ -89,9 +89,11 @@ public abstract class Either<L, R> {
   public abstract boolean equals(final Object other);
 
   /**
-   * Casts an either to a more specific left type.
+   * Casts an either to a more specific left type. If the cast cannot be made, return a default
+   * value instead.
    *
    * @param clazz the left type to which we downcast
+   * @param defaultValue the value to return if the cast fails
    * @param <L> the original left type
    * @param <R> the right type
    * @param <T> the downcasted left type

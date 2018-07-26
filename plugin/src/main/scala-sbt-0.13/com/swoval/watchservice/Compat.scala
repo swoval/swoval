@@ -5,7 +5,7 @@ import java.io.{ File, IOException }
 import java.nio.file._
 
 import com.swoval.files.Directory.{ Entry, EntryFilter }
-import com.swoval.files.{ Directory, FileCaches }
+import com.swoval.files.{ Directory, FileTreeRepositories }
 import com.swoval.watchservice.CloseWatchPlugin.autoImport.closeWatchFileCache
 import sbt.Keys._
 
@@ -76,7 +76,7 @@ object Compat {
   val global = Scope(Global, Global, Global, Global)
   def extraProjectSettings: Seq[Def.Setting[_]] = Seq(
     pollInterval := 75,
-    closeWatchFileCache := FileCaches.getCached(new Directory.Converter[Path] {
+    closeWatchFileCache := FileTreeRepositories.get(new Directory.Converter[Path] {
       override def apply(p: Path): Path = p
     })
   )

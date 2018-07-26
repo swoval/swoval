@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
  * implements {@link com.swoval.files.RegisterableWatchService} by delegation with an instance of
  * {@link java.nio.file.WatchService}.
  */
-public class WatchServices {
+public class RegisterableWatchServices {
   public static RegisterableWatchService get() throws IOException, InterruptedException {
     return Platform.isMac() ? new MacOSXWatchService() : new RegisterableWatchServiceImpl();
   }

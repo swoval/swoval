@@ -10,7 +10,7 @@ import java.util.List;
  *
  * @param <T> the data value for each path
  */
-public interface DataView<T> extends FileTreeView, AutoCloseable {
+public interface FileTreeDataView<T> extends FileTreeView, AutoCloseable {
   /**
    * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
    *

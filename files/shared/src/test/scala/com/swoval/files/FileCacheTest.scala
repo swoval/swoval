@@ -5,7 +5,7 @@ import java.nio.file.Path
 
 import com.swoval.files.DataViews.{ Converter, Entry, OnError }
 import com.swoval.files.FileCacheTest._
-import com.swoval.files.FileCaches.{ DEFAULT_SYMLINK_FACTORY, EventHandler }
+import FileTreeRepositories.{ DEFAULT_SYMLINK_FACTORY, EventHandler }
 import com.swoval.files.FileTreeViews.CacheObserver
 import com.swoval.files.PathWatchers.{ Event, Factory }
 import com.swoval.files.test._
@@ -35,7 +35,7 @@ trait FileCacheTest { self: TestSuite =>
 
 object FileCacheTest {
   def getCached[T](converter: Converter[T], cacheObserver: CacheObserver[T]) = {
-    val res = FileCaches.getCached(converter)
+    val res = FileTreeRepositories.get(converter)
     res.addCacheObserver(cacheObserver)
     res
   }

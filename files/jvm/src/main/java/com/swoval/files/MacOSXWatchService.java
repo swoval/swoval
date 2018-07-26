@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Provides an alternative {@link java.nio.file.WatchService} for mac that uses native file system
  * events rather than polling for file changes.
  */
-public class MacOSXWatchService implements RegisterableWatchService {
+class MacOSXWatchService implements RegisterableWatchService {
   private final int watchLatency;
   private final TimeUnit watchTimeUnit;
   private final int queueSize;

@@ -66,10 +66,11 @@ public class ShutdownHooks {
   }
 
   /**
-   * Add a hook to run at shutdown.
+   * Add a removable hook to run at shutdown.
    *
    * @param priority controls the ordering of this hook. Lower values run first.
    * @param runnable the shutdown task to run
+   * @return an id that can be used to later remove the runnable if it is no longer needed.
    */
   public static int addHook(final int priority, final Runnable runnable) {
     synchronized(lock) {

@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/UsingtheFSEventsFramework/UsingtheFSEventsFramework.html"
  * target="_blank">Apple File System Events Api</a>.
  */
-public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
+class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   private final DirectoryRegistry directoryRegistry;
   private final Map<Path, Stream> streams = new HashMap<>();
   private final AtomicBoolean closed = new AtomicBoolean(false);

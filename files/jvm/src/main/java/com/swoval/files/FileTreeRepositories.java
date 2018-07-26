@@ -10,8 +10,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 /** Provides factory methods for generating instances of {@link FileTreeRepository}. */
-public class FileCaches {
-  private FileCaches() {}
+public class FileTreeRepositories {
+  private FileTreeRepositories() {}
   /**
    * Create a file cache with a CacheObserver of events.
    *
@@ -19,7 +19,7 @@ public class FileCaches {
    * @param <T> the value type of the cache entries
    * @return a file cache.
    */
-  public static <T> FileTreeRepository<T> getCached(final Converter<T> converter) {
+  public static <T> FileTreeRepository<T> get(final Converter<T> converter) {
     final Executor executor = Executor.make("FileTreeRepository-internal-executor");
     final FileCacheDirectoryTree<T> tree =
         new FileCacheDirectoryTree<>(
@@ -30,7 +30,6 @@ public class FileCaches {
     final FileCachePathWatcher<T> watcher = new FileCachePathWatcher<>(tree, pathWatcher);
     return new FileTreeRepositoryImpl<>(tree, watcher, executor);
   }
-
   static class EventHandler implements BiConsumer<Event, Executor.Thread> {
     private final FileCacheDirectoryTree<?> tree;
 

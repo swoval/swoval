@@ -24,11 +24,9 @@ public interface FileEventMonitor extends AutoCloseable {
       throws ClosedFileEventMonitorException;
 
   /**
-   * Stop monitoring a path previously registered with {@link FileEventMonitor#createStream(Path,
-   * long, TimeUnit, Create)}.
+   * Stop monitoring a path previously registered with {@link FileEventMonitor#createStream}.
    *
-   * @param streamHandle the handle returned by {@link FileEventMonitor#createStream(Path, long,
-   *     TimeUnit, Create)}
+   * @param streamHandle the handle returned by {@link FileEventMonitor#createStream}
    * @throws ClosedFileEventMonitorException if the {@link FileEventMonitor} has been closed
    */
   void stopStream(FileEventMonitors.Handle streamHandle) throws ClosedFileEventMonitorException;

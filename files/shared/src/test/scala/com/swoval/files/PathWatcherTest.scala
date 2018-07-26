@@ -371,7 +371,7 @@ object NioPathWatcherTest extends PathWatcherTest {
 
   def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] = {
     new NioPathWatcher(new DirectoryRegistryImpl(),
-                       WatchServices.get(),
+                       RegisterableWatchServices.get(),
                        (e: PathWatchers.Event) => callback(e),
                        Executor.make("DirectoryWatcherTestExecutor-internal"))
   }

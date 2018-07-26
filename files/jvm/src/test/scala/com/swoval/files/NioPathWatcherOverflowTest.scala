@@ -37,7 +37,7 @@ object NioPathWatcherOverflowTest extends TestSuite {
       usingAsync(
         PlatformWatcher.make(
           (e: PathWatchers.Event, _: Executor#Thread) => callback.accept(e),
-          new BoundedWatchService(4, WatchServices.get()),
+          new BoundedWatchService(4, RegisterableWatchServices.get()),
           Executor.make("NioPathWatcherExecutor"),
           new DirectoryRegistryImpl()
         )) { c =>
@@ -55,7 +55,8 @@ object NioPathWatcherOverflowTest extends TestSuite {
           }
           .andThen {
             case Failure(_) =>
-              println(s"Test failed -- subdirLatch ${subdirLatch.getCount}, fileLatch ${fileLatch.getCount}")
+              println(
+                s"Test failed -- subdirLatch ${subdirLatch.getCount}, fileLatch ${fileLatch.getCount}")
               if (addedSubdirs.size != subdirs.size) {
                 //println("missing subdirs:\n" + (subdirs.toSet diff addedSubdirs.toSet).mkString("\n"))
               }

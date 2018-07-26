@@ -29,7 +29,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
       (consumer: Consumer[PathWatchers.Event], executor: Executor, registry: DirectoryRegistry) =>
         PathWatchers.get(
           (e: PathWatchers.Event, _: Executor#Thread) => consumer.accept(e),
-          new BoundedWatchService(boundedQueueSize, WatchServices.get),
+          new BoundedWatchService(boundedQueueSize, RegisterableWatchServices.get),
           executor,
           registry
     )
