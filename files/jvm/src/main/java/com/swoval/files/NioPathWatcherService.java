@@ -20,7 +20,7 @@ import java.nio.file.Path;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.util.ArrayList;
-import java.util.TreeMap;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +34,7 @@ class NioPathWatcherService implements AutoCloseable {
   private final AtomicBoolean isStopped = new AtomicBoolean(false);
   private static final AtomicInteger threadId = new AtomicInteger(0);
   private final CountDownLatch shutdownLatch = new CountDownLatch(1);
-  private final Map<Path, WatchedDirectory> watchedDirectoriesByPath = new TreeMap<>();
+  private final Map<Path, WatchedDirectory> watchedDirectoriesByPath = new HashMap<>();
   private final RegisterableWatchService watchService;
   private final int shutdownHookId;
 

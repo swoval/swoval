@@ -4,7 +4,7 @@ import static java.util.Map.Entry;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.TreeMap;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -21,13 +21,13 @@ class MapOps {
       final List<DataViews.Entry<T>> oldEntries,
       final List<DataViews.Entry<T>> newEntries,
       final FileTreeViews.CacheObserver<T> cacheObserver) {
-    final Map<Path, DataViews.Entry<T>> oldMap = new TreeMap<>();
+    final Map<Path, DataViews.Entry<T>> oldMap = new HashMap<>();
     final Iterator<DataViews.Entry<T>> oldIterator = oldEntries.iterator();
     while (oldIterator.hasNext()) {
       final DataViews.Entry<T> entry = oldIterator.next();
       oldMap.put(entry.getPath(), entry);
     }
-    final Map<Path, DataViews.Entry<T>> newMap = new TreeMap<>();
+    final Map<Path, DataViews.Entry<T>> newMap = new HashMap<>();
     final Iterator<DataViews.Entry<T>> newIterator = newEntries.iterator();
     while (newIterator.hasNext()) {
       final DataViews.Entry<T> entry = newIterator.next();

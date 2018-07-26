@@ -13,7 +13,7 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.TreeMap;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -44,8 +44,8 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
   private final Converter<T> converter;
   private final AtomicReference<Entry<T>> _cacheEntry;
   private final Object lock = new Object();
-  private final Map<Path, CachedDirectoryImpl<T>> subdirectories = new TreeMap<>();
-  private final Map<Path, Entry<T>> files = new TreeMap<>();
+  private final Map<Path, CachedDirectoryImpl<T>> subdirectories = new HashMap<>();
+  private final Map<Path, Entry<T>> files = new HashMap<>();
   private final Filter<? super TypedPath> pathFilter;
 
   /**
@@ -245,8 +245,8 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
       exists = false;
     } catch (final IOException e) {
     }
-    final Map<Path, Entry<T>> oldEntries = new TreeMap<>();
-    final Map<Path, Entry<T>> newEntries = new TreeMap<>();
+    final Map<Path, Entry<T>> oldEntries = new HashMap<>();
+    final Map<Path, Entry<T>> newEntries = new HashMap<>();
     if (exists) {
       final CachedDirectoryImpl<T> previous =
           currentDir.subdirectories.put(path.getFileName(), dir);

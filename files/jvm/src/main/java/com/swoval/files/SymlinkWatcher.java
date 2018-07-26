@@ -13,7 +13,7 @@ import java.nio.file.FileSystemLoopException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.TreeMap;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -28,8 +28,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 class SymlinkWatcher implements AutoCloseable {
   private final AtomicBoolean isClosed = new AtomicBoolean(false);
-  private final Map<Path, RegisteredPath> watchedSymlinksByDirectory = new TreeMap<>();
-  private final Map<Path, RegisteredPath> watchedSymlinksByTarget = new TreeMap<>();
+  private final Map<Path, RegisteredPath> watchedSymlinksByDirectory = new HashMap<>();
+  private final Map<Path, RegisteredPath> watchedSymlinksByTarget = new HashMap<>();
   private final OnError onError;
   private final Executor internalExecutor;
 
