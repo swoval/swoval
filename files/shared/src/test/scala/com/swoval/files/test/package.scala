@@ -68,9 +68,6 @@ package object test {
   def withTempDirectory[R](dir: Path)(f: Path => Future[R]): Future[Unit] =
     com.swoval.test.TestFiles.withTempDirectory(dir.toString)(d => f(Paths.get(d)).map(_ => ()))
 
-  def withDirectory[R](dir: Path)(f: => Future[R]): Future[Unit] =
-    com.swoval.test.TestFiles.withDirectory(dir.toString)(f.map(_ => ()))
-
   def wrap[R](f: Path => R): Path => Future[Unit] = (path: Path) => {
     val p = Promise[Unit]()
     p.tryComplete(util.Try { f(path); () })
@@ -86,11 +83,4 @@ package object test {
 
   def withTempDirectorySync[R: NotFuture](dir: Path)(f: Path => R): Future[Unit] =
     withTempDirectory(dir)(wrap(f))
-
-  def withDirectorySync[R: NotFuture](dir: Path)(f: => R): Future[Unit] =
-    com.swoval.test.TestFiles.withDirectory(dir.toString) {
-      val p = Promise[Unit]
-      p.tryComplete(util.Try { f; () })
-      p.future
-    }
 }
