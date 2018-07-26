@@ -85,8 +85,6 @@ class NativeDirectoryLister implements DirectoryLister {
       while (fileHandle != 0) {
         final int fileType = getType(fileHandle);
         switch (fileType) {
-          case EOF:
-            break;
           case DIRECTORY:
             results.addDir(getName(fileHandle));
             break;

@@ -235,7 +235,8 @@ object CachedFileTreeViewTest extends TestSuite {
           val dir =
             FileTreeViews.cached[LastModified](f.getParent,
                                                LastModified(_: TypedPath),
-                                               Integer.MAX_VALUE)
+                                               Integer.MAX_VALUE,
+                                               true)
           val lastModified = f.lastModified
           val updatedLastModified = 2000
           f.setLastModifiedTime(updatedLastModified)
@@ -248,7 +249,7 @@ object CachedFileTreeViewTest extends TestSuite {
         f.write("foo")
         val initialBytes = "foo".getBytes.toIndexedSeq
         val dir =
-          FileTreeViews.cached[FileBytes](f.getParent, FileBytes(_: TypedPath), Integer.MAX_VALUE)
+          FileTreeViews.cached[FileBytes](f.getParent, FileBytes(_: TypedPath), Integer.MAX_VALUE, true)
         def filter(bytes: Seq[Byte]): Filter[Entry[FileBytes]] =
           new Filter[Entry[FileBytes]] {
             override def accept(p: Entry[FileBytes]): Boolean = p.value.bytes == bytes

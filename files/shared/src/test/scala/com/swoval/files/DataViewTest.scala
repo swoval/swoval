@@ -20,7 +20,7 @@ object DataViewTest extends TestSuite {
           val dir = FileTreeViews.cached(parent, (p: TypedPath) => {
             if (p.isDirectory) throw new IOException("die")
             1: Integer
-          }, Integer.MAX_VALUE)
+          }, Integer.MAX_VALUE, true)
           dir.getEntry.getValue.getOrElse(2) ==> 2
           dir.getEntry.getValue.left().getValue.getMessage ==> "die"
           dir.ls(recursive = true, AllPass) === Seq(file)
@@ -30,7 +30,7 @@ object DataViewTest extends TestSuite {
           val directory = FileTreeViews.cached(dir, (p: TypedPath) => {
             if (p.getPath.toString.contains("subdir")) throw new IOException("die")
             1: Integer
-          }, 0)
+          }, 0, true)
           directory.getEntry.getValue.getOrElse(2) ==> 1
           directory
             .listEntries(Integer.MAX_VALUE, AllPass)
@@ -43,7 +43,7 @@ object DataViewTest extends TestSuite {
           val dir = FileTreeViews.cached(parent, (p: TypedPath) => {
             if (!p.isDirectory) throw new IOException("die")
             1: Integer
-          }, Integer.MAX_VALUE)
+          }, Integer.MAX_VALUE, true)
           dir.getEntry.getValue.getOrElse(2) ==> 1
           dir
             .listEntries(parent, Integer.MAX_VALUE, AllPass)
