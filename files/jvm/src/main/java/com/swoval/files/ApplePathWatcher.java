@@ -21,7 +21,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.TreeMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   private final DirectoryRegistry directoryRegistry;
-  private final Map<Path, Stream> streams = new HashMap<>();
+  private final Map<Path, Stream> streams = new TreeMap<>();
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final long latency;
   private final TimeUnit timeUnit;

@@ -20,9 +20,9 @@ import java.nio.file.FileSystemLoopException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Provides a PathWatcher that is backed by a {@link java.nio.file.WatchService}. */
@@ -30,8 +30,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final Executor internalExecutor;
   private final Observers<PathWatchers.Event> observers = new Observers<>();
-  private final Map<Path, CachedDirectory<WatchedDirectory>> rootDirectories =
-      new LinkedHashMap<>();
+  private final Map<Path, CachedDirectory<WatchedDirectory>> rootDirectories = new TreeMap<>();
   private final DirectoryRegistry directoryRegistry;
   private final Converter<WatchedDirectory> converter;
   private final FileTreeViews.CacheObserver<WatchedDirectory> updateCacheObserver =

@@ -26,7 +26,7 @@ import java.nio.file.WatchEvent.Kind;
 import java.nio.file.Watchable;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.TreeMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -47,7 +47,7 @@ public class MacOSXWatchService implements RegisterableWatchService {
   private final TimeUnit watchTimeUnit;
   private final int queueSize;
   private final AtomicBoolean open = new AtomicBoolean(false);
-  private final Map<Path, WatchKey> registered = new HashMap<>();
+  private final Map<Path, WatchKey> registered = new TreeMap<>();
   private final LinkedBlockingQueue<MacOSXWatchKey> readyKeys = new LinkedBlockingQueue<>();
   private Executor internalExecutor;
 

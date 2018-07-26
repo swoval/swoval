@@ -5,7 +5,7 @@ import static java.util.Map.Entry;
 import com.swoval.functional.Filter;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.TreeMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +26,7 @@ interface DirectoryRegistry extends Filter<Path>, AutoCloseable {
 }
 
 class DirectoryRegistryImpl implements DirectoryRegistry {
-  private final Map<Path, RegisteredDirectory> registeredDirectoriesByPath = new HashMap<>();
+  private final Map<Path, RegisteredDirectory> registeredDirectoriesByPath = new TreeMap<>();
   private final Object lock = new Object();
 
   @Override

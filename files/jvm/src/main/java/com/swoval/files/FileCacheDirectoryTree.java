@@ -26,7 +26,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.TreeMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.Set;
 
 class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
-  private final Map<Path, CachedDirectory<T>> directories = new HashMap<>();
+  private final Map<Path, CachedDirectory<T>> directories = new TreeMap<>();
   private final DirectoryRegistry directoryRegistry = new DirectoryRegistryImpl();
   private final Set<Path> pendingFiles = new HashSet<>();
   private final Converter<T> converter;
