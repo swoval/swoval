@@ -258,6 +258,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
           final Entry<T> entry = entryIterator.next();
           oldEntries.put(entry.getPath(), entry);
         }
+        previous.close();
       }
       newEntries.put(dir.realPath, dir.getEntry());
       final Iterator<Entry<T>> it = dir.listEntries(Integer.MAX_VALUE, AllPass).iterator();
@@ -311,10 +312,11 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
                       converter,
                       TypedPaths.getDelegate(resolved, typedPath));
               if (isDirectory) {
-                currentDir.subdirectories.put(
+                final CachedDirectoryImpl previous = currentDir.subdirectories.put(
                     p,
                     new CachedDirectoryImpl<>(
                         resolved, realPath, converter, -1, pathFilter, fileTreeView));
+                if (previous != null) previous.close();
               } else {
                 currentDir.files.put(p, newEntry);
               }

@@ -10,7 +10,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-interface DirectoryRegistry extends Filter<Path> {
+interface DirectoryRegistry extends Filter<Path>, AutoCloseable {
   boolean addDirectory(final Path path, final int maxDepth);
 
   int maxDepthFor(final Path path);
@@ -20,6 +20,9 @@ interface DirectoryRegistry extends Filter<Path> {
   void removeDirectory(final Path path);
 
   boolean acceptPrefix(final Path path);
+
+  @Override
+  void close();
 }
 
 class DirectoryRegistryImpl implements DirectoryRegistry {
@@ -98,6 +101,11 @@ class DirectoryRegistryImpl implements DirectoryRegistry {
 
   public boolean acceptPrefix(final Path path) {
     return acceptImpl(path, true);
+  }
+
+  @Override
+  public void close() {
+    registeredDirectoriesByPath.clear();
   }
 
   private static class RegisteredDirectory {

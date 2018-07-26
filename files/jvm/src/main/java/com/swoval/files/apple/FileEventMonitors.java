@@ -241,7 +241,7 @@ class GlobalFileEventMonitor extends FileEventMonitorImpl {
     }
   }
 
-  static final class Consumers<T> implements Consumer<T> {
+  static final class Consumers<T> implements Consumer<T>, AutoCloseable {
     private final Map<Integer, Consumer<T>> consumers = new LinkedHashMap<>();
     private final Object lock = new Object();
 
@@ -278,6 +278,13 @@ class GlobalFileEventMonitor extends FileEventMonitorImpl {
     boolean isEmpty() {
       synchronized (lock) {
         return consumers.isEmpty();
+      }
+    }
+
+    @Override
+    public void close() {
+      synchronized (lock) {
+        consumers.clear();
       }
     }
   }

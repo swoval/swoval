@@ -69,6 +69,9 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
   private final DirectoryRegistry READ_ONLY_DIRECTORY_REGISTRY =
       new DirectoryRegistry() {
         @Override
+        public void close() {}
+
+        @Override
         public boolean addDirectory(final Path path, final int maxDepth) {
           return false;
         }
@@ -162,7 +165,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
           } catch (final NotDirectoryException nde) {
             cachedDirectory = FileTreeViews.cached(path, converter, -1);
           }
-          directories.put(path, cachedDirectory);
+          final CachedDirectory<T> previous = directories.put(path, cachedDirectory);
+          if (previous != null) previous.close();
           addCallback(callbacks, typedPath, null, cachedDirectory.getEntry(), Create, null);
           final Iterator<DataViews.Entry<T>> it =
               cachedDirectory.listEntries(cachedDirectory.getMaxDepth(), AllPass).iterator();
@@ -220,6 +224,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, DataView<T> {
     callbackExecutor.close();
     if (symlinkWatcher != null) symlinkWatcher.close();
     directories.clear();
+    directoryRegistry.close();
+    pendingFiles.clear();
   }
 
   CachedDirectory<T> register(

@@ -59,5 +59,7 @@ class MapOps {
         cacheObserver.onDelete(entry.getValue());
       }
     }
+    newMap.clear();
+    oldMap.clear();
   }
 }

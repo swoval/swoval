@@ -17,10 +17,8 @@ import com.swoval.functional.Filter;
 import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.FileSystemLoopException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -304,6 +302,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                     it.next().getEntry().getValue();
                 if (either.isRight()) either.get().close();
               }
+              rootDirectories.clear();
             }
           }
         });

@@ -19,6 +19,7 @@ import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.Path;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -113,11 +114,6 @@ class NioPathWatcherService implements AutoCloseable {
     CachedWatchDirectory(final Path path) throws IOException {
       this.path = path;
       this.key = watchService.register(path, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
-      if (key == null) {
-        final IOException e = new IOException("FUCK " + path);
-        e.printStackTrace(System.err);
-        throw e;
-      }
     }
 
     @Override
@@ -165,6 +161,11 @@ class NioPathWatcherService implements AutoCloseable {
     if (isStopped.compareAndSet(false, true)) {
       loopThread.interrupt();
       try {
+        final Iterator<WatchedDirectory> it = new ArrayList<>(watchedDirectoriesByPath.values()).iterator();
+        while (it.hasNext()) {
+          it.next().close();
+        }
+        watchedDirectoriesByPath.clear();
         watchService.close();
         shutdownLatch.await(5, TimeUnit.SECONDS);
         loopThread.join(5000);

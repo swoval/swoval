@@ -350,6 +350,13 @@ class GlobalApplePathWatcher implements AutoCloseable {
       };
   private final DirectoryRegistry registry =
       new DirectoryRegistry() {
+        @Override
+        public void close() {
+          final Iterator<DelegatePathWatcher> it = pathWatchers.iterator();
+          while (it.hasNext()) {
+            it.next().directoryRegistry.close();
+          }
+        }
         /*
          * No-op. This is managed by the underlying directory registries.
          */
@@ -530,7 +537,7 @@ class GlobalApplePathWatcher implements AutoCloseable {
     }
   }
 
-  private static class DelegatePathWatchers {
+  private static class DelegatePathWatchers implements AutoCloseable {
     private static final Map<Integer, DelegatePathWatcher> pathWatchers = new LinkedHashMap<>();
     private final Object lock = new Object();
     private final AtomicInteger watcherID = new AtomicInteger(1);
@@ -556,6 +563,17 @@ class GlobalApplePathWatcher implements AutoCloseable {
     private Iterator<DelegatePathWatcher> iterator() {
       synchronized (lock) {
         return new ArrayList<>(pathWatchers.values()).iterator();
+      }
+    }
+
+    @Override
+    public void close() {
+      synchronized (lock) {
+        final Iterator<DelegatePathWatcher> it = pathWatchers.values().iterator();
+        while (it.hasNext()) {
+          it.next().close();
+        }
+        pathWatchers.clear();
       }
     }
   }

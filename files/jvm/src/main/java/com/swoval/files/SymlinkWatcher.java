@@ -145,7 +145,15 @@ class SymlinkWatcher implements AutoCloseable {
           public void accept(final Executor.Thread thread) {
             if (isClosed.compareAndSet(false, true)) {
               watcher.close();
+              final Iterator<RegisteredPath> targetIt = watchedSymlinksByTarget.values().iterator();
+              while (targetIt.hasNext()) {
+                targetIt.next().paths.clear();
+              }
               watchedSymlinksByTarget.clear();
+              final Iterator<RegisteredPath> dirIt = watchedSymlinksByDirectory.values().iterator();
+              while (dirIt.hasNext()) {
+                dirIt.next().paths.clear();
+              }
               watchedSymlinksByDirectory.clear();
             }
           }

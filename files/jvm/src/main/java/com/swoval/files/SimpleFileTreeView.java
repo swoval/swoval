@@ -38,6 +38,7 @@ final class SimpleFileTreeView implements FileTreeView {
     final List<TypedPath> result = new ArrayList<>();
     final Set<Path> visited = (followLinks && maxDepth > 0) ? new HashSet<Path>() : null;
     listDirImpl(path, 1, maxDepth, result, filter, visited);
+    if (visited != null) visited.clear();
     return result;
   }
 

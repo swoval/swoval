@@ -180,6 +180,12 @@ public class MacOSXWatchService implements AutoCloseable {
                     watchKeys.keys.clear();
                   }
                   registered.clear();
+                  final Iterator<DelegateMacOSXWatchService> delegateIt =
+                      delegates.values().iterator();
+                  while (delegateIt.hasNext()) {
+                    delegateIt.next().close();
+                  }
+                  delegates.clear();
                   fileEventMonitor.close();
                   return true;
                 } else {
@@ -244,10 +250,6 @@ public class MacOSXWatchService implements AutoCloseable {
                     } else {
                       result = new MacOSXWatchKey(realPath, queueSize, Handles.INVALID, kinds);
                       watchKeys.keys.add(result);
-                    }
-                    if (result == null) {
-                      System.err.println("WTF null result for " + realPath);
-                      throw new IOException("Couldn't register " + realPath);
                     }
                     keys.add(result);
                     return result;
