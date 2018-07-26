@@ -10,6 +10,7 @@ import com.swoval.files.DataViews.Converter;
 import com.swoval.files.Executor.Thread;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
+import com.swoval.files.PathWatchers.Event.Kind;
 import com.swoval.files.PathWatchers.Overflow;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
@@ -358,11 +359,20 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
       if (!typedPath.exists()) {
         final CachedDirectory<WatchedDirectory> root = getOrAdd(event.getPath());
         if (root != null) {
-          final Iterator<DataViews.Entry<WatchedDirectory>> it =
+          final boolean isRoot = root.getPath().equals(event.getPath());
+          final Iterator<DataViews.Entry<WatchedDirectory>> it = isRoot ? root.listEntries(root.getMaxDepth(), AllPass).iterator() :
               root.remove(event.getPath(), thread).iterator();
           while (it.hasNext()) {
-            final Either<IOException, WatchedDirectory> either = it.next().getValue();
-            if (either.isRight()) either.get().close();
+            final DataViews.Entry<WatchedDirectory> entry = it.next();
+            final Either<IOException, WatchedDirectory> either = entry.getValue();
+            if (either.isRight()) {
+              either.get().close();
+            }
+            maybeRunCallback(new Event(entry, Kind.Delete));
+          }
+          if (isRoot) {
+            rootDirectories.remove(root.getPath());
+            getOrAdd(event.getPath());
           }
         }
       }

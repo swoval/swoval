@@ -2,9 +2,10 @@ package com.swoval
 package files
 
 import java.nio.file.attribute.FileTime
-import java.nio.file.{ Files, Paths }
+import java.nio.file.{ Files, Path, Paths }
 import java.util.concurrent.{ TimeUnit, TimeoutException }
 
+import com.swoval.files.PathWatchers.Event.Kind
 import com.swoval.files.PathWatchers.Event.Kind.{ Create, Delete, Modify }
 import com.swoval.files.apple.Flags
 import com.swoval.files.test.{ ArrayBlockingQueue, _ }
@@ -13,6 +14,7 @@ import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
 import utest._
 
+import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
@@ -23,6 +25,7 @@ trait PathWatcherTest extends TestSuite {
   val fileFlags = new Flags.Create().setNoDefer().setFileEvents()
 
   def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event]
+  def expectedDeletions(dir: Path, subdir: Path): Set[Path]
 
   val testsImpl = Tests {
     val events = new ArrayBlockingQueue[PathWatchers.Event](10)
@@ -201,7 +204,39 @@ trait PathWatcherTest extends TestSuite {
             case Failure(_) => System.out.println(s"absent.initially failed for $file")
           }
         }
-        'afterRemoval - {}
+      }
+    }
+    'directory - {
+      'delete - withTempDirectory { dir =>
+        withTempDirectory(dir) { subdir =>
+          val deletions = mutable.Set.empty[Path]
+          val expected = expectedDeletions(dir, subdir)
+          val deletionLatch = new CountDownLatch(expected.size)
+          val creationLatch = new CountDownLatch(1)
+          var creationPending = false
+          val callback = (e: PathWatchers.Event) => {
+            if (e.getKind == Kind.Delete && deletions.add(e.getPath)) {
+              deletionLatch.countDown()
+            }
+            if (e.getPath.equals(dir) && creationPending) {
+              creationPending = false
+              creationLatch.countDown()
+            }
+          }
+          usingAsync(defaultWatcher(callback)) { w =>
+            w.register(dir, Integer.MAX_VALUE)
+            dir.deleteRecursive()
+            deletionLatch
+              .waitFor(DEFAULT_TIMEOUT) {
+                deletions.toSet === expected
+                creationPending = true
+                Files.createDirectory(dir)
+              }
+              .flatMap { _ =>
+                creationLatch.waitFor(DEFAULT_TIMEOUT) {}
+              }
+          }
+        }
       }
     }
     'depth - {
@@ -315,6 +350,8 @@ trait PathWatcherTest extends TestSuite {
 
 object PathWatcherTest extends PathWatcherTest {
   val tests = testsImpl
+  override def expectedDeletions(dir: Path, subdir: Path): Set[Path] =
+    if (Platform.isMac) Set(dir) else Set(dir, subdir)
 
   def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] = {
     PathWatchers.get((e: PathWatchers.Event) => callback(e))
@@ -322,6 +359,7 @@ object PathWatcherTest extends PathWatcherTest {
 }
 
 object NioPathWatcherTest extends PathWatcherTest {
+  override def expectedDeletions(dir: Path, subdir: Path): Set[Path] = Set(dir, subdir)
   val tests =
     if (Platform.isJVM && Platform.isMac) testsImpl
     else
