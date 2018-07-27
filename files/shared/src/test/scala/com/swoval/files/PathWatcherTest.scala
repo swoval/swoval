@@ -206,37 +206,42 @@ trait PathWatcherTest extends TestSuite {
       }
     }
     'directory - {
-      'delete - withTempDirectory { dir =>
-        withTempDirectory(dir) { subdir =>
-          val deletions = mutable.Set.empty[Path]
-          val expected = expectedDeletions(dir, subdir)
-          val deletionLatch = new CountDownLatch(expected.size)
-          val creationLatch = new CountDownLatch(1)
-          var creationPending = false
-          val callback = (e: PathWatchers.Event) => {
-            if (e.getKind == Kind.Delete && deletions.add(e.getPath)) {
-              deletionLatch.countDown()
-            }
-            if (e.getPath.equals(dir) && creationPending) {
-              creationPending = false
-              creationLatch.countDown()
-            }
-          }
-          usingAsync(defaultWatcher(callback)) { w =>
-            w.register(dir, Integer.MAX_VALUE)
-            dir.deleteRecursive()
-            deletionLatch
-              .waitFor(DEFAULT_TIMEOUT) {
-                deletions.toSet === expected
-                creationPending = true
-                Files.createDirectory(dir)
-              }
-              .flatMap { _ =>
-                creationLatch.waitFor(DEFAULT_TIMEOUT) {}
-              }
-          }
-        }
-      }
+      'delete - (if (Platform.isJVM || !Platform.isWin) {
+                   withTempDirectory { dir =>
+                     withTempDirectory(dir) { subdir =>
+                       val deletions = mutable.Set.empty[Path]
+                       val expected = expectedDeletions(dir, subdir)
+                       val deletionLatch = new CountDownLatch(expected.size)
+                       val creationLatch = new CountDownLatch(1)
+                       var creationPending = false
+                       val callback = (e: PathWatchers.Event) => {
+                         if (e.getKind == Kind.Delete && deletions.add(e.getPath)) {
+                           deletionLatch.countDown()
+                         }
+                         if (e.getPath.equals(dir) && creationPending) {
+                           creationPending = false
+                           creationLatch.countDown()
+                         }
+                       }
+                       usingAsync(defaultWatcher(callback)) { w =>
+                         w.register(dir, Integer.MAX_VALUE)
+                         dir.deleteRecursive()
+                         deletionLatch
+                           .waitFor(DEFAULT_TIMEOUT) {
+                             deletions.toSet === expected
+                             creationPending = true
+                             Files.createDirectory(dir)
+                           }
+                           .flatMap { _ =>
+                             creationLatch.waitFor(DEFAULT_TIMEOUT) {}
+                           }
+                       }
+                     }
+                   }
+                 } else {
+                   Future.successful(
+                     println("not running directory.delete test on scala.js on windows"))
+                 })
     }
     'depth - {
       'limit - withTempDirectory { dir =>
