@@ -1,14 +1,12 @@
 package com.swoval.files
 
-import java.util.concurrent.Callable
-
 import com.swoval.functional.{ Consumer, Either }
 
 /**
  * Provides an execution context to run tasks. Exists to allow source interoperability with the jvm
  * interoperability.
  */
-abstract class Executor extends AutoCloseable {
+private[files] abstract class Executor extends AutoCloseable {
   private[this] var _closed = false
 
   def copy(): Executor = this
@@ -17,12 +15,7 @@ abstract class Executor extends AutoCloseable {
 
   def getThread(): Executor.Thread
 
-  /**
-   * Runs the task on a thread
-   *
-   * @param runnable task to run
-   */
-  def run(consumer: Consumer[Executor.Thread]): Unit = {
+  def run(consumer: Consumer[Executor.Thread], priority: Int): Unit = {
     try {
       consumer.accept(getThread())
     } catch {
@@ -30,6 +23,7 @@ abstract class Executor extends AutoCloseable {
         System.err.println(s"Error running: $consumer\n$e\n${e.getStackTrace mkString "\n"}")
     }
   }
+  def run(consumer: Consumer[Executor.Thread]): Unit = run(consumer, -1)
   def block(consumer: Consumer[Executor.Thread]): Unit = consumer.accept(getThread())
   def block[T](function: Function[Executor.Thread, T]): Either[Exception, T] =
     try {
@@ -49,7 +43,7 @@ abstract class Executor extends AutoCloseable {
 }
 
 object Executor {
-  class Thread
+  trait Thread
 
   /**
    * Make a new instance of an Executor
@@ -58,7 +52,7 @@ object Executor {
    * @return
    */
   def make(name: String): Executor = new Executor {
-    override def getThread(): Thread = new Thread
-    override def run(consumer: Consumer[Thread]): Unit = consumer.accept(getThread())
+    override def getThread(): Thread = new Thread {}
+    override def run(consumer: Consumer[Executor.Thread]): Unit = consumer.accept(getThread())
   }
 }

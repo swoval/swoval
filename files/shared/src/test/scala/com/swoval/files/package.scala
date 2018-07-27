@@ -20,10 +20,11 @@ import utest._
 package object files extends PlatformFiles {
   val Ignore: CacheObserver[_] = getObserver[Path]((_: Entry[Path]) => {})
 
-  def getObserver[T](oncreate: Entry[T] => Unit,
-                     onupdate: (Entry[T], Entry[T]) => Unit,
-                     ondelete: Entry[T] => Unit,
-                     onerror: IOException => Unit = _ => {}): FileTreeViews.CacheObserver[T] =
+  def getObserver[T <: AnyRef](
+      oncreate: Entry[T] => Unit,
+      onupdate: (Entry[T], Entry[T]) => Unit,
+      ondelete: Entry[T] => Unit,
+      onerror: IOException => Unit = _ => {}): FileTreeViews.CacheObserver[T] =
     new FileTreeViews.CacheObserver[T] {
       override def onCreate(newEntry: Entry[T]): Unit = oncreate(newEntry)
 
@@ -35,7 +36,7 @@ package object files extends PlatformFiles {
       override def onError(exception: IOException): Unit = onerror(exception)
     }
 
-  def getObserver[T](onUpdate: Entry[T] => Unit): FileTreeViews.CacheObserver[T] =
+  def getObserver[T <: AnyRef](onUpdate: Entry[T] => Unit): FileTreeViews.CacheObserver[T] =
     getObserver[T](onUpdate, (_: Entry[T], e: Entry[T]) => onUpdate(e), onUpdate)
 
   implicit class PathWatcherOps[T](val watcher: PathWatcher[T]) extends AnyVal {

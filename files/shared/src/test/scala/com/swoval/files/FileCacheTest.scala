@@ -31,8 +31,8 @@ trait FileCacheTest { self: TestSuite =>
 }
 
 object FileCacheTest {
-  def getCached[T](converter: Converter[T],
-                   cacheObserver: CacheObserver[T]): FileTreeRepository[T] = {
+  def getCached[T <: AnyRef](converter: Converter[T],
+                             cacheObserver: CacheObserver[T]): FileTreeRepository[T] = {
     val res = FileTreeRepositories.get(converter)
     res.addCacheObserver(cacheObserver)
     res
@@ -47,7 +47,7 @@ object FileCacheTest {
   implicit class FactoryOps(
       val f: (Consumer[PathWatchers.Event], Executor, DirectoryRegistry) => PathWatcher[Event])
       extends PathWatchers.Factory {
-    override def create(consumer: BiConsumer[PathWatchers.Event, Executor#Thread],
+    override def create(consumer: BiConsumer[PathWatchers.Event, Executor.Thread],
                         executor: Executor,
                         registry: DirectoryRegistry): PathWatcher[Event] =
       f((e: PathWatchers.Event) => consumer.accept(e, null), executor, registry)
@@ -73,7 +73,7 @@ object FileCacheTest {
    * @param cacheObserver an cacheObserver of events for this cache
    * @return a file cache.
    */
-  private[files] def get[T](
+  private[files] def get[T <: AnyRef](
       converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeViews.CacheObserver[T],
       watcherFactory: (Executor, DirectoryRegistry) => PathWatcher[PathWatchers.Event])
@@ -90,7 +90,7 @@ object FileCacheTest {
                                           symlinkWatcher)
     val pathWatcher = watcherFactory(copy, tree.readOnlyDirectoryRegistry)
     pathWatcher.addObserver((e: PathWatchers.Event) =>
-      copy.run((t: Executor#Thread) => tree.handleEvent(e, t)))
+      copy.run((t: Executor.Thread) => tree.handleEvent(e, t)))
     val watcher = new FileCachePathWatcher(tree, pathWatcher)
     val res = new FileTreeRepositoryImpl(tree, watcher, executor)
     res.addCacheObserver(cacheObserver)

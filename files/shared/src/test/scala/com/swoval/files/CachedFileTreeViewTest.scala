@@ -28,7 +28,7 @@ object CachedFileTreeViewTest extends TestSuite {
                             AllPass,
                             FileTreeViews.getDefault(followLinks))
       .init()
-  class Updates[T](u: FileTreeViews.Updates[T]) {
+  class Updates[T <: AnyRef](u: FileTreeViews.Updates[T]) {
     private[this] var _creations: Seq[Entry[T]] = Nil
     private[this] var _deletions: Seq[Entry[T]] = Nil
     private[this] var _updates: Seq[(Entry[T], Entry[T])] = Nil
@@ -43,20 +43,20 @@ object CachedFileTreeViewTest extends TestSuite {
     def deletions: Seq[Entry[T]] = _deletions
     def updates: Seq[(Entry[T], Entry[T])] = _updates
   }
-  implicit class UpdateOps[T](val u: FileTreeViews.Updates[T]) extends AnyVal {
+  implicit class UpdateOps[T <: AnyRef](val u: FileTreeViews.Updates[T]) extends AnyVal {
     def toUpdates: CachedFileTreeViewTest.Updates[T] = new CachedFileTreeViewTest.Updates(u)
   }
 
   val executor = new Executor {
-    override def run(threadConsumer: Consumer[Executor#Thread], priority: Int): Unit =
+    override def run(threadConsumer: Consumer[Executor.Thread], priority: Int): Unit =
       threadConsumer.accept(getThread())
-    override def getThread(): Executor#Thread = null
+    override def getThread(): Executor.Thread = null
   }
-  implicit class CachedDirectoryOps[T](val cd: CachedDirectory[T]) extends AnyVal {
+  implicit class CachedDirectoryOps[T <: AnyRef](val cd: CachedDirectory[T]) extends AnyVal {
     def remove(path: Path): java.util.List[Entry[T]] =
-      executor.block((t: Executor#Thread) => cd.remove(path, t)).get()
+      executor.block((t: Executor.Thread) => cd.remove(path, t)).get()
     def update(path: TypedPath): FileTreeViews.Updates[T] =
-      executor.block((t: Executor#Thread) => cd.update(path, t)).get()
+      executor.block((t: Executor.Thread) => cd.update(path, t)).get()
   }
 
   val tests = Tests {

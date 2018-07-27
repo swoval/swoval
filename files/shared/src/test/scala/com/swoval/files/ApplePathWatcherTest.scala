@@ -19,7 +19,7 @@ object ApplePathWatcherTest extends TestSuite {
       10,
       TimeUnit.MILLISECONDS,
       dirFlags,
-      (_: String, _: Executor#Thread) => {},
+      (_: String, _: Executor.Thread) => {},
       Executor.make("ApplePathWatcher-internal-executor"),
       new DirectoryRegistryImpl
     )

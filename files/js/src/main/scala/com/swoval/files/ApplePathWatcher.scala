@@ -232,7 +232,7 @@ class ApplePathWatcher(private val latency: Long,
   }
 
   /**
- Closes the FileEventMonitor and shuts down the {@code internalExecutor}.
+ Closes the FileEventsApi and shuts down the {@code internalExecutor}.
    */
   override def close(): Unit = {
     if (closed.compareAndSet(false, true)) {

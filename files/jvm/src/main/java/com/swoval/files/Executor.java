@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 abstract class Executor implements AutoCloseable {
   Executor() {}
 
-  public class Thread {
+  public static class Thread {
     private Thread() {}
     private long id = -1;
     private String name = "";

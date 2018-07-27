@@ -42,11 +42,11 @@ object NioPathWatcherOverflowTest extends TestSuite {
         )) { c =>
         c.addObserver(callback)
         c.register(dir, Integer.MAX_VALUE)
-        executor.run((_: Executor#Thread) => subdirs.foreach(Files.createDirectory(_)))
+        executor.run((_: Executor.Thread) => subdirs.foreach(Files.createDirectory(_)))
         subdirLatch
           .waitFor(DEFAULT_TIMEOUT) {
             subdirs.toSet === addedSubdirs.toSet
-            executor.run((_: Executor#Thread) => files.foreach(Files.createFile(_)))
+            executor.run((_: Executor.Thread) => files.foreach(Files.createFile(_)))
           }
           .flatMap { _ =>
             fileLatch.waitFor(DEFAULT_TIMEOUT) {

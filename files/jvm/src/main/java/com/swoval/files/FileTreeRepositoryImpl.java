@@ -14,23 +14,10 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
-  /** The constructor must come first for code-gen */
-  FileTreeRepositoryImpl(
-      final FileCacheDirectoryTree<T> directoryTree,
-      final FileCachePathWatcher<T> watcher,
-      final Executor executor) {
-    assert (executor != null);
-    this.shutdownHookId = ShutdownHooks.addHook( 1, closeRunnable);
-    this.internalExecutor = executor;
-    this.directoryTree = directoryTree;
-    this.watcher = watcher;
-  }
-
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final Executor internalExecutor;
   private final FileCacheDirectoryTree<T> directoryTree;
   private final FileCachePathWatcher<T> watcher;
-  private final int shutdownHookId;
   private final Runnable closeRunnable = new Runnable() {
     @Override
     public void run() {
@@ -48,6 +35,20 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
       }
     }
   };
+  private final int shutdownHookId;
+
+  FileTreeRepositoryImpl(
+      final FileCacheDirectoryTree<T> directoryTree,
+      final FileCachePathWatcher<T> watcher,
+      final Executor executor) {
+    assert (executor != null);
+    this.shutdownHookId = ShutdownHooks.addHook( 1, closeRunnable);
+    this.internalExecutor = executor;
+    this.directoryTree = directoryTree;
+    this.watcher = watcher;
+  }
+
+
 
   /** Cleans up the path watcher and clears the directory cache. */
   @Override

@@ -68,16 +68,37 @@ object Converter {
     val varargsRegex = "(.*)options[)]".r
     val newLines = sanitize(lines)
     val fileName = path.getFileName.toString.dropRight(6)
+    val needAnyRef =
+      Set(
+        "CachedDirectory",
+        "CachedDirectoryImpl",
+        "FileCachePathWatcher",
+        "FileCacheDirectoryTree",
+        "FileTreeDataView",
+        "FileTreeRepositories",
+        "FileTreeRepository",
+        "FileTreeRepositoryImpl",
+        "FileTreeViews",
+        "UpdatableFileTreeDataView"
+      )
     (if (fileName.contains("PathWatcher")) {
-       newLines
+       val regex =
+         s"(def (?:get|apply|cached)|trait (?:${needAnyRef.mkString("|")})|class (?:${needAnyRef
+           .mkString("|")}}))[\\[]T".r
+       val contraRegex = "^(.*result: List).R".r
+       newLines.view
+         .filterNot(_.contains("import Entry._"))
+         .map(regex.replaceAllIn(_, "$1[T <: AnyRef"))
+         .map(contraRegex.replaceAllIn(_, "$1[_ >: R"))
          .filterNot(l => l.contains("import Event._") || l.contains("import Kind._"))
          .map(varargsRegex.replaceAllIn(_, "$1options:_*)"))
      } else if (fileName == "Either") {
        val regex = "class Either\\[L, R\\]".r
        newLines.map(regex.replaceAllIn(_, "class Either[+L, +R]"))
-     } else if (fileName == "CachedDirectory" || fileName == "CachedDirectoryImpl" || fileName == "UpdatableDataView" || fileName == "DataView" || fileName == "FileTreeViews") {
+     } else if (needAnyRef.contains(fileName)) {
        val regex =
-         "(apply|cached|trait (?:CachedDirectory|UpdatableDataView)|class CachedDirectoryImpl)[\\[]T".r
+         s"(def (?:get|apply|cached)|trait (?:${needAnyRef.mkString("|")})|class (?:${needAnyRef
+           .mkString("|")}}))[\\[]T".r
        val contraRegex = "^(.*result: List).R".r
        newLines.view
          .filterNot(_.contains("import Entry._"))

@@ -17,7 +17,7 @@ import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
 
 trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
-  def getBounded[T](
+  def getBounded[T <: AnyRef](
       converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeViews.CacheObserver[T]
   ): FileTreeRepository[T] =
@@ -85,7 +85,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
       )
       usingAsync(getBounded[Path](identity, observer)) { c =>
         c.reg(dir)
-        executor.run((_: Executor#Thread) => {
+        executor.run((_: Executor.Thread) => {
           subdirs.foreach(Files.createDirectories(_))
           files.foreach(Files.createFile(_))
         })
@@ -98,7 +98,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
             }
           }
           .flatMap { _ =>
-            executor.run((_: Executor#Thread) => {
+            executor.run((_: Executor.Thread) => {
               val name = Paths.get("file-1")
               files.filter(_.getFileName == name).foreach(_.setLastModifiedTime(3000))
             })
@@ -110,7 +110,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
                 }
               }
               .flatMap { _ =>
-                executor.run((_: Executor#Thread) => {
+                executor.run((_: Executor.Thread) => {
                   files.foreach(Files.deleteIfExists)
                   subdirs.foreach(Files.deleteIfExists)
                 })
@@ -166,8 +166,9 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
   }
 }
 object FileCacheOverflowTest extends FileCacheOverflowTest with DefaultFileCacheTest {
-  override def getBounded[T](converter: FileTreeDataViews.Converter[T],
-                             cacheObserver: FileTreeViews.CacheObserver[T]): FileTreeRepository[T] =
+  override def getBounded[T <: AnyRef](
+      converter: FileTreeDataViews.Converter[T],
+      cacheObserver: FileTreeViews.CacheObserver[T]): FileTreeRepository[T] =
     if (Platform.isMac) FileCacheTest.getCached(converter, cacheObserver)
     else super.getBounded(converter, cacheObserver)
   val tests = testsImpl
