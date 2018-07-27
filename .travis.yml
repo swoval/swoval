@@ -58,7 +58,7 @@ matrix:
        CMD="filesJVM/jacoco plugin/compile"
        TRAVIS_SCALA_VERSION=2.10.7
 
-script: /tmp/sbt/bin/sbt -Dsbt.version=$SBT_VER -Dswoval.skip.native=true -Dswoval.fork.tests=true -Dswoval.alltests.iterations=50 ++$TRAVIS_SCALA_VERSION $CMD
+script: /tmp/sbt/bin/sbt -Dsbt.version=$SBT_VER -Dswoval.skip.native=true -Dswoval.fork.tests=true -Dswoval.alltests.iterations=20 ++$TRAVIS_SCALA_VERSION $CMD
 
 before_install:
   # https://github.com/travis-ci/travis-ci/issues/8408
