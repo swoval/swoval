@@ -20,8 +20,7 @@ public class PathWatchers {
    *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
-  public static PathWatcher<PathWatchers.Event> get()
-      throws IOException, InterruptedException {
+  public static PathWatcher<PathWatchers.Event> get() throws IOException, InterruptedException {
     return get(
         Executor.make("com.swoval.files.PathWatcher-internal-executor"),
         new DirectoryRegistryImpl());
@@ -37,9 +36,7 @@ public class PathWatchers {
    *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
-  static PathWatcher<Event> get(
-      final Executor executor,
-      final DirectoryRegistry registry)
+  static PathWatcher<Event> get(final Executor executor, final DirectoryRegistry registry)
       throws IOException, InterruptedException {
     return Platform.isMac()
         ? ApplePathWatchers.get(executor, registry)

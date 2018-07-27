@@ -73,7 +73,7 @@ public class ShutdownHooks {
    * @return an id that can be used to later remove the runnable if it is no longer needed.
    */
   public static int addHook(final int priority, final Runnable runnable) {
-    synchronized(lock) {
+    synchronized (lock) {
       final int id = hookID.getAndIncrement();
       hooks.put(id, new Hook(priority, runnable));
       return id;

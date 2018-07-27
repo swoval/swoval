@@ -22,6 +22,7 @@ public class FileEventMonitors {
 
   public static class Handles {
     private Handles() {}
+
     public static final Handle INVALID =
         new Handle() {
           @Override
@@ -46,24 +47,25 @@ class FileEventMonitorImpl implements FileEventMonitor {
           new ThreadFactory("com.swoval.files.apple.FileEventsMonitor.callback"));
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final int shutdownHookId;
-  private final Runnable closeRunnable = new Runnable() {
-    @Override
-    public void run() {
-      if (closed.compareAndSet(false, true)) {
-        ShutdownHooks.removeHook(shutdownHookId);
-        stopLoop(handle);
-        loopThread.interrupt();
-        callbackExecutor.shutdownNow();
-        try {
-          loopThread.join(5000);
-          callbackExecutor.awaitTermination(5, TimeUnit.SECONDS);
-          close(handle);
-        } catch (final InterruptedException e) {
-          e.printStackTrace(System.err);
+  private final Runnable closeRunnable =
+      new Runnable() {
+        @Override
+        public void run() {
+          if (closed.compareAndSet(false, true)) {
+            ShutdownHooks.removeHook(shutdownHookId);
+            stopLoop(handle);
+            loopThread.interrupt();
+            callbackExecutor.shutdownNow();
+            try {
+              loopThread.join(5000);
+              callbackExecutor.awaitTermination(5, TimeUnit.SECONDS);
+              close(handle);
+            } catch (final InterruptedException e) {
+              e.printStackTrace(System.err);
+            }
+          }
         }
-      }
-    }
-  };
+      };
 
   FileEventMonitorImpl(
       final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer)

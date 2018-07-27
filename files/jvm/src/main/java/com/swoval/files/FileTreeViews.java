@@ -116,12 +116,12 @@ public class FileTreeViews {
     return new SimpleFileTreeView(defaultDirectoryLister, followLinks);
   }
 
-
   /**
    * List the contents of a path.
+   *
    * @param path the path to list. If the path is a directory, return the children of this directory
-   * up to the maxDepth. If the path is a regular file and the maxDepth is <code>-1</code>, the
-   * path itself is returned. Otherwise an empty list is returned.
+   *     up to the maxDepth. If the path is a regular file and the maxDepth is <code>-1</code>, the
+   *     path itself is returned. Otherwise an empty list is returned.
    * @param maxDepth the maximum depth of children to include in the results
    * @param filter only include paths accepted by this filter
    * @return a {@link java.util.List} of {@link TypedPath}
@@ -135,17 +135,20 @@ public class FileTreeViews {
 
   /**
    * Generic Observer for an {@link Observable}.
+   *
    * @param <T> the type under observation
    */
   public interface Observer<T> {
     /**
      * Fired if the underlying {@link Observable} encounters an error
+     *
      * @param t the error
      */
     void onError(final Throwable t);
 
     /**
      * Callback that is invoked whenever a change is detected by the {@link Observable}.
+     *
      * @param t the changed instance
      */
     void onNext(final T t);

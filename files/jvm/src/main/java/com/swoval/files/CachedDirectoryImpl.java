@@ -312,10 +312,11 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
                       converter,
                       TypedPaths.getDelegate(resolved, typedPath));
               if (isDirectory) {
-                final CachedDirectoryImpl<T> previous = currentDir.subdirectories.put(
-                    p,
-                    new CachedDirectoryImpl<>(
-                        resolved, realPath, converter, -1, pathFilter, fileTreeView));
+                final CachedDirectoryImpl<T> previous =
+                    currentDir.subdirectories.put(
+                        p,
+                        new CachedDirectoryImpl<>(
+                            resolved, realPath, converter, -1, pathFilter, fileTreeView));
                 if (previous != null) previous.close();
               } else {
                 currentDir.files.put(p, newEntry);

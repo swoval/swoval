@@ -57,6 +57,7 @@ public interface TypedPath extends Comparable<TypedPath> {
 
 class TypedPaths {
   private TypedPaths() {}
+
   private abstract static class TypedPathImpl implements TypedPath {
     private final Path path;
 

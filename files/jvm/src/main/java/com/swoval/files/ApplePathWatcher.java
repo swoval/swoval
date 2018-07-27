@@ -205,9 +205,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
     public void accept(final String stream, final Executor.Thread thread) {}
   }
 
-  ApplePathWatcher(
-      final Executor executor,
-      final DirectoryRegistry directoryRegistry)
+  ApplePathWatcher(final Executor executor, final DirectoryRegistry directoryRegistry)
       throws InterruptedException {
     this(
         10,
@@ -326,8 +324,7 @@ class ApplePathWatchers {
   private ApplePathWatchers() {}
 
   public static PathWatcher<PathWatchers.Event> get(
-      final Executor executor,
-      final DirectoryRegistry directoryRegistry)
+      final Executor executor, final DirectoryRegistry directoryRegistry)
       throws InterruptedException {
     return new ApplePathWatcher(executor, directoryRegistry);
   }

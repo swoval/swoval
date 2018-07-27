@@ -22,6 +22,7 @@ abstract class Executor implements AutoCloseable {
 
   public static class Thread {
     private Thread() {}
+
     private long id = -1;
     private String name = "";
 
@@ -148,7 +149,8 @@ abstract class Executor implements AutoCloseable {
     final ExecutorService service;
     final LinkedBlockingQueue<PriorityConsumer> consumers = new LinkedBlockingQueue<>();
 
-    ExecutorImpl(final ThreadFactory factory, final ExecutorService service) throws InterruptedException {
+    ExecutorImpl(final ThreadFactory factory, final ExecutorService service)
+        throws InterruptedException {
       this.factory = factory;
       this.service = service;
       final LinkedBlockingQueue<java.lang.Thread> queue = new LinkedBlockingQueue<>(1);
@@ -192,8 +194,8 @@ abstract class Executor implements AutoCloseable {
       if (closed.compareAndSet(false, true)) {
         super.close();
         synchronized (consumers) {
-            consumers.clear();
-            consumers.offer(STOP);
+          consumers.clear();
+          consumers.offer(STOP);
         }
         service.shutdownNow();
         try {

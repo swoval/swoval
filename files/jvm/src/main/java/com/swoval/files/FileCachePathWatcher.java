@@ -20,10 +20,7 @@ class FileCachePathWatcher<T> {
     this.tree = tree;
   }
 
-  boolean register(
-      final Path path,
-      final int maxDepth,
-      final Executor.Thread thread) {
+  boolean register(final Path path, final int maxDepth, final Executor.Thread thread) {
     Either<IOException, CachedDirectory<T>> treeResult;
     try {
       treeResult = Either.right(tree.register(path, maxDepth, pathWatcher, thread));

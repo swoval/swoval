@@ -5,8 +5,7 @@ import java.io.IOException;
 
 class PlatformWatcher {
   static PathWatcher<Event> make(
-      final Executor internalExecutor,
-      final DirectoryRegistry directoryRegistry)
+      final Executor internalExecutor, final DirectoryRegistry directoryRegistry)
       throws IOException, InterruptedException {
     return make(RegisterableWatchServices.get(), internalExecutor, directoryRegistry);
   }

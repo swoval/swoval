@@ -44,14 +44,15 @@ class NioPathWatcherService implements AutoCloseable {
       final Executor internalExecutor)
       throws InterruptedException {
     this.watchService = watchService;
-    this.shutdownHookId = ShutdownHooks.addHook(
-        1,
-        new Runnable() {
-          @Override
-          public void run() {
-            close();
-          }
-        });
+    this.shutdownHookId =
+        ShutdownHooks.addHook(
+            1,
+            new Runnable() {
+              @Override
+              public void run() {
+                close();
+              }
+            });
     final CountDownLatch latch = new CountDownLatch(1);
     loopThread =
         new Thread("NioPathWatcher-loop-thread-" + threadId.incrementAndGet()) {
@@ -158,7 +159,8 @@ class NioPathWatcherService implements AutoCloseable {
       ShutdownHooks.removeHook(shutdownHookId);
       loopThread.interrupt();
       try {
-        final Iterator<WatchedDirectory> it = new ArrayList<>(watchedDirectoriesByPath.values()).iterator();
+        final Iterator<WatchedDirectory> it =
+            new ArrayList<>(watchedDirectoriesByPath.values()).iterator();
         while (it.hasNext()) {
           it.next().close();
         }

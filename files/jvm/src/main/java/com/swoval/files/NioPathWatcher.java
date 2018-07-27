@@ -264,7 +264,8 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                       depth,
                       new Filter<FileTreeDataViews.Entry<WatchedDirectory>>() {
                         @Override
-                        public boolean accept(final FileTreeDataViews.Entry<WatchedDirectory> entry) {
+                        public boolean accept(
+                            final FileTreeDataViews.Entry<WatchedDirectory> entry) {
                           return !directoryRegistry.acceptPrefix(entry.getPath());
                         }
                       });
@@ -357,8 +358,10 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         final CachedDirectory<WatchedDirectory> root = getOrAdd(event.getPath());
         if (root != null) {
           final boolean isRoot = root.getPath().equals(event.getPath());
-          final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> it = isRoot ? root.listEntries(root.getMaxDepth(), AllPass).iterator() :
-              root.remove(event.getPath(), thread).iterator();
+          final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> it =
+              isRoot
+                  ? root.listEntries(root.getMaxDepth(), AllPass).iterator()
+                  : root.remove(event.getPath(), thread).iterator();
           while (it.hasNext()) {
             final FileTreeDataViews.Entry<WatchedDirectory> entry = it.next();
             final Either<IOException, WatchedDirectory> either = entry.getValue();

@@ -12,9 +12,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * Provides a platform dependent implementation of {@link
  * com.swoval.files.RegisterableWatchService}. On osx, the implementation will be {@link
- * MacOSXWatchService}. On linux and windows, it will be an object that
- * implements {@link com.swoval.files.RegisterableWatchService} by delegation with an instance of
- * {@link java.nio.file.WatchService}.
+ * MacOSXWatchService}. On linux and windows, it will be an object that implements {@link
+ * com.swoval.files.RegisterableWatchService} by delegation with an instance of {@link
+ * java.nio.file.WatchService}.
  */
 public class RegisterableWatchServices {
   public static RegisterableWatchService get() throws IOException, InterruptedException {

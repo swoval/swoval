@@ -203,7 +203,8 @@ class MacOSXWatchService implements RegisterableWatchService {
   }
 
   @Override
-  public java.nio.file.WatchKey register(final Path path, final Kind<?>... kinds) throws IOException {
+  public java.nio.file.WatchKey register(final Path path, final Kind<?>... kinds)
+      throws IOException {
     Either<Exception, java.nio.file.WatchKey> result =
         internalExecutor.block(
             new Function<Executor.Thread, java.nio.file.WatchKey>() {

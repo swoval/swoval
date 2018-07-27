@@ -233,7 +233,10 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   }
 
   CachedDirectory<T> register(
-      final Path path, final int maxDepth, final PathWatcher<PathWatchers.Event> watcher, final Thread thread)
+      final Path path,
+      final int maxDepth,
+      final PathWatcher<PathWatchers.Event> watcher,
+      final Thread thread)
       throws IOException {
     if (directoryRegistry.addDirectory(path, maxDepth)) {
       watcher.register(path, maxDepth);
@@ -373,7 +376,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
       }
 
       @Override
-      public void onUpdate(final FileTreeDataViews.Entry<T> oldEntry, final FileTreeDataViews.Entry<T> newEntry) {
+      public void onUpdate(
+          final FileTreeDataViews.Entry<T> oldEntry, final FileTreeDataViews.Entry<T> newEntry) {
         addCallback(callbacks, oldEntry, oldEntry, newEntry, Modify, null);
       }
 

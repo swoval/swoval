@@ -18,23 +18,24 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
   private final Executor internalExecutor;
   private final FileCacheDirectoryTree<T> directoryTree;
   private final FileCachePathWatcher<T> watcher;
-  private final Runnable closeRunnable = new Runnable() {
-    @Override
-    public void run() {
-      if (closed.compareAndSet(false, true)) {
-        internalExecutor.block(
-            new Consumer<Executor.Thread>() {
-              @Override
-              public void accept(final Executor.Thread thread) {
-                ShutdownHooks.removeHook(shutdownHookId);
-                watcher.close(thread);
-                directoryTree.close(thread);
-              }
-            });
-        internalExecutor.close();
-      }
-    }
-  };
+  private final Runnable closeRunnable =
+      new Runnable() {
+        @Override
+        public void run() {
+          if (closed.compareAndSet(false, true)) {
+            internalExecutor.block(
+                new Consumer<Executor.Thread>() {
+                  @Override
+                  public void accept(final Executor.Thread thread) {
+                    ShutdownHooks.removeHook(shutdownHookId);
+                    watcher.close(thread);
+                    directoryTree.close(thread);
+                  }
+                });
+            internalExecutor.close();
+          }
+        }
+      };
   private final int shutdownHookId;
 
   FileTreeRepositoryImpl(
@@ -42,13 +43,11 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
       final FileCachePathWatcher<T> watcher,
       final Executor executor) {
     assert (executor != null);
-    this.shutdownHookId = ShutdownHooks.addHook( 1, closeRunnable);
+    this.shutdownHookId = ShutdownHooks.addHook(1, closeRunnable);
     this.internalExecutor = executor;
     this.directoryTree = directoryTree;
     this.watcher = watcher;
   }
-
-
 
   /** Cleans up the path watcher and clears the directory cache. */
   @Override
@@ -89,7 +88,9 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
 
   @Override
   public List<FileTreeDataViews.Entry<T>> listEntries(
-      final Path path, final int maxDepth, final Filter<? super FileTreeDataViews.Entry<T>> filter) {
+      final Path path,
+      final int maxDepth,
+      final Filter<? super FileTreeDataViews.Entry<T>> filter) {
     return internalExecutor
         .block(
             new Function<Executor.Thread, List<FileTreeDataViews.Entry<T>>>() {

@@ -3,7 +3,9 @@ package com.swoval.files;
 import com.swoval.functional.Either;
 import java.io.IOException;
 
-/** Provides functional interfaces for processing and managing instances of {@link FileTreeDataView}. */
+/**
+ * Provides functional interfaces for processing and managing instances of {@link FileTreeDataView}.
+ */
 public class FileTreeDataViews {
   private FileTreeDataViews() {}
 
@@ -15,8 +17,8 @@ public class FileTreeDataViews {
    */
   public interface Entry<T> extends TypedPath {
     /**
-     * Return the value associated with this entry.
-     *jjj
+     * Return the value associated with this entry. jjj
+     *
      * @return the value associated with this entry.
      */
     Either<IOException, T> getValue();
