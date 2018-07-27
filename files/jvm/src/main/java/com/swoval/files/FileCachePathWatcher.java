@@ -2,9 +2,7 @@ package com.swoval.files;
 
 import static com.swoval.functional.Filters.AllPass;
 
-import com.swoval.files.DataViews.Entry;
-import com.swoval.files.FileTreeViews.Observer;
-import com.swoval.files.PathWatchers.Event;
+import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.functional.Either;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -37,7 +35,7 @@ class FileCachePathWatcher<T> {
       if (dir != null) {
         final Iterator<Entry<T>> it = dir.listEntries(dir.getMaxDepth(), AllPass).iterator();
         while (it.hasNext()) {
-          final DataViews.Entry entry = it.next();
+          final FileTreeDataViews.Entry entry = it.next();
           if (entry.isSymbolicLink()) {
             final int depth = path.relativize(entry.getPath()).getNameCount();
             symlinkWatcher.addSymlink(

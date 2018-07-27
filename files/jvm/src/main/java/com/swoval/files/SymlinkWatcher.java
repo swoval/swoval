@@ -4,7 +4,6 @@ import static com.swoval.functional.Either.getOrElse;
 import static com.swoval.functional.Either.leftProjection;
 import static java.util.Map.Entry;
 
-import com.sun.xml.internal.ws.policy.privateutil.PolicyUtils.IO;
 import com.swoval.files.DataViews.OnError;
 import com.swoval.files.FileTreeViews.Observable;
 import com.swoval.files.FileTreeViews.Observer;
@@ -96,51 +95,53 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
 
           @Override
           public void onNext(final Event event) {
-            SymlinkWatcher.this.internalExecutor.run(
-                new Consumer<Executor.Thread>() {
-                  @Override
-                  public void accept(final Executor.Thread thread) {
+            if (!isClosed.get()) {
+              SymlinkWatcher.this.internalExecutor.run(
+                  new Consumer<Executor.Thread>() {
+                    @Override
+                    public void accept(final Executor.Thread thread) {
 
-                    final List<Runnable> callbacks = new ArrayList<>();
-                    final Path path = event.getPath();
-                    {
-                      final RegisteredPath registeredPath = find(path, watchedSymlinksByTarget);
-                      if (registeredPath != null) {
-                        final Path relativized = registeredPath.path.relativize(path);
-                        final Iterator<Path> it = registeredPath.paths.iterator();
-                        while (it.hasNext()) {
-                          final Path rawPath = it.next().resolve(relativized);
-                          if (!hasLoop(rawPath)) {
-                            callbacks.add(
-                                new Runnable() {
-                                  @Override
-                                  public void run() {
-                                    observers.onNext(
-                                        new Event(TypedPaths.get(rawPath), event.getKind()));
-                                  }
-                                });
+                      final List<Runnable> callbacks = new ArrayList<>();
+                      final Path path = event.getPath();
+                      {
+                        final RegisteredPath registeredPath = find(path, watchedSymlinksByTarget);
+                        if (registeredPath != null) {
+                          final Path relativized = registeredPath.path.relativize(path);
+                          final Iterator<Path> it = registeredPath.paths.iterator();
+                          while (it.hasNext()) {
+                            final Path rawPath = it.next().resolve(relativized);
+                            if (!hasLoop(rawPath)) {
+                              callbacks.add(
+                                  new Runnable() {
+                                    @Override
+                                    public void run() {
+                                      observers.onNext(
+                                          new Event(TypedPaths.get(rawPath), event.getKind()));
+                                    }
+                                  });
+                            }
                           }
                         }
                       }
-                    }
-                    if (!Files.exists(event.getPath())) {
-                      watchedSymlinksByTarget.remove(event.getPath());
-                      final RegisteredPath registeredPath =
-                          watchedSymlinksByDirectory.get(event.getPath());
-                      if (registeredPath != null) {
-                        registeredPath.paths.remove(event.getPath());
-                        if (registeredPath.paths.isEmpty()) {
-                          watcher.unregister(event.getPath());
-                          watchedSymlinksByDirectory.remove(event.getPath());
+                      if (!Files.exists(event.getPath())) {
+                        watchedSymlinksByTarget.remove(event.getPath());
+                        final RegisteredPath registeredPath =
+                            watchedSymlinksByDirectory.get(event.getPath());
+                        if (registeredPath != null) {
+                          registeredPath.paths.remove(event.getPath());
+                          if (registeredPath.paths.isEmpty()) {
+                            watcher.unregister(event.getPath());
+                            watchedSymlinksByDirectory.remove(event.getPath());
+                          }
                         }
                       }
+                      final Iterator<Runnable> it = callbacks.iterator();
+                      while (it.hasNext()) {
+                        it.next().run();
+                      }
                     }
-                    final Iterator<Runnable> it = callbacks.iterator();
-                    while (it.hasNext()) {
-                      it.next().run();
-                    }
-                  }
-                });
+                  });
+            }
           }
         });
   }

@@ -220,13 +220,13 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   }
 
   public void close(final Executor.Thread thread) {
+    callbackExecutor.close();
     if (symlinkWatcher != null) symlinkWatcher.close();
     final Iterator<CachedDirectory<T>> directoryIterator = directories.values().iterator();
     while (directoryIterator.hasNext()) {
       directoryIterator.next().close();
     }
     observers.close();
-    callbackExecutor.close();
     directories.clear();
     directoryRegistry.close();
     pendingFiles.clear();

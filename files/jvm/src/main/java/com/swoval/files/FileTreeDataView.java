@@ -1,6 +1,6 @@
 package com.swoval.files;
 
-import com.swoval.files.DataViews.Entry;
+import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.functional.Filter;
 import java.nio.file.Path;
 import java.util.List;

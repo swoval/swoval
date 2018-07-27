@@ -4,7 +4,7 @@ import java.io.IOException
 import java.nio.file.Path
 
 import FileCacheTest._
-import com.swoval.files.DataViews.{ Converter, Entry }
+import FileTreeDataViews.{ Converter, Entry }
 import com.swoval.files.FileTreeViews.{ CacheObserver, Observer }
 import com.swoval.files.PathWatchers.{ Event, Factory }
 import com.swoval.files.test._
@@ -74,7 +74,7 @@ object FileCacheTest {
    * @return a file cache.
    */
   private[files] def get[T](
-      converter: DataViews.Converter[T],
+      converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeViews.CacheObserver[T],
       watcherFactory: (Executor, DirectoryRegistry) => PathWatcher[PathWatchers.Event])
     : FileTreeRepository[T] = {
