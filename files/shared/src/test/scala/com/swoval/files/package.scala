@@ -63,8 +63,16 @@ package object files extends PlatformFiles {
     override def accept(pathname: File): Boolean = f(pathname)
   }
 
+  implicit class FilterOps[T](val f: T => Boolean) extends functional.Filter[T] {
+    override def accept(t: T): Boolean = f(t)
+  }
+
   implicit class EntryOps[T](val entry: Entry[T]) {
     def value: T = entry.getValue.get
+  }
+
+  implicit class FunctionOps[T, R](val f: T => R) extends com.swoval.files.Function[T, R] {
+    override def apply(t: T): R = f(t)
   }
 
   implicit class EntryFilterFunctionOps[T](val f: Entry[T] => Boolean) extends Filter[Entry[T]] {

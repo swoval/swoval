@@ -16,18 +16,20 @@ import scala.collection.JavaConverters._
 
 trait FileCacheTest { self: TestSuite =>
   val factory: (Executor, DirectoryRegistry) => PathWatcher[Event]
-  def identity: Converter[Path] = _.getPath
+  def identity: Converter[Path] = (_: TypedPath).getPath
 
   def simpleCache(f: Entry[Path] => Unit): FileTreeRepository[Path] =
     FileCacheTest.get(identity, getObserver(f), factory)
 
   def lastModifiedCache(f: Entry[LastModified] => Unit): FileTreeRepository[LastModified] =
-    FileCacheTest.get(LastModified(_), getObserver(f), factory)
+    FileCacheTest.get(LastModified(_: TypedPath), getObserver(f), factory)
 
   def lastModifiedCache(onCreate: Entry[LastModified] => Unit,
                         onUpdate: (Entry[LastModified], Entry[LastModified]) => Unit,
                         onDelete: Entry[LastModified] => Unit): FileTreeRepository[LastModified] =
-    FileCacheTest.get(LastModified(_), getObserver(onCreate, onUpdate, onDelete), factory)
+    FileCacheTest.get(LastModified(_: TypedPath),
+                      getObserver(onCreate, onUpdate, onDelete),
+                      factory)
 }
 
 object FileCacheTest {

@@ -15,6 +15,7 @@ import utest._
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.concurrent.Future
 
 object CachedFileTreeViewTest extends TestSuite {
   def newCachedView(path: Path): CachedDirectory[Path] = newCachedView(path, Integer.MAX_VALUE)
@@ -58,250 +59,225 @@ object CachedFileTreeViewTest extends TestSuite {
     def update(path: TypedPath): FileTreeViews.Updates[T] =
       executor.block((t: Executor.Thread) => cd.update(path, t)).get()
   }
-
-  val tests = Tests {
-    'add - {
-      'file - withTempDirectory { dir =>
-        val directory = newCachedView(dir)
-        withTempFileSync(dir) { f =>
-          directory.ls(f, recursive = false, AllPass) === Seq.empty
+  object add {
+    def file: Future[Unit] = withTempDirectory { dir =>
+      val directory = newCachedView(dir)
+      withTempFileSync(dir) { f =>
+        directory.ls(f, recursive = false, AllPass) === Seq.empty
+        assert(directory.update(TypedPaths.get(f, Entries.FILE)).toUpdates.creations.nonEmpty)
+        directory.ls(f, recursive = false, AllPass) === Seq(f)
+      }
+    }
+    def directory: Future[Unit] = withTempDirectory { dir =>
+      val directory = newCachedView(dir)
+      withTempDirectory(dir) { subdir =>
+        withTempFileSync(subdir) { f =>
+          directory.ls(f, recursive = true, AllPass) === Seq.empty
           assert(directory.update(TypedPaths.get(f, Entries.FILE)).toUpdates.creations.nonEmpty)
-          directory.ls(f, recursive = false, AllPass) === Seq(f)
+          directory.ls(dir, recursive = true, AllPass) === Seq(subdir, f)
         }
       }
-      'directory - withTempDirectory { dir =>
-        val directory = newCachedView(dir)
+    }
+    def sequentially: Future[Unit] = withTempDirectory { dir =>
+      val directory = newCachedView(dir)
+      withTempDirectory(dir) { subdir =>
+        assert(
+          directory
+            .update(TypedPaths.get(subdir, Entries.DIRECTORY))
+            .toUpdates
+            .creations
+            .nonEmpty)
+        withTempFileSync(subdir) { f =>
+          assert(directory.update(TypedPaths.get(f, Entries.FILE)).toUpdates.creations.nonEmpty)
+          directory.ls(recursive = true, AllPass) === Set(subdir, f)
+        }
+      }
+    }
+    def recursive: Future[Unit] = withTempDirectory { dir =>
+      val directory = newCachedView(dir)
+      withTempDirectory(dir) { subdir =>
+        withTempFileSync(subdir) { f =>
+          assert(directory.update(TypedPaths.get(f, Entries.FILE)).toUpdates.creations.nonEmpty)
+          directory.ls(recursive = true, AllPass) === Set(f, subdir)
+        }
+      }
+    }
+    object overlapping {
+      def base: Future[Unit] = withTempDirectory { dir =>
+        val directory = newCachedView(dir, 0)
         withTempDirectory(dir) { subdir =>
-          withTempFileSync(subdir) { f =>
-            directory.ls(f, recursive = true, AllPass) === Seq.empty
-            assert(directory.update(TypedPaths.get(f, Entries.FILE)).toUpdates.creations.nonEmpty)
-            directory.ls(dir, recursive = true, AllPass) === Seq(subdir, f)
+          withTempFileSync(subdir) { file =>
+            directory.update(TypedPaths.get(subdir, Entries.DIRECTORY))
+            directory.ls(recursive = true, AllPass) === Set(subdir)
           }
         }
       }
-      'sequentially - withTempDirectory { dir =>
-        val directory = newCachedView(dir)
+      def nested: Future[Unit] = withTempDirectory { dir =>
         withTempDirectory(dir) { subdir =>
-          assert(
-            directory
-              .update(TypedPaths.get(subdir, Entries.DIRECTORY))
-              .toUpdates
-              .creations
-              .nonEmpty)
-          withTempFileSync(subdir) { f =>
-            assert(directory.update(TypedPaths.get(f, Entries.FILE)).toUpdates.creations.nonEmpty)
-            directory.ls(recursive = true, AllPass) === Set(subdir, f)
-          }
-        }
-      }
-      'recursive - withTempDirectory { dir =>
-        val directory = newCachedView(dir)
-        withTempDirectory(dir) { subdir =>
-          withTempFileSync(subdir) { f =>
-            assert(directory.update(TypedPaths.get(f, Entries.FILE)).toUpdates.creations.nonEmpty)
-            directory.ls(recursive = true, AllPass) === Set(f, subdir)
-          }
-        }
-      }
-      'overlapping - {
-        'base - withTempDirectory { dir =>
-          val directory = newCachedView(dir, 0)
-          withTempDirectory(dir) { subdir =>
-            withTempFileSync(subdir) { file =>
-              directory.update(TypedPaths.get(subdir, Entries.DIRECTORY))
-              directory.ls(recursive = true, AllPass) === Set(subdir)
-            }
-          }
-        }
-        'nested - withTempDirectory { dir =>
-          withTempDirectory(dir) { subdir =>
-            val directory = newCachedView(dir, 2)
-            withTempDirectory(subdir) { nestedSubdir =>
-              withTempDirectory(nestedSubdir) { deepNestedSubdir =>
-                withTempFileSync(deepNestedSubdir) { file =>
-                  directory.update(TypedPaths.get(nestedSubdir, Entries.DIRECTORY))
-                  directory.ls(recursive = true, AllPass) === Set(subdir,
-                                                                  nestedSubdir,
-                                                                  deepNestedSubdir)
-                }
+          val directory = newCachedView(dir, 2)
+          withTempDirectory(subdir) { nestedSubdir =>
+            withTempDirectory(nestedSubdir) { deepNestedSubdir =>
+              withTempFileSync(deepNestedSubdir) { file =>
+                directory.update(TypedPaths.get(nestedSubdir, Entries.DIRECTORY))
+                directory.ls(recursive = true, AllPass) === Set(subdir,
+                                                                nestedSubdir,
+                                                                deepNestedSubdir)
               }
             }
           }
         }
       }
     }
-    'update - {
-      'directory - {
-        'simple - withTempDirectory { dir =>
+  }
+  object update {
+    object directory {
+      def simple: Future[Unit] = withTempDirectory { dir =>
+        withTempDirectorySync(dir) { subdir =>
+          val directory = newCachedView(dir)
+          val file = subdir.resolve("file").createFile()
+          val updates = directory.update(TypedPaths.get(subdir, Entries.DIRECTORY)).toUpdates
+          val typedPath = TypedPaths.get(subdir, Entries.DIRECTORY)
+          val entry: Entry[Path] = Entries.get(typedPath, (_: TypedPath).getPath, typedPath)
+          updates.updates === Seq(entry -> entry)
+          updates.creations === Seq(file)
+        }
+      }
+      object nested {
+        def created: Future[Unit] = withTempDirectory { dir =>
           withTempDirectorySync(dir) { subdir =>
             val directory = newCachedView(dir)
-            val file = subdir.resolve("file").createFile()
+            val nestedSubdir = Files.createDirectory(subdir.resolve("nested"))
+            val nestedFile = nestedSubdir.resolve("file").createFile()
             val updates = directory.update(TypedPaths.get(subdir, Entries.DIRECTORY)).toUpdates
             val typedPath = TypedPaths.get(subdir, Entries.DIRECTORY)
-            val entry: Entry[Path] = Entries.get(typedPath, _.getPath, typedPath)
+            val entry: Entry[Path] = Entries.get(typedPath, (_: TypedPath).getPath, typedPath)
             updates.updates === Seq(entry -> entry)
-            updates.creations === Seq(file)
+            updates.creations === Set(nestedSubdir, nestedFile)
           }
         }
-        'nested - {
-          'created - withTempDirectory { dir =>
-            withTempDirectorySync(dir) { subdir =>
-              val directory = newCachedView(dir)
-              val nestedSubdir = Files.createDirectory(subdir.resolve("nested"))
-              val nestedFile = nestedSubdir.resolve("file").createFile()
-              val updates = directory.update(TypedPaths.get(subdir, Entries.DIRECTORY)).toUpdates
-              val typedPath = TypedPaths.get(subdir, Entries.DIRECTORY)
-              val entry: Entry[Path] = Entries.get(typedPath, _.getPath, typedPath)
-              updates.updates === Seq(entry -> entry)
-              updates.creations === Set(nestedSubdir, nestedFile)
-            }
+        def removed: Future[Unit] = withTempDirectory { dir =>
+          withTempDirectorySync(dir) { subdir =>
+            val nestedSubdir = Files.createDirectory(subdir.resolve("nested"))
+            val nestedFile = nestedSubdir.resolve("file").createFile()
+            val directory = newCachedView(dir)
+            nestedSubdir.deleteRecursive()
+            val updates = directory.update(TypedPaths.get(subdir, Entries.DIRECTORY)).toUpdates
+            val typedPath = TypedPaths.get(subdir, Entries.DIRECTORY)
+            val entry: Entry[Path] =
+              Entries.get(TypedPaths.get(subdir, Entries.DIRECTORY),
+                          (_: TypedPath).getPath,
+                          typedPath)
+            updates.updates === Seq(entry -> entry)
+            updates.deletions === Set(nestedSubdir, nestedFile)
           }
-          'removed - withTempDirectory { dir =>
-            withTempDirectorySync(dir) { subdir =>
-              val nestedSubdir = Files.createDirectory(subdir.resolve("nested"))
-              val nestedFile = nestedSubdir.resolve("file").createFile()
-              val directory = newCachedView(dir)
-              nestedSubdir.deleteRecursive()
-              val updates = directory.update(TypedPaths.get(subdir, Entries.DIRECTORY)).toUpdates
-              val typedPath = TypedPaths.get(subdir, Entries.DIRECTORY)
-              val entry: Entry[Path] =
-                Entries.get(TypedPaths.get(subdir, Entries.DIRECTORY), _.getPath, typedPath)
-              updates.updates === Seq(entry -> entry)
-              updates.deletions === Set(nestedSubdir, nestedFile)
-            }
-          }
-        }
-        'subfiles - withTempDirectorySync { dir =>
-          val directory = newCachedView(dir)
-          directory.list(Integer.MAX_VALUE, AllPass).asScala.toSeq === Seq.empty[TypedPath]
-          val subdir: Path = Files.createDirectories(dir.resolve("subdir").resolve("nested"))
-          val files = 1 to 2 map (i => subdir.resolve(s"file-$i").createFile())
-          val found = mutable.Set.empty[Path]
-          val updates = directory.update(TypedPaths.get(files.last, Entries.FILE))
-          updates.observe(CacheObservers.fromObserver(new Observer[Entry[Path]] {
-            override def onError(t: Throwable): Unit = {}
-            override def onNext(t: Entry[Path]): Unit = found.add(t.getPath())
-          }))
-          val expected = (files :+ subdir :+ subdir.getParent).toSet
-          found.toSet === expected
-          directory.update(TypedPaths.get(subdir.getParent, Entries.DIRECTORY))
-          directory.list(Integer.MAX_VALUE, AllPass).asScala.toSeq.map(_.getPath) === expected
         }
       }
-      'depth - withTempDirectory { dir =>
-        val directory = newCachedView(dir, 0)
-        withTempDirectory(dir) { subdir =>
-          withTempDirectorySync(subdir) { nestedSubdir =>
-            directory.ls(recursive = true, AllPass) === Seq.empty[Path]
-            directory.update(TypedPaths.get(subdir, Entries.DIRECTORY))
-            directory.ls(recursive = true, AllPass) === Seq(subdir)
-            directory.update(TypedPaths.get(nestedSubdir, Entries.DIRECTORY))
-            directory.ls(recursive = true, AllPass) === Seq(subdir)
+      def subfiles: Future[Unit] = withTempDirectorySync { dir =>
+        val directory = newCachedView(dir)
+        directory.list(Integer.MAX_VALUE, AllPass).asScala.toSeq === Seq.empty[TypedPath]
+        val subdir: Path = Files.createDirectories(dir.resolve("subdir").resolve("nested"))
+        val files = 1 to 2 map (i => subdir.resolve(s"file-$i").createFile())
+        val found = mutable.Set.empty[Path]
+        val updates = directory.update(TypedPaths.get(files.last, Entries.FILE))
+        updates.observe(CacheObservers.fromObserver(new Observer[Entry[Path]] {
+          override def onError(t: Throwable): Unit = {}
+          override def onNext(t: Entry[Path]): Unit = found.add(t.getPath())
+        }))
+        val expected = (files :+ subdir :+ subdir.getParent).toSet
+        found.toSet === expected
+        directory.update(TypedPaths.get(subdir.getParent, Entries.DIRECTORY))
+        directory.list(Integer.MAX_VALUE, AllPass).asScala.toSeq.map(_.getPath) === expected
+      }
+    }
+    def depth: Future[Unit] = withTempDirectory { dir =>
+      val directory = newCachedView(dir, 0)
+      withTempDirectory(dir) { subdir =>
+        withTempDirectorySync(subdir) { nestedSubdir =>
+          directory.ls(recursive = true, AllPass) === Seq.empty[Path]
+          directory.update(TypedPaths.get(subdir, Entries.DIRECTORY))
+          directory.ls(recursive = true, AllPass) === Seq(subdir)
+          directory.update(TypedPaths.get(nestedSubdir, Entries.DIRECTORY))
+          directory.ls(recursive = true, AllPass) === Seq(subdir)
+        }
+      }
+    }
+  }
+  object remove {
+    def direct: Future[Unit] = withTempDirectory { dir =>
+      withTempFileSync(dir) { f =>
+        val directory = newCachedView(dir)
+        directory.ls(recursive = false, AllPass) === Seq(f)
+        assert(Option(directory.remove(f)).isDefined)
+        directory.ls(recursive = false, AllPass) === Seq.empty[Path]
+      }
+    }
+    def recursive: Future[Unit] = withTempDirectory { dir =>
+      withTempDirectory(dir) { subdir =>
+        withTempDirectory(subdir) { nestedSubdir =>
+          withTempFileSync(nestedSubdir) { f =>
+            val directory = newCachedView(dir)
+            def ls = directory.ls(recursive = true, AllPass)
+            ls === Set(f, subdir, nestedSubdir)
+            directory.remove(f).asScala === Seq(f)
+            ls === Set(subdir, nestedSubdir)
           }
         }
       }
     }
-    'remove - {
-      'direct - withTempDirectory { dir =>
-        withTempFileSync(dir) { f =>
-          val directory = newCachedView(dir)
-          directory.ls(recursive = false, AllPass) === Seq(f)
-          assert(Option(directory.remove(f)).isDefined)
-          assert(directory.ls(recursive = false, AllPass).isEmpty)
-        }
-      }
-      'recursive - withTempDirectory { dir =>
-        withTempDirectory(dir) { subdir =>
-          withTempDirectory(subdir) { nestedSubdir =>
-            withTempFileSync(nestedSubdir) { f =>
-              val directory = newCachedView(dir)
-              def ls = directory.ls(recursive = true, AllPass)
-              ls === Set(f, subdir, nestedSubdir)
-              directory.remove(f).asScala === Seq(f)
-              ls === Set(subdir, nestedSubdir)
-            }
-          }
-        }
-      }
+  }
+  object subTypes {
+    def overrides: Future[Unit] = withTempFileSync { f =>
+      val dir =
+        FileTreeViews
+          .cached[LastModified](f.getParent, LastModified(_: TypedPath), Integer.MAX_VALUE, true)
+      val lastModified = f.lastModified
+      val updatedLastModified = 2000
+      f.setLastModifiedTime(updatedLastModified)
+      f.lastModified ==> updatedLastModified
+      val cachedFile = dir.listEntries(f, Integer.MAX_VALUE, AllPass).get(0)
+      cachedFile.getValue().get().lastModified ==> lastModified
     }
-    'subTypes - {
-      'overrides - {
-        withTempFileSync { f =>
-          val dir =
-            FileTreeViews.cached[LastModified](f.getParent,
-                                               LastModified(_: TypedPath),
-                                               Integer.MAX_VALUE,
-                                               true)
-          val lastModified = f.lastModified
-          val updatedLastModified = 2000
-          f.setLastModifiedTime(updatedLastModified)
-          f.lastModified ==> updatedLastModified
-          val cachedFile = dir.listEntries(f, Integer.MAX_VALUE, AllPass).get(0)
-          cachedFile.value.lastModified ==> lastModified
-        }
-      }
-      'newFields - withTempFileSync { f =>
-        f.write("foo")
-        val initialBytes = "foo".getBytes.toIndexedSeq
-        val dir =
-          FileTreeViews.cached[FileBytes](f.getParent,
-                                          FileBytes(_: TypedPath),
-                                          Integer.MAX_VALUE,
-                                          true)
-        def filter(bytes: Seq[Byte]): Filter[Entry[FileBytes]] =
-          new Filter[Entry[FileBytes]] {
-            override def accept(p: Entry[FileBytes]): Boolean = p.value.bytes == bytes
-          }
-        val cachedFile = dir.listEntries(f, Integer.MAX_VALUE, filter(initialBytes)).get(0)
-        cachedFile.value.bytes ==> initialBytes
-        f.write("bar")
-        val newBytes = "bar".getBytes
-        cachedFile.value.bytes ==> initialBytes
-        f.getBytes ==> newBytes
-        dir.update(TypedPaths.get(f, Entries.FILE))
-        val newCachedFile = dir.listEntries(f, Integer.MAX_VALUE, filter(newBytes)).get(0)
-        newCachedFile.value.bytes.toSeq ==> newBytes.toSeq
-        dir.listEntries(f, Integer.MAX_VALUE, filter(initialBytes)).asScala.toSeq === Seq
-          .empty[Path]
-      }
+    def newFields: Future[Unit] = withTempFileSync { f =>
+      f.write("foo")
+      val initialBytes = "foo".getBytes.toIndexedSeq
+      val dir =
+        FileTreeViews
+          .cached[FileBytes](f.getParent, FileBytes(_: TypedPath), Integer.MAX_VALUE, true)
+      def filter(bytes: Seq[Byte]): Filter[Entry[FileBytes]] =
+        (e: Entry[FileBytes]) => e.getValue.get().bytes == bytes
+      val cachedFile = dir.listEntries(f, Integer.MAX_VALUE, filter(initialBytes)).get(0)
+      cachedFile.getValue.get().bytes ==> initialBytes
+      f.write("bar")
+      val newBytes = "bar".getBytes
+      cachedFile.getValue().get().bytes ==> initialBytes
+      f.getBytes ==> newBytes
+      dir.update(TypedPaths.get(f, Entries.FILE))
+      val newCachedFile = dir.listEntries(f, Integer.MAX_VALUE, filter(newBytes)).get(0)
+      newCachedFile.getValue().get().bytes.toSeq ==> newBytes.toSeq
+      dir.listEntries(f, Integer.MAX_VALUE, filter(initialBytes)).asScala.toSeq === Seq
+        .empty[Path]
     }
-    'symlinks - {
-      'indirect - {
-        'remoteLink - withTempDirectory { dir =>
-          withTempDirectorySync { otherDir =>
-            val dirToOtherDirLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
-            val otherDirToDirLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
-            val directory = newCachedView(dir, Integer.MAX_VALUE, followLinks = true)
-            directory.ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink,
-                                                                 dirToOtherDirLink.resolve("dir"))
-            otherDirToDirLink.delete()
-            Files.createDirectory(otherDirToDirLink)
-            val nestedFile = otherDirToDirLink.resolve("file").createFile()
-            val file = dirToOtherDirLink.resolve("dir").resolve("file")
-            directory.update(TypedPaths.get(dir, Entries.DIRECTORY))
-            directory.ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink,
-                                                                 file.getParent,
-                                                                 file)
-          }
-        }
-        'localLink - withTempDirectory { dir =>
-          withTempDirectorySync { otherDir =>
-            val dirToOtherDirLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
-            val otherDirToDirLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
-            val directory = newCachedView(dir, Integer.MAX_VALUE, followLinks = true)
-            directory.ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink,
-                                                                 dirToOtherDirLink.resolve("dir"))
-            dirToOtherDirLink.delete()
-            Files.createDirectory(dirToOtherDirLink)
-            val nestedFile = dirToOtherDirLink.resolve("file").createFile()
-            directory.update(TypedPaths.get(dir, Entries.DIRECTORY))
-            directory.ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink, nestedFile)
-          }
+  }
+  object symlinks {
+    object indirect {
+      def remoteLink: Future[Unit] = withTempDirectory { dir =>
+        withTempDirectorySync { otherDir =>
+          val dirToOtherDirLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
+          val otherDirToDirLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+          val directory = newCachedView(dir, Integer.MAX_VALUE, followLinks = true)
+          directory.ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink,
+                                                               dirToOtherDirLink.resolve("dir"))
+          otherDirToDirLink.delete()
+          Files.createDirectory(otherDirToDirLink)
+          val nestedFile = otherDirToDirLink.resolve("file").createFile()
+          val file = dirToOtherDirLink.resolve("dir").resolve("file")
+          directory.update(TypedPaths.get(dir, Entries.DIRECTORY))
+          directory.ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink,
+                                                               file.getParent,
+                                                               file)
         }
       }
-      // This test is different from those above because it calls update with dirToOtherDirLink
-      // rather than with dir
-      'direct - withTempDirectory { dir =>
+      def localLink: Future[Unit] = withTempDirectory { dir =>
         withTempDirectorySync { otherDir =>
           val dirToOtherDirLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
           val otherDirToDirLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
@@ -311,11 +287,66 @@ object CachedFileTreeViewTest extends TestSuite {
           dirToOtherDirLink.delete()
           Files.createDirectory(dirToOtherDirLink)
           val nestedFile = dirToOtherDirLink.resolve("file").createFile()
-          directory.update(TypedPaths.get(dirToOtherDirLink, Entries.DIRECTORY))
+          directory.update(TypedPaths.get(dir, Entries.DIRECTORY))
           directory.ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink, nestedFile)
         }
       }
     }
+    // This test is different from those above because it calls update with dirToOtherDirLink
+    // rather than with dir
+    def direct: Future[Unit] = withTempDirectory { dir =>
+      withTempDirectorySync { otherDir =>
+        val dirToOtherDirLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
+        val otherDirToDirLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+        val directory = newCachedView(dir, Integer.MAX_VALUE, followLinks = true)
+        directory.ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink,
+                                                             dirToOtherDirLink.resolve("dir"))
+        dirToOtherDirLink.delete()
+        Files.createDirectory(dirToOtherDirLink)
+        val nestedFile = dirToOtherDirLink.resolve("file").createFile()
+        directory.update(TypedPaths.get(dirToOtherDirLink, Entries.DIRECTORY))
+        directory.ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink, nestedFile)
+      }
+    }
   }
 
+  val tests = Tests {
+    'add - {
+      'file - add.file
+      'directory - add.directory
+      'sequentially - add.sequentially
+      'recursive - add.recursive
+      'overlapping - {
+        'base - add.overlapping.base
+        'nested - add.overlapping.nested
+      }
+    }
+    'update - {
+      'directory - {
+        'simple - update.directory.simple
+        'nested - {
+          'created - update.directory.nested.created
+          'removed - update.directory.nested.removed
+        }
+        'subfiles - update.directory.subfiles
+      }
+      'depth - update.depth
+    }
+    'remove - {
+      'direct - remove.direct
+      'recursive - remove.recursive
+    }
+
+    'subTypes - {
+      'overrides - subTypes.overrides
+      'newFields - subTypes.newFields
+    }
+    'symlinks - {
+      'indirect - {
+        'remoteLink - symlinks.indirect.remoteLink
+        'localLink - symlinks.indirect.localLink
+      }
+      'direct - symlinks.direct
+    }
+  }
 }

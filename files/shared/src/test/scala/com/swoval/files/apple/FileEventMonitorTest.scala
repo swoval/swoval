@@ -4,6 +4,7 @@ import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
 import com.swoval.files.test.{ CountDownLatch, _ }
+import com.swoval.files._
 import com.swoval.test._
 import utest._
 import utest.framework.ExecutionContext.RunNow
@@ -11,7 +12,7 @@ import utest.framework.ExecutionContext.RunNow
 object FileEventMonitorTest extends TestSuite {
 
   def getFileEventsApi(onFileEvent: FileEvent => Unit,
-                       onStreamClosed: String => Unit = _ => {}): FileEventMonitor =
+                       onStreamClosed: String => Unit = (_: String) => {}): FileEventMonitor =
     FileEventMonitors.get((fe: FileEvent) => onFileEvent(fe), (s: String) => onStreamClosed(s))
 
   val tests: Tests = testOn(MacOS) {

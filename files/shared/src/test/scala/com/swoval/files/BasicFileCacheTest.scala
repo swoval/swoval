@@ -243,7 +243,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         val latch = new CountDownLatch(1)
         usingAsync(
           FileCacheTest.getCached[LastModified](
-            LastModified(_),
+            LastModified(_: TypedPath),
             new FileTreeViews.CacheObserver[LastModified] {
               override def onCreate(newEntry: Entry[LastModified]): Unit = {}
 
