@@ -1,15 +1,19 @@
 package com.swoval.files;
 
+import com.swoval.concurrent.ThreadFactory;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
+import java.nio.file.ClosedWatchServiceException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Provides an execution context to run tasks. Exists to allow source interoperability with scala.js
@@ -18,12 +22,15 @@ abstract class Executor implements AutoCloseable {
   Executor() {}
 
   public class Thread {
-    private final long id;
-    private final String name;
+    private Thread() {}
+    private long id = -1;
+    private String name = "";
 
-    private Thread(final long id, final String name) {
-      this.id = id;
-      this.name = name;
+    void setID() {
+      if (id == -1) {
+        name = java.lang.Thread.currentThread().getName();
+        id = java.lang.Thread.currentThread().getId();
+      }
     }
 
     @Override
@@ -146,56 +153,53 @@ abstract class Executor implements AutoCloseable {
 
   static class ExecutorImpl extends Executor {
     private final AtomicBoolean closed = new AtomicBoolean(false);
-    private final Thread thread;
-    private static final AtomicInteger threadId = new AtomicInteger(0);
+    private final RuntimeException ex;
+    private final Thread thread = new Thread();
 
     Thread getThread() {
       return thread;
     }
 
-    private final java.lang.Thread executorThread;
+    private RuntimeException closedException;
 
-    private java.lang.Thread getExecutorThread(
-        final String name, final LinkedBlockingQueue<Thread> queue) {
-      return new java.lang.Thread(name + "-" + threadId.getAndIncrement()) {
-        @Override
-        public void run() {
-          final java.lang.Thread jThread = java.lang.Thread.currentThread();
-          queue.offer(new Thread(jThread.getId(), jThread.getName()));
-          boolean stop = false;
-          while (!stop && !closed.get() && !jThread.isInterrupted()) {
-            try {
-              final PriorityQueue<PriorityConsumer> queue = new PriorityQueue<>();
-              queue.add(consumers.take());
-              drainRunnables(queue);
-              while (queue.peek() != null && !stop) {
-                drainRunnables(queue);
-                final PriorityConsumer consumer = queue.poll();
-                assert (consumer != null);
-                stop = consumer.priority < 0;
-                if (!stop) {
-                  try {
-                    consumer.accept(getThread());
-                  } catch (final Exception e) {
-                    e.printStackTrace();
-                  }
-                }
-              }
-            } catch (final InterruptedException e) {
-              stop = true;
-            }
-          }
-        }
-      };
-    }
-
+    final ThreadFactory factory;
+    final ExecutorService service;
     final LinkedBlockingQueue<PriorityConsumer> consumers = new LinkedBlockingQueue<>();
 
-    ExecutorImpl(final String name) throws InterruptedException {
-      final LinkedBlockingQueue<Thread> queue = new LinkedBlockingQueue<>(1);
-      executorThread = getExecutorThread(name, queue);
-      executorThread.start();
-      thread = queue.take();
+    ExecutorImpl(final ThreadFactory factory, final ExecutorService service) {
+      this.factory = factory;
+      this.service = service;
+      ex = new RuntimeException("Made " + this);
+      service.submit(
+          new Runnable() {
+            @Override
+            public void run() {
+              boolean stop = false;
+              thread.setID();
+              while (!stop && !closed.get() && !java.lang.Thread.currentThread().isInterrupted()) {
+                try {
+                  final PriorityQueue<PriorityConsumer> queue = new PriorityQueue<>();
+                  queue.add(consumers.take());
+                  drainRunnables(queue);
+                  while (queue.peek() != null && !stop) {
+                    drainRunnables(queue);
+                    final PriorityConsumer consumer = queue.poll();
+                    assert (consumer != null);
+                    stop = consumer.priority < 0;
+                    if (!stop) {
+                      try {
+                        consumer.accept(getThread());
+                      } catch (final Exception e) {
+                        e.printStackTrace();
+                      }
+                    }
+                  }
+                } catch (final InterruptedException e) {
+                  stop = true;
+                }
+              }
+            }
+          });
     }
 
     @SuppressWarnings("EmptyCatchBlock")
@@ -203,15 +207,18 @@ abstract class Executor implements AutoCloseable {
     public void close() {
       if (closed.compareAndSet(false, true)) {
         super.close();
-        executorThread.interrupt();
         synchronized (consumers) {
-          consumers.clear();
-          consumers.offer(STOP);
+            consumers.clear();
+            consumers.offer(STOP);
         }
+        service.shutdownNow();
         try {
-          executorThread.join(5000);
-        } catch (final InterruptedException e) {
+          if (!service.awaitTermination(5, TimeUnit.SECONDS)) {
+            System.err.println("Couldn't close executor");
+          }
+        } catch (InterruptedException e) {
         }
+        factory.close();
       }
     }
 
@@ -220,7 +227,7 @@ abstract class Executor implements AutoCloseable {
       if (closed.get()) {
         new Exception("Tried to submit to closed executor").printStackTrace(System.err);
       } else {
-        if (java.lang.Thread.currentThread().getId() == executorThread.getId()) {
+        if (factory.created(java.lang.Thread.currentThread())) {
           try {
             consumer.accept(getThread());
           } catch (final Exception e) {
@@ -252,10 +259,29 @@ abstract class Executor implements AutoCloseable {
    * Make a new instance of an Executor
    *
    * @param name The name of the executor thread
-   * @return Executo
+   * @return Executor
    */
-  static Executor make(final String name) throws InterruptedException {
-    return new ExecutorImpl(name);
+  static Executor make(final String name) {
+    final ThreadFactory factory = new ThreadFactory(name);
+    final ExecutorService service =
+        new ThreadPoolExecutor(
+            1, 1, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(), factory) {
+          @Override
+          protected void finalize() {
+            shutdown();
+            super.finalize();
+          }
+
+          @Override
+          protected void afterExecute(Runnable r, Throwable t) {
+            super.afterExecute(r, t);
+            if (t != null) {
+              System.err.println("Error running: " + r + "\n" + t);
+              t.printStackTrace(System.err);
+            }
+          }
+        };
+    return new ExecutorImpl(factory, service);
   }
 
   private static final class PriorityConsumer

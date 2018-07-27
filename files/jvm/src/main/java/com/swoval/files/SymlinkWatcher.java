@@ -85,7 +85,10 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
       final OnError onError,
       final Executor executor) {
     this.onError = onError;
-    this.internalExecutor = executor;
+    this.internalExecutor =
+        executor == null
+            ? Executor.make("com.swoval.files.SymlinkWatcher-callback-internalExecutor")
+            : executor;
     this.watcher = watcher;
     watcher.addObserver(
         new Observer<Event>() {
