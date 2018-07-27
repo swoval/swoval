@@ -48,14 +48,9 @@ object CachedFileTreeViewTest extends TestSuite {
   }
 
   val executor = new Executor {
-
-    /**
-     * Runs the task on a thread with a given priority.
-     *
-     * @param threadConsumer task to run
-     */
     override def run(threadConsumer: Consumer[Executor#Thread], priority: Int): Unit =
       threadConsumer.accept(getThread())
+    override def getThread(): Executor#Thread = null
   }
   implicit class CachedDirectoryOps[T](val cd: CachedDirectory[T]) extends AnyVal {
     def remove(path: Path): java.util.List[Entry[T]] =
@@ -249,7 +244,10 @@ object CachedFileTreeViewTest extends TestSuite {
         f.write("foo")
         val initialBytes = "foo".getBytes.toIndexedSeq
         val dir =
-          FileTreeViews.cached[FileBytes](f.getParent, FileBytes(_: TypedPath), Integer.MAX_VALUE, true)
+          FileTreeViews.cached[FileBytes](f.getParent,
+                                          FileBytes(_: TypedPath),
+                                          Integer.MAX_VALUE,
+                                          true)
         def filter(bytes: Seq[Byte]): Filter[Entry[FileBytes]] =
           new Filter[Entry[FileBytes]] {
             override def accept(p: Entry[FileBytes]): Boolean = p.value.bytes == bytes

@@ -1,7 +1,6 @@
 package com.swoval.files;
 
 import com.swoval.files.DataViews.Entry;
-import com.swoval.files.Executor.Thread;
 import com.swoval.files.FileTreeViews.CacheObserver;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event.Kind;
@@ -117,7 +116,7 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
   @Override
   public void unregister(final Path path) {
     internalExecutor.block(
-        new Consumer<Thread>() {
+        new Consumer<Executor.Thread>() {
           @Override
           public void accept(final Executor.Thread thread) {
             watcher.unregister(path, thread);

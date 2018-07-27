@@ -170,7 +170,6 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
               }
               watchedSymlinksByDirectory.clear();
               watcher.close();
-              //System.out.println("closed " + SymlinkWatcher.this);
             }
           }
         });

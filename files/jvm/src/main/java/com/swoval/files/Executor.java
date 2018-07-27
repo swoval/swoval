@@ -23,13 +23,23 @@ abstract class Executor implements AutoCloseable {
 
   public class Thread {
     private Thread() {}
+    private long id = -1;
+    private String name = "";
+
+    void setID() {
+      if (id == -1) {
+        name = java.lang.Thread.currentThread().getName();
+        id = java.lang.Thread.currentThread().getId();
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "Executor.Thread(" + name + ", " + id + ")";
+    }
   }
 
-  private final Thread thread = new Thread();
-
-  Thread getThread() {
-    return thread;
-  }
+  abstract Thread getThread();
 
   <T> BiConsumer<T, Thread> delegate(final BiConsumer<T, Thread> consumer) {
     return new BiConsumer<T, Thread>() {
@@ -71,6 +81,11 @@ abstract class Executor implements AutoCloseable {
   Executor copy() {
     final Executor self = this;
     return new Executor() {
+      @Override
+      Thread getThread() {
+        return self.getThread();
+      }
+
       @Override
       public void run(final Consumer<Thread> consumer, final int priority) {
         self.run(consumer, priority);
@@ -136,9 +151,15 @@ abstract class Executor implements AutoCloseable {
   @Override
   public void close() {}
 
-  private static class ExecutorImpl extends Executor {
+  static class ExecutorImpl extends Executor {
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final RuntimeException ex;
+    private final Thread thread = new Thread();
+
+    Thread getThread() {
+      return thread;
+    }
+
     private RuntimeException closedException;
 
     final ThreadFactory factory;
@@ -154,6 +175,7 @@ abstract class Executor implements AutoCloseable {
             @Override
             public void run() {
               boolean stop = false;
+              thread.setID();
               while (!stop && !closed.get() && !java.lang.Thread.currentThread().isInterrupted()) {
                 try {
                   final PriorityQueue<PriorityConsumer> queue = new PriorityQueue<>();

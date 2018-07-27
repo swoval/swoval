@@ -32,7 +32,7 @@ public class FileTreeRepositories {
               @Override
               public void apply(IOException exception) {}
             },
-            executor);
+            copy);
     final FileCacheDirectoryTree<T> tree =
         new FileCacheDirectoryTree<>(
             converter, Executor.make("FileTreeRepository-callback-executor"), symlinkWatcher);

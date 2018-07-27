@@ -180,6 +180,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
           new Consumer<Executor.Thread>() {
             @Override
             public void accept(final Executor.Thread thread) {
+              System.out.println(thread);
               final Iterator<Stream> it = streams.values().iterator();
               boolean stop = false;
               while (it.hasNext() && !stop) {
@@ -190,9 +191,12 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
                 }
               }
               streams.clear();
+              System.out.println("file event monitor close");
               fileEventMonitor.close();
+              System.out.println("file event monitor close done");
             }
           });
+      System.out.println(internalExecutor);
       internalExecutor.close();
     }
   }
