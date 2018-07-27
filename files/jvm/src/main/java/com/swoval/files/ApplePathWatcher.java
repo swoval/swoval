@@ -180,7 +180,6 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
           new Consumer<Executor.Thread>() {
             @Override
             public void accept(final Executor.Thread thread) {
-              System.out.println(thread);
               final Iterator<Stream> it = streams.values().iterator();
               boolean stop = false;
               while (it.hasNext() && !stop) {
@@ -191,12 +190,9 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
                 }
               }
               streams.clear();
-              System.out.println("file event monitor close");
               fileEventMonitor.close();
-              System.out.println("file event monitor close done");
             }
           });
-      System.out.println(internalExecutor);
       internalExecutor.close();
     }
   }
@@ -229,7 +225,6 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
    *
    * @param latency specified in fractional seconds
    * @param flags Native flags
-   * @param onFileEvent {@link com.swoval.functional.Consumer} to run on file events
    * @param onStreamRemoved {@link com.swoval.functional.Consumer} to run when a redundant stream is
    *     removed from the underlying native file events implementation
    * @param executor The internal executor to manage the directory watcher state
@@ -287,7 +282,6 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
                               observers.onNext(event);
                             } catch (final RuntimeException e) {
                               observers.onError(e);
-                              System.out.println("WTF " + event + " " + internalExecutor);
                             }
                           }
                         }

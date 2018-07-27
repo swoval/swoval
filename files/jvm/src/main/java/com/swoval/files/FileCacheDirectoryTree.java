@@ -13,6 +13,7 @@ import com.swoval.files.FileTreeRepositoryImpl.Callback;
 import com.swoval.files.FileTreeViews.CacheObserver;
 import com.swoval.files.FileTreeViews.ObservableCache;
 import com.swoval.files.FileTreeViews.Observer;
+import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Event.Kind;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Filter;
@@ -43,10 +44,29 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   FileCacheDirectoryTree(
       final Converter<T> converter,
       final Executor callbackExecutor,
+      final Executor internalExecutor,
       final SymlinkWatcher symlinkWatcher) {
     this.converter = converter;
     this.callbackExecutor = callbackExecutor;
     this.symlinkWatcher = symlinkWatcher;
+    symlinkWatcher.addObserver(
+        new Observer<Event>() {
+          @Override
+          public void onError(final Throwable t) {
+            t.printStackTrace(System.err);
+          }
+
+          @Override
+          public void onNext(final Event event) {
+            internalExecutor.run(
+                new Consumer<Executor.Thread>() {
+                  @Override
+                  public void accept(Executor.Thread thread) {
+                    handleEvent(event, thread);
+                  }
+                });
+          }
+        });
   }
 
   private final DirectoryRegistry READ_ONLY_DIRECTORY_REGISTRY =
@@ -201,7 +221,6 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
 
   public void close(final Executor.Thread thread) {
     if (symlinkWatcher != null) symlinkWatcher.close();
-    //System.out.println("WTF close " + this + " " + symlinkWatcher);
     final Iterator<CachedDirectory<T>> directoryIterator = directories.values().iterator();
     while (directoryIterator.hasNext()) {
       directoryIterator.next().close();

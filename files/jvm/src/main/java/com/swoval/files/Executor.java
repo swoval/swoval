@@ -202,26 +202,15 @@ abstract class Executor implements AutoCloseable {
           });
     }
 
-    private void printPart(final Exception e, final int lines) {
-      final StackTraceElement[] elements = e.getStackTrace();
-      System.out.println(e);
-      for (int i = 0; i < ((lines < elements.length) ? lines : elements.length); ++i) {
-        System.out.println(elements[i]);
-      }
-      System.out.println("...\n\n");
-    }
-
     @SuppressWarnings("EmptyCatchBlock")
     @Override
     public void close() {
-      //System.out.println("FUCKING CUNT Close " + this);
-      synchronized (consumers) {
-        consumers.clear();
-        consumers.offer(STOP);
-      }
       if (closed.compareAndSet(false, true)) {
         super.close();
-        closedException = new RuntimeException();
+        synchronized (consumers) {
+            consumers.clear();
+            consumers.offer(STOP);
+        }
         service.shutdownNow();
         try {
           if (!service.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -236,11 +225,7 @@ abstract class Executor implements AutoCloseable {
     @Override
     void run(final Consumer<Thread> consumer, final int priority) {
       if (closed.get()) {
-        //printPart(ex, 10);
-        //closedException.printStackTrace(System.err);
-        //new Exception("\n\n\n\n\ncalled from").printStackTrace(System.err);
-        //System.exit(1);
-        //throw ex;
+        new Exception("Tried to submit to closed executor").printStackTrace(System.err);
       } else {
         if (factory.created(java.lang.Thread.currentThread())) {
           try {

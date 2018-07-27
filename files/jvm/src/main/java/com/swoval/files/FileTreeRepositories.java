@@ -35,7 +35,7 @@ public class FileTreeRepositories {
             copy);
     final FileCacheDirectoryTree<T> tree =
         new FileCacheDirectoryTree<>(
-            converter, Executor.make("FileTreeRepository-callback-executor"), symlinkWatcher);
+            converter, Executor.make("FileTreeRepository-callback-executor"), copy, symlinkWatcher);
     final PathWatcher<PathWatchers.Event> pathWatcher =
         PathWatchers.get(copy, tree.readOnlyDirectoryRegistry());
     pathWatcher.addObserver(

@@ -86,6 +86,7 @@ object FileCacheTest {
                          copy)
     val tree = new FileCacheDirectoryTree(converter,
                                           Executor.make("FileTreeRepository-callback-executor"),
+                                          copy,
                                           symlinkWatcher)
     val pathWatcher = watcherFactory(copy, tree.readOnlyDirectoryRegistry)
     pathWatcher.addObserver((e: PathWatchers.Event) =>
