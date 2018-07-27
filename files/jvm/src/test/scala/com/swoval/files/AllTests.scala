@@ -15,6 +15,8 @@ object AllTests {
       println(s"Iteration $i:")
       run()
     }
+    println("finished")
+    System.exit(0)
   }
   def run(): Unit = {
     def test[T <: TestSuite](t: T): (Tests, String) =
@@ -56,6 +58,7 @@ object AllTests {
     if (failed.get()) {
       throw new Exception("Tests failed")
     }
+    println("joining threads")
     threads.foreach { t =>
       t.interrupt()
       t.join(5000)
