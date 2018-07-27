@@ -2,7 +2,7 @@ language: node_js
 
 env:
   global:
-  - SBT_VER=1.1.5
+  - SBT_VER=1.1.2
 
 matrix:
   include:
