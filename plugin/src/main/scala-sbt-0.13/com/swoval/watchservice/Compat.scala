@@ -1,11 +1,11 @@
 package com.swoval
 package watchservice
 
-import java.io.{File, IOException}
+import java.io.{ File, IOException }
 import java.nio.file._
 
-import com.swoval.files.FileTreeDataViews.{Converter, Entry}
-import com.swoval.files.{FileTreeRepositories, TypedPath}
+import com.swoval.files.FileTreeDataViews.{ Converter, Entry }
+import com.swoval.files.{ FileTreeRepositories, TypedPath }
 import com.swoval.watchservice.CloseWatchPlugin.autoImport.closeWatchFileCache
 import sbt.Keys._
 import scala.util.Try
@@ -34,7 +34,8 @@ class ExactFileFilter(val f: File, override val id: Filter.ID) extends Filter {
   }
   override lazy val hashCode: Int = f.hashCode()
 }
-class ExactFileSource(val file: File, id: Filter.ID) extends FileSource(file, new ExactFileFilter(file, id)) {
+class ExactFileSource(val file: File, id: Filter.ID)
+    extends FileSource(file, new ExactFileFilter(file, id)) {
   override lazy val hashCode: Int = file.hashCode
   override def equals(o: Any): Boolean = o match {
     case that: ExactFileSource => this.file == that.file
@@ -42,11 +43,12 @@ class ExactFileSource(val file: File, id: Filter.ID) extends FileSource(file, ne
   }
   override lazy val toString: String = s"""ExactFileSource("$file")"""
 }
-class BaseFileSource(val file: File, filter: functional.Filter[Entry[Path]], _id: Filter.ID) extends FileSource(file, new Filter {
-  override def id: Filter.ID = _id
-  override def base: Path = file.toPath
-  override def accept(t: Path): Boolean = filter.accept(Compat.EntryImpl(t))
-}) {
+class BaseFileSource(val file: File, filter: functional.Filter[Entry[Path]], _id: Filter.ID)
+    extends FileSource(file, new Filter {
+      override def id: Filter.ID = _id
+      override def base: Path = file.toPath
+      override def accept(t: Path): Boolean = filter.accept(Compat.EntryImpl(t))
+    }) {
   override lazy val hashCode: Int = file.hashCode
   override def recursive = false
   override def equals(o: Any): Boolean = o match {
@@ -78,7 +80,7 @@ object Compat {
     type SimpleFilter = sbt.SimpleFilter
     type SimpleFileFilter = sbt.SimpleFileFilter
   }
-  import sbt.{Path => _, _}
+  import sbt.{ Path => _, _ }
   type Structure = sbt.BuildStructure
   type WatchSource = File
   type FileFilter = sbt.FileFilter
