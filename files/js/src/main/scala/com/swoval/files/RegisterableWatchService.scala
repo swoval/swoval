@@ -2,7 +2,10 @@
 
 package com.swoval.files
 
-import java.nio.file.{ Path, WatchEvent, WatchKey }
+import java.io.IOException
+import java.nio.file.Path
+import java.nio.file.WatchEvent
+import java.nio.file.WatchKey
 
 /**
  * Augments the [[https://docs.oracle.com/javase/7/docs/api/java/nio/file/WatchService.html java.nio.file.WatchService]]

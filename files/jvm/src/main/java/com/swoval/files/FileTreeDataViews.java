@@ -4,8 +4,8 @@ import com.swoval.functional.Either;
 import java.io.IOException;
 
 /** Provides functional interfaces for processing and managing instances of {@link FileTreeDataView}. */
-public class DataViews {
-  private DataViews() {}
+public class FileTreeDataViews {
+  private FileTreeDataViews() {}
 
   /**
    * Container class for {@link CachedDirectoryImpl} entries. Contains both the path to which the

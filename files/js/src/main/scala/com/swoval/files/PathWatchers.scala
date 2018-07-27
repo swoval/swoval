@@ -2,31 +2,36 @@
 
 package com.swoval.files
 
-import java.nio.file.Path
-
+import com.swoval.files.Executor.Thread
 import com.swoval.functional.Consumer
 import com.swoval.runtime.Platform
-
-import scala.beans.BeanProperty
+import java.io.IOException
+import java.nio.file.Path
+import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
 object PathWatchers {
-
-  val DEFAULT_FACTORY: Factory = new Factory() {
-    override def create(callback: Consumer[Event],
-                        internalExecutor: Executor,
-                        directoryRegistry: DirectoryRegistry): PathWatcher =
-      get(callback, internalExecutor, directoryRegistry)
-  }
 
   /**
    * Create a PathWatcher for the runtime platform.
    *
-   * @param callback [[com.swoval.functional.Consumer]] to run on file events
    * @return PathWatcher for the runtime platform
    *     initialized
    */
-  def get(callback: Consumer[Event]): PathWatcher =
-    get(callback, Executor.make("com.swoval.files.PathWatcher-internal-executor"), null)
+  def get(): PathWatcher[PathWatchers.Event] =
+    get(Executor.make("com.swoval.files.PathWatcher-internal-executor"),
+        new DirectoryRegistryImpl())
+
+  /**
+   * Create a PathWatcher for the runtime platform.
+   *
+   * @param executor provides a single threaded context to manage state
+   * @param registry The registry of directories to monitor
+   * @return PathWatcher for the runtime platform
+   *     initialized
+   */
+  def get(executor: Executor, registry: DirectoryRegistry): PathWatcher[Event] =
+    if (Platform.isMac) ApplePathWatchers.get(executor, registry)
+    else PlatformWatcher.make(executor, registry)
 
   /**
    * Create a PathWatcher for the runtime platform.
@@ -35,34 +40,13 @@ object PathWatchers {
    * @param executor provides a single threaded context to manage state
    * @param registry The registry of directories to monitor
    * @return PathWatcher for the runtime platform
-   *     initialized
    */
-  def get(callback: Consumer[Event], executor: Executor, registry: DirectoryRegistry): PathWatcher =
-    if (Platform.isMac)
-      new ApplePathWatcher(executor.delegate(callback), executor, registry)
-    else PlatformWatcher.make(callback, executor, registry)
+  def get(service: RegisterableWatchService,
+          executor: Executor,
+          registry: DirectoryRegistry): PathWatcher[Event] =
+    PlatformWatcher.make(service, executor, registry)
 
-  /**
-   * Instantiates new [[PathWatcher]] instances with a [[Consumer]]. This is primarily so
-   * that the [[PathWatcher]] in [[FileCache]] may be changed in testing.
-   */
-  abstract class Factory {
-
-    /**
-     * Creates a new PathWatcher.
-     *
-     * @param callback the callback to invoke on directory updates
-     * @param internalExecutor the internalExecutor on which internal updates are invoked
-     * @param directoryRegistry the registry of directories to monitor
-     * @return A PathWatcher instance
-     *     can occur on mac
-     *     and windows
-     */
-    def create(callback: Consumer[Event],
-               internalExecutor: Executor,
-               directoryRegistry: DirectoryRegistry): PathWatcher
-
-  }
+  class Overflow(@BeanProperty val path: Path)
 
   object Event {
 
@@ -87,11 +71,6 @@ object PathWatchers {
  An existing file was modified.
        */
       val Modify: Kind = new Kind("Modify", 3)
-
-      /**
- An overflow occurred in the underlying path monitor.
-       */
-      val Overflow: Kind = new Kind("Overflow", 0)
 
     }
 
@@ -119,7 +98,7 @@ object PathWatchers {
   }
 
   /**
- Container for [[PathWatcher]] events
+ Container for [[PathWatcher]] events.
    */
   class Event(path: TypedPath, @BeanProperty val kind: Event.Kind) extends TypedPath {
 
@@ -158,6 +137,14 @@ object PathWatchers {
 
     override def compareTo(that: TypedPath): Int =
       this.getPath.compareTo(that.getPath)
+
+  }
+
+  trait Factory {
+
+    def create(consumer: BiConsumer[Event, Executor.Thread],
+               executor: Executor,
+               registry: DirectoryRegistry): PathWatcher[Event]
 
   }
 

@@ -18,35 +18,35 @@ class MapOps {
   private MapOps() {}
 
   static <T> void diffDirectoryEntries(
-      final List<DataViews.Entry<T>> oldEntries,
-      final List<DataViews.Entry<T>> newEntries,
+      final List<FileTreeDataViews.Entry<T>> oldEntries,
+      final List<FileTreeDataViews.Entry<T>> newEntries,
       final FileTreeViews.CacheObserver<T> cacheObserver) {
-    final Map<Path, DataViews.Entry<T>> oldMap = new HashMap<>();
-    final Iterator<DataViews.Entry<T>> oldIterator = oldEntries.iterator();
+    final Map<Path, FileTreeDataViews.Entry<T>> oldMap = new HashMap<>();
+    final Iterator<FileTreeDataViews.Entry<T>> oldIterator = oldEntries.iterator();
     while (oldIterator.hasNext()) {
-      final DataViews.Entry<T> entry = oldIterator.next();
+      final FileTreeDataViews.Entry<T> entry = oldIterator.next();
       oldMap.put(entry.getPath(), entry);
     }
-    final Map<Path, DataViews.Entry<T>> newMap = new HashMap<>();
-    final Iterator<DataViews.Entry<T>> newIterator = newEntries.iterator();
+    final Map<Path, FileTreeDataViews.Entry<T>> newMap = new HashMap<>();
+    final Iterator<FileTreeDataViews.Entry<T>> newIterator = newEntries.iterator();
     while (newIterator.hasNext()) {
-      final DataViews.Entry<T> entry = newIterator.next();
+      final FileTreeDataViews.Entry<T> entry = newIterator.next();
       newMap.put(entry.getPath(), entry);
     }
     diffDirectoryEntries(oldMap, newMap, cacheObserver);
   }
 
   static <K, V> void diffDirectoryEntries(
-      final Map<K, DataViews.Entry<V>> oldMap,
-      final Map<K, DataViews.Entry<V>> newMap,
+      final Map<K, FileTreeDataViews.Entry<V>> oldMap,
+      final Map<K, FileTreeDataViews.Entry<V>> newMap,
       final FileTreeViews.CacheObserver<V> cacheObserver) {
-    final Iterator<Entry<K, DataViews.Entry<V>>> newIterator =
+    final Iterator<Entry<K, FileTreeDataViews.Entry<V>>> newIterator =
         new ArrayList<>(newMap.entrySet()).iterator();
-    final Iterator<Entry<K, DataViews.Entry<V>>> oldIterator =
+    final Iterator<Entry<K, FileTreeDataViews.Entry<V>>> oldIterator =
         new ArrayList<>(oldMap.entrySet()).iterator();
     while (newIterator.hasNext()) {
-      final Entry<K, DataViews.Entry<V>> entry = newIterator.next();
-      final DataViews.Entry<V> oldValue = oldMap.get(entry.getKey());
+      final Entry<K, FileTreeDataViews.Entry<V>> entry = newIterator.next();
+      final FileTreeDataViews.Entry<V> oldValue = oldMap.get(entry.getKey());
       if (oldValue != null) {
         cacheObserver.onUpdate(oldValue, entry.getValue());
       } else {
@@ -54,7 +54,7 @@ class MapOps {
       }
     }
     while (oldIterator.hasNext()) {
-      final Entry<K, DataViews.Entry<V>> entry = oldIterator.next();
+      final Entry<K, FileTreeDataViews.Entry<V>> entry = oldIterator.next();
       if (!newMap.containsKey(entry.getKey())) {
         cacheObserver.onDelete(entry.getValue());
       }

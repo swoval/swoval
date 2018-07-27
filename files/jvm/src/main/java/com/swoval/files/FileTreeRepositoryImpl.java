@@ -1,6 +1,6 @@
 package com.swoval.files;
 
-import com.swoval.files.DataViews.Entry;
+import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.files.FileTreeViews.CacheObserver;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event.Kind;
@@ -56,7 +56,7 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
   }
 
   @Override
-  public int addObserver(final Observer<DataViews.Entry<T>> observer) {
+  public int addObserver(final Observer<FileTreeDataViews.Entry<T>> observer) {
     return addCacheObserver(
         new CacheObserver<T>() {
           @Override
@@ -87,13 +87,13 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
   }
 
   @Override
-  public List<DataViews.Entry<T>> listEntries(
-      final Path path, final int maxDepth, final Filter<? super DataViews.Entry<T>> filter) {
+  public List<FileTreeDataViews.Entry<T>> listEntries(
+      final Path path, final int maxDepth, final Filter<? super FileTreeDataViews.Entry<T>> filter) {
     return internalExecutor
         .block(
-            new Function<Executor.Thread, List<DataViews.Entry<T>>>() {
+            new Function<Executor.Thread, List<FileTreeDataViews.Entry<T>>>() {
               @Override
-              public List<DataViews.Entry<T>> apply(final Executor.Thread thread) {
+              public List<FileTreeDataViews.Entry<T>> apply(final Executor.Thread thread) {
                 return directoryTree.listEntries(path, maxDepth, filter);
               }
             })

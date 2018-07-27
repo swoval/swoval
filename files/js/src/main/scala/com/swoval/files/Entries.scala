@@ -2,14 +2,15 @@
 
 package com.swoval.files
 
-import java.io.IOException
-import java.nio.file.{ Files, Path }
-import java.nio.file.attribute.BasicFileAttributes
-
-import com.swoval.files.DataViews.{ Converter, Entry }
 import com.swoval.files.LinkOption.NOFOLLOW_LINKS
-import com.swoval.functional.Either
 import com.swoval.functional.Either.leftProjection
+import com.swoval.files.FileTreeDataViews.Converter
+import com.swoval.files.FileTreeDataViews.Entry
+import com.swoval.functional.Either
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
 
 object Entries {
 
@@ -29,6 +30,19 @@ object Entries {
       case e: IOException => new InvalidEntry(typedPath, e)
 
     }
+
+  def setExists[T](entry: Entry[T], exists: Boolean): Entry[T] = {
+    val kind: Int = (if (exists) 0 else NONEXISTENT) | (if (entry.isFile) FILE
+                                                        else 0) |
+      (if (entry.isDirectory) DIRECTORY else 0) |
+      (if (entry.isSymbolicLink) LINK else 0)
+    val typedPath: TypedPath = TypedPaths.get(entry.getPath, kind)
+    if (entry.getValue.isLeft) {
+      new InvalidEntry(typedPath, Either.leftProjection(entry.getValue).getValue)
+    } else {
+      new ValidEntry(typedPath, entry.getValue.get)
+    }
+  }
 
   def resolve[T](path: Path, entry: Entry[T]): Entry[T] = {
     val value: Either[IOException, T] = entry.getValue

@@ -3,7 +3,7 @@ package com.swoval.files
 import java.nio.file.{ Path, WatchEvent, WatchKey, WatchService => JWatchService }
 import java.util.concurrent.TimeUnit
 
-private[files] object WatchServices {
+private[files] object RegisterableWatchServices {
   def get(): RegisterableWatchService = new RegisterableWatchServiceImpl(null)
   private[files] class RegisterableWatchServiceImpl(underlying: JWatchService)
       extends JWatchService

@@ -2,19 +2,25 @@
 
 package com.swoval.files
 
-import java.io.IOException
-import java.nio.file.Path
-import java.util.{ ArrayList, Collection, HashMap, Iterator, List, Map }
-import java.util.concurrent.atomic.AtomicReference
-
-import com.swoval.files.CachedDirectoryImpl._
-import com.swoval.files.DataViews.{ Converter, Entry }
-import com.swoval.files.FileTreeViews.Updates
 import com.swoval.functional.Either.leftProjection
-import com.swoval.functional.{ Either, Filter }
 import com.swoval.functional.Filters.AllPass
-
-import scala.beans.BeanProperty
+import com.swoval.files.FileTreeDataViews.Converter
+import com.swoval.files.FileTreeDataViews.Entry
+import com.swoval.files.FileTreeViews.Updates
+import com.swoval.functional.Either
+import com.swoval.functional.Filter
+import java.io.IOException
+import java.nio.file.NoSuchFileException
+import java.nio.file.Path
+import java.util.ArrayList
+import java.util.Collection
+import java.util.HashMap
+import java.util.Iterator
+import java.util.List
+import java.util.Map
+import java.util.concurrent.atomic.AtomicReference
+import CachedDirectoryImpl._
+import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
 object CachedDirectoryImpl {
 
@@ -37,9 +43,9 @@ object CachedDirectoryImpl {
  * Provides a mutable in-memory cache of files and subdirectories with basic CRUD functionality. The
  * CachedDirectory can be fully recursive as the subdirectories are themselves stored as recursive
  * (when the CachedDirectory is initialized without the recursive toggle, the subdirectories are
- * stored as [[Entry]] instances. The primary use case is the implementation of [[FileCache]] and [[NioPathWatcher]]. Directly handling CachedDirectory instances is discouraged
- * because it is inherently mutable so it's better to let the FileCache manage it and query the
- * cache rather than CachedDirectory directly.
+ * stored as [[Entry]] instances. The primary use case is the implementation of [[FileTreeRepository]] and [[NioPathWatcher]]. Directly handling CachedDirectory instances is
+ * discouraged because it is inherently mutable so it's better to let the FileTreeRepository manage
+ * it and query the cache rather than CachedDirectory directly.
  *
  * <p>The CachedDirectory should cache all of the files and subdirectories up the maximum depth. A
  * maximum depth of zero means that the CachedDirectory should cache the subdirectories, but not
@@ -77,12 +83,16 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
     if (findResult != null) {
       if (findResult.isRight) {
         val result: List[TypedPath] = new ArrayList[TypedPath]()
-        findResult.get.listImpl(maxDepth, filter, result)
+        findResult.get.listImpl(maxDepth, filter, result, new TotalFunction[Entry[T], TypedPath]() {
+          override def apply(entry: Entry[T]): TypedPath =
+            TypedPaths.getDelegate(entry.getPath, entry)
+        })
         result
       } else {
         val entry: Entry[T] = leftProjection(findResult).getValue
         val result: List[TypedPath] = new ArrayList[TypedPath]()
-        if (entry != null && filter.accept(entry)) result.add(entry)
+        if (entry != null && filter.accept(entry))
+          result.add(TypedPaths.getDelegate(entry.getPath, entry))
         result
       }
     } else {
@@ -97,7 +107,9 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
     if (findResult != null) {
       if (findResult.isRight) {
         val result: List[Entry[T]] = new ArrayList[Entry[T]]()
-        findResult.get.listImpl(maxDepth, filter, result)
+        findResult.get.listImpl(maxDepth, filter, result, new TotalFunction[Entry[T], Entry[T]]() {
+          override def apply(entry: Entry[T]): Entry[T] = entry
+        })
         result
       } else {
         val entry: Entry[T] = leftProjection(findResult).getValue
@@ -125,7 +137,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
     }
   }
 
-  val typedPath: TypedPath = TypedPaths.get(realPath)
+  val typedPath: TypedPath = TypedPaths.get(path)
 
   this._cacheEntry.set(Entries.get(TypedPaths.getDelegate(path, typedPath), converter, typedPath))
 
@@ -139,7 +151,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
    *     the previous and new [[Entry]].
    *     traversing the directory.
    */
-  def update(typedPath: TypedPath): Updates[T] =
+  override def update(typedPath: TypedPath, thread: Executor.Thread): Updates[T] =
     if (pathFilter.accept(typedPath))
       updateImpl(if (typedPath.getPath == this.path) new ArrayList[Path]()
                  else parts(this.path.relativize(typedPath.getPath)),
@@ -153,7 +165,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
    * @return a List containing the Entry instances for the removed path. The result also contains
    *     the cache entries for any children of the path when the path is a non-empty directory.
    */
-  def remove(path: Path): List[Entry[T]] =
+  def remove(path: Path, thread: Executor.Thread): List[Entry[T]] =
     if (path.isAbsolute && path.startsWith(this.path)) {
       removeImpl(parts(this.path.relativize(path)))
     } else {
@@ -170,34 +182,57 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
     else 0
 
   private def addDirectory(currentDir: CachedDirectoryImpl[T],
-                           path: Path,
+                           typedPath: TypedPath,
                            updates: Updates[T]): Unit = {
-    val dir: CachedDirectoryImpl[T] =
-      new CachedDirectoryImpl(path,
-                              path,
-                              converter,
-                              currentDir.subdirectoryDepth(),
-                              pathFilter,
-                              fileTreeView).init()
-    val oldEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
-    val previous: CachedDirectoryImpl[T] =
-      currentDir.subdirectories.put(path.getFileName, dir)
-    if (previous != null) {
-      oldEntries.put(previous.realPath, previous.getEntry)
-      val entryIterator: Iterator[Entry[T]] =
-        previous.listEntries(java.lang.Integer.MAX_VALUE, AllPass).iterator()
-      while (entryIterator.hasNext) {
-        val entry: Entry[T] = entryIterator.next()
-        oldEntries.put(entry.getPath, entry)
-      }
+    val path: Path = typedPath.getPath
+    val dir: CachedDirectoryImpl[T] = new CachedDirectoryImpl[T](path,
+                                                                 typedPath.toRealPath(),
+                                                                 converter,
+                                                                 currentDir.subdirectoryDepth(),
+                                                                 pathFilter,
+                                                                 fileTreeView)
+    var exists: Boolean = true
+    try dir.init()
+    catch {
+      case nsfe: NoSuchFileException => exists = false
+
+      case e: IOException => {}
+
     }
+    val oldEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
     val newEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
-    newEntries.put(dir.realPath, dir.getEntry)
-    val it: Iterator[Entry[T]] =
-      dir.listEntries(java.lang.Integer.MAX_VALUE, AllPass).iterator()
-    while (it.hasNext) {
-      val entry: Entry[T] = it.next()
-      newEntries.put(entry.getPath, entry)
+    if (exists) {
+      val previous: CachedDirectoryImpl[T] =
+        currentDir.subdirectories.put(path.getFileName, dir)
+      if (previous != null) {
+        oldEntries.put(previous.realPath, previous.getEntry)
+        val entryIterator: Iterator[Entry[T]] =
+          previous.listEntries(java.lang.Integer.MAX_VALUE, AllPass).iterator()
+        while (entryIterator.hasNext) {
+          val entry: Entry[T] = entryIterator.next()
+          oldEntries.put(entry.getPath, entry)
+        }
+        previous.close()
+      }
+      newEntries.put(dir.realPath, dir.getEntry)
+      val it: Iterator[Entry[T]] =
+        dir.listEntries(java.lang.Integer.MAX_VALUE, AllPass).iterator()
+      while (it.hasNext) {
+        val entry: Entry[T] = it.next()
+        newEntries.put(entry.getPath, entry)
+      }
+    } else {
+      val previous: CachedDirectoryImpl[T] =
+        currentDir.subdirectories.get(path.getFileName)
+      if (previous != null) {
+        oldEntries.put(previous.realPath, Entries.setExists(previous.getEntry, false))
+        val entryIterator: Iterator[Entry[T]] =
+          previous.listEntries(java.lang.Integer.MAX_VALUE, AllPass).iterator()
+        while (entryIterator.hasNext) {
+          val entry: Entry[T] = entryIterator.next()
+          oldEntries.put(entry.getPath, entry)
+        }
+      }
     }
     MapOps.diffDirectoryEntries(oldEntries, newEntries, updates)
   }
@@ -231,13 +266,15 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
                             converter,
                             TypedPaths.getDelegate(resolved, typedPath))
               if (isDirectory) {
-                currentDir.subdirectories.put(p,
-                                              new CachedDirectoryImpl(resolved,
-                                                                      realPath,
-                                                                      converter,
-                                                                      -1,
-                                                                      pathFilter,
-                                                                      fileTreeView))
+                val previous: CachedDirectoryImpl =
+                  currentDir.subdirectories.put(p,
+                                                new CachedDirectoryImpl(resolved,
+                                                                        realPath,
+                                                                        converter,
+                                                                        -1,
+                                                                        pathFilter,
+                                                                        fileTreeView))
+                if (previous != null) previous.close()
               } else {
                 currentDir.files.put(p, newEntry)
               }
@@ -251,7 +288,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
               }
               result
             } else {
-              addDirectory(currentDir, resolved, result)
+              addDirectory(currentDir, typedPath, result)
               result
             }
           }
@@ -259,7 +296,9 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
           currentDir.lock.synchronized {
             val dir: CachedDirectoryImpl[T] = currentDir.subdirectories.get(p)
             if (dir == null && currentDir.depth > 0) {
-              addDirectory(currentDir, currentDir.path.resolve(p), result)
+              addDirectory(currentDir,
+                           TypedPaths.getDelegate(currentDir.path.resolve(p), typedPath),
+                           result)
             }
             currentDir = dir
           }
@@ -267,7 +306,11 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
       }
     } else if (typedPath.isDirectory) {
       val oldEntries: List[Entry[T]] = listEntries(getMaxDepth, AllPass)
-      init()
+      try init()
+      catch {
+        case e: IOException => {}
+
+      }
       val newEntries: List[Entry[T]] = listEntries(getMaxDepth, AllPass)
       MapOps.diffDirectoryEntries(oldEntries, newEntries, result)
     } else {
@@ -317,7 +360,10 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
       null
     }
 
-  private def listImpl[R](maxDepth: Int, filter: Filter[_ >: R], result: List[_ >: R]): Unit = {
+  private def listImpl[R](maxDepth: Int,
+                          filter: Filter[_ >: R],
+                          result: List[_ >: R],
+                          function: TotalFunction[Entry[T], R]): Unit = {
     if (this.depth < 0 || maxDepth < 0) {
       result.add(this.getEntry.asInstanceOf[R])
     } else {
@@ -330,19 +376,18 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
       val filesIterator: Iterator[Entry[T]] = files.iterator()
       while (filesIterator.hasNext) {
         val entry: Entry[T] = filesIterator.next()
-        val resolved: Entry[T] = Entries.resolve(getPath, entry)
-        if (filter.accept(resolved.asInstanceOf[R]))
-          result.add(resolved.asInstanceOf[R])
+        val resolved: R = function.apply(Entries.resolve(getPath, entry))
+        if (filter.accept(resolved)) result.add(resolved)
       }
       val subdirIterator: Iterator[CachedDirectoryImpl[T]] =
         subdirectories.iterator()
       while (subdirIterator.hasNext) {
         val subdir: CachedDirectoryImpl[T] = subdirIterator.next()
         val entry: Entry[T] = subdir.getEntry
-        val resolved: Entry[T] = Entries.resolve(getPath, entry)
-        if (filter.accept(resolved.asInstanceOf[R]))
-          result.add(resolved.asInstanceOf[R])
-        if (maxDepth > 0) subdir.listImpl(maxDepth - 1, filter, result)
+        val resolved: R = function.apply(Entries.resolve(getPath, entry))
+        if (filter.accept(resolved)) result.add(resolved)
+        if (maxDepth > 0)
+          subdir.listImpl(maxDepth - 1, filter, result, function)
       }
     }
   }
@@ -376,28 +421,22 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
     result
   }
 
-  private def toRealPath(path: Path): Path =
-    try path.toRealPath()
-    catch {
-      case e: IOException => path
-
-    }
-
   def init(): CachedDirectoryImpl[T] = {
     subdirectories.clear()
     files.clear()
-    if (depth >= 0) {
+    if (depth >= 0 &&
+        (!this.path.startsWith(this.realPath) || this.path == this.realPath)) {
       lock.synchronized {
         val it: Iterator[TypedPath] =
-          fileTreeView.list(path, 0, pathFilter).iterator()
+          fileTreeView.list(this.path, 0, pathFilter).iterator()
         while (it.hasNext) {
           val file: TypedPath = it.next()
           if (pathFilter.accept(file)) {
             val path: Path = file.getPath
+            val realPath: Path = file.toRealPath()
             val key: Path = this.path.relativize(path).getFileName
             if (file.isDirectory) {
               if (depth > 0) {
-                val realPath: Path = toRealPath(path)
                 if (!file.isSymbolicLink || !isLoop(path, realPath)) {
                   val dir: CachedDirectoryImpl[T] =
                     new CachedDirectoryImpl[T](path,
@@ -406,12 +445,12 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
                                                subdirectoryDepth(),
                                                pathFilter,
                                                fileTreeView)
-                  subdirectories.put(key, dir)
                   try dir.init()
                   catch {
                     case e: IOException => {}
 
                   }
+                  subdirectories.put(key, dir)
                 } else {
                   subdirectories.put(key,
                                      new CachedDirectoryImpl(path,

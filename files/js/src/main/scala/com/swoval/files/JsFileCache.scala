@@ -4,7 +4,7 @@ package files
 
 import java.nio.file.Paths
 
-import com.swoval.files.DataViews.{ Converter, Entry }
+import com.swoval.files.FileTreeDataViews.{ Converter, Entry }
 import com.swoval.functional.Filter
 
 import scala.collection.JavaConverters._
@@ -22,7 +22,7 @@ import com.swoval.files.EitherOpsHolder._
 class JsFileCache[T <: AnyRef](converter: js.UndefOr[js.Function1[TypedPath, T]],
                                callback: js.UndefOr[js.Function1[JSEntry[T], Unit]])
     extends js.Object {
-  private[this] val inner: FileCache[T] = FileCaches.get(
+  private[this] val inner: FileTreeRepository[T] = FileTreeRepositories.get(
     converter.toOption
       .map(c =>
         new Converter[T] {

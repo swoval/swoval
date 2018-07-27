@@ -1,15 +1,11 @@
 package com.swoval.files;
 
-import com.swoval.files.DataViews.Converter;
-import com.swoval.files.DataViews.OnError;
-import com.swoval.files.Executor.Thread;
+import com.swoval.files.FileTreeDataViews.Converter;
+import com.swoval.files.FileTreeDataViews.OnError;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
-import com.swoval.files.PathWatchers.Factory;
 import com.swoval.functional.Consumer;
-import com.swoval.functional.Either;
 import java.io.IOException;
-import java.nio.file.Path;
 
 /** Provides factory methods for generating instances of {@link FileTreeRepository}. */
 public class FileTreeRepositories {

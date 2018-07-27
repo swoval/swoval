@@ -2,15 +2,21 @@
 
 package com.swoval.files
 
-import java.io.File
-import java.nio.file.{ FileSystemLoopException, NoSuchFileException, Path, Paths }
-import java.nio.file.attribute.BasicFileAttributes
-import java.util.{ ArrayList, HashSet, Iterator, List, Set }
-
-import com.swoval.files.SimpleFileTreeView._
 import com.swoval.functional.Filter
-
-import scala.beans.BeanProperty
+import java.io.File
+import java.io.IOException
+import java.nio.file.FileSystemLoopException
+import java.nio.file.NoSuchFileException
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.attribute.BasicFileAttributes
+import java.util.ArrayList
+import java.util.HashSet
+import java.util.Iterator
+import java.util.List
+import java.util.Set
+import SimpleFileTreeView._
+import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
 object SimpleFileTreeView {
 
@@ -71,6 +77,7 @@ class SimpleFileTreeView(private val directoryLister: DirectoryLister,
     val visited: Set[Path] =
       if ((followLinks && maxDepth > 0)) new HashSet[Path]() else null
     listDirImpl(path, 1, maxDepth, result, filter, visited)
+    if (visited != null) visited.clear()
     result
   }
 

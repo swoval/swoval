@@ -15,23 +15,25 @@ abstract class Executor extends AutoCloseable {
 
   def delegate[T](consumer: Consumer[T]): Consumer[T] = consumer
 
+  def getThread(): Executor.Thread
+
   /**
    * Runs the task on a thread
    *
    * @param runnable task to run
    */
-  def run(runnable: Runnable): Unit = {
+  def run(consumer: Consumer[Executor.Thread]): Unit = {
     try {
-      runnable.run()
+      consumer.accept(getThread())
     } catch {
       case e: Exception =>
-        System.err.println(s"Error running: $runnable\n$e\n${e.getStackTrace mkString "\n"}")
+        System.err.println(s"Error running: $consumer\n$e\n${e.getStackTrace mkString "\n"}")
     }
   }
-  def block(runnable: Runnable): Unit = runnable.run()
-  def block[T](callable: Callable[T]): Either[Exception, T] =
+  def block(consumer: Consumer[Executor.Thread]): Unit = consumer.accept(getThread())
+  def block[T](function: Function[Executor.Thread, T]): Either[Exception, T] =
     try {
-      Either.right(callable.call())
+      Either.right(function.apply(getThread()))
     } catch {
       case e: Exception => Either.left(e)
     }
@@ -47,6 +49,7 @@ abstract class Executor extends AutoCloseable {
 }
 
 object Executor {
+  class Thread
 
   /**
    * Make a new instance of an Executor
@@ -55,6 +58,7 @@ object Executor {
    * @return
    */
   def make(name: String): Executor = new Executor {
-    override def run(runnable: Runnable): Unit = runnable.run()
+    override def getThread(): Thread = new Thread
+    override def run(consumer: Consumer[Thread]): Unit = consumer.accept(getThread())
   }
 }

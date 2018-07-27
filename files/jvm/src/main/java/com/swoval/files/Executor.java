@@ -3,7 +3,6 @@ package com.swoval.files;
 import com.swoval.concurrent.ThreadFactory;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
-import java.nio.file.ClosedWatchServiceException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -40,21 +39,6 @@ abstract class Executor implements AutoCloseable {
   }
 
   abstract Thread getThread();
-
-  <T> BiConsumer<T, Thread> delegate(final BiConsumer<T, Thread> consumer) {
-    return new BiConsumer<T, Thread>() {
-      @Override
-      public void accept(final T t, final Thread thread) {
-        run(
-            new Consumer<Thread>() {
-              @Override
-              public void accept(Thread thread) {
-                consumer.accept(t, thread);
-              }
-            });
-      }
-    };
-  }
 
   /**
    * Runs the task on a thread.

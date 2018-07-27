@@ -3,7 +3,7 @@ package com.swoval
 import java.io.{ File, FileFilter, IOException }
 import java.nio.file.Path
 
-import com.swoval.files.DataViews._
+import com.swoval.files.FileTreeDataViews._
 import com.swoval.files.FileTreeViews.{ CacheObserver, Observer }
 import com.swoval.files.test.platform.Bool
 import com.swoval.functional.{ Consumer, Filter }

@@ -6,7 +6,7 @@ import java.io.IOException
 import java.nio.file.{ FileSystemLoopException, Files, Path, Paths }
 import java.util.concurrent.atomic.AtomicBoolean
 
-import com.swoval.files.PathWatchers.Event
+import com.swoval.files.PathWatchers.{ Event, Overflow }
 import com.swoval.files.PathWatchers.Event.Kind.{ Delete, Error, Modify }
 import com.swoval.functional.Consumer
 import io.scalajs.nodejs
@@ -18,10 +18,10 @@ import scala.util.Try
 /**
  * Native directory watcher implementation for Linux and Windows
  */
-private[files] class NioPathWatcherService(eventConsumer: Consumer[Event],
-                                           overflowConsumer: Consumer[Path],
-                                           registerable: RegisterableWatchService,
-                                           internalExecutor: Executor)
+private[files] class NioPathWatcherService(
+    eventConsumer: Consumer[functional.Either[Overflow, Event]],
+    registerable: RegisterableWatchService,
+    internalExecutor: Executor)
     extends AutoCloseable {
   private[this] var closed = false
   private[this] val options = new FSWatcherOptions(recursive = false, persistent = false)
@@ -43,7 +43,7 @@ private[files] class NioPathWatcherService(eventConsumer: Consumer[Event],
   private def applyImpl(path: Path): functional.Either[IOException, WatchedDirectory] = {
     try {
       functional.Either.right(watchedDirectoriesByPath get path match {
-        case Some(w) if w.isValid() => w
+        case Some(w) => w
         case _ if Files.isDirectory(path) =>
           val cb: js.Function2[nodejs.EventType, String, Unit] =
             (tpe: nodejs.EventType, name: String) => {
@@ -53,7 +53,8 @@ private[files] class NioPathWatcherService(eventConsumer: Consumer[Event],
                 case "rename" if !exists => Delete
                 case _                   => Modify
               }
-              eventConsumer.accept(new Event(TypedPaths.get(watchPath), kind))
+              eventConsumer.accept(
+                functional.Either.right(new Event(TypedPaths.get(watchPath), kind)))
             }
 
           val closed = new AtomicBoolean(false)
@@ -62,20 +63,9 @@ private[files] class NioPathWatcherService(eventConsumer: Consumer[Event],
             closed.set(true)
             watcher.close()
             watchedDirectoriesByPath += path -> WatchedDirectories.INVALID
-            eventConsumer.accept(new Event(TypedPaths.get(path), Error))
+            eventConsumer.accept(functional.Either.right(new Event(TypedPaths.get(path), Error)))
           }
           val watchedDirectory: WatchedDirectory = new WatchedDirectory {
-
-            /**
-             * Is the underlying directory watcher valid?
-             *
-             * @return true if the underlying directory watcher is valid
-             */
-            override def isValid(): Boolean = true
-
-            /**
-             * Cancel the watch on this directory. Handle all non-fatal exceptions.
-             */
             override def close(): Unit = if (closed.compareAndSet(false, true)) {
               watchedDirectoriesByPath -= path
               watcher.close()

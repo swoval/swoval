@@ -2,72 +2,63 @@
 
 package com.swoval.files
 
-import java.io.IOException
-import java.util.{ ArrayList, HashMap, Iterator, List, Map }
+import com.swoval.files.FileTreeViews.Observer
+import java.util.ArrayList
+import java.util.Iterator
+import java.util.LinkedHashMap
+import java.util.List
+import java.util.Map
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.swoval.files.DataViews.Entry
-
 /**
- * Container class that wraps multiple [[FileTreeViews.CacheObserver]] and runs the callbacks
- * for each whenever the [[com.swoval.files.FileCache]] detects an event.
+ * Container class that wraps multiple [[FileTreeViews.Observer]] and runs the callbacks for
+ * each whenever the [[PathWatcher]] detects an event.
  *
- * @tparam T the data type for the [[com.swoval.files.FileCache]] to which the observers
- *     correspond
+ * @tparam T the data type for the [[PathWatcher]] to which the observers correspond
  */
-class Observers[T] extends FileTreeViews.CacheObserver[T] with AutoCloseable {
+class Observers[T] extends FileTreeViews.Observer[T] with AutoCloseable {
 
   private val counter: AtomicInteger = new AtomicInteger(0)
 
-  private val observers: Map[Integer, FileTreeViews.CacheObserver[T]] =
-    new HashMap()
+  private val observers: Map[Integer, FileTreeViews.Observer[T]] =
+    new LinkedHashMap()
 
-  override def onCreate(newEntry: Entry[T]): Unit = {
-    var cbs: List[FileTreeViews.CacheObserver[T]] = null
+  override def onNext(t: T): Unit = {
+    var cbs: List[FileTreeViews.Observer[T]] = null
     observers.synchronized {
       cbs = new ArrayList(observers.values)
     }
-    val it: Iterator[FileTreeViews.CacheObserver[T]] = cbs.iterator()
-    while (it.hasNext) it.next().onCreate(newEntry)
+    val it: Iterator[FileTreeViews.Observer[T]] = cbs.iterator()
+    while (it.hasNext) try it.next().onNext(t)
+    catch {
+      case e: Exception => e.printStackTrace()
+
+    }
   }
 
-  override def onDelete(oldEntry: Entry[T]): Unit = {
-    var cbs: List[FileTreeViews.CacheObserver[T]] = null
+  override def onError(throwable: Throwable): Unit = {
+    var cbs: List[FileTreeViews.Observer[T]] = null
     observers.synchronized {
       cbs = new ArrayList(observers.values)
     }
-    val it: Iterator[FileTreeViews.CacheObserver[T]] = cbs.iterator()
-    while (it.hasNext) it.next().onDelete(oldEntry)
-  }
+    val it: Iterator[FileTreeViews.Observer[T]] = cbs.iterator()
+    while (it.hasNext) try it.next().onError(throwable)
+    catch {
+      case e: Exception => e.printStackTrace()
 
-  override def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit = {
-    var cbs: List[FileTreeViews.CacheObserver[T]] = null
-    observers.synchronized {
-      cbs = new ArrayList(observers.values)
     }
-    val it: Iterator[FileTreeViews.CacheObserver[T]] = cbs.iterator()
-    while (it.hasNext) it.next().onUpdate(oldEntry, newEntry)
-  }
-
-  override def onError(exception: IOException): Unit = {
-    var cbs: List[FileTreeViews.CacheObserver[T]] = null
-    observers.synchronized {
-      cbs = new ArrayList(observers.values)
-    }
-    val it: Iterator[FileTreeViews.CacheObserver[T]] = cbs.iterator()
-    while (it.hasNext) it.next().onError(exception)
   }
 
   /**
    * Add an cacheObserver to receive events.
    *
-   * @param cacheObserver the new cacheObserver
+   * @param observer the new cacheObserver
    * @return a handle to the added cacheObserver that can be used to halt observation using [[    com.swoval.files.Observers.removeObserver]] .
    */
-  def addObserver(cacheObserver: FileTreeViews.CacheObserver[T]): Int = {
+  def addObserver(observer: Observer[T]): Int = {
     val key: Int = counter.getAndIncrement
     observers.synchronized {
-      observers.put(key, cacheObserver)
+      observers.put(key, observer)
     }
     key
   }

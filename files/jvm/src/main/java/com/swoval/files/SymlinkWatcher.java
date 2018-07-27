@@ -4,7 +4,7 @@ import static com.swoval.functional.Either.getOrElse;
 import static com.swoval.functional.Either.leftProjection;
 import static java.util.Map.Entry;
 
-import com.swoval.files.DataViews.OnError;
+import com.swoval.files.FileTreeDataViews.OnError;
 import com.swoval.files.FileTreeViews.Observable;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
@@ -90,7 +90,7 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
         new Observer<Event>() {
           @Override
           public void onError(final Throwable t) {
-            if (t instanceof IOException) onError.apply((IOException) t);
+            if (t instanceof IOException) SymlinkWatcher.this.onError.apply((IOException) t);
           }
 
           @Override

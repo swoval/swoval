@@ -4,7 +4,7 @@ package watchservice
 import java.io.FileFilter
 import java.nio.file.Path
 
-import com.swoval.files.DataViews.{ Converter, Entry }
+import com.swoval.files.FileTreeDataViews.{ Converter, Entry }
 import com.swoval.files._
 import com.swoval.runtime.ShutdownHooks
 import sbt.Keys._

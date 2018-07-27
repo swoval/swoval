@@ -3,7 +3,7 @@ package com.swoval.files
 import java.io.IOException
 import java.nio.file.{ Files, Path }
 
-import com.swoval.files.DataViews.Entry
+import FileTreeDataViews.Entry
 import com.swoval.files.EntryOps._
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.test._

@@ -3,8 +3,8 @@ package com.swoval.files;
 import static com.swoval.files.LinkOption.NOFOLLOW_LINKS;
 import static com.swoval.functional.Either.leftProjection;
 
-import com.swoval.files.DataViews.Converter;
-import com.swoval.files.DataViews.Entry;
+import com.swoval.files.FileTreeDataViews.Converter;
+import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.functional.Either;
 import java.io.IOException;
 import java.nio.file.Files;

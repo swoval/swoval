@@ -3,8 +3,8 @@ package com.swoval.files;
 import static com.swoval.functional.Either.leftProjection;
 import static com.swoval.functional.Filters.AllPass;
 
-import com.swoval.files.DataViews.Converter;
-import com.swoval.files.DataViews.Entry;
+import com.swoval.files.FileTreeDataViews.Converter;
+import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.files.FileTreeViews.Updates;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;

@@ -3,7 +3,7 @@ package com.swoval.files
 import java.io.IOException
 import java.nio.file.{ Files, Path, Paths }
 
-import com.swoval.files.DataViews.Entry
+import FileTreeDataViews.Entry
 import com.swoval.files.EntryOps._
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.test._
@@ -18,7 +18,7 @@ import scala.util.{ Failure, Success, Try }
 
 trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
   def getBounded[T](
-      converter: DataViews.Converter[T],
+      converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeViews.CacheObserver[T]
   ): FileTreeRepository[T] =
     FileCacheTest.get[T](
@@ -166,7 +166,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
   }
 }
 object FileCacheOverflowTest extends FileCacheOverflowTest with DefaultFileCacheTest {
-  override def getBounded[T](converter: DataViews.Converter[T],
+  override def getBounded[T](converter: FileTreeDataViews.Converter[T],
                              cacheObserver: FileTreeViews.CacheObserver[T]): FileTreeRepository[T] =
     if (Platform.isMac) FileCacheTest.getCached(converter, cacheObserver)
     else super.getBounded(converter, cacheObserver)

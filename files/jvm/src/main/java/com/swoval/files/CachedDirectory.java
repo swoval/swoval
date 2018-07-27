@@ -1,6 +1,6 @@
 package com.swoval.files;
 
-import com.swoval.files.DataViews.Entry;
+import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.functional.Filter;
 import java.nio.file.Path;
 import java.util.List;
@@ -9,7 +9,7 @@ interface CachedDirectory<T> extends UpdatableFileTreeDataView<T>, DirectoryView
 
   /**
    * List the children of the path specified by {@link CachedDirectory#getPath()}, excluding the
-   * {@link DataViews.Entry entry} for the path itself. When the maxDepth parameter is <code>-1
+   * {@link FileTreeDataViews.Entry entry} for the path itself. When the maxDepth parameter is <code>-1
    * </code>, return just the entry for the path itself.
    *
    * @param maxDepth the maximum depth of children (see {@link DirectoryView#getMaxDepth()})
@@ -44,7 +44,7 @@ interface CachedDirectory<T> extends UpdatableFileTreeDataView<T>, DirectoryView
   List<TypedPath> list(final Path path, final int maxDepth, final Filter<? super TypedPath> filter);
 
   /**
-   * Returns the {@link DataViews.Entry} associated with the path specified by {@link
+   * Returns the {@link FileTreeDataViews.Entry} associated with the path specified by {@link
    * CachedDirectory#getPath()}.
    *
    * @return the entry

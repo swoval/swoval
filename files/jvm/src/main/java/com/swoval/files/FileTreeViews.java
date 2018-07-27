@@ -1,7 +1,7 @@
 package com.swoval.files;
 
-import com.swoval.files.DataViews.Converter;
-import com.swoval.files.DataViews.Entry;
+import com.swoval.files.FileTreeDataViews.Converter;
+import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.functional.Filter;
 import com.swoval.functional.Filters;
 import java.io.IOException;
@@ -153,14 +153,14 @@ public class FileTreeViews {
   /**
    * Provides callbacks to run when different types of file events are detected by the cache.
    *
-   * @param <T> the type for the {@link DataViews.Entry} data
+   * @param <T> the type for the {@link FileTreeDataViews.Entry} data
    */
   public interface CacheObserver<T> {
 
     /**
      * Callback to fire when a new path is created.
      *
-     * @param newEntry the {@link DataViews.Entry} for the newly created file
+     * @param newEntry the {@link FileTreeDataViews.Entry} for the newly created file
      */
     void onCreate(final Entry<T> newEntry);
 

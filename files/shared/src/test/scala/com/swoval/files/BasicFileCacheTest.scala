@@ -4,7 +4,7 @@ import java.io.IOException
 import java.nio.file.attribute.FileTime
 import java.nio.file.{ Files, Path, Paths }
 
-import com.swoval.files.DataViews.Entry
+import FileTreeDataViews.Entry
 import com.swoval.files.EntryOps._
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.test._

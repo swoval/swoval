@@ -2,12 +2,16 @@
 
 package com.swoval.files
 
+import com.swoval.files.FileTreeDataViews.Converter
+import com.swoval.files.FileTreeDataViews.Entry
+import com.swoval.functional.Filter
+import com.swoval.functional.Filters
 import java.io.IOException
 import java.nio.file.Path
-import java.util.{ ArrayList, Collections, Iterator, List }
-
-import com.swoval.files.DataViews.{ Converter, Entry }
-import com.swoval.functional.{ Filter, Filters }
+import java.util.ArrayList
+import java.util.Collections
+import java.util.Iterator
+import java.util.List
 
 object FileTreeViews {
 
@@ -42,7 +46,7 @@ object FileTreeViews {
    *     files
    * @return a directory whose entries just contain the path itself.
    */
-  def of(path: Path, depth: Int, followLinks: Boolean): CachedDirectory[Path] =
+  def of(path: Path, depth: Int, followLinks: Boolean): DirectoryView =
     new CachedDirectoryImpl(path,
                             path,
                             PATH_CONVERTER,
@@ -56,11 +60,17 @@ object FileTreeViews {
    * @param path the path to cache
    * @param converter a function to create the cache value for each path
    * @param depth determines how many levels of children of subdirectories to include in the results
+   * @param followLinks sets whether or not to treat symbolic links whose targets as directories or
+   *     files
    * @tparam T the cache value type
    * @return a directory with entries of type T.
    */
-  def cached[T <: AnyRef](path: Path, converter: Converter[T], depth: Int): CachedDirectory[T] =
-    new CachedDirectoryImpl(path, path, converter, depth, Filters.AllPass, getDefault(false)).init()
+  def cached[T <: AnyRef](path: Path,
+                          converter: Converter[T],
+                          depth: Int,
+                          followLinks: Boolean): CachedDirectory[T] =
+    new CachedDirectoryImpl(path, path, converter, depth, Filters.AllPass, getDefault(followLinks))
+      .init()
 
   /**
    * Returns an instance of [[FileTreeView]] that uses only apis available in java.nio.file.
@@ -96,13 +106,34 @@ object FileTreeViews {
   def getDefault(followLinks: Boolean): FileTreeView =
     new SimpleFileTreeView(defaultDirectoryLister, followLinks)
 
+  /**
+   * List the contents of a path.
+   * @param path the path to list. If the path is a directory, return the children of this directory
+   * up to the maxDepth. If the path is a regular file and the maxDepth is <code>-1</code>, the
+   * path itself is returned. Otherwise an empty list is returned.
+   * @param maxDepth the maximum depth of children to include in the results
+   * @param filter only include paths accepted by this filter
+   * @return a [[java.util.List]] of [[TypedPath]]
+   */
   def list(path: Path, maxDepth: Int, filter: Filter[_ >: TypedPath]): List[TypedPath] =
     defaultFileTreeView.list(path, maxDepth, filter)
 
+  /**
+   * Generic Observer for an [[Observable]].
+   * @tparam T the type under observation
+   */
   trait Observer[T] {
 
+    /**
+     * Fired if the underlying [[Observable]] encounters an error
+     * @param t the error
+     */
     def onError(t: Throwable): Unit
 
+    /**
+     * Callback that is invoked whenever a change is detected by the [[Observable]].
+     * @param t the changed instance
+     */
     def onNext(t: T): Unit
 
   }
@@ -110,14 +141,14 @@ object FileTreeViews {
   /**
    * Provides callbacks to run when different types of file events are detected by the cache.
    *
-   * @tparam T the type for the [[DataViews.Entry]] data
+   * @tparam T the type for the [[FileTreeDataViews.Entry]] data
    */
   trait CacheObserver[T] {
 
     /**
      * Callback to fire when a new path is created.
      *
-     * @param newEntry the [[DataViews.Entry]] for the newly created file
+     * @param newEntry the [[FileTreeDataViews.Entry]] for the newly created file
      */
     def onCreate(newEntry: Entry[T]): Unit
 
@@ -194,7 +225,8 @@ object FileTreeViews {
         cacheObserver.onUpdate(entries(0), entries(1))
       }
       val deletionIterator: Iterator[Entry[T]] = deletions.iterator()
-      while (deletionIterator.hasNext) cacheObserver.onDelete(deletionIterator.next())
+      while (deletionIterator.hasNext) cacheObserver.onDelete(
+        Entries.setExists(deletionIterator.next(), false))
     }
 
     override def onCreate(newEntry: Entry[T]): Unit = {

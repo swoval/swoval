@@ -1,7 +1,7 @@
 package com.swoval.files;
 
-import com.swoval.files.DataViews.Converter;
-import com.swoval.files.DataViews.Entry;
+import com.swoval.files.FileTreeDataViews.Converter;
+import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.files.FileTreeViews.ObservableCache;
 import com.swoval.functional.Either;
 import java.io.IOException;
@@ -36,7 +36,7 @@ import java.nio.file.Path;
  * @param <T> the type of data stored in the {@link Entry} instances for the cache
  */
 public interface FileTreeRepository<T>
-    extends FileTreeDataView<T>, PathWatcher<DataViews.Entry<T>>, ObservableCache<T>, AutoCloseable {
+    extends FileTreeDataView<T>, PathWatcher<FileTreeDataViews.Entry<T>>, ObservableCache<T>, AutoCloseable {
 
   /**
    * Register a path with the cache. A successful call to this method will both start monitoring of

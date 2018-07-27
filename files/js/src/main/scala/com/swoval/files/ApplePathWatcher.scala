@@ -2,52 +2,65 @@
 
 package com.swoval.files
 
-import java.io.IOException
-import java.nio.file.{ Path, Paths }
-import java.util.{ ArrayList, HashMap, Iterator, List, Map }
-import java.util.Map.Entry
-import java.util.concurrent.Callable
-import java.util.concurrent.atomic.AtomicBoolean
-
-import com.swoval.files.ApplePathWatcher._
-import com.swoval.files.PathWatchers.Event
-import com.swoval.files.PathWatchers.Event.Kind.{ Create, Delete, Modify, Overflow }
-import com.swoval.files.apple.FileEventsApi.ClosedFileEventsApiException
-import com.swoval.files.apple.{ FileEvent, FileEventsApi, Flags }
-import com.swoval.functional.{ Consumer, Either }
+import com.swoval.files.PathWatchers.Event.Kind.Create
+import com.swoval.files.PathWatchers.Event.Kind.Delete
+import com.swoval.files.PathWatchers.Event.Kind.Modify
 import com.swoval.functional.Either.leftProjection
+import com.swoval.files.FileTreeViews.Observer
+import com.swoval.files.PathWatchers.Event
+import com.swoval.files.apple.ClosedFileEventMonitorException
+import com.swoval.files.apple.FileEvent
+import com.swoval.files.apple.FileEventMonitor
+import com.swoval.files.apple.FileEventMonitors
+import com.swoval.files.apple.FileEventMonitors.Handle
+import com.swoval.files.apple.FileEventMonitors.Handles
+import com.swoval.files.apple.Flags
+import com.swoval.functional.Consumer
+import com.swoval.functional.Either
+import java.io.IOException
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.util.ArrayList
+import java.util.HashMap
+import java.util.Iterator
+import java.util.List
+import java.util.Map
+import java.util.Map.Entry
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import ApplePathWatcher._
 
 object ApplePathWatcher {
 
   private val DefaultOnStreamRemoved: DefaultOnStreamRemoved =
     new DefaultOnStreamRemoved()
 
-  private class Stream(val id: Int)
+  private class Stream(val handle: Handle)
 
   /**
  A no-op callback to invoke when streams are removed.
    */
-  class DefaultOnStreamRemoved() extends Consumer[String] {
+  class DefaultOnStreamRemoved() extends BiConsumer[String, Executor.Thread] {
 
-    override def accept(stream: String): Unit = {}
+    override def accept(stream: String, thread: Executor.Thread): Unit = {}
 
   }
 
 }
 
 /**
- * Implements the PathWatcher for Mac OSX using the [[https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/UsingtheFSEventsFramework/UsingtheFSEventsFramework.html Apple File System Events Api]]
+ * Implements the PathWatcher for Mac OSX using the [[https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/UsingtheFSEventsFramework/UsingtheFSEventsFramework.html Apple File System Events Api]].
  */
-class ApplePathWatcher(private val latency: Double,
+class ApplePathWatcher(private val latency: Long,
+                       private val timeUnit: TimeUnit,
                        private val flags: Flags.Create,
-                       onFileEvent: Consumer[Event],
-                       onStreamRemoved: Consumer[String],
+                       onStreamRemoved: BiConsumer[String, Executor.Thread],
                        executor: Executor,
                        managedDirectoryRegistry: DirectoryRegistry)
-    extends PathWatcher {
+    extends PathWatcher[PathWatchers.Event] {
 
   private val directoryRegistry: DirectoryRegistry =
-    if (managedDirectoryRegistry == null) new DirectoryRegistry()
+    if (managedDirectoryRegistry == null) new DirectoryRegistryImpl()
     else managedDirectoryRegistry
 
   private val streams: Map[Path, Stream] = new HashMap()
@@ -59,46 +72,60 @@ class ApplePathWatcher(private val latency: Double,
       Executor.make("com.swoval.files.ApplePathWatcher-internalExecutor")
     else executor
 
-  private val fileEventsApi: FileEventsApi = FileEventsApi.apply(
+  private val fileEventMonitor: FileEventMonitor = FileEventMonitors.get(
     new Consumer[FileEvent]() {
       override def accept(fileEvent: FileEvent): Unit = {
-        internalExecutor.run(new Runnable() {
-          override def run(): Unit = {
-            val fileName: String = fileEvent.fileName
-            val path: TypedPath = TypedPaths.get(Paths.get(fileName))
-            if (directoryRegistry.accept(path.getPath)) {
-              var event: Event = null
-              event =
-                if (fileEvent.mustScanSubDirs()) new Event(path, Overflow)
-                else if (fileEvent.itemIsFile())
-                  if (fileEvent.isNewFile && path.exists())
-                    new Event(path, Create)
-                  else if (fileEvent.isRemoved || !path.exists())
-                    new Event(path, Delete)
-                  else new Event(path, Modify)
-                else if (path.exists()) new Event(path, Modify)
-                else new Event(path, Delete)
-              onFileEvent.accept(event)
+        if (!closed.get) {
+          internalExecutor.run(new Consumer[Executor.Thread]() {
+            override def accept(thread: Executor.Thread): Unit = {
+              val fileName: String = fileEvent.fileName
+              val path: TypedPath = TypedPaths.get(Paths.get(fileName))
+              if (directoryRegistry.accept(path.getPath)) {
+                var event: Event = null
+                event =
+                  if (fileEvent.itemIsFile())
+                    if (fileEvent.isNewFile && path.exists())
+                      new Event(path, Create)
+                    else if (fileEvent.isRemoved || !path.exists())
+                      new Event(path, Delete)
+                    else new Event(path, Modify)
+                  else if (path.exists()) new Event(path, Modify)
+                  else new Event(path, Delete)
+                try observers.onNext(event)
+                catch {
+                  case e: RuntimeException => observers.onError(e)
+
+                }
+              }
             }
-          }
-        })
+          })
+        }
       }
     },
     new Consumer[String]() {
       override def accept(stream: String): Unit = {
-        internalExecutor.block(new Runnable() {
-          override def run(): Unit = {
+        internalExecutor.block(new Consumer[Executor.Thread]() {
+          override def accept(thread: Executor.Thread): Unit = {
             new Runnable() {
               override def run(): Unit = {
                 streams.remove(Paths.get(stream))
+                onStreamRemoved.accept(stream, thread)
               }
             }.run()
           }
         })
-        onStreamRemoved.accept(stream)
       }
     }
   )
+
+  private val observers: Observers[PathWatchers.Event] = new Observers()
+
+  override def addObserver(observer: Observer[Event]): Int =
+    observers.addObserver(observer)
+
+  override def removeObserver(handle: Int): Unit = {
+    observers.removeObserver(handle)
+  }
 
   /**
    * Registers a path
@@ -126,39 +153,33 @@ class ApplePathWatcher(private val latency: Double,
    */
   def register(path: Path, flags: Flags.Create, maxDepth: Int): Either[IOException, Boolean] = {
     val either: Either[Exception, Boolean] =
-      internalExecutor.block(new Callable[Boolean]() {
-        override def call(): Boolean =
+      internalExecutor.block(new TotalFunction[Executor.Thread, Boolean]() {
+        override def apply(thread: Executor.Thread): Boolean =
           registerImpl(path, flags, maxDepth)
       })
     if (either.isLeft &&
         !(leftProjection(either).getValue.isInstanceOf[IOException])) {
       throw new RuntimeException(leftProjection(either).getValue)
     }
-    either.castLeft(classOf[IOException])
+    either.castLeft(classOf[IOException], false)
   }
 
   private def registerImpl(path: Path, flags: Flags.Create, maxDepth: Int): Boolean = {
     var result: Boolean = true
-    var realPath: Path = path
-    try realPath = path.toRealPath()
-    catch {
-      case e: IOException => {}
-
-    }
-    val entry: Entry[Path, Stream] = find(realPath)
+    val entry: Entry[Path, Stream] = find(path)
     directoryRegistry.addDirectory(path, maxDepth)
     if (entry == null) {
       try {
-        val id: Int = fileEventsApi.createStream(realPath.toString, latency, flags.getValue)
-        if (id == -1) {
+        val id: FileEventMonitors.Handle =
+          fileEventMonitor.createStream(path, latency, timeUnit, flags)
+        if (id == Handles.INVALID) {
           result = false
-          System.err.println("Error watching " + realPath + ".")
         } else {
-          removeRedundantStreams(realPath)
-          streams.put(realPath, new Stream(id))
+          removeRedundantStreams(path)
+          streams.put(path, new Stream(id))
         }
       } catch {
-        case e: ClosedFileEventsApiException => {
+        case e: ClosedFileEventMonitorException => {
           close()
           result = false
         }
@@ -186,8 +207,13 @@ class ApplePathWatcher(private val latency: Double,
     if (!closed.get) {
       directoryRegistry.removeDirectory(path)
       val stream: Stream = streams.remove(path)
-      if (stream != null && stream.id != -1) {
-        fileEventsApi.stopStream(stream.id)
+      if (stream != null && stream.handle != Handles.INVALID) {
+        try fileEventMonitor.stopStream(stream.handle)
+        catch {
+          case e: ClosedFileEventMonitorException =>
+            e.printStackTrace(System.err)
+
+        }
       }
     }
   }
@@ -198,8 +224,8 @@ class ApplePathWatcher(private val latency: Double,
    * @param path The directory to remove from monitoring
    */
   override def unregister(path: Path): Unit = {
-    internalExecutor.block(new Runnable() {
-      override def run(): Unit = {
+    internalExecutor.block(new Consumer[Executor.Thread]() {
+      override def accept(thread: Executor.Thread): Unit = {
         unregisterImpl(path)
       }
     })
@@ -210,20 +236,27 @@ class ApplePathWatcher(private val latency: Double,
    */
   override def close(): Unit = {
     if (closed.compareAndSet(false, true)) {
-      internalExecutor.block(new Runnable() {
-        override def run(): Unit = {
+      internalExecutor.block(new Consumer[Executor.Thread]() {
+        override def accept(thread: Executor.Thread): Unit = {
+          val it: Iterator[Stream] = streams.values.iterator()
+          var stop: Boolean = false
+          while (it.hasNext && !stop) try fileEventMonitor.stopStream(it.next().handle)
+          catch {
+            case e: ClosedFileEventMonitorException => stop = true
+
+          }
           streams.clear()
-          fileEventsApi.close()
+          fileEventMonitor.close()
         }
       })
       internalExecutor.close()
     }
   }
 
-  def this(onFileEvent: Consumer[Event], executor: Executor, directoryRegistry: DirectoryRegistry) =
-    this(0.01,
+  def this(executor: Executor, directoryRegistry: DirectoryRegistry) =
+    this(10,
+         TimeUnit.MILLISECONDS,
          new Flags.Create().setNoDefer().setFileEvents(),
-         onFileEvent,
          DefaultOnStreamRemoved,
          executor,
          directoryRegistry)
@@ -239,5 +272,13 @@ class ApplePathWatcher(private val latency: Double,
     }
     result
   }
+
+}
+
+object ApplePathWatchers {
+
+  def get(executor: Executor,
+          directoryRegistry: DirectoryRegistry): PathWatcher[PathWatchers.Event] =
+    new ApplePathWatcher(executor, directoryRegistry)
 
 }

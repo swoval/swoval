@@ -2,10 +2,10 @@
 
 package com.swoval.files
 
+import com.swoval.functional.Filter
+import java.io.IOException
 import java.nio.file.Path
 import java.util.List
-
-import com.swoval.functional.Filter
 
 /**
  * A repository for a directory. The [[FileTreeView.list]] method will only

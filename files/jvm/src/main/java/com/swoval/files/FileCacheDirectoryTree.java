@@ -6,8 +6,8 @@ import static com.swoval.files.PathWatchers.Event.Kind.Error;
 import static com.swoval.files.PathWatchers.Event.Kind.Modify;
 import static com.swoval.functional.Filters.AllPass;
 
-import com.swoval.files.DataViews.Converter;
-import com.swoval.files.DataViews.Entry;
+import com.swoval.files.FileTreeDataViews.Converter;
+import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.files.Executor.Thread;
 import com.swoval.files.FileTreeRepositoryImpl.Callback;
 import com.swoval.files.FileTreeViews.CacheObserver;
@@ -172,10 +172,10 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
           final CachedDirectory<T> previous = directories.put(path, cachedDirectory);
           if (previous != null) previous.close();
           addCallback(callbacks, typedPath, null, cachedDirectory.getEntry(), Create, null);
-          final Iterator<DataViews.Entry<T>> it =
+          final Iterator<FileTreeDataViews.Entry<T>> it =
               cachedDirectory.listEntries(cachedDirectory.getMaxDepth(), AllPass).iterator();
           while (it.hasNext()) {
-            final DataViews.Entry<T> entry = it.next();
+            final FileTreeDataViews.Entry<T> entry = it.next();
             addCallback(callbacks, entry, null, entry, Create, null);
           }
         } catch (final IOException e) {
@@ -183,13 +183,13 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         }
       }
     } else {
-      final List<Iterator<DataViews.Entry<T>>> removeIterators = new ArrayList<>();
+      final List<Iterator<FileTreeDataViews.Entry<T>>> removeIterators = new ArrayList<>();
       final Iterator<CachedDirectory<T>> directoryIterator =
           new ArrayList<>(directories.values()).iterator();
       while (directoryIterator.hasNext()) {
         final CachedDirectory<T> dir = directoryIterator.next();
         if (path.startsWith(dir.getPath())) {
-          List<DataViews.Entry<T>> updates = dir.remove(path, thread);
+          List<FileTreeDataViews.Entry<T>> updates = dir.remove(path, thread);
           final Iterator<Path> it = directoryRegistry.registered().iterator();
           while (it.hasNext()) {
             if (it.next().equals(path)) {
@@ -203,11 +203,11 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
           removeIterators.add(updates.iterator());
         }
       }
-      final Iterator<Iterator<DataViews.Entry<T>>> it = removeIterators.iterator();
+      final Iterator<Iterator<FileTreeDataViews.Entry<T>>> it = removeIterators.iterator();
       while (it.hasNext()) {
-        final Iterator<DataViews.Entry<T>> removeIterator = it.next();
+        final Iterator<FileTreeDataViews.Entry<T>> removeIterator = it.next();
         while (removeIterator.hasNext()) {
-          final DataViews.Entry<T> entry = Entries.setExists(removeIterator.next(), false);
+          final FileTreeDataViews.Entry<T> entry = Entries.setExists(removeIterator.next(), false);
           addCallback(callbacks, entry, entry, null, Delete, null);
         }
       }
@@ -296,8 +296,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   private void addCallback(
       final List<Callback> callbacks,
       final TypedPath typedPath,
-      final DataViews.Entry<T> oldEntry,
-      final DataViews.Entry<T> newEntry,
+      final FileTreeDataViews.Entry<T> oldEntry,
+      final FileTreeDataViews.Entry<T> newEntry,
       final Kind kind,
       final IOException ioException) {
     if (typedPath.isSymbolicLink()) {
@@ -351,7 +351,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
       return new ArrayList<>();
     } else {
       if (dir.getPath().equals(path) && dir.getMaxDepth() == -1) {
-        List<DataViews.Entry<T>> result = new ArrayList<>();
+        List<FileTreeDataViews.Entry<T>> result = new ArrayList<>();
         result.add(dir.getEntry());
         return result;
       } else {
@@ -363,17 +363,17 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   private FileTreeViews.CacheObserver<T> callbackObserver(final List<Callback> callbacks) {
     return new FileTreeViews.CacheObserver<T>() {
       @Override
-      public void onCreate(final DataViews.Entry<T> newEntry) {
+      public void onCreate(final FileTreeDataViews.Entry<T> newEntry) {
         addCallback(callbacks, newEntry, null, newEntry, Create, null);
       }
 
       @Override
-      public void onDelete(final DataViews.Entry<T> oldEntry) {
+      public void onDelete(final FileTreeDataViews.Entry<T> oldEntry) {
         addCallback(callbacks, oldEntry, oldEntry, null, Delete, null);
       }
 
       @Override
-      public void onUpdate(final DataViews.Entry<T> oldEntry, final DataViews.Entry<T> newEntry) {
+      public void onUpdate(final FileTreeDataViews.Entry<T> oldEntry, final FileTreeDataViews.Entry<T> newEntry) {
         addCallback(callbacks, oldEntry, oldEntry, newEntry, Modify, null);
       }
 

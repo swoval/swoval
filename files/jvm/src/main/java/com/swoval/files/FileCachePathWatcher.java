@@ -35,7 +35,7 @@ class FileCachePathWatcher<T> {
       if (dir != null) {
         final Iterator<Entry<T>> it = dir.listEntries(dir.getMaxDepth(), AllPass).iterator();
         while (it.hasNext()) {
-          final FileTreeDataViews.Entry entry = it.next();
+          final FileTreeDataViews.Entry<T> entry = it.next();
           if (entry.isSymbolicLink()) {
             final int depth = path.relativize(entry.getPath()).getNameCount();
             symlinkWatcher.addSymlink(

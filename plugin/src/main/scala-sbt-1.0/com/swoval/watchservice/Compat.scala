@@ -4,7 +4,7 @@ package watchservice
 import java.io.{ File, IOException }
 import java.nio.file.{ Files, Path }
 
-import com.swoval.files.DataViews.Entry
+import com.swoval.files.FileTreeDataViews.Entry
 import com.swoval.files.TypedPath
 import com.swoval.functional
 import sbt.SourceWrapper._

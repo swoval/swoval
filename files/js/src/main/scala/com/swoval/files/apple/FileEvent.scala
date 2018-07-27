@@ -2,12 +2,10 @@
 
 package com.swoval.files.apple
 
-import com.swoval.files.apple.Flags.Event.{
-  ItemCreated,
-  ItemInodeMetaMod,
-  ItemModified,
-  ItemRemoved
-}
+import com.swoval.files.apple.Flags.Event.ItemCreated
+import com.swoval.files.apple.Flags.Event.ItemInodeMetaMod
+import com.swoval.files.apple.Flags.Event.ItemModified
+import com.swoval.files.apple.Flags.Event.ItemRemoved
 
 /**
  * Simple wrapper around the event provided by the apple file system event callback.
