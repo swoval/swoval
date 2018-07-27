@@ -84,7 +84,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
         final List<TypedPath> result = new ArrayList<>();
         findResult
             .get()
-            .listImpl(
+            .<TypedPath>listImpl(
                 maxDepth,
                 filter,
                 result,
@@ -116,7 +116,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
         final List<Entry<T>> result = new ArrayList<>();
         findResult
             .get()
-            .listImpl(
+            .<Entry<T>>listImpl(
                 maxDepth,
                 filter,
                 result,
@@ -312,7 +312,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
                       converter,
                       TypedPaths.getDelegate(resolved, typedPath));
               if (isDirectory) {
-                final CachedDirectoryImpl previous = currentDir.subdirectories.put(
+                final CachedDirectoryImpl<T> previous = currentDir.subdirectories.put(
                     p,
                     new CachedDirectoryImpl<>(
                         resolved, realPath, converter, -1, pathFilter, fileTreeView));
@@ -428,7 +428,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
         final Entry<T> entry = subdir.getEntry();
         final R resolved = function.apply(Entries.resolve(getPath(), entry));
         if (filter.accept(resolved)) result.add(resolved);
-        if (maxDepth > 0) subdir.listImpl(maxDepth - 1, filter, result, function);
+        if (maxDepth > 0) subdir.<R>listImpl(maxDepth - 1, filter, result, function);
       }
     }
   }

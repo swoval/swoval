@@ -1,15 +1,18 @@
 package com.swoval.files.apple
 
 import java.io.IOException
+import java.nio.file.Path
+import java.util.concurrent.TimeUnit
 
+import com.swoval.files.apple.FileEventMonitors.{ Handle, HandleImpl }
 import com.swoval.functional.Consumer
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation._
 
-@JSExportTopLevel("com.swoval.files.apple.FileEventsApi")
+@JSExportTopLevel("com.swoval.files.apple.FileEventsMonitor")
 @JSExportAll
-class FileEventsApi(handle: Double) extends AutoCloseable {
+class FileEventMonitor(handle: Double) extends AutoCloseable {
   private[this] var closed = false
   override def close(): Unit = {
     if (!closed) {
@@ -21,40 +24,51 @@ class FileEventsApi(handle: Double) extends AutoCloseable {
   /**
    * Creates an event stream
    * @param path The directory to monitor for events
-   * @param latency The minimum time in seconds between events for the path
+   * @param latency The minimum time between events for the path
+   * @param unit the time unit that `latency` is specified in
    * @param flags The flags for the stream [[Flags.Create]]
    * @return handle that can be used to stop the stream in the future
    */
-  def createStream(path: String, latency: Double, flags: Int): Int = {
-    val res =
-      if (!closed) FileEventsApiFacade.createStream(path, latency, flags, handle)
+  def createStream(path: Path, latency: Long, unit: TimeUnit, flags: Flags.Create): Handle = {
+    val res: Int =
+      if (!closed)
+        FileEventsApiFacade.createStream(path.toString,
+                                         unit.toNanos(latency) / 1.0e9,
+                                         flags.value,
+                                         handle)
       else
         throw new IllegalStateException(
-          s"Tried to call create stream for $path on closed FileEventsApi")
-    res
+          s"Tried to call create stream for $path on closed FileEventMonitor")
+    new HandleImpl(res)
   }
 
   /**
    * Stop monitoring the path that was previously created with [[createStream]]
    * @param streamHandle handle returned by [[createStream]]
    */
-  def stopStream(streamHandle: Int): Unit = {
-    if (!closed) FileEventsApiFacade.stopStream(handle, streamHandle)
-    else
+  def stopStream(streamHandle: Handle): Unit = {
+    if (!closed) {
+      streamHandle match {
+        case h: HandleImpl => FileEventsApiFacade.stopStream(handle, h.value)
+      }
+    } else
       throw new IllegalStateException(
-        s"Tried to call stop stream for handle $handle on closed FileEventsApi")
+        s"Tried to call stop stream for handle $handle on closed FileEventMonitor")
   }
 }
-
-@JSExportTopLevel("com.swoval.files.apple.FileEventsApi$")
-object FileEventsApi {
-  class ClosedFileEventsApiException(msg: String) extends IOException(msg)
-  @JSExport("apply")
-  def apply(consumer: Consumer[FileEvent], pathConsumer: Consumer[String]): FileEventsApi = {
+@JSExportTopLevel("com.swoval.files.apple.FileEventMonitors$")
+object FileEventMonitors {
+  trait Handle extends Any
+  object Handles {
+    val INVALID = new Handle {}
+  }
+  private[files] class HandleImpl(val value: Int) extends AnyVal with Handle
+  @JSExport("get")
+  def get(consumer: Consumer[FileEvent], pathConsumer: Consumer[String]): FileEventMonitor = {
     val jsConsumer: js.Function2[String, Int, Unit] = (s: String, i: Int) =>
       consumer.accept(new FileEvent(s, i))
     val jsPathConsumer: js.Function1[String, Unit] = (s: String) => pathConsumer.accept(s)
-    new FileEventsApi(FileEventsApiFacade.init(jsConsumer, jsPathConsumer))
+    new FileEventMonitor(FileEventsApiFacade.init(jsConsumer, jsPathConsumer))
   }
 }
 
@@ -73,8 +87,9 @@ private object FileEventsApiFacade {
     fe.init(consumer, pathConsumer).asInstanceOf[Double]
   }
 
-  def createStream(path: String, latency: Double, flags: Int, handle: Double): Int =
+  def createStream(path: String, latency: Double, flags: Int, handle: Double): Int = {
     fe.createStream(path, latency, flags, handle).asInstanceOf[Int]
+  }
 
   def stopStream(handle: Double, streamHandle: Int): Unit = {
     fe.stopStream(handle, streamHandle)
