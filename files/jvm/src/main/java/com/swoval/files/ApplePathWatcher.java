@@ -5,7 +5,6 @@ import static com.swoval.files.PathWatchers.Event.Kind.Delete;
 import static com.swoval.files.PathWatchers.Event.Kind.Modify;
 import static com.swoval.functional.Either.leftProjection;
 
-import com.swoval.files.Executor.Thread;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.apple.ClosedFileEventMonitorException;
@@ -23,13 +22,11 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Implements the PathWatcher for Mac OSX using the <a
@@ -45,15 +42,18 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   private final Executor internalExecutor;
   private final Flags.Create flags;
   private final FileEventMonitor fileEventMonitor;
+  private final Observers<PathWatchers.Event> observers = new Observers<>();
   private static final DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
 
   @Override
-  public int addObserver(Observer<Event> observer) {
-    return 0;
+  public int addObserver(final Observer<Event> observer) {
+    return observers.addObserver(observer);
   }
 
   @Override
-  public void removeObserver(int handle) {}
+  public void removeObserver(int handle) {
+    observers.removeObserver(handle);
+  }
 
   private static class Stream {
     public final Handle handle;
@@ -180,6 +180,15 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
           new Consumer<Executor.Thread>() {
             @Override
             public void accept(final Executor.Thread thread) {
+              final Iterator<Stream> it = streams.values().iterator();
+              boolean stop = false;
+              while (it.hasNext() && !stop) {
+                try {
+                  fileEventMonitor.stopStream(it.next().handle);
+                } catch (final ClosedFileEventMonitorException e) {
+                  stop = true;
+                }
+              }
               streams.clear();
               fileEventMonitor.close();
             }
@@ -197,7 +206,6 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   }
 
   ApplePathWatcher(
-      final BiConsumer<Event, Executor.Thread> onFileEvent,
       final Executor executor,
       final DirectoryRegistry directoryRegistry)
       throws InterruptedException {
@@ -205,7 +213,6 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
         10,
         TimeUnit.MILLISECONDS,
         new Flags.Create().setNoDefer().setFileEvents(),
-        onFileEvent,
         DefaultOnStreamRemoved,
         executor,
         directoryRegistry);
@@ -232,7 +239,6 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
       final long latency,
       final TimeUnit timeUnit,
       final Flags.Create flags,
-      final BiConsumer<Event, Executor.Thread> onFileEvent,
       final BiConsumer<String, Executor.Thread> onStreamRemoved,
       final Executor executor,
       final DirectoryRegistry managedDirectoryRegistry)
@@ -251,31 +257,38 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
             new Consumer<FileEvent>() {
               @Override
               public void accept(final FileEvent fileEvent) {
-                internalExecutor.run(
-                    new Consumer<Executor.Thread>() {
-                      @Override
-                      public void accept(final Executor.Thread thread) {
-                        final String fileName = fileEvent.fileName;
-                        final TypedPath path = TypedPaths.get(Paths.get(fileName));
-                        if (directoryRegistry.accept(path.getPath())) {
-                          Event event;
-                          if (fileEvent.itemIsFile()) {
-                            if (fileEvent.isNewFile() && path.exists()) {
-                              event = new Event(path, Create);
-                            } else if (fileEvent.isRemoved() || !path.exists()) {
-                              event = new Event(path, Delete);
-                            } else {
+                if (!closed.get()) {
+                  internalExecutor.run(
+                      new Consumer<Executor.Thread>() {
+                        @Override
+                        public void accept(final Executor.Thread thread) {
+                          final String fileName = fileEvent.fileName;
+                          final TypedPath path = TypedPaths.get(Paths.get(fileName));
+                          if (directoryRegistry.accept(path.getPath())) {
+                            Event event;
+                            if (fileEvent.itemIsFile()) {
+                              if (fileEvent.isNewFile() && path.exists()) {
+                                event = new Event(path, Create);
+                              } else if (fileEvent.isRemoved() || !path.exists()) {
+                                event = new Event(path, Delete);
+                              } else {
+                                event = new Event(path, Modify);
+                              }
+                            } else if (path.exists()) {
                               event = new Event(path, Modify);
+                            } else {
+                              event = new Event(path, Delete);
                             }
-                          } else if (path.exists()) {
-                            event = new Event(path, Modify);
-                          } else {
-                            event = new Event(path, Delete);
+                            try {
+                              observers.onNext(event);
+                            } catch (final RuntimeException e) {
+                              observers.onError(e);
+                              System.out.println("WTF " + event + " " + internalExecutor);
+                            }
                           }
-                          onFileEvent.accept(event, thread);
                         }
-                      }
-                    });
+                      });
+                }
               }
             },
             new Consumer<String>() {
@@ -313,11 +326,11 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
 
 class ApplePathWatchers {
   private ApplePathWatchers() {}
+
   public static PathWatcher<PathWatchers.Event> get(
-      final BiConsumer<PathWatchers.Event, Executor.Thread> biConsumer,
       final Executor executor,
       final DirectoryRegistry directoryRegistry)
       throws InterruptedException {
-    return new ApplePathWatcher(biConsumer, executor, directoryRegistry);
+    return new ApplePathWatcher(executor, directoryRegistry);
   }
 }

@@ -46,7 +46,7 @@ class MacOSXWatchService implements RegisterableWatchService {
   private final int watchLatency;
   private final TimeUnit watchTimeUnit;
   private final int queueSize;
-  private final AtomicBoolean open = new AtomicBoolean(false);
+  private final AtomicBoolean open = new AtomicBoolean(true);
   private final Map<Path, WatchKey> registered = new HashMap<>();
   private final LinkedBlockingQueue<MacOSXWatchKey> readyKeys = new LinkedBlockingQueue<>();
   private Executor internalExecutor;
@@ -104,14 +104,6 @@ class MacOSXWatchService implements RegisterableWatchService {
       };
   private FileEventMonitor fileEventMonitor;
 
-  private void maybeInit() throws InterruptedException {
-    if (!open.get()) {
-      open.set(true);
-      fileEventMonitor = FileEventMonitors.get(onFileEvent, dropEvent);
-      internalExecutor = Executor.make("com.swoval.files.MacOSXWatchService.executor.internal");
-    }
-  }
-
   /**
    * Creates a new MacOSXWatchService.
    *
@@ -126,7 +118,8 @@ class MacOSXWatchService implements RegisterableWatchService {
     this.watchLatency = watchLatency;
     this.queueSize = queueSize;
     this.watchTimeUnit = timeUnit;
-    maybeInit();
+    this.fileEventMonitor = FileEventMonitors.get(onFileEvent, dropEvent);
+    this.internalExecutor = Executor.make("com.swoval.files.MacOSXWatchService.executor.internal");
   }
 
   /**

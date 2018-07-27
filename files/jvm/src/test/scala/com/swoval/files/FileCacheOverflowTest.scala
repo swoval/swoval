@@ -1,13 +1,12 @@
 package com.swoval.files
 
+import java.io.IOException
 import java.nio.file.{ Files, Path, Paths }
 
 import com.swoval.files.DataViews.Entry
 import com.swoval.files.EntryOps._
-import com.swoval.files.FileCacheTest.{ FileCacheOps, _ }
-import com.swoval.files.PathWatchers.{ Factory, Overflow }
+import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.test._
-import com.swoval.functional.Consumer
 import com.swoval.runtime.Platform
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
@@ -21,18 +20,18 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
   def getBounded[T](
       converter: DataViews.Converter[T],
       cacheObserver: FileTreeViews.CacheObserver[T]
-  ): FileTreeRepository[T] = FileCacheTest.get[T](converter, cacheObserver, Left(nioFactory))
+  ): FileTreeRepository[T] =
+    FileCacheTest.get[T](
+      converter,
+      cacheObserver,
+      (e: Executor, r: DirectoryRegistry) => {
+        PathWatchers.get(new BoundedWatchService(boundedQueueSize, RegisterableWatchServices.get()),
+                         e,
+                         r)
+      }
+    )
   val name = getClass.getSimpleName
 
-  private def nioFactory[T]: FileCacheDirectoryTree[T] => Factory =
-    (tree: FileCacheDirectoryTree[T]) =>
-      (consumer: Consumer[PathWatchers.Event], executor: Executor, registry: DirectoryRegistry) =>
-        PathWatchers.get(
-          (e: PathWatchers.Event, _: Executor#Thread) => consumer.accept(e),
-          new BoundedWatchService(boundedQueueSize, RegisterableWatchServices.get),
-          executor,
-          registry
-    )
   val boundedQueueSize = System.getProperty("swoval.test.queue.size") match {
     case null => 4
     case c    => Try(c.toInt).getOrElse(4)
@@ -81,7 +80,8 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
               updateLatch.countDown()
             }
         },
-        (e: Entry[Path]) => if (deletedFiles.add(e.getPath)) deletionLatch.countDown()
+        (e: Entry[Path]) => if (deletedFiles.add(e.getPath)) deletionLatch.countDown(),
+        (_: IOException) => {}
       )
       usingAsync(getBounded[Path](identity, observer)) { c =>
         c.reg(dir)

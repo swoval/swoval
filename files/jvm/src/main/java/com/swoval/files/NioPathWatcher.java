@@ -78,7 +78,6 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         public void onError(final IOException exception) {}
       };
   private final NioPathWatcherService service;
-  private final Consumer<Event> callback;
 
   /**
    * Instantiate a NioPathWatcher.
@@ -88,11 +87,9 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   NioPathWatcher(
       final DirectoryRegistry directoryRegistry,
       final RegisterableWatchService watchService,
-      final Consumer<Event> callback,
       final Executor internalExecutor)
       throws InterruptedException {
     this.directoryRegistry = directoryRegistry;
-    this.callback = callback;
     this.internalExecutor = internalExecutor;
     this.service =
         new NioPathWatcherService(
@@ -349,7 +346,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
   private void maybeRunCallback(final Event event) {
     if (directoryRegistry.accept(event.getPath())) {
-      callback.accept(event);
+      observers.onNext(event);
     }
   }
 

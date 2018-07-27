@@ -14,16 +14,18 @@ import scala.concurrent.duration._
 object ApplePathWatcherTest extends TestSuite {
   val DEFAULT_LATENCY = 5.milliseconds
   val dirFlags = new Flags.Create().setNoDefer()
-  def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] =
-    new ApplePathWatcher(
+  def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] = {
+    val watcher = new ApplePathWatcher(
       10,
       TimeUnit.MILLISECONDS,
       dirFlags,
-      (e: PathWatchers.Event, _: Executor#Thread) => callback(e),
       (_: String, _: Executor#Thread) => {},
       Executor.make("ApplePathWatcher-internal-executor"),
       new DirectoryRegistryImpl
     )
+    watcher.addObserver(callback)
+    watcher
+  }
   val tests = testOn(MacOS) {
     val events = new ArrayBlockingQueue[Event](10)
     val dirFlags = new Flags.Create().setNoDefer()

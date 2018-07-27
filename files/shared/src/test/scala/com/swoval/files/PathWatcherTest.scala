@@ -82,7 +82,6 @@ trait PathWatcherTest extends TestSuite {
               DEFAULT_LATENCY.toNanos,
               TimeUnit.NANOSECONDS,
               fileFlags,
-              (_: PathWatchers.Event, _: Executor#Thread) => {},
               callback,
               null,
               new DirectoryRegistryImpl
@@ -354,7 +353,9 @@ object PathWatcherTest extends PathWatcherTest {
     if (Platform.isMac) Set(dir) else Set(dir, subdir)
 
   def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] = {
-    PathWatchers.get((e: PathWatchers.Event) => callback(e))
+    val res = PathWatchers.get()
+    res.addObserver(callback)
+    res
   }
 }
 
@@ -370,9 +371,10 @@ object NioPathWatcherTest extends PathWatcherTest {
       }
 
   def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] = {
-    new NioPathWatcher(new DirectoryRegistryImpl(),
-                       RegisterableWatchServices.get(),
-                       (e: PathWatchers.Event) => callback(e),
-                       Executor.make("DirectoryWatcherTestExecutor-internal"))
+    val res = new NioPathWatcher(new DirectoryRegistryImpl(),
+                                 RegisterableWatchServices.get(),
+                                 Executor.make("DirectoryWatcherTestExecutor-internal"))
+    res.addObserver(callback)
+    res
   }
 }

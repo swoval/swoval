@@ -139,6 +139,7 @@ abstract class Executor implements AutoCloseable {
   private static class ExecutorImpl extends Executor {
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final RuntimeException ex;
+    private RuntimeException closedException;
 
     final ThreadFactory factory;
     final ExecutorService service;
@@ -147,7 +148,7 @@ abstract class Executor implements AutoCloseable {
     ExecutorImpl(final ThreadFactory factory, final ExecutorService service) {
       this.factory = factory;
       this.service = service;
-      ex = new RuntimeException();
+      ex = new RuntimeException("Made " + this);
       service.submit(
           new Runnable() {
             @Override
@@ -179,15 +180,26 @@ abstract class Executor implements AutoCloseable {
           });
     }
 
+    private void printPart(final Exception e, final int lines) {
+      final StackTraceElement[] elements = e.getStackTrace();
+      System.out.println(e);
+      for (int i = 0; i < ((lines < elements.length) ? lines : elements.length); ++i) {
+        System.out.println(elements[i]);
+      }
+      System.out.println("...\n\n");
+    }
+
     @SuppressWarnings("EmptyCatchBlock")
     @Override
     public void close() {
+      //System.out.println("FUCKING CUNT Close " + this);
+      synchronized (consumers) {
+        consumers.clear();
+        consumers.offer(STOP);
+      }
       if (closed.compareAndSet(false, true)) {
         super.close();
-        synchronized (consumers) {
-          consumers.clear();
-          consumers.offer(STOP);
-        }
+        closedException = new RuntimeException();
         service.shutdownNow();
         try {
           if (!service.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -202,10 +214,11 @@ abstract class Executor implements AutoCloseable {
     @Override
     void run(final Consumer<Thread> consumer, final int priority) {
       if (closed.get()) {
-        System.out.println("\n\n\n\n");
-        ex.printStackTrace(System.err);
-        new Exception("\n\n\n\n\ncalled from").printStackTrace(System.err);
-        throw ex;
+        //printPart(ex, 10);
+        //closedException.printStackTrace(System.err);
+        //new Exception("\n\n\n\n\ncalled from").printStackTrace(System.err);
+        //System.exit(1);
+        //throw ex;
       } else {
         if (factory.created(java.lang.Thread.currentThread())) {
           try {

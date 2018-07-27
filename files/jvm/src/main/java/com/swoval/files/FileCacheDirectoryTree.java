@@ -1,6 +1,5 @@
 package com.swoval.files;
 
-import static com.swoval.files.FileTreeRepositories.DEFAULT_SYMLINK_FACTORY;
 import static com.swoval.files.PathWatchers.Event.Kind.Create;
 import static com.swoval.files.PathWatchers.Event.Kind.Delete;
 import static com.swoval.files.PathWatchers.Event.Kind.Error;
@@ -9,13 +8,11 @@ import static com.swoval.functional.Filters.AllPass;
 
 import com.swoval.files.DataViews.Converter;
 import com.swoval.files.DataViews.Entry;
-import com.swoval.files.DataViews.OnError;
 import com.swoval.files.Executor.Thread;
 import com.swoval.files.FileTreeRepositoryImpl.Callback;
 import com.swoval.files.FileTreeViews.CacheObserver;
 import com.swoval.files.FileTreeViews.ObservableCache;
 import com.swoval.files.FileTreeViews.Observer;
-import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Event.Kind;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Filter;
@@ -46,25 +43,10 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   FileCacheDirectoryTree(
       final Converter<T> converter,
       final Executor callbackExecutor,
-      final Executor symlinkExecutor) {
+      final SymlinkWatcher symlinkWatcher) {
     this.converter = converter;
     this.callbackExecutor = callbackExecutor;
-    this.symlinkWatcher =
-        symlinkExecutor != null
-            ? new SymlinkWatcher(
-                new BiConsumer<Event, Thread>() {
-                  @Override
-                  public void accept(final Event event, final Thread thread) {
-                    handleEvent(event, thread);
-                  }
-                },
-                DEFAULT_SYMLINK_FACTORY,
-                new OnError() {
-                  @Override
-                  public void apply(IOException exception) {}
-                },
-                symlinkExecutor.copy())
-            : null;
+    this.symlinkWatcher = symlinkWatcher;
   }
 
   private final DirectoryRegistry READ_ONLY_DIRECTORY_REGISTRY =
@@ -162,7 +144,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
           CachedDirectory<T> cachedDirectory;
           try {
             cachedDirectory =
-                FileTreeViews.cached(path, converter, directoryRegistry.maxDepthFor(path), followLinks);
+                FileTreeViews.cached(
+                    path, converter, directoryRegistry.maxDepthFor(path), followLinks);
           } catch (final NotDirectoryException nde) {
             cachedDirectory = FileTreeViews.cached(path, converter, -1, followLinks);
           }
@@ -217,11 +200,12 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   }
 
   public void close(final Executor.Thread thread) {
+    if (symlinkWatcher != null) symlinkWatcher.close();
+    System.out.println("WTF close " + this + " " + symlinkWatcher);
     final Iterator<CachedDirectory<T>> directoryIterator = directories.values().iterator();
     while (directoryIterator.hasNext()) {
       directoryIterator.next().close();
     }
-    if (symlinkWatcher != null) symlinkWatcher.close();
     observers.close();
     callbackExecutor.close();
     directories.clear();

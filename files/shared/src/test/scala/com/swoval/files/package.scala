@@ -4,7 +4,7 @@ import java.io.{ File, FileFilter, IOException }
 import java.nio.file.Path
 
 import com.swoval.files.DataViews._
-import com.swoval.files.FileTreeViews.CacheObserver
+import com.swoval.files.FileTreeViews.{ CacheObserver, Observer }
 import com.swoval.files.test.platform.Bool
 import com.swoval.functional.{ Consumer, Filter }
 import com.swoval.test._
@@ -74,6 +74,10 @@ package object files extends PlatformFiles {
     override def apply(exception: IOException): Unit = f(exception)
   }
 
+  implicit class CallbackOps(f: PathWatchers.Event => _) extends Observer[PathWatchers.Event] {
+    override def onError(t: Throwable): Unit = {}
+    override def onNext(t: PathWatchers.Event): Unit = f(t)
+  }
   implicit class CacheObserverFunctionOps[T](val f: Entry[T] => Unit)
       extends FileTreeViews.CacheObserver[T] {
     override def onCreate(newCachedPath: Entry[T]): Unit = f(newCachedPath)

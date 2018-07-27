@@ -15,21 +15,14 @@ public class PathWatchers {
   /**
    * Create a PathWatcher for the runtime platform.
    *
-   * @param callback {@link com.swoval.functional.Consumer} to run on file events
    * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
-  public static PathWatcher<PathWatchers.Event> get(final Consumer<Event> callback)
+  public static PathWatcher<PathWatchers.Event> get()
       throws IOException, InterruptedException {
     return get(
-        new BiConsumer<Event, Thread>() {
-          @Override
-          public void accept(final Event event, final Thread thread) {
-            callback.accept(event);
-          }
-        },
         Executor.make("com.swoval.files.PathWatcher-internal-executor"),
         new DirectoryRegistryImpl());
   }
@@ -37,7 +30,6 @@ public class PathWatchers {
   /**
    * Create a PathWatcher for the runtime platform.
    *
-   * @param callback {@link Consumer} to run on file events
    * @param executor provides a single threaded context to manage state
    * @param registry The registry of directories to monitor
    * @return PathWatcher for the runtime platform
@@ -46,13 +38,12 @@ public class PathWatchers {
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
   static PathWatcher<Event> get(
-      final BiConsumer<Event, Executor.Thread> callback,
       final Executor executor,
       final DirectoryRegistry registry)
       throws IOException, InterruptedException {
     return Platform.isMac()
-        ? ApplePathWatchers.get(executor.delegate(callback), executor, registry)
-        : PlatformWatcher.make(callback, executor, registry);
+        ? ApplePathWatchers.get(executor, registry)
+        : PlatformWatcher.make(executor, registry);
   }
 
   /**
@@ -65,12 +56,11 @@ public class PathWatchers {
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
   static PathWatcher<Event> get(
-      final BiConsumer<Event, Executor.Thread> callback,
       final RegisterableWatchService service,
       final Executor executor,
       final DirectoryRegistry registry)
       throws InterruptedException {
-    return PlatformWatcher.make(callback, service, executor, registry);
+    return PlatformWatcher.make(service, executor, registry);
   }
 
   static final class Overflow {

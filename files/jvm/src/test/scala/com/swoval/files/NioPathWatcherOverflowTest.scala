@@ -25,7 +25,7 @@ object NioPathWatcherOverflowTest extends TestSuite {
       val addedSubdirs = mutable.Set.empty[Path]
       val addedFiles = mutable.Set.empty[Path]
       val files = subdirs.map(_.resolve("file"))
-      val callback: Consumer[Event] = (e: Event) => {
+      val callback = (e: Event) => {
         e.getPath.getFileName.toString match {
           case name if name.startsWith("subdir") && addedSubdirs.add(e.getPath) =>
             subdirLatch.countDown()
@@ -36,11 +36,11 @@ object NioPathWatcherOverflowTest extends TestSuite {
       }
       usingAsync(
         PlatformWatcher.make(
-          (e: PathWatchers.Event, _: Executor#Thread) => callback.accept(e),
           new BoundedWatchService(4, RegisterableWatchServices.get()),
           Executor.make("NioPathWatcherExecutor"),
           new DirectoryRegistryImpl()
         )) { c =>
+        c.addObserver(callback)
         c.register(dir, Integer.MAX_VALUE)
         executor.run((_: Executor#Thread) => subdirs.foreach(Files.createDirectory(_)))
         subdirLatch

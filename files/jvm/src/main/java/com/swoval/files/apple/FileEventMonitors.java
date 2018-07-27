@@ -157,17 +157,21 @@ class FileEventMonitorImpl implements FileEventMonitor {
 
     @Override
     public void accept(final T t) {
-      callbackExecutor.submit(
-          new Runnable() {
-            @Override
-            public void run() {
-              try {
-                consumer.accept(t);
-              } catch (final Exception e) {
-                e.printStackTrace(System.err);
+      if (!closed.get()) {
+        callbackExecutor.submit(
+            new Runnable() {
+              @Override
+              public void run() {
+                try {
+                  if (!closed.get()) {
+                    consumer.accept(t);
+                  }
+                } catch (final Exception e) {
+                  e.printStackTrace(System.err);
+                }
               }
-            }
-          });
+            });
+      }
     }
   }
 }

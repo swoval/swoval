@@ -1,6 +1,8 @@
 package com.swoval.files;
 
 import com.swoval.files.DataViews.Converter;
+import com.swoval.files.DataViews.OnError;
+import com.swoval.files.Executor.Thread;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Factory;
@@ -19,55 +21,40 @@ public class FileTreeRepositories {
    * @param <T> the value type of the cache entries
    * @return a file cache.
    */
-  public static <T> FileTreeRepository<T> get(final Converter<T> converter) {
+  public static <T> FileTreeRepository<T> get(final Converter<T> converter)
+      throws InterruptedException, IOException {
     final Executor executor = Executor.make("FileTreeRepository-internal-executor");
+    final Executor copy = executor.copy();
+    final SymlinkWatcher symlinkWatcher =
+        new SymlinkWatcher(
+            PathWatchers.get(copy, new DirectoryRegistryImpl()),
+            new OnError() {
+              @Override
+              public void apply(IOException exception) {}
+            },
+            executor);
     final FileCacheDirectoryTree<T> tree =
         new FileCacheDirectoryTree<>(
-            converter, Executor.make("FileTreeRepository-callback-executor"), executor.copy());
-    final PathWatcher<Event> pathWatcher =
-        DEFAULT_PATH_WATCHER_FACTORY.create(
-            new EventHandler(tree), executor.copy(), tree.readOnlyDirectoryRegistry());
+            converter, Executor.make("FileTreeRepository-callback-executor"), symlinkWatcher);
+    final PathWatcher<PathWatchers.Event> pathWatcher =
+        PathWatchers.get(copy, tree.readOnlyDirectoryRegistry());
+    pathWatcher.addObserver(
+        new Observer<Event>() {
+          @Override
+          public void onError(final Throwable t) {}
+
+          @Override
+          public void onNext(final Event event) {
+            copy.run(
+                new Consumer<Executor.Thread>() {
+                  @Override
+                  public void accept(final Executor.Thread thread) {
+                    tree.handleEvent(event, thread);
+                  }
+                });
+          }
+        });
     final FileCachePathWatcher<T> watcher = new FileCachePathWatcher<>(tree, pathWatcher);
     return new FileTreeRepositoryImpl<>(tree, watcher, executor);
   }
-  static class EventHandler implements BiConsumer<Event, Executor.Thread> {
-    private final FileCacheDirectoryTree<?> tree;
-
-    EventHandler(final FileCacheDirectoryTree<?> tree) {
-      this.tree = tree;
-    }
-
-    @Override
-    public void accept(final Event event, final Executor.Thread thread) {
-      final Event newEvent = new Event(TypedPaths.get(event.getPath()), event.getKind());
-      tree.handleEvent(newEvent, thread);
-    }
-  }
-
-  static TotalFunction<Consumer<Event>, PathWatcher<PathWatchers.Event>> DEFAULT_SYMLINK_FACTORY =
-      new TotalFunction<Consumer<Event>, PathWatcher<PathWatchers.Event>>() {
-        @Override
-        public PathWatcher<PathWatchers.Event> apply(final Consumer<Event> consumer) {
-          try {
-            return PathWatchers.get(consumer);
-          } catch (final Exception e) {
-            throw new RuntimeException(e);
-          }
-        }
-      };
-
-  static Factory DEFAULT_PATH_WATCHER_FACTORY =
-      new Factory() {
-        @Override
-        public PathWatcher<Event> create(
-            final BiConsumer<Event, Executor.Thread> consumer,
-            final Executor executor,
-            final DirectoryRegistry registry) {
-          try {
-            return PathWatchers.get(consumer, executor, registry);
-          } catch (final Exception e) {
-            throw new RuntimeException(e);
-          }
-        }
-      };
 }
