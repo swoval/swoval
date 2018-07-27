@@ -91,7 +91,9 @@ object FileCacheTest {
     pathWatcher.addObserver((e: PathWatchers.Event) =>
       copy.run((t: Executor#Thread) => tree.handleEvent(e, t)))
     val watcher = new FileCachePathWatcher(tree, pathWatcher)
-    new FileTreeRepositoryImpl(tree, watcher, executor)
+    val res = new FileTreeRepositoryImpl(tree, watcher, executor)
+    res.addCacheObserver(cacheObserver)
+    res
   }
 }
 
