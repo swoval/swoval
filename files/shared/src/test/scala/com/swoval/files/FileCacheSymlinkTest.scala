@@ -317,7 +317,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
                 .flatMap { _ =>
                   Files.write(file, "foo".getBytes)
                   updateLatch
-                    .waitFor(DEFAULT_TIMEOUT / 10) {
+                    .waitFor(DEFAULT_TIMEOUT) {
                       paths.toSet === Set(link)
                     }
                     .flatMap { _ =>
