@@ -25,11 +25,14 @@ object Sources {
             .flatMap(_.project.fold({
               case (p: ProjectRef) => impl(p)
               case _               => Nil
-            }, Nil, Nil))) ++ Compat.filter {
-          val key = Def.ScopedKey(task.scope in ref, Keys.watchSources.key)
-          val nil: Seq[Compat.WatchSource] = Nil
-          EvaluateTask(structure, key, state, ref).fold(nil)(_._2.toEither.right.getOrElse(nil))
-        }
+            }, Nil, Nil))) ++ Compat.filter(
+          {
+            val key = Def.ScopedKey(task.scope in ref, Keys.watchSources.key)
+            val nil: Seq[Compat.WatchSource] = Nil
+            EvaluateTask(structure, key, state, ref).fold(nil)(_._2.toEither.right.getOrElse(nil))
+          },
+          task
+        )
       } else {
         Nil
       }

@@ -105,7 +105,7 @@ object Compat {
     override def accept(p: File): Boolean = false
     override def toString = "NothingFilter"
   }
-  def filter(files: Seq[WatchSource]): Seq[SourcePath] = files map sourcePath
+  def filter(files: Seq[WatchSource], id: Filter.ID): Seq[SourcePath] = files map sourcePath
   def makeScopedSource(p: Path,
                        pathFilter: functional.Filter[Entry[Path]],
                        id: Def.ScopedKey[_]): WatchSource = {
