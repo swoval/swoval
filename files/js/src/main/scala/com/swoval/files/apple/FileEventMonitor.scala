@@ -52,8 +52,7 @@ class FileEventMonitor(handle: Double) extends AutoCloseable {
         case h: HandleImpl => FileEventsApiFacade.stopStream(handle, h.value)
       }
     } else
-      throw new IllegalStateException(
-        s"Tried to call stop stream for handle $handle on closed FileEventMonitor")
+      throw new ClosedFileEventMonitorException
   }
 }
 @JSExportTopLevel("com.swoval.files.apple.FileEventMonitors$")

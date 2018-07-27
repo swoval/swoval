@@ -4,7 +4,7 @@ import java.nio.file.{ Files, Path }
 
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.test._
-import com.swoval.functional.Consumer
+import com.swoval.runtime.Platform
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
 import utest._
@@ -13,7 +13,7 @@ import scala.collection.mutable
 import scala.util.Failure
 
 object NioPathWatcherOverflowTest extends TestSuite {
-  val tests = Tests {
+  val tests = if (Platform.isJVM || !Platform.isMac) Tests {
     val subdirsToAdd = 200
     val executor = Executor.make("NioPathWatcherOverflowTest-executor")
     'overflows - withTempDirectory { dir =>
@@ -64,5 +64,10 @@ object NioPathWatcherOverflowTest extends TestSuite {
           }
       }
     }
-  }
+  } else
+    Tests {
+      'ignore - {
+        println("Not running NioPathWatcher on scala.js on osx")
+      }
+    }
 }
