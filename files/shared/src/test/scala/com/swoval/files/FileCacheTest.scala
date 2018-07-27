@@ -3,13 +3,12 @@ package com.swoval.files
 import java.io.IOException
 import java.nio.file.Path
 
-import FileCacheTest._
-import FileTreeDataViews.{ Converter, Entry }
-import com.swoval.files.FileTreeViews.{ CacheObserver, Observer }
-import com.swoval.files.PathWatchers.{ Event, Factory }
+import com.swoval.files.FileTreeDataViews.{ Converter, Entry }
+import com.swoval.files.FileTreeViews.CacheObserver
+import com.swoval.files.PathWatchers.Event
 import com.swoval.files.test._
 import com.swoval.files.test.platform.Bool
-import com.swoval.functional.{ Consumer, Filter, Filters, Either => SEither }
+import com.swoval.functional.{ Filter, Filters, Either => SEither }
 import utest._
 
 import scala.collection.JavaConverters._
@@ -44,15 +43,6 @@ object FileCacheTest {
     override def onDelete(oldEntry: Entry[Path]): Unit = {}
     override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
     override def onError(exception: IOException): Unit = latch.countDown()
-  }
-
-  implicit class FactoryOps(
-      val f: (Consumer[PathWatchers.Event], Executor, DirectoryRegistry) => PathWatcher[Event])
-      extends PathWatchers.Factory {
-    override def create(consumer: BiConsumer[PathWatchers.Event, Executor.Thread],
-                        executor: Executor,
-                        registry: DirectoryRegistry): PathWatcher[Event] =
-      f((e: PathWatchers.Event) => consumer.accept(e, null), executor, registry)
   }
 
   implicit class FileCacheOps[T <: AnyRef](val fileCache: FileTreeRepository[T]) extends AnyVal {

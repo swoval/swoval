@@ -14,7 +14,8 @@ trait CachedDirectory[T <: AnyRef]
 
   /**
    * List the children of the path specified by [[CachedDirectory.getPath]], excluding the
-   * [[FileTreeDataViews.Entry entry]] for the path itself. When the maxDepth parameter is <code>-1
+   * [[FileTreeDataViews.Entry entry]] for the path itself. When the maxDepth parameter is
+   * <code>-1
    * </code>, return just the entry for the path itself.
    *
    * @param maxDepth the maximum depth of children (see [[DirectoryView.getMaxDepth]])

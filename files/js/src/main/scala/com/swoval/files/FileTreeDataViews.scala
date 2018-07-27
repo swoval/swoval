@@ -16,8 +16,8 @@ object FileTreeDataViews {
   trait Entry[T] extends TypedPath {
 
     /**
-     * Return the value associated with this entry.
-     *jjj
+     * Return the value associated with this entry. jjj
+     *
      * @return the value associated with this entry.
      */
     def getValue(): Either[IOException, T]

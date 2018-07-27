@@ -2,7 +2,6 @@
 
 package com.swoval.files
 
-import com.swoval.files.Executor.Thread
 import com.swoval.functional.Consumer
 import com.swoval.runtime.Platform
 import java.io.IOException
@@ -137,14 +136,6 @@ object PathWatchers {
 
     override def compareTo(that: TypedPath): Int =
       this.getPath.compareTo(that.getPath)
-
-  }
-
-  trait Factory {
-
-    def create(consumer: BiConsumer[Event, Executor.Thread],
-               executor: Executor,
-               registry: DirectoryRegistry): PathWatcher[Event]
 
   }
 

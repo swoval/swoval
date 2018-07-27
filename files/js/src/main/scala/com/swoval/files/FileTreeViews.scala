@@ -108,9 +108,10 @@ object FileTreeViews {
 
   /**
    * List the contents of a path.
+   *
    * @param path the path to list. If the path is a directory, return the children of this directory
-   * up to the maxDepth. If the path is a regular file and the maxDepth is <code>-1</code>, the
-   * path itself is returned. Otherwise an empty list is returned.
+   *     up to the maxDepth. If the path is a regular file and the maxDepth is <code>-1</code>, the
+   *     path itself is returned. Otherwise an empty list is returned.
    * @param maxDepth the maximum depth of children to include in the results
    * @param filter only include paths accepted by this filter
    * @return a [[java.util.List]] of [[TypedPath]]
@@ -120,18 +121,21 @@ object FileTreeViews {
 
   /**
    * Generic Observer for an [[Observable]].
+   *
    * @tparam T the type under observation
    */
   trait Observer[T] {
 
     /**
      * Fired if the underlying [[Observable]] encounters an error
+     *
      * @param t the error
      */
     def onError(t: Throwable): Unit
 
     /**
      * Callback that is invoked whenever a change is detected by the [[Observable]].
+     *
      * @param t the changed instance
      */
     def onNext(t: T): Unit

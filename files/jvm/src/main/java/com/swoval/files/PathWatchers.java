@@ -1,6 +1,5 @@
 package com.swoval.files;
 
-import com.swoval.files.Executor.Thread;
 import com.swoval.functional.Consumer;
 import com.swoval.runtime.Platform;
 import java.io.IOException;
@@ -192,12 +191,5 @@ public class PathWatchers {
         return Integer.compare(this.priority, that.priority);
       }
     }
-  }
-
-  interface Factory {
-    PathWatcher<Event> create(
-        final BiConsumer<Event, Executor.Thread> consumer,
-        final Executor executor,
-        final DirectoryRegistry registry);
   }
 }

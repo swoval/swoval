@@ -15,9 +15,9 @@ import java.nio.file.Path
  * contents may be retrieved using the [[FileTreeRepository.list]] method. The cache stores the
  * path information in [[Entry]] instances.
  *
- * <p>A default implementation is provided by [[FileTreeRepositories.get]]. The
- * user may cache arbitrary information in the cache by customizing the [[Converter]] that is
- * passed into the factory [[FileTreeRepositories.get]].
+ * <p>A default implementation is provided by [[FileTreeRepositories.get]]. The user may cache
+ * arbitrary information in the cache by customizing the [[Converter]] that is passed into the
+ * factory [[FileTreeRepositories.get]].
  *
  * <p>The cache allows the user to register a regular file, directory or symbolic link. After
  * registration, the cache should monitor the path (and in the case of symbolic links, the target of
