@@ -153,27 +153,26 @@ abstract class Executor implements AutoCloseable {
 
   static class ExecutorImpl extends Executor {
     private final AtomicBoolean closed = new AtomicBoolean(false);
-    private final RuntimeException ex;
     private final Thread thread = new Thread();
+    private final java.lang.Thread executorThread;
 
     Thread getThread() {
       return thread;
     }
 
-    private RuntimeException closedException;
-
     final ThreadFactory factory;
     final ExecutorService service;
     final LinkedBlockingQueue<PriorityConsumer> consumers = new LinkedBlockingQueue<>();
 
-    ExecutorImpl(final ThreadFactory factory, final ExecutorService service) {
+    ExecutorImpl(final ThreadFactory factory, final ExecutorService service) throws InterruptedException {
       this.factory = factory;
       this.service = service;
-      ex = new RuntimeException("Made " + this);
+      final LinkedBlockingQueue<java.lang.Thread> queue = new LinkedBlockingQueue<>(1);
       service.submit(
           new Runnable() {
             @Override
             public void run() {
+              queue.offer(java.lang.Thread.currentThread());
               boolean stop = false;
               thread.setID();
               while (!stop && !closed.get() && !java.lang.Thread.currentThread().isInterrupted()) {
@@ -200,6 +199,7 @@ abstract class Executor implements AutoCloseable {
               }
             }
           });
+      executorThread = queue.take();
     }
 
     @SuppressWarnings("EmptyCatchBlock")
@@ -218,7 +218,6 @@ abstract class Executor implements AutoCloseable {
           }
         } catch (InterruptedException e) {
         }
-        factory.close();
       }
     }
 
@@ -227,7 +226,7 @@ abstract class Executor implements AutoCloseable {
       if (closed.get()) {
         new Exception("Tried to submit to closed executor").printStackTrace(System.err);
       } else {
-        if (factory.created(java.lang.Thread.currentThread())) {
+        if (java.lang.Thread.currentThread() == executorThread) {
           try {
             consumer.accept(getThread());
           } catch (final Exception e) {
@@ -261,17 +260,11 @@ abstract class Executor implements AutoCloseable {
    * @param name The name of the executor thread
    * @return Executor
    */
-  static Executor make(final String name) {
+  static Executor make(final String name) throws InterruptedException {
     final ThreadFactory factory = new ThreadFactory(name);
     final ExecutorService service =
         new ThreadPoolExecutor(
             1, 1, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(), factory) {
-          @Override
-          protected void finalize() {
-            shutdown();
-            super.finalize();
-          }
-
           @Override
           protected void afterExecute(Runnable r, Throwable t) {
             super.afterExecute(r, t);
