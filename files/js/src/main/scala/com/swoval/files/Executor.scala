@@ -1,37 +1,29 @@
 package com.swoval.files
 
-import java.util.concurrent.Callable
-import com.swoval.functional.Either
+import com.swoval.functional.{ Consumer, Either }
 
 /**
  * Provides an execution context to run tasks. Exists to allow source interoperability with the jvm
  * interoperability.
  */
-abstract class Executor extends AutoCloseable {
+private[files] abstract class Executor extends AutoCloseable {
   private[this] var _closed = false
+  private[this] val threadHandle: Executor.ThreadHandle = new Executor.ThreadHandle
+  def getThreadHandle(): Executor.ThreadHandle = threadHandle
 
   def copy(): Executor = this
 
-  /**
-   * Runs the task on a thread
-   *
-   * @param runnable task to run
-   */
-  def run(runnable: Runnable): Unit = {
+  def delegate[T](consumer: Consumer[T]): Consumer[T] = consumer
+
+  def run(consumer: Consumer[Executor.ThreadHandle], priority: Int): Unit = {
     try {
-      runnable.run()
+      consumer.accept(getThreadHandle())
     } catch {
       case e: Exception =>
-        System.err.println(s"Error running: $runnable\n$e\n${e.getStackTrace mkString "\n"}")
+        System.err.println(s"Error running: $consumer\n$e\n${e.getStackTrace mkString "\n"}")
     }
   }
-  def block(runnable: Runnable): Unit = runnable.run()
-  def block[T](callable: Callable[T]): Either[Exception, T] =
-    try {
-      Either.right(callable.call())
-    } catch {
-      case e: Exception => Either.left(e)
-    }
+  def run(consumer: Consumer[Executor.ThreadHandle]): Unit = run(consumer, -1)
 
   /**
    * Is this executor available to invoke callbacks?
@@ -44,6 +36,9 @@ abstract class Executor extends AutoCloseable {
 }
 
 object Executor {
+  final class ThreadHandle {
+    def release(): Unit = {}
+  }
 
   /**
    * Make a new instance of an Executor
@@ -52,6 +47,7 @@ object Executor {
    * @return
    */
   def make(name: String): Executor = new Executor {
-    override def run(runnable: Runnable): Unit = runnable.run()
+    override def run(consumer: Consumer[Executor.ThreadHandle]): Unit =
+      consumer.accept(getThreadHandle)
   }
 }

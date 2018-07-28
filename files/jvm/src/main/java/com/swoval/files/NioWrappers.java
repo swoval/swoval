@@ -13,8 +13,17 @@ import java.nio.file.attribute.BasicFileAttributes;
  * workaround.
  */
 class NioWrappers {
+  private NioWrappers() {}
+
   static BasicFileAttributes readAttributes(
-      final Path path, final java.nio.file.LinkOption... linkOptions) throws IOException {
-    return Files.<BasicFileAttributes>readAttributes(path, BasicFileAttributes.class, linkOptions);
+      final Path path, final com.swoval.files.LinkOption... linkOptions) throws IOException {
+    final java.nio.file.LinkOption[] options = new java.nio.file.LinkOption[linkOptions.length];
+    for (int i = 0; i < options.length; ++i) {
+      options[i] =
+          linkOptions[i] == com.swoval.files.LinkOption.NOFOLLOW_LINKS
+              ? LinkOption.NOFOLLOW_LINKS
+              : null;
+    }
+    return Files.<BasicFileAttributes>readAttributes(path, BasicFileAttributes.class, options);
   }
 }

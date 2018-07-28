@@ -1,5 +1,6 @@
 package com.swoval.files;
 
+import com.swoval.files.FileTreeViews.Observable;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.functional.Either;
 import java.io.IOException;
@@ -15,7 +16,7 @@ import java.nio.file.Path;
  * file creation and modify events, so the {@link Event.Kind} is best effort, but should not be
  * relied upon to accurately reflect the state of the file.
  */
-public interface PathWatcher extends AutoCloseable {
+public interface PathWatcher<T> extends Observable<T>, AutoCloseable {
 
   /**
    * Register a path to monitor for file events. The watcher will only watch child subdirectories up
@@ -34,32 +35,9 @@ public interface PathWatcher extends AutoCloseable {
   Either<IOException, Boolean> register(Path path, int maxDepth);
 
   /**
-   * Register a path to monitor for file events. The monitoring may be recursive.
+   * Stop watching a path.
    *
-   * @param path the directory to watch for file events
-   * @param recursive toggles whether or not to monitor subdirectories
-   * @return an {@link com.swoval.functional.Either} containing the result of the registration or an
-   *     IOException if registration fails. This method should be idempotent and return true the
-   *     first time the directory is registered or when the depth is changed. Otherwise it should
-   *     return false.
-   */
-  Either<IOException, Boolean> register(Path path, boolean recursive);
-
-  /**
-   * Register a path to monitor for file events recursively.
-   *
-   * @param path the directory to watch for file events
-   * @return an {@link com.swoval.functional.Either} containing the result of the registration or an
-   *     IOException if registration fails. This method should be idempotent and return true the
-   *     first time the directory is registered or when the depth is changed. Otherwise it should
-   *     return false.
-   */
-  Either<IOException, Boolean> register(Path path);
-
-  /**
-   * Stop watching a directory.
-   *
-   * @param path the directory to remove from monitoring
+   * @param path the path to remove from monitoring
    */
   void unregister(Path path);
 

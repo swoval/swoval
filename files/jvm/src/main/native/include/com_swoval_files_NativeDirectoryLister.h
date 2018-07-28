@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 #undef com_swoval_files_NativeDirectoryLister_UNKNOWN
-#define com_swoval_files_NativeDirectoryLister_UNKNOWN 0L
+#define com_swoval_files_NativeDirectoryLister_UNKNOWN 8L
 #undef com_swoval_files_NativeDirectoryLister_DIRECTORY
 #define com_swoval_files_NativeDirectoryLister_DIRECTORY 1L
 #undef com_swoval_files_NativeDirectoryLister_FILE

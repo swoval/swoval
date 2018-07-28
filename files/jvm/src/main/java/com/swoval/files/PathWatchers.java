@@ -11,46 +11,35 @@ import java.nio.file.Path;
  * com.swoval.files.PathWatcher} will emit events.
  */
 public class PathWatchers {
-
-  static final Factory DEFAULT_FACTORY =
-      new Factory() {
-        @Override
-        public PathWatcher create(
-            Consumer<Event> callback,
-            final Executor executor,
-            final DirectoryRegistry directoryRegistry)
-            throws InterruptedException, IOException {
-          return get(callback, executor, directoryRegistry);
-        }
-      };
-
   /**
    * Create a PathWatcher for the runtime platform.
    *
-   * @param callback {@link com.swoval.functional.Consumer} to run on file events
    * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
-  public static PathWatcher get(final Consumer<Event> callback)
-      throws IOException, InterruptedException {
-    return get(callback, Executor.make("com.swoval.files.PathWatcher-internal-executor"), null);
+  public static PathWatcher<PathWatchers.Event> get() throws IOException, InterruptedException {
+    return get(
+        Executor.make("com.swoval.files.PathWatcher-internal-executor"),
+        new DirectoryRegistryImpl());
   }
 
   /**
    * Create a PathWatcher for the runtime platform.
    *
-   * @param callback {@link Consumer} to run on file events
    * @param executor provides a single threaded context to manage state
+   * @param registry The registry of directories to monitor
    * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
-  static PathWatcher get(final Consumer<Event> callback, final Executor executor)
+  static PathWatcher<Event> get(final Executor executor, final DirectoryRegistry registry)
       throws IOException, InterruptedException {
-    return get(callback, executor, null);
+    return Platform.isMac()
+        ? ApplePathWatchers.get(executor, registry)
+        : PlatformWatcher.make(executor, registry);
   }
 
   /**
@@ -60,61 +49,31 @@ public class PathWatchers {
    * @param executor provides a single threaded context to manage state
    * @param registry The registry of directories to monitor
    * @return PathWatcher for the runtime platform
-   * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
-   *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
-  static PathWatcher get(
-      final Consumer<Event> callback, final Executor executor, final DirectoryRegistry registry)
-      throws IOException, InterruptedException {
-    return Platform.isMac()
-        ? new ApplePathWatcher(callback, executor, registry)
-        : PlatformWatcher.make(callback, executor, registry);
+  static PathWatcher<Event> get(
+      final RegisterableWatchService service,
+      final Executor executor,
+      final DirectoryRegistry registry)
+      throws InterruptedException {
+    return PlatformWatcher.make(service, executor, registry);
   }
 
-  /**
-   * Instantiates new {@link PathWatcher} instances with a {@link Consumer}. This is primarily so
-   * that the {@link PathWatcher} in {@link FileCache} may be changed in testing.
-   */
-  abstract static class Factory {
+  static final class Overflow {
+    private final Path path;
 
-    /**
-     * Creates a new PathWatcher.
-     *
-     * @param callback the callback to invoke on directory updates
-     * @param executor the executor on which internal updates are invoked
-     * @return a PathWatcher instance.
-     * @throws InterruptedException if the PathWatcher is interrupted during initialization -- this
-     *     can occur on mac.
-     * @throws IOException if an IOException occurs during initialization -- this can occur on linux
-     *     and windows.
-     */
-    PathWatcher create(final Consumer<Event> callback, final Executor executor)
-        throws InterruptedException, IOException {
-      return create(callback, executor, null);
+    Overflow(final Path path) {
+      this.path = path;
     }
 
-    /**
-     * Creates a new PathWatcher.
-     *
-     * @param callback the callback to invoke on directory updates
-     * @param executor the executor on which internal updates are invoked
-     * @param directoryRegistry the registry of directories to monitor
-     * @return A PathWatcher instance
-     * @throws InterruptedException if the PathWatcher is interrupted during initialization -- this
-     *     can occur on mac
-     * @throws IOException if an IOException occurs during initialization -- this can occur on linux
-     *     and windows
-     */
-    abstract PathWatcher create(
-        final Consumer<Event> callback,
-        final Executor executor,
-        final DirectoryRegistry directoryRegistry)
-        throws InterruptedException, IOException;
+    public Path getPath() {
+      return path;
+    }
   }
-
-  /** Container for {@link PathWatcher} events */
-  public static final class Event {
+  /** Container for {@link PathWatcher} events. */
+  public static final class Event implements TypedPath {
+    private final TypedPath typedPath;
+    private final Event.Kind kind;
 
     /**
      * Returns the path that triggered the event.
@@ -122,7 +81,32 @@ public class PathWatchers {
      * @return the path that triggered the event.
      */
     public Path getPath() {
-      return path;
+      return typedPath.getPath();
+    }
+
+    @Override
+    public boolean exists() {
+      return typedPath.exists();
+    }
+
+    @Override
+    public boolean isDirectory() {
+      return typedPath.isDirectory();
+    }
+
+    @Override
+    public boolean isFile() {
+      return typedPath.isFile();
+    }
+
+    @Override
+    public boolean isSymbolicLink() {
+      return typedPath.isSymbolicLink();
+    }
+
+    @Override
+    public Path toRealPath() {
+      return typedPath.toRealPath();
     }
 
     /**
@@ -134,11 +118,8 @@ public class PathWatchers {
       return kind;
     }
 
-    private final Path path;
-    private final Event.Kind kind;
-
-    public Event(final Path path, final Event.Kind kind) {
-      this.path = path;
+    public Event(final TypedPath path, final Event.Kind kind) {
+      this.typedPath = path;
       this.kind = kind;
     }
 
@@ -146,7 +127,7 @@ public class PathWatchers {
     public boolean equals(Object other) {
       if (other instanceof Event) {
         Event that = (Event) other;
-        return this.path.equals(that.path) && this.kind.equals(that.kind);
+        return this.typedPath.equals(that.typedPath) && this.kind.equals(that.kind);
       } else {
         return false;
       }
@@ -154,12 +135,17 @@ public class PathWatchers {
 
     @Override
     public int hashCode() {
-      return path.hashCode() ^ kind.hashCode();
+      return typedPath.hashCode() ^ kind.hashCode();
     }
 
     @Override
     public String toString() {
-      return "Event(" + path + ", " + kind + ")";
+      return "Event(" + typedPath.getPath() + ", " + kind + ")";
+    }
+
+    @Override
+    public int compareTo(TypedPath that) {
+      return this.getPath().compareTo(that.getPath());
     }
 
     /**
@@ -176,8 +162,6 @@ public class PathWatchers {
       public static final Kind Error = new Kind("Error", 4);
       /** An existing file was modified. */
       public static final Kind Modify = new Kind("Modify", 3);
-      /** An overflow occurred in the underlying path monitor. */
-      public static final Kind Overflow = new Kind("Overflow", 0);
 
       private final String name;
       private final int priority;

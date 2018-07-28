@@ -2,6 +2,7 @@
 
 package com.swoval.files
 
+import com.swoval.files.FileTreeViews.Observable
 import com.swoval.files.PathWatchers.Event
 import com.swoval.functional.Either
 import java.io.IOException
@@ -16,7 +17,7 @@ import java.nio.file.Path
  * file creation and modify events, so the [[Event.Kind]] is best effort, but should not be
  * relied upon to accurately reflect the state of the file.
  */
-trait PathWatcher extends AutoCloseable {
+trait PathWatcher[T] extends Observable[T] with AutoCloseable {
 
   /**
    * Register a path to monitor for file events. The watcher will only watch child subdirectories up
@@ -35,32 +36,9 @@ trait PathWatcher extends AutoCloseable {
   def register(path: Path, maxDepth: Int): Either[IOException, Boolean]
 
   /**
-   * Register a path to monitor for file events. The monitoring may be recursive.
+   * Stop watching a path.
    *
-   * @param path the directory to watch for file events
-   * @param recursive toggles whether or not to monitor subdirectories
-   * @return an [[com.swoval.functional.Either]] containing the result of the registration or an
-   *     IOException if registration fails. This method should be idempotent and return true the
-   *     first time the directory is registered or when the depth is changed. Otherwise it should
-   *     return false.
-   */
-  def register(path: Path, recursive: Boolean): Either[IOException, Boolean]
-
-  /**
-   * Register a path to monitor for file events recursively.
-   *
-   * @param path the directory to watch for file events
-   * @return an [[com.swoval.functional.Either]] containing the result of the registration or an
-   *     IOException if registration fails. This method should be idempotent and return true the
-   *     first time the directory is registered or when the depth is changed. Otherwise it should
-   *     return false.
-   */
-  def register(path: Path): Either[IOException, Boolean]
-
-  /**
-   * Stop watching a directory.
-   *
-   * @param path the directory to remove from monitoring
+   * @param path the path to remove from monitoring
    */
   def unregister(path: Path): Unit
 

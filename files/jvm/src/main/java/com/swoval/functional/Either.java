@@ -89,9 +89,11 @@ public abstract class Either<L, R> {
   public abstract boolean equals(final Object other);
 
   /**
-   * Casts an either to a more specific left type.
+   * Casts an either to a more specific left type. If the cast cannot be made, return a default
+   * value instead.
    *
    * @param clazz the left type to which we downcast
+   * @param defaultValue the value to return if the cast fails
    * @param <L> the original left type
    * @param <R> the right type
    * @param <T> the downcasted left type
@@ -99,11 +101,14 @@ public abstract class Either<L, R> {
    * @throws ClassCastException if the wrapped value is not a subtype of T.
    */
   @SuppressWarnings("unchecked")
-  public <L, R, T extends L> Either<T, R> castLeft(final Class<T> clazz) {
-    if (isRight()) return (Either<T, R>) this;
-    else if (clazz.isAssignableFrom(leftProjection(this).getValue().getClass()))
+  public <L, R, T extends L> Either<T, R> castLeft(final Class<T> clazz, final R defaultValue) {
+    if (isRight()) {
       return (Either<T, R>) this;
-    else throw new ClassCastException(leftProjection(this) + " is not an instance of " + clazz);
+    } else if (clazz.isAssignableFrom(leftProjection(this).getValue().getClass())) {
+      return (Either<T, R>) this;
+    } else {
+      return Either.right(defaultValue);
+    }
   }
 
   /**

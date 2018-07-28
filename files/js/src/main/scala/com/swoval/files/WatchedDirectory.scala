@@ -5,13 +5,6 @@ package com.swoval.files
 trait WatchedDirectory extends AutoCloseable {
 
   /**
-   * Is the underlying directory watcher valid?
-   *
-   * @return true if the underlying directory watcher is valid
-   */
-  def isValid(): Boolean
-
-  /**
  Cancel the watch on this directory. Handle all non-fatal exceptions.
    */
   override def close(): Unit
@@ -21,8 +14,6 @@ trait WatchedDirectory extends AutoCloseable {
 object WatchedDirectories {
 
   var INVALID: WatchedDirectory = new WatchedDirectory() {
-    override def isValid(): Boolean = false
-
     override def close(): Unit = {}
 
     override def toString(): String = "Invalid"

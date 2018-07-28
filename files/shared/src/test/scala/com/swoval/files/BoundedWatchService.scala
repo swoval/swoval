@@ -1,10 +1,13 @@
 package com.swoval.files
-import java.nio.file.StandardWatchEventKinds.OVERFLOW
+
 import java.nio.file._
+import java.nio.file.StandardWatchEventKinds.OVERFLOW
 import java.util
 import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConverters._
+import scala.concurrent.duration._
+import TestHelpers._
 
 class BoundedWatchService(val queueSize: Int, underlying: RegisterableWatchService)
     extends RegisterableWatchService {
@@ -34,6 +37,7 @@ private class BoundedWatchKey(val queueSize: Int, underlying: WatchKey) extends 
   override def isValid: Boolean = underlying.isValid
 
   override def pollEvents(): util.List[WatchEvent[_]] = {
+    0.milliseconds.sleep // This makes it more likely that an overflow is triggered
     val raw = underlying.pollEvents
     if (raw.size() > queueSize) {
       val result = raw.asScala
