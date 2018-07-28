@@ -13,6 +13,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Provides an execution context to run tasks. Exists to allow source interoperability with scala.js
@@ -20,22 +21,22 @@ import java.util.concurrent.atomic.AtomicBoolean;
 abstract class Executor implements AutoCloseable {
   Executor() {}
 
-  public static class ThreadHandle {
+  public static final class ThreadHandle {
     private ThreadHandle() {}
 
-    private long id = -1;
-    private String name = "";
+    private final ReentrantLock reentrantLock = new ReentrantLock();
 
-    void setID() {
-      if (id == -1) {
-        name = java.lang.Thread.currentThread().getName();
-        id = java.lang.Thread.currentThread().getId();
+    boolean lock() {
+      try {
+        reentrantLock.lockInterruptibly();
+        return true;
+      } catch (final InterruptedException e) {
+        return false;
       }
     }
 
-    @Override
-    public String toString() {
-      return "Executor.ThreadHandle(" + name + ", " + id + ")";
+    void unlock() {
+      reentrantLock.unlock();
     }
   }
 
@@ -78,60 +79,6 @@ abstract class Executor implements AutoCloseable {
     };
   }
 
-  /**
-   * Blocks the current threadHandle until the executor runs the Callable and returns the value.
-   *
-   * @param callable The callable whose value we're waiting on.
-   * @param <T> The result type of the Callable
-   * @return The result evaluated by the Callable
-   */
-  <T> Either<Exception, T> block(final Function<ThreadHandle, T> callable) {
-    final ArrayBlockingQueue<Either<Exception, T>> queue = new ArrayBlockingQueue<>(1);
-    try {
-      run(
-          new Consumer<ThreadHandle>() {
-            @Override
-            public void accept(final ThreadHandle threadHandle) {
-              try {
-                queue.add(Either.<Exception, T, T>right(callable.apply(threadHandle)));
-              } catch (Exception e) {
-                queue.add(Either.<Exception, T, Exception>left(e));
-              }
-            }
-          },
-          0);
-      try {
-        return queue.take();
-      } catch (InterruptedException e) {
-        return Either.left(e);
-      }
-    } catch (final Exception e) {
-      return Either.left(e);
-    }
-  }
-
-  /**
-   * Blocks the current threadHandle until the executor runs the provided Runnable.
-   *
-   * @param consumer The consumer to invoke.
-   */
-  @SuppressWarnings("EmptyCatchBlock")
-  void block(final Consumer<ThreadHandle> consumer) {
-    final CountDownLatch latch = new CountDownLatch(1);
-    try {
-      run(
-          new Consumer<ThreadHandle>() {
-            @Override
-            public void accept(final ThreadHandle threadHandle) {
-              consumer.accept(threadHandle);
-              latch.countDown();
-            }
-          });
-      latch.await();
-    } catch (InterruptedException e) {
-    }
-  }
-
   /** Close the executor. All exceptions must be handled by the implementation. */
   @Override
   public void close() {}
@@ -139,7 +86,6 @@ abstract class Executor implements AutoCloseable {
   static class ExecutorImpl extends Executor {
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final ThreadHandle threadHandle = new ThreadHandle();
-    private final java.lang.Thread executorThread;
 
     ThreadHandle getThreadHandle() {
       return threadHandle;
@@ -149,18 +95,14 @@ abstract class Executor implements AutoCloseable {
     final ExecutorService service;
     final LinkedBlockingQueue<PriorityConsumer> consumers = new LinkedBlockingQueue<>();
 
-    ExecutorImpl(final ThreadFactory factory, final ExecutorService service)
-        throws InterruptedException {
+    ExecutorImpl(final ThreadFactory factory, final ExecutorService service) {
       this.factory = factory;
       this.service = service;
-      final LinkedBlockingQueue<java.lang.Thread> queue = new LinkedBlockingQueue<>(1);
       service.submit(
           new Runnable() {
             @Override
             public void run() {
-              queue.offer(java.lang.Thread.currentThread());
               boolean stop = false;
-              threadHandle.setID();
               while (!stop && !closed.get() && !java.lang.Thread.currentThread().isInterrupted()) {
                 try {
                   final PriorityQueue<PriorityConsumer> queue = new PriorityQueue<>();
@@ -172,10 +114,14 @@ abstract class Executor implements AutoCloseable {
                     assert (consumer != null);
                     stop = consumer.priority < 0;
                     if (!stop) {
-                      try {
-                        consumer.accept(getThreadHandle());
-                      } catch (final Exception e) {
-                        e.printStackTrace();
+                      if (threadHandle.lock()) {
+                        try {
+                          consumer.accept(getThreadHandle());
+                        } catch (final Exception e) {
+                          e.printStackTrace();
+                        } finally {
+                          threadHandle.unlock();
+                        }
                       }
                     }
                   }
@@ -185,7 +131,6 @@ abstract class Executor implements AutoCloseable {
               }
             }
           });
-      executorThread = queue.take();
     }
 
     @SuppressWarnings("EmptyCatchBlock")
@@ -212,18 +157,10 @@ abstract class Executor implements AutoCloseable {
       if (closed.get()) {
         new Exception("Tried to submit to closed executor").printStackTrace(System.err);
       } else {
-        if (java.lang.Thread.currentThread() == executorThread) {
-          try {
-            consumer.accept(getThreadHandle());
-          } catch (final Exception e) {
-            e.printStackTrace();
-          }
-        } else {
-          synchronized (consumers) {
-            if (!consumers.offer(new PriorityConsumer(consumer, priority))) {
-              throw new IllegalStateException(
-                  "Couldn't run task due to full queue (" + consumers.size() + ")");
-            }
+        synchronized (consumers) {
+          if (!consumers.offer(new PriorityConsumer(consumer, priority))) {
+            throw new IllegalStateException(
+                "Couldn't run task due to full queue (" + consumers.size() + ")");
           }
         }
       }
@@ -246,7 +183,7 @@ abstract class Executor implements AutoCloseable {
    * @param name The name of the executor threadHandle
    * @return Executor
    */
-  static Executor make(final String name) throws InterruptedException {
+  static Executor make(final String name) {
     final ThreadFactory factory = new ThreadFactory(name);
     final ExecutorService service =
         new ThreadPoolExecutor(

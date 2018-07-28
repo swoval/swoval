@@ -92,21 +92,23 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
    */
   public Either<IOException, Boolean> register(
       final Path path, final Flags.Create flags, final int maxDepth) {
-    final Either<Exception, Boolean> either =
-        internalExecutor.block(
-            new TotalFunction<ThreadHandle, Boolean>() {
-              @Override
-              public Boolean apply(final ThreadHandle thread) {
-                return registerImpl(path, flags, maxDepth);
-              }
-            });
-    if (either.isLeft() && !(leftProjection(either).getValue() instanceof IOException)) {
-      throw new RuntimeException(leftProjection(either).getValue());
+    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+    if (threadHandle.lock()) {
+      try {
+        return Either.right(registerImpl(path, flags, maxDepth, threadHandle));
+      } finally {
+        threadHandle.unlock();
+      }
+    } else {
+      throw new RuntimeException("Couldn't lock executor thread");
     }
-    return either.castLeft(IOException.class, false);
   }
 
-  private boolean registerImpl(final Path path, final Flags.Create flags, final int maxDepth) {
+  private boolean registerImpl(
+      final Path path,
+      final Flags.Create flags,
+      final int maxDepth,
+      final ThreadHandle threadHandle) {
     boolean result = true;
     final Entry<Path, Stream> entry = find(path);
     directoryRegistry.addDirectory(path, maxDepth);
@@ -116,7 +118,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
         if (id == Handles.INVALID) {
           result = false;
         } else {
-          removeRedundantStreams(path);
+          removeRedundantStreams(path, threadHandle);
           streams.put(path, new Stream(id));
         }
       } catch (final ClosedFileEventMonitorException e) {
@@ -127,7 +129,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
     return result;
   }
 
-  private void removeRedundantStreams(final Path path) {
+  private void removeRedundantStreams(final Path path, final ThreadHandle threadHandle) {
     final List<Path> toRemove = new ArrayList<>();
     final Iterator<Entry<Path, Stream>> it = streams.entrySet().iterator();
     while (it.hasNext()) {
@@ -139,11 +141,11 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
     }
     final Iterator<Path> pathIterator = toRemove.iterator();
     while (pathIterator.hasNext()) {
-      unregisterImpl(pathIterator.next());
+      unregisterImpl(pathIterator.next(), threadHandle);
     }
   }
 
-  private void unregisterImpl(final Path path) {
+  private void unregisterImpl(final Path path, final ThreadHandle threadHandle) {
     if (!closed.get()) {
       directoryRegistry.removeDirectory(path);
       final Stream stream = streams.remove(path);
@@ -164,36 +166,38 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
    */
   @Override
   public void unregister(final Path path) {
-    internalExecutor.block(
-        new Consumer<ThreadHandle>() {
-          @Override
-          public void accept(final ThreadHandle threadHandle) {
-            unregisterImpl(path);
-          }
-        });
+    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+    if (threadHandle.lock()) {
+      try {
+        unregisterImpl(path, threadHandle);
+      } finally {
+        threadHandle.unlock();
+      }
+    }
   }
 
   /** Closes the FileEventsApi and shuts down the {@code internalExecutor}. */
   @Override
   public void close() {
     if (closed.compareAndSet(false, true)) {
-      internalExecutor.block(
-          new Consumer<ThreadHandle>() {
-            @Override
-            public void accept(final ThreadHandle threadHandle) {
-              final Iterator<Stream> it = streams.values().iterator();
-              boolean stop = false;
-              while (it.hasNext() && !stop) {
-                try {
-                  fileEventMonitor.stopStream(it.next().handle);
-                } catch (final ClosedFileEventMonitorException e) {
-                  stop = true;
-                }
-              }
-              streams.clear();
-              fileEventMonitor.close();
+      final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+      if (threadHandle.lock()) {
+        try {
+          final Iterator<Stream> it = streams.values().iterator();
+          boolean stop = false;
+          while (it.hasNext() && !stop) {
+            try {
+              fileEventMonitor.stopStream(it.next().handle);
+            } catch (final ClosedFileEventMonitorException e) {
+              stop = true;
             }
-          });
+          }
+          streams.clear();
+          fileEventMonitor.close();
+        } finally {
+          threadHandle.unlock();
+        }
+      }
       internalExecutor.close();
     }
   }
@@ -291,19 +295,17 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
             new Consumer<String>() {
               @Override
               public void accept(final String stream) {
-                internalExecutor.block(
-                    new Consumer<ThreadHandle>() {
-                      @Override
-                      public void accept(final ThreadHandle threadHandle) {
-                        new Runnable() {
-                          @Override
-                          public void run() {
-                            streams.remove(Paths.get(stream));
-                            onStreamRemoved.accept(stream, threadHandle);
-                          }
-                        }.run();
-                      }
-                    });
+                if (!closed.get()) {
+                  final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+                  if (threadHandle.lock()) {
+                    try {
+                      streams.remove(Paths.get(stream));
+                      onStreamRemoved.accept(stream, threadHandle);
+                    } finally {
+                      threadHandle.unlock();
+                    }
+                  }
+                }
               }
             });
   }

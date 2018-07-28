@@ -21,28 +21,21 @@ class FileCachePathWatcher<T> {
     this.tree = tree;
   }
 
-  boolean register(final Path path, final int maxDepth, final ThreadHandle threadHandle) {
-    Either<IOException, CachedDirectory<T>> treeResult;
-    try {
-      treeResult = Either.right(tree.register(path, maxDepth, pathWatcher, threadHandle));
-    } catch (final IOException e) {
-      treeResult = Either.left(e);
-    }
-    if (treeResult.isRight() && symlinkWatcher != null) {
-      final CachedDirectory<T> dir = treeResult.get();
-      if (dir != null) {
-        final Iterator<Entry<T>> it = dir.listEntries(dir.getMaxDepth(), AllPass).iterator();
-        while (it.hasNext()) {
-          final FileTreeDataViews.Entry<T> entry = it.next();
-          if (entry.isSymbolicLink()) {
-            final int depth = path.relativize(entry.getPath()).getNameCount();
-            symlinkWatcher.addSymlink(
-                entry.getPath(), maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - depth);
-          }
+  boolean register(final Path path, final int maxDepth, final ThreadHandle threadHandle)
+      throws IOException {
+    final CachedDirectory<T> dir = tree.register(path, maxDepth, pathWatcher, threadHandle);
+    if (dir != null && symlinkWatcher != null) {
+      final Iterator<Entry<T>> it = dir.listEntries(dir.getMaxDepth(), AllPass).iterator();
+      while (it.hasNext()) {
+        final FileTreeDataViews.Entry<T> entry = it.next();
+        if (entry.isSymbolicLink()) {
+          final int depth = path.relativize(entry.getPath()).getNameCount();
+          symlinkWatcher.addSymlink(
+              entry.getPath(), maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - depth);
         }
       }
     }
-    return treeResult.isRight();
+    return dir != null;
   }
 
   void unregister(final Path path, final ThreadHandle threadHandle) {

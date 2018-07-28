@@ -17,7 +17,6 @@ import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
 import com.swoval.runtime.Platform;
 import java.io.IOException;
-import java.nio.file.FileSystemLoopException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -150,42 +149,45 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
   @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
-    return internalExecutor
-        .block(
-            new Function<ThreadHandle, Boolean>() {
-              @Override
-              public Boolean apply(ThreadHandle threadHandle) throws IOException {
-                final int existingMaxDepth = directoryRegistry.maxDepthFor(path);
-                boolean result = existingMaxDepth < maxDepth;
-                final TypedPath typedPath = TypedPaths.get(path);
-                final Path realPath = typedPath.toRealPath();
-                if (result) {
-                  directoryRegistry.addDirectory(typedPath.getPath(), maxDepth);
-                } else if (!typedPath.getPath().equals(realPath)) {
-                  /*
-                   * Note that watchedDir is not null, which means that this typedPath has been
-                   * registered with a different alias.
-                   */
-                  throw new FileSystemLoopException(typedPath.toString());
-                }
-                final CachedDirectory<WatchedDirectory> dir = getOrAdd(realPath);
-                if (dir != null) {
-                  final List<FileTreeDataViews.Entry<WatchedDirectory>> directories =
-                      dir.listEntries(typedPath.getPath(), -1, AllPass);
-                  if (result || directories.isEmpty() || directories.get(0).getValue().isRight()) {
-                    Path toUpdate = typedPath.getPath();
-                    if (toUpdate != null) update(dir, typedPath, threadHandle);
-                  }
-                }
-                return result;
-              }
-            })
-        .castLeft(IOException.class, false);
+    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+    Either<IOException, Boolean> either = Either.right(false);
+    if (threadHandle.lock()) {
+      try {
+        final int existingMaxDepth = directoryRegistry.maxDepthFor(path);
+        boolean result = existingMaxDepth < maxDepth;
+        either = Either.right(result);
+        final TypedPath typedPath = TypedPaths.get(path);
+        final Path realPath = typedPath.toRealPath();
+        if (result) {
+          directoryRegistry.addDirectory(typedPath.getPath(), maxDepth);
+        }
+        //    else if (!typedPath.getPath().equals(realPath)) {
+        //      /*
+        //       * Note that watchedDir is not null, which means that this typedPath has been
+        //       * registered with a different alias.
+        //       */
+        //      throw new FileSystemLoopException(typedPath.toString());
+        //    }
+        final CachedDirectory<WatchedDirectory> dir = getOrAdd(realPath);
+        if (dir != null) {
+          final List<FileTreeDataViews.Entry<WatchedDirectory>> directories =
+              dir.listEntries(typedPath.getPath(), -1, AllPass);
+          if (result || directories.isEmpty() || directories.get(0).getValue().isRight()) {
+            Path toUpdate = typedPath.getPath();
+            if (toUpdate != null) update(dir, typedPath, threadHandle);
+          }
+        }
+      } finally {
+        threadHandle.unlock();
+      }
+    }
+    return either;
   }
 
   private CachedDirectory<WatchedDirectory> findOrAddRoot(final Path rawPath) {
     final Path parent = Platform.isMac() ? rawPath : rawPath.getRoot();
     final Path path = parent == null ? rawPath.getRoot() : parent;
+    assert(path != null);
     final Iterator<Entry<Path, CachedDirectory<WatchedDirectory>>> it =
         rootDirectories.entrySet().iterator();
     CachedDirectory<WatchedDirectory> result = null;
@@ -234,82 +236,83 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   }
 
   private CachedDirectory<WatchedDirectory> getOrAdd(final Path path) {
-    return Either.getOrElse(
-        internalExecutor.block(
-            new Function<ThreadHandle, CachedDirectory<WatchedDirectory>>() {
-              @Override
-              public CachedDirectory<WatchedDirectory> apply(final ThreadHandle threadHandle) {
-                if (!closed.get()) {
-                  return findOrAddRoot(path);
-                } else {
-                  return null;
-                }
-              }
-            }),
-        null);
+    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+    CachedDirectory<WatchedDirectory> result = null;
+    if (threadHandle.lock()) {
+      try {
+        if (!closed.get()) {
+          result = findOrAddRoot(path);
+        }
+      } finally {
+        threadHandle.unlock();
+      }
+    }
+    return result;
   }
 
   @Override
   public void unregister(final Path path) {
-    internalExecutor.block(
-        new Consumer<ThreadHandle>() {
-          @Override
-          public void accept(ThreadHandle threadHandle) {
-            directoryRegistry.removeDirectory(path);
-            final CachedDirectory<WatchedDirectory> dir = rootDirectories.get(path.getRoot());
-            if (dir != null) {
-              final int depth = dir.getPath().relativize(path).getNameCount();
-              List<FileTreeDataViews.Entry<WatchedDirectory>> toRemove =
-                  dir.listEntries(
-                      depth,
-                      new Filter<FileTreeDataViews.Entry<WatchedDirectory>>() {
-                        @Override
-                        public boolean accept(
-                            final FileTreeDataViews.Entry<WatchedDirectory> entry) {
-                          return !directoryRegistry.acceptPrefix(entry.getPath());
-                        }
-                      });
-              final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> it = toRemove.iterator();
-              while (it.hasNext()) {
-                final FileTreeDataViews.Entry<WatchedDirectory> entry = it.next();
-                if (!directoryRegistry.acceptPrefix(entry.getPath())) {
-                  final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> toCancel =
-                      dir.remove(entry.getPath(), threadHandle).iterator();
-                  while (toCancel.hasNext()) {
-                    final Either<IOException, WatchedDirectory> either = toCancel.next().getValue();
-                    if (either.isRight()) either.get().close();
-                  }
-                }
+    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+    if (threadHandle.lock()) {
+      try {
+        directoryRegistry.removeDirectory(path);
+        final CachedDirectory<WatchedDirectory> dir = rootDirectories.get(path.getRoot());
+        if (dir != null) {
+          final int depth = dir.getPath().relativize(path).getNameCount();
+          List<FileTreeDataViews.Entry<WatchedDirectory>> toRemove =
+              dir.listEntries(
+                  depth,
+                  new Filter<FileTreeDataViews.Entry<WatchedDirectory>>() {
+                    @Override
+                    public boolean accept(final FileTreeDataViews.Entry<WatchedDirectory> entry) {
+                      return !directoryRegistry.acceptPrefix(entry.getPath());
+                    }
+                  });
+          final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> it = toRemove.iterator();
+          while (it.hasNext()) {
+            final FileTreeDataViews.Entry<WatchedDirectory> entry = it.next();
+            if (!directoryRegistry.acceptPrefix(entry.getPath())) {
+              final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> toCancel =
+                  dir.remove(entry.getPath(), threadHandle).iterator();
+              while (toCancel.hasNext()) {
+                final Either<IOException, WatchedDirectory> either = toCancel.next().getValue();
+                if (either.isRight()) either.get().close();
               }
             }
           }
-        });
+        }
+      } finally {
+        threadHandle.unlock();
+      }
+    }
   }
 
   @Override
   public void close() {
-    internalExecutor.block(
-        new Consumer<ThreadHandle>() {
-          @Override
-          public void accept(ThreadHandle threadHandle) {
-            if (closed.compareAndSet(false, true)) {
-              service.close();
-              final Iterator<CachedDirectory<WatchedDirectory>> it =
-                  rootDirectories.values().iterator();
-              while (it.hasNext()) {
-                final Either<IOException, WatchedDirectory> either =
-                    it.next().getEntry().getValue();
-                if (either.isRight()) either.get().close();
-              }
-              rootDirectories.clear();
-            }
+    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+    if (threadHandle.lock()) {
+      try {
+        if (closed.compareAndSet(false, true)) {
+          service.close();
+          final Iterator<CachedDirectory<WatchedDirectory>> it =
+              rootDirectories.values().iterator();
+          while (it.hasNext()) {
+            final Either<IOException, WatchedDirectory> either = it.next().getEntry().getValue();
+            if (either.isRight()) either.get().close();
           }
-        });
+          rootDirectories.clear();
+        }
+      } finally {
+        threadHandle.unlock();
+      }
+    }
     internalExecutor.close();
   }
 
   private void update(
-      final CachedDirectory<WatchedDirectory> dir, final TypedPath typedPath, final ThreadHandle threadHandle) {
+      final CachedDirectory<WatchedDirectory> dir,
+      final TypedPath typedPath,
+      final ThreadHandle threadHandle) {
     dir.update(typedPath, threadHandle).observe(updateCacheObserver);
   }
 

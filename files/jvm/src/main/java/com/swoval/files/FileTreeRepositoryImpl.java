@@ -11,6 +11,7 @@ import com.swoval.functional.Filter;
 import com.swoval.runtime.ShutdownHooks;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -24,15 +25,16 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
         @Override
         public void run() {
           if (closed.compareAndSet(false, true)) {
-            internalExecutor.block(
-                new Consumer<ThreadHandle>() {
-                  @Override
-                  public void accept(final ThreadHandle threadHandle) {
-                    ShutdownHooks.removeHook(shutdownHookId);
-                    watcher.close(threadHandle);
-                    directoryTree.close(threadHandle);
-                  }
-                });
+            final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+            if (threadHandle.lock()) {
+              try {
+                ShutdownHooks.removeHook(shutdownHookId);
+                watcher.close(threadHandle);
+                directoryTree.close(threadHandle);
+              } finally {
+                threadHandle.unlock();
+              }
+            }
             internalExecutor.close();
           }
         }
@@ -92,39 +94,44 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
       final Path path,
       final int maxDepth,
       final Filter<? super FileTreeDataViews.Entry<T>> filter) {
-    return internalExecutor
-        .block(
-            new Function<ThreadHandle, List<FileTreeDataViews.Entry<T>>>() {
-              @Override
-              public List<FileTreeDataViews.Entry<T>> apply(final ThreadHandle threadHandle) {
-                return directoryTree.listEntries(path, maxDepth, filter);
-              }
-            })
-        .get();
+    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+    if (threadHandle.lock()) {
+      try {
+        return directoryTree.listEntries(path, maxDepth, filter);
+      } finally {
+        threadHandle.unlock();
+      }
+    } else {
+      return new ArrayList<>();
+    }
   }
 
   @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
-    return internalExecutor
-        .block(
-            new Function<ThreadHandle, Boolean>() {
-              @Override
-              public Boolean apply(final ThreadHandle threadHandle) {
-                return watcher.register(path, maxDepth, threadHandle);
-              }
-            })
-        .castLeft(IOException.class, false);
+    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+    if (threadHandle.lock()) {
+      try {
+        return Either.right(watcher.register(path, maxDepth, threadHandle));
+      } catch (final IOException e) {
+        return Either.left(e);
+      } finally {
+        threadHandle.unlock();
+      }
+    } else {
+      throw new RuntimeException("Couldn't lock executor thread");
+    }
   }
 
   @Override
   public void unregister(final Path path) {
-    internalExecutor.block(
-        new Consumer<ThreadHandle>() {
-          @Override
-          public void accept(final ThreadHandle threadHandle) {
-            watcher.unregister(path, threadHandle);
-          }
-        });
+    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+    if (threadHandle.lock()) {
+      try {
+        watcher.unregister(path, threadHandle);
+      } finally {
+        threadHandle.unlock();
+      }
+    }
   }
 
   @Override

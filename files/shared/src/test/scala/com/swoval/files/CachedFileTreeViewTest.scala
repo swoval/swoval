@@ -2,6 +2,7 @@ package com.swoval.files
 
 import java.io.IOException
 import java.nio.file.{ Files, Path }
+import java.util
 
 import FileTreeDataViews.Entry
 import com.swoval.files.EntryOps._
@@ -55,10 +56,30 @@ object CachedFileTreeViewTest extends TestSuite {
     override def getThreadHandle(): ThreadHandle = null
   }
   implicit class CachedDirectoryOps[T <: AnyRef](val cd: CachedDirectory[T]) extends AnyVal {
-    def remove(path: Path): java.util.List[Entry[T]] =
-      executor.block((t: ThreadHandle) => cd.remove(path, t)).get()
-    def update(path: TypedPath): FileTreeViews.Updates[T] =
-      executor.block((t: ThreadHandle) => cd.update(path, t)).get()
+    def remove(path: Path): java.util.List[Entry[T]] = {
+      val threadHandle = executor.getThreadHandle
+      if (threadHandle.lock()) {
+        try {
+          cd.remove(path, threadHandle);
+        } finally {
+          threadHandle.unlock();
+        }
+      } else {
+        new util.ArrayList[Entry[T]]()
+      }
+    }
+    def update(path: TypedPath): FileTreeViews.Updates[T] = {
+      val threadHandle = executor.getThreadHandle
+      if (threadHandle.lock()) {
+        try {
+          cd.update(path, threadHandle)
+        } finally {
+          threadHandle.unlock()
+        }
+      } else {
+        new FileTreeViews.Updates[T]
+      }
+    }
   }
   object add {
     def file: Future[Unit] = withTempDirectory { dir =>

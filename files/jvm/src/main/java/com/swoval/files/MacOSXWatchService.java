@@ -137,39 +137,34 @@ class MacOSXWatchService implements RegisterableWatchService {
   @Override
   @SuppressWarnings("EmptyCatchBlock")
   public void close() {
-    if (Either.getOrElse(
-        internalExecutor.block(
-            new Function<ThreadHandle, Boolean>() {
-              @Override
-              public Boolean apply(final ThreadHandle threadHandle) {
-                if (open.compareAndSet(true, false)) {
-                  final Iterator<WatchKey> it = new ArrayList<>(registered.values()).iterator();
-                  while (it.hasNext()) {
-                    final WatchKey watchKey = it.next();
-                    if (watchKey.handle != Handles.INVALID) {
-                      try {
-                        fileEventMonitor.stopStream(watchKey.handle);
-                      } catch (final ClosedFileEventMonitorException e) {
-                        e.printStackTrace(System.err);
-                      }
-                    }
-                    final Iterator<MacOSXWatchKey> keys = watchKey.keys.iterator();
-                    while (keys.hasNext()) {
-                      keys.next().cancel();
-                    }
-                    watchKey.keys.clear();
-                  }
-                  registered.clear();
-                  fileEventMonitor.close();
-                  return true;
-                } else {
-                  return false;
-                }
+    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+    if (threadHandle.lock()) {
+      try {
+        if (open.compareAndSet(true, false)) {
+          final Iterator<WatchKey> it = new ArrayList<>(registered.values()).iterator();
+          while (it.hasNext()) {
+            final WatchKey watchKey = it.next();
+            if (watchKey.handle != Handles.INVALID) {
+              try {
+                fileEventMonitor.stopStream(watchKey.handle);
+              } catch (final ClosedFileEventMonitorException e) {
+                e.printStackTrace(System.err);
               }
-            }),
-        false)) {
-      internalExecutor.close();
+            }
+            final Iterator<MacOSXWatchKey> keys = watchKey.keys.iterator();
+            while (keys.hasNext()) {
+              keys.next().cancel();
+            }
+            watchKey.keys.clear();
+          }
+          registered.clear();
+          fileEventMonitor.close();
+        }
+      } finally {
+        threadHandle.unlock();
+      }
     }
+    internalExecutor.close();
   }
 
   @Override
@@ -206,58 +201,47 @@ class MacOSXWatchService implements RegisterableWatchService {
   @Override
   public java.nio.file.WatchKey register(final Path path, final Kind<?>... kinds)
       throws IOException {
-    Either<Exception, java.nio.file.WatchKey> result =
-        internalExecutor.block(
-            new Function<ThreadHandle, java.nio.file.WatchKey>() {
-              @Override
-              public java.nio.file.WatchKey apply(final ThreadHandle thread) throws IOException {
-                if (isOpen()) {
-                  final Path realPath = path.toRealPath();
-                  if (!Files.isDirectory(realPath))
-                    throw new NotDirectoryException(realPath.toString());
-                  final WatchKey watchKey = registered.get(realPath);
-                  final MacOSXWatchKey result;
-                  if (watchKey == null) {
-                    final Create flags = new Create().setNoDefer().setFileEvents();
-                    Handle handle = null;
-                    final Iterator<Path> it = registered.keySet().iterator();
-                    while (it.hasNext() && handle != Handles.INVALID) {
-                      if (realPath.startsWith(it.next())) {
-                        handle = Handles.INVALID;
-                      }
-                    }
-                    if (handle != Handles.INVALID) {
-                      try {
-                        handle =
-                            fileEventMonitor.createStream(
-                                realPath, watchLatency, watchTimeUnit, flags);
-                      } catch (final ClosedFileEventMonitorException e) {
-                        MacOSXWatchService.this.close();
-                        throw e;
-                      }
-                    }
-                    result = new MacOSXWatchKey(realPath, queueSize, handle, kinds);
-                    registered.put(realPath, new WatchKey(handle, result));
-                  } else {
-                    result = new MacOSXWatchKey(realPath, queueSize, Handles.INVALID, kinds);
-                    watchKey.keys.add(result);
-                  }
-                  return result;
-                } else {
-                  throw new ClosedWatchServiceException();
-                }
+    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+    if (threadHandle.lock()) {
+      try {
+        if (isOpen()) {
+          final Path realPath = path.toRealPath();
+          if (!Files.isDirectory(realPath)) throw new NotDirectoryException(realPath.toString());
+          final WatchKey watchKey = registered.get(realPath);
+          final MacOSXWatchKey result;
+          if (watchKey == null) {
+            final Create flags = new Create().setNoDefer().setFileEvents();
+            Handle handle = null;
+            final Iterator<Path> it = registered.keySet().iterator();
+            while (it.hasNext() && handle != Handles.INVALID) {
+              if (realPath.startsWith(it.next())) {
+                handle = Handles.INVALID;
               }
-            });
-    if (result.isRight()) {
-      return result.get();
-    } else {
-      final Exception e = Either.leftProjection(result).getValue();
-      if (e instanceof IOException) {
-        throw (IOException) e;
-      } else {
-        e.printStackTrace();
-        return null;
+            }
+            if (handle != Handles.INVALID) {
+              try {
+                handle =
+                    fileEventMonitor.createStream(realPath, watchLatency, watchTimeUnit, flags);
+              } catch (final ClosedFileEventMonitorException e) {
+                MacOSXWatchService.this.close();
+                throw e;
+              }
+            }
+            result = new MacOSXWatchKey(realPath, queueSize, handle, kinds);
+            registered.put(realPath, new WatchKey(handle, result));
+          } else {
+            result = new MacOSXWatchKey(realPath, queueSize, Handles.INVALID, kinds);
+            watchKey.keys.add(result);
+          }
+          return result;
+        } else {
+          throw new ClosedWatchServiceException();
+        }
+      } finally {
+        threadHandle.unlock();
       }
+    } else {
+      throw new RuntimeException("Couldn't lock executor thread");
     }
   }
 
@@ -420,23 +404,24 @@ class MacOSXWatchService implements RegisterableWatchService {
     }
 
     void remove(final MacOSXWatchKey key) {
-      internalExecutor.block(
-          new Consumer<ThreadHandle>() {
-            @Override
-            public void accept(ThreadHandle threadHandle) {
-              keys.remove(key);
-              if (keys.isEmpty()) {
-                if (handle != Handles.INVALID) {
-                  try {
-                    fileEventMonitor.stopStream(handle);
-                  } catch (final ClosedFileEventMonitorException e) {
-                    e.printStackTrace(System.err);
-                  }
-                }
-                registered.remove(key.watchable);
+      final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+      if (threadHandle.lock()) {
+        try {
+          keys.remove(key);
+          if (keys.isEmpty()) {
+            if (handle != Handles.INVALID) {
+              try {
+                fileEventMonitor.stopStream(handle);
+              } catch (final ClosedFileEventMonitorException e) {
+                e.printStackTrace(System.err);
               }
             }
-          });
+            registered.remove(key.watchable);
+          }
+        } finally {
+          threadHandle.unlock();
+        }
+      }
     }
   }
 }
