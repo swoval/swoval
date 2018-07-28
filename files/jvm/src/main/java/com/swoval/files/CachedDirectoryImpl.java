@@ -3,6 +3,7 @@ package com.swoval.files;
 import static com.swoval.functional.Either.leftProjection;
 import static com.swoval.functional.Filters.AllPass;
 
+import com.swoval.files.Executor.ThreadHandle;
 import com.swoval.files.FileTreeDataViews.Converter;
 import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.files.FileTreeViews.Updates;
@@ -190,7 +191,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
    *     traversing the directory.
    */
   @Override
-  public Updates<T> update(final TypedPath typedPath, final Executor.Thread thread) {
+  public Updates<T> update(final TypedPath typedPath, final ThreadHandle threadHandle) {
     return pathFilter.accept(typedPath)
         ? updateImpl(
             typedPath.getPath().equals(this.path)
@@ -207,7 +208,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
    * @return a List containing the Entry instances for the removed path. The result also contains
    *     the cache entries for any children of the path when the path is a non-empty directory.
    */
-  public List<Entry<T>> remove(final Path path, final Executor.Thread thread) {
+  public List<Entry<T>> remove(final Path path, final ThreadHandle threadHandle) {
     if (path.isAbsolute() && path.startsWith(this.path)) {
       return removeImpl(parts(this.path.relativize(path)));
     } else {

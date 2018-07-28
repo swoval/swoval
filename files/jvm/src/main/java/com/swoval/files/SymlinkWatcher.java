@@ -4,6 +4,7 @@ import static com.swoval.functional.Either.getOrElse;
 import static com.swoval.functional.Either.leftProjection;
 import static java.util.Map.Entry;
 
+import com.swoval.files.Executor.ThreadHandle;
 import com.swoval.files.FileTreeDataViews.OnError;
 import com.swoval.files.FileTreeViews.Observable;
 import com.swoval.files.FileTreeViews.Observer;
@@ -97,9 +98,9 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
           public void onNext(final Event event) {
             if (!isClosed.get()) {
               SymlinkWatcher.this.internalExecutor.run(
-                  new Consumer<Executor.Thread>() {
+                  new Consumer<ThreadHandle>() {
                     @Override
-                    public void accept(final Executor.Thread thread) {
+                    public void accept(final ThreadHandle threadHandle) {
 
                       final List<Runnable> callbacks = new ArrayList<>();
                       final Path path = event.getPath();
@@ -154,9 +155,9 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
   @Override
   public void close() {
     internalExecutor.block(
-        new Consumer<Executor.Thread>() {
+        new Consumer<ThreadHandle>() {
           @Override
-          public void accept(final Executor.Thread thread) {
+          public void accept(final ThreadHandle threadHandle) {
             if (isClosed.compareAndSet(false, true)) {
               final Iterator<RegisteredPath> targetIt = watchedSymlinksByTarget.values().iterator();
               while (targetIt.hasNext()) {
@@ -187,14 +188,14 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
   @SuppressWarnings("EmptyCatchBlock")
   void addSymlink(final Path path, final int maxDepth) {
     internalExecutor.run(
-        new Consumer<Executor.Thread>() {
+        new Consumer<ThreadHandle>() {
           @Override
           public String toString() {
             return "Add symlink " + path;
           }
 
           @Override
-          public void accept(final Executor.Thread thread) {
+          public void accept(final ThreadHandle threadHandle) {
             if (!isClosed.get()) {
               try {
                 final Path realPath = path.toRealPath();
@@ -236,9 +237,9 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
    */
   void remove(final Path path) {
     internalExecutor.block(
-        new Consumer<Executor.Thread>() {
+        new Consumer<ThreadHandle>() {
           @Override
-          public void accept(final Executor.Thread thread) {
+          public void accept(final ThreadHandle threadHandle) {
             if (!isClosed.get()) {
               Path target = null;
               {

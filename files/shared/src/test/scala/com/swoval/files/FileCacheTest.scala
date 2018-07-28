@@ -3,6 +3,7 @@ package com.swoval.files
 import java.io.IOException
 import java.nio.file.Path
 
+import com.swoval.files.Executor.ThreadHandle
 import com.swoval.files.FileTreeDataViews.{ Converter, Entry }
 import com.swoval.files.FileTreeViews.CacheObserver
 import com.swoval.files.PathWatchers.Event
@@ -82,7 +83,7 @@ object FileCacheTest {
                                           symlinkWatcher)
     val pathWatcher = watcherFactory(copy, tree.readOnlyDirectoryRegistry)
     pathWatcher.addObserver((e: PathWatchers.Event) =>
-      copy.run((t: Executor.Thread) => tree.handleEvent(e, t)))
+      copy.run((t: ThreadHandle) => tree.handleEvent(e, t)))
     val watcher = new FileCachePathWatcher(tree, pathWatcher)
     val res = new FileTreeRepositoryImpl(tree, watcher, executor)
     res.addCacheObserver(cacheObserver)

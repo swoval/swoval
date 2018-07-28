@@ -9,6 +9,7 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
+import com.swoval.files.Executor.ThreadHandle;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Overflow;
 import com.swoval.functional.Consumer;
@@ -68,9 +69,9 @@ class NioPathWatcherService implements AutoCloseable {
                   key.cancel();
                 }
                 internalExecutor.run(
-                    new Consumer<Executor.Thread>() {
+                    new Consumer<ThreadHandle>() {
                       @Override
-                      public void accept(final Executor.Thread thread) {
+                      public void accept(final ThreadHandle threadHandle) {
                         final Iterator<WatchEvent<?>> it = events.iterator();
                         while (it.hasNext()) {
                           final WatchEvent<?> e = it.next();

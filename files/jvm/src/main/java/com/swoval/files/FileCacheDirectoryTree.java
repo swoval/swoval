@@ -6,9 +6,9 @@ import static com.swoval.files.PathWatchers.Event.Kind.Error;
 import static com.swoval.files.PathWatchers.Event.Kind.Modify;
 import static com.swoval.functional.Filters.AllPass;
 
+import com.swoval.files.Executor.ThreadHandle;
 import com.swoval.files.FileTreeDataViews.Converter;
 import com.swoval.files.FileTreeDataViews.Entry;
-import com.swoval.files.Executor.Thread;
 import com.swoval.files.FileTreeRepositoryImpl.Callback;
 import com.swoval.files.FileTreeViews.CacheObserver;
 import com.swoval.files.FileTreeViews.ObservableCache;
@@ -59,10 +59,10 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
           @Override
           public void onNext(final Event event) {
             internalExecutor.run(
-                new Consumer<Executor.Thread>() {
+                new Consumer<ThreadHandle>() {
                   @Override
-                  public void accept(Executor.Thread thread) {
-                    handleEvent(event, thread);
+                  public void accept(ThreadHandle threadHandle) {
+                    handleEvent(event, threadHandle);
                   }
                 });
           }
@@ -107,7 +107,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
     return READ_ONLY_DIRECTORY_REGISTRY;
   }
 
-  void unregister(final Path path, final Executor.Thread thread) {
+  void unregister(final Path path, final ThreadHandle threadHandle) {
     directoryRegistry.removeDirectory(path);
     if (!directoryRegistry.accept(path)) {
       final CachedDirectory<T> dir = find(path);
@@ -115,7 +115,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         if (dir.getPath().equals(path)) {
           directories.remove(path);
         } else {
-          dir.remove(path, thread);
+          dir.remove(path, threadHandle);
         }
       }
     }
@@ -137,9 +137,9 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   private void runCallbacks(final List<Callback> callbacks) {
     if (!callbacks.isEmpty()) {
       callbackExecutor.run(
-          new Consumer<Thread>() {
+          new Consumer<ThreadHandle>() {
             @Override
-            public void accept(final Thread thread) {
+            public void accept(final ThreadHandle threadHandle) {
               Collections.sort(callbacks);
               final Iterator<Callback> it = callbacks.iterator();
               while (it.hasNext()) {
@@ -151,14 +151,14 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   }
 
   @SuppressWarnings("EmptyCatchBlock")
-  void handleEvent(final TypedPath typedPath, final Executor.Thread thread) {
+  void handleEvent(final TypedPath typedPath, final ThreadHandle threadHandle) {
     final Path path = typedPath.getPath();
 
     final List<Callback> callbacks = new ArrayList<>();
     if (typedPath.exists()) {
       final CachedDirectory<T> dir = find(typedPath.getPath());
       if (dir != null) {
-        dir.update(typedPath, thread).observe(callbackObserver(callbacks));
+        dir.update(typedPath, threadHandle).observe(callbackObserver(callbacks));
       } else if (pendingFiles.remove(path)) {
         try {
           CachedDirectory<T> cachedDirectory;
@@ -189,7 +189,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
       while (directoryIterator.hasNext()) {
         final CachedDirectory<T> dir = directoryIterator.next();
         if (path.startsWith(dir.getPath())) {
-          List<FileTreeDataViews.Entry<T>> updates = dir.remove(path, thread);
+          List<FileTreeDataViews.Entry<T>> updates = dir.remove(path, threadHandle);
           final Iterator<Path> it = directoryRegistry.registered().iterator();
           while (it.hasNext()) {
             if (it.next().equals(path)) {
@@ -219,7 +219,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
     throw new UnsupportedOperationException("close");
   }
 
-  public void close(final Executor.Thread thread) {
+  public void close(final ThreadHandle threadHandle) {
     callbackExecutor.close();
     if (symlinkWatcher != null) symlinkWatcher.close();
     final Iterator<CachedDirectory<T>> directoryIterator = directories.values().iterator();
@@ -236,7 +236,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
       final Path path,
       final int maxDepth,
       final PathWatcher<PathWatchers.Event> watcher,
-      final Thread thread)
+      final ThreadHandle threadHandle)
       throws IOException {
     if (directoryRegistry.addDirectory(path, maxDepth)) {
       watcher.register(path, maxDepth);
@@ -287,7 +287,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
           dir = FileTreeViews.<T>cached(path, converter, -1, followLinks);
         }
       } else {
-        existing.update(TypedPaths.get(path), thread);
+        existing.update(TypedPaths.get(path), threadHandle);
         dir = existing;
       }
       return dir;

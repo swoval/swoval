@@ -5,6 +5,7 @@ import java.nio.file.{ Files, Path, Paths }
 
 import FileTreeDataViews.Entry
 import com.swoval.files.EntryOps._
+import com.swoval.files.Executor.ThreadHandle
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.test._
 import com.swoval.runtime.Platform
@@ -85,7 +86,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
       )
       usingAsync(getBounded[Path](identity, observer)) { c =>
         c.reg(dir)
-        executor.run((_: Executor.Thread) => {
+        executor.run((_: ThreadHandle) => {
           subdirs.foreach(Files.createDirectories(_))
           files.foreach(Files.createFile(_))
         })
@@ -98,7 +99,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
             }
           }
           .flatMap { _ =>
-            executor.run((_: Executor.Thread) => {
+            executor.run((_: ThreadHandle) => {
               val name = Paths.get("file-1")
               files.filter(_.getFileName == name).foreach(_.setLastModifiedTime(3000))
             })
@@ -110,7 +111,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
                 }
               }
               .flatMap { _ =>
-                executor.run((_: Executor.Thread) => {
+                executor.run((_: ThreadHandle) => {
                   files.foreach(Files.deleteIfExists)
                   subdirs.foreach(Files.deleteIfExists)
                 })

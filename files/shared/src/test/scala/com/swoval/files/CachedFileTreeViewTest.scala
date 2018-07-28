@@ -5,6 +5,7 @@ import java.nio.file.{ Files, Path }
 
 import FileTreeDataViews.Entry
 import com.swoval.files.EntryOps._
+import com.swoval.files.Executor.ThreadHandle
 import com.swoval.files.FileTreeViewTest.RepositoryOps
 import com.swoval.files.FileTreeViews.{ CacheObserver, Observer }
 import com.swoval.files.test._
@@ -49,15 +50,15 @@ object CachedFileTreeViewTest extends TestSuite {
   }
 
   val executor = new Executor {
-    override def run(threadConsumer: Consumer[Executor.Thread], priority: Int): Unit =
-      threadConsumer.accept(getThread())
-    override def getThread(): Executor.Thread = null
+    override def run(threadConsumer: Consumer[ThreadHandle], priority: Int): Unit =
+      threadConsumer.accept(getThreadHandle())
+    override def getThreadHandle(): ThreadHandle = null
   }
   implicit class CachedDirectoryOps[T <: AnyRef](val cd: CachedDirectory[T]) extends AnyVal {
     def remove(path: Path): java.util.List[Entry[T]] =
-      executor.block((t: Executor.Thread) => cd.remove(path, t)).get()
+      executor.block((t: ThreadHandle) => cd.remove(path, t)).get()
     def update(path: TypedPath): FileTreeViews.Updates[T] =
-      executor.block((t: Executor.Thread) => cd.update(path, t)).get()
+      executor.block((t: ThreadHandle) => cd.update(path, t)).get()
   }
   object add {
     def file: Future[Unit] = withTempDirectory { dir =>

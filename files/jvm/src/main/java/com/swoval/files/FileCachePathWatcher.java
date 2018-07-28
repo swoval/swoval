@@ -2,6 +2,7 @@ package com.swoval.files;
 
 import static com.swoval.functional.Filters.AllPass;
 
+import com.swoval.files.Executor.ThreadHandle;
 import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.functional.Either;
 import java.io.IOException;
@@ -20,10 +21,10 @@ class FileCachePathWatcher<T> {
     this.tree = tree;
   }
 
-  boolean register(final Path path, final int maxDepth, final Executor.Thread thread) {
+  boolean register(final Path path, final int maxDepth, final ThreadHandle threadHandle) {
     Either<IOException, CachedDirectory<T>> treeResult;
     try {
-      treeResult = Either.right(tree.register(path, maxDepth, pathWatcher, thread));
+      treeResult = Either.right(tree.register(path, maxDepth, pathWatcher, threadHandle));
     } catch (final IOException e) {
       treeResult = Either.left(e);
     }
@@ -44,12 +45,12 @@ class FileCachePathWatcher<T> {
     return treeResult.isRight();
   }
 
-  void unregister(final Path path, final Executor.Thread thread) {
-    tree.unregister(path, thread);
+  void unregister(final Path path, final ThreadHandle threadHandle) {
+    tree.unregister(path, threadHandle);
     pathWatcher.unregister(path);
   }
 
-  public void close(final Executor.Thread thread) {
+  public void close(final ThreadHandle threadHandle) {
     pathWatcher.close();
     symlinkWatcher.close();
   }

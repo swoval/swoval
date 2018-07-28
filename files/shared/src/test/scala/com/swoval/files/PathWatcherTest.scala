@@ -5,6 +5,7 @@ import java.nio.file.attribute.FileTime
 import java.nio.file.{ Files, Path, Paths }
 import java.util.concurrent.{ TimeUnit, TimeoutException }
 
+import com.swoval.files.Executor.ThreadHandle
 import com.swoval.files.PathWatchers.Event.Kind
 import com.swoval.files.PathWatchers.Event.Kind.{ Create, Delete, Modify }
 import com.swoval.files.apple.Flags
@@ -75,8 +76,8 @@ trait PathWatcherTest extends TestSuite {
       'redundant - withTempDirectory { dir =>
         if (Platform.isMac) {
           val events = new ArrayBlockingQueue[String](10)
-          val callback: BiConsumer[String, Executor.Thread] =
-            (stream: String, _: Executor.Thread) => events.add(stream)
+          val callback: BiConsumer[String, ThreadHandle] =
+            (stream: String, _: ThreadHandle) => events.add(stream)
           withTempDirectory(dir) { subdir =>
             val watcher = new ApplePathWatcher(
               DEFAULT_LATENCY.toNanos,

@@ -3,6 +3,7 @@ package com.swoval.files
 import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 
+import com.swoval.files.Executor.ThreadHandle
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.apple.Flags
 import com.swoval.files.test._
@@ -19,7 +20,7 @@ object ApplePathWatcherTest extends TestSuite {
       10,
       TimeUnit.MILLISECONDS,
       dirFlags,
-      (_: String, _: Executor.Thread) => {},
+      (_: String, _: ThreadHandle) => {},
       Executor.make("ApplePathWatcher-internal-executor"),
       new DirectoryRegistryImpl
     )

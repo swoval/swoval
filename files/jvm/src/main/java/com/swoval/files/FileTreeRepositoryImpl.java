@@ -1,5 +1,6 @@
 package com.swoval.files;
 
+import com.swoval.files.Executor.ThreadHandle;
 import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.files.FileTreeViews.CacheObserver;
 import com.swoval.files.FileTreeViews.Observer;
@@ -24,12 +25,12 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
         public void run() {
           if (closed.compareAndSet(false, true)) {
             internalExecutor.block(
-                new Consumer<Executor.Thread>() {
+                new Consumer<ThreadHandle>() {
                   @Override
-                  public void accept(final Executor.Thread thread) {
+                  public void accept(final ThreadHandle threadHandle) {
                     ShutdownHooks.removeHook(shutdownHookId);
-                    watcher.close(thread);
-                    directoryTree.close(thread);
+                    watcher.close(threadHandle);
+                    directoryTree.close(threadHandle);
                   }
                 });
             internalExecutor.close();
@@ -93,9 +94,9 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
       final Filter<? super FileTreeDataViews.Entry<T>> filter) {
     return internalExecutor
         .block(
-            new Function<Executor.Thread, List<FileTreeDataViews.Entry<T>>>() {
+            new Function<ThreadHandle, List<FileTreeDataViews.Entry<T>>>() {
               @Override
-              public List<FileTreeDataViews.Entry<T>> apply(final Executor.Thread thread) {
+              public List<FileTreeDataViews.Entry<T>> apply(final ThreadHandle threadHandle) {
                 return directoryTree.listEntries(path, maxDepth, filter);
               }
             })
@@ -106,10 +107,10 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
     return internalExecutor
         .block(
-            new Function<Executor.Thread, Boolean>() {
+            new Function<ThreadHandle, Boolean>() {
               @Override
-              public Boolean apply(final Executor.Thread thread) {
-                return watcher.register(path, maxDepth, thread);
+              public Boolean apply(final ThreadHandle threadHandle) {
+                return watcher.register(path, maxDepth, threadHandle);
               }
             })
         .castLeft(IOException.class, false);
@@ -118,10 +119,10 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
   @Override
   public void unregister(final Path path) {
     internalExecutor.block(
-        new Consumer<Executor.Thread>() {
+        new Consumer<ThreadHandle>() {
           @Override
-          public void accept(final Executor.Thread thread) {
-            watcher.unregister(path, thread);
+          public void accept(final ThreadHandle threadHandle) {
+            watcher.unregister(path, threadHandle);
           }
         });
   }

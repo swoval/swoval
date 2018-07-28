@@ -5,6 +5,7 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
+import com.swoval.files.Executor.ThreadHandle;
 import com.swoval.files.apple.ClosedFileEventMonitorException;
 import com.swoval.files.apple.FileEvent;
 import com.swoval.files.apple.FileEventMonitor;
@@ -56,9 +57,9 @@ class MacOSXWatchService implements RegisterableWatchService {
         @Override
         public void accept(final String s) {
           internalExecutor.run(
-              new Consumer<Executor.Thread>() {
+              new Consumer<ThreadHandle>() {
                 @Override
-                public void accept(Executor.Thread thread) {
+                public void accept(ThreadHandle threadHandle) {
                   final Path path = Paths.get(s);
                   final WatchKey watchKey = registered.get(path);
                   if (watchKey != null) {
@@ -73,9 +74,9 @@ class MacOSXWatchService implements RegisterableWatchService {
         @Override
         public void accept(final FileEvent fileEvent) {
           internalExecutor.run(
-              new Consumer<Executor.Thread>() {
+              new Consumer<ThreadHandle>() {
                 @Override
-                public void accept(final Executor.Thread thread) {
+                public void accept(final ThreadHandle threadHandle) {
                   final Path path = Paths.get(fileEvent.fileName);
                   final WatchKey childKeys = registered.get(path);
                   final WatchKey watchKey =
@@ -138,9 +139,9 @@ class MacOSXWatchService implements RegisterableWatchService {
   public void close() {
     if (Either.getOrElse(
         internalExecutor.block(
-            new Function<Executor.Thread, Boolean>() {
+            new Function<ThreadHandle, Boolean>() {
               @Override
-              public Boolean apply(final Executor.Thread thread) {
+              public Boolean apply(final ThreadHandle threadHandle) {
                 if (open.compareAndSet(true, false)) {
                   final Iterator<WatchKey> it = new ArrayList<>(registered.values()).iterator();
                   while (it.hasNext()) {
@@ -207,9 +208,9 @@ class MacOSXWatchService implements RegisterableWatchService {
       throws IOException {
     Either<Exception, java.nio.file.WatchKey> result =
         internalExecutor.block(
-            new Function<Executor.Thread, java.nio.file.WatchKey>() {
+            new Function<ThreadHandle, java.nio.file.WatchKey>() {
               @Override
-              public java.nio.file.WatchKey apply(final Executor.Thread thread) throws IOException {
+              public java.nio.file.WatchKey apply(final ThreadHandle thread) throws IOException {
                 if (isOpen()) {
                   final Path realPath = path.toRealPath();
                   if (!Files.isDirectory(realPath))
@@ -420,9 +421,9 @@ class MacOSXWatchService implements RegisterableWatchService {
 
     void remove(final MacOSXWatchKey key) {
       internalExecutor.block(
-          new Consumer<Executor.Thread>() {
+          new Consumer<ThreadHandle>() {
             @Override
-            public void accept(Executor.Thread thread) {
+            public void accept(ThreadHandle threadHandle) {
               keys.remove(key);
               if (keys.isEmpty()) {
                 if (handle != Handles.INVALID) {

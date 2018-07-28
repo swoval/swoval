@@ -1,6 +1,6 @@
 package com.swoval.files;
 
-import com.swoval.files.Executor.Thread;
+import com.swoval.files.Executor.ThreadHandle;
 import com.swoval.files.FileTreeDataViews.OnError;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
@@ -63,9 +63,9 @@ class SymlinkFollowingPathWatcherImpl implements SymlinkFollowingPathWatcher {
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
     return internalExecutor
         .block(
-            new Function<Thread, Boolean>() {
+            new Function<ThreadHandle, Boolean>() {
               @Override
-              public Boolean apply(final Thread thread) throws IOException {
+              public Boolean apply(final ThreadHandle threadHandle) throws IOException {
                 final Either<IOException, Boolean> pathWatcherResult =
                     pathWatcher.register(path, maxDepth);
                 if (pathWatcherResult.isRight()) {
@@ -96,9 +96,9 @@ class SymlinkFollowingPathWatcherImpl implements SymlinkFollowingPathWatcher {
   @Override
   public void unregister(final Path path) {
     internalExecutor.block(
-        new Consumer<Thread>() {
+        new Consumer<ThreadHandle>() {
           @Override
-          public void accept(Thread thread) {
+          public void accept(ThreadHandle threadHandle) {
 
             pathWatcher.unregister(path);
           }
@@ -108,9 +108,9 @@ class SymlinkFollowingPathWatcherImpl implements SymlinkFollowingPathWatcher {
   @Override
   public void close() {
     internalExecutor.block(
-        new Consumer<Thread>() {
+        new Consumer<ThreadHandle>() {
           @Override
-          public void accept(Thread thread) {
+          public void accept(ThreadHandle threadHandle) {
             pathWatcher.close();
             symlinkWatcher.close();
           }

@@ -5,6 +5,7 @@ import static com.swoval.files.PathWatchers.Event.Kind.Delete;
 import static com.swoval.files.PathWatchers.Event.Kind.Modify;
 import static com.swoval.functional.Either.leftProjection;
 
+import com.swoval.files.Executor.ThreadHandle;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.apple.ClosedFileEventMonitorException;
@@ -93,9 +94,9 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
       final Path path, final Flags.Create flags, final int maxDepth) {
     final Either<Exception, Boolean> either =
         internalExecutor.block(
-            new TotalFunction<Executor.Thread, Boolean>() {
+            new TotalFunction<ThreadHandle, Boolean>() {
               @Override
-              public Boolean apply(final Executor.Thread thread) {
+              public Boolean apply(final ThreadHandle thread) {
                 return registerImpl(path, flags, maxDepth);
               }
             });
@@ -164,9 +165,9 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   @Override
   public void unregister(final Path path) {
     internalExecutor.block(
-        new Consumer<Executor.Thread>() {
+        new Consumer<ThreadHandle>() {
           @Override
-          public void accept(final Executor.Thread thread) {
+          public void accept(final ThreadHandle threadHandle) {
             unregisterImpl(path);
           }
         });
@@ -177,9 +178,9 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   public void close() {
     if (closed.compareAndSet(false, true)) {
       internalExecutor.block(
-          new Consumer<Executor.Thread>() {
+          new Consumer<ThreadHandle>() {
             @Override
-            public void accept(final Executor.Thread thread) {
+            public void accept(final ThreadHandle threadHandle) {
               final Iterator<Stream> it = streams.values().iterator();
               boolean stop = false;
               while (it.hasNext() && !stop) {
@@ -198,11 +199,11 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   }
 
   /** A no-op callback to invoke when streams are removed. */
-  static class DefaultOnStreamRemoved implements BiConsumer<String, Executor.Thread> {
+  static class DefaultOnStreamRemoved implements BiConsumer<String, ThreadHandle> {
     DefaultOnStreamRemoved() {}
 
     @Override
-    public void accept(final String stream, final Executor.Thread thread) {}
+    public void accept(final String stream, final ThreadHandle threadHandle) {}
   }
 
   ApplePathWatcher(final Executor executor, final DirectoryRegistry directoryRegistry)
@@ -236,7 +237,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
       final long latency,
       final TimeUnit timeUnit,
       final Flags.Create flags,
-      final BiConsumer<String, Executor.Thread> onStreamRemoved,
+      final BiConsumer<String, ThreadHandle> onStreamRemoved,
       final Executor executor,
       final DirectoryRegistry managedDirectoryRegistry)
       throws InterruptedException {
@@ -256,9 +257,9 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
               public void accept(final FileEvent fileEvent) {
                 if (!closed.get()) {
                   internalExecutor.run(
-                      new Consumer<Executor.Thread>() {
+                      new Consumer<ThreadHandle>() {
                         @Override
-                        public void accept(final Executor.Thread thread) {
+                        public void accept(final ThreadHandle threadHandle) {
                           final String fileName = fileEvent.fileName;
                           final TypedPath path = TypedPaths.get(Paths.get(fileName));
                           if (directoryRegistry.accept(path.getPath())) {
@@ -291,14 +292,14 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
               @Override
               public void accept(final String stream) {
                 internalExecutor.block(
-                    new Consumer<Executor.Thread>() {
+                    new Consumer<ThreadHandle>() {
                       @Override
-                      public void accept(final Executor.Thread thread) {
+                      public void accept(final ThreadHandle threadHandle) {
                         new Runnable() {
                           @Override
                           public void run() {
                             streams.remove(Paths.get(stream));
-                            onStreamRemoved.accept(stream, thread);
+                            onStreamRemoved.accept(stream, threadHandle);
                           }
                         }.run();
                       }

@@ -20,8 +20,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 abstract class Executor implements AutoCloseable {
   Executor() {}
 
-  public static class Thread {
-    private Thread() {}
+  public static class ThreadHandle {
+    private ThreadHandle() {}
 
     private long id = -1;
     private String name = "";
@@ -35,27 +35,27 @@ abstract class Executor implements AutoCloseable {
 
     @Override
     public String toString() {
-      return "Executor.Thread(" + name + ", " + id + ")";
+      return "Executor.ThreadHandle(" + name + ", " + id + ")";
     }
   }
 
-  abstract Thread getThread();
+  abstract ThreadHandle getThreadHandle();
 
   /**
-   * Runs the task on a thread.
+   * Runs the task on a threadHandle.
    *
    * @param threadConsumer task to run
    */
-  void run(final Consumer<Thread> threadConsumer) {
+  void run(final Consumer<ThreadHandle> threadConsumer) {
     run(threadConsumer, Integer.MAX_VALUE);
   }
 
   /**
-   * Runs the task on a thread with a given priority.
+   * Runs the task on a threadHandle with a given priority.
    *
    * @param threadConsumer task to run
    */
-  abstract void run(final Consumer<Thread> threadConsumer, final int priority);
+  abstract void run(final Consumer<ThreadHandle> threadConsumer, final int priority);
 
   /**
    * Returns a copy of the executor. The purpose of this is to provide the executor to a class or
@@ -67,33 +67,33 @@ abstract class Executor implements AutoCloseable {
     final Executor self = this;
     return new Executor() {
       @Override
-      Thread getThread() {
-        return self.getThread();
+      ThreadHandle getThreadHandle() {
+        return self.getThreadHandle();
       }
 
       @Override
-      public void run(final Consumer<Thread> consumer, final int priority) {
+      public void run(final Consumer<ThreadHandle> consumer, final int priority) {
         self.run(consumer, priority);
       }
     };
   }
 
   /**
-   * Blocks the current thread until the executor runs the Callable and returns the value.
+   * Blocks the current threadHandle until the executor runs the Callable and returns the value.
    *
    * @param callable The callable whose value we're waiting on.
    * @param <T> The result type of the Callable
    * @return The result evaluated by the Callable
    */
-  <T> Either<Exception, T> block(final Function<Thread, T> callable) {
+  <T> Either<Exception, T> block(final Function<ThreadHandle, T> callable) {
     final ArrayBlockingQueue<Either<Exception, T>> queue = new ArrayBlockingQueue<>(1);
     try {
       run(
-          new Consumer<Thread>() {
+          new Consumer<ThreadHandle>() {
             @Override
-            public void accept(final Thread thread) {
+            public void accept(final ThreadHandle threadHandle) {
               try {
-                queue.add(Either.<Exception, T, T>right(callable.apply(thread)));
+                queue.add(Either.<Exception, T, T>right(callable.apply(threadHandle)));
               } catch (Exception e) {
                 queue.add(Either.<Exception, T, Exception>left(e));
               }
@@ -111,19 +111,19 @@ abstract class Executor implements AutoCloseable {
   }
 
   /**
-   * Blocks the current thread until the executor runs the provided Runnable.
+   * Blocks the current threadHandle until the executor runs the provided Runnable.
    *
    * @param consumer The consumer to invoke.
    */
   @SuppressWarnings("EmptyCatchBlock")
-  void block(final Consumer<Thread> consumer) {
+  void block(final Consumer<ThreadHandle> consumer) {
     final CountDownLatch latch = new CountDownLatch(1);
     try {
       run(
-          new Consumer<Thread>() {
+          new Consumer<ThreadHandle>() {
             @Override
-            public void accept(final Thread thread) {
-              consumer.accept(thread);
+            public void accept(final ThreadHandle threadHandle) {
+              consumer.accept(threadHandle);
               latch.countDown();
             }
           });
@@ -138,11 +138,11 @@ abstract class Executor implements AutoCloseable {
 
   static class ExecutorImpl extends Executor {
     private final AtomicBoolean closed = new AtomicBoolean(false);
-    private final Thread thread = new Thread();
+    private final ThreadHandle threadHandle = new ThreadHandle();
     private final java.lang.Thread executorThread;
 
-    Thread getThread() {
-      return thread;
+    ThreadHandle getThreadHandle() {
+      return threadHandle;
     }
 
     final ThreadFactory factory;
@@ -160,7 +160,7 @@ abstract class Executor implements AutoCloseable {
             public void run() {
               queue.offer(java.lang.Thread.currentThread());
               boolean stop = false;
-              thread.setID();
+              threadHandle.setID();
               while (!stop && !closed.get() && !java.lang.Thread.currentThread().isInterrupted()) {
                 try {
                   final PriorityQueue<PriorityConsumer> queue = new PriorityQueue<>();
@@ -173,7 +173,7 @@ abstract class Executor implements AutoCloseable {
                     stop = consumer.priority < 0;
                     if (!stop) {
                       try {
-                        consumer.accept(getThread());
+                        consumer.accept(getThreadHandle());
                       } catch (final Exception e) {
                         e.printStackTrace();
                       }
@@ -208,13 +208,13 @@ abstract class Executor implements AutoCloseable {
     }
 
     @Override
-    void run(final Consumer<Thread> consumer, final int priority) {
+    void run(final Consumer<ThreadHandle> consumer, final int priority) {
       if (closed.get()) {
         new Exception("Tried to submit to closed executor").printStackTrace(System.err);
       } else {
         if (java.lang.Thread.currentThread() == executorThread) {
           try {
-            consumer.accept(getThread());
+            consumer.accept(getThreadHandle());
           } catch (final Exception e) {
             e.printStackTrace();
           }
@@ -243,7 +243,7 @@ abstract class Executor implements AutoCloseable {
   /**
    * Make a new instance of an Executor
    *
-   * @param name The name of the executor thread
+   * @param name The name of the executor threadHandle
    * @return Executor
    */
   static Executor make(final String name) throws InterruptedException {
@@ -264,11 +264,11 @@ abstract class Executor implements AutoCloseable {
   }
 
   private static final class PriorityConsumer
-      implements Consumer<Thread>, Comparable<PriorityConsumer> {
-    private final Consumer<Thread> consumer;
+      implements Consumer<ThreadHandle>, Comparable<PriorityConsumer> {
+    private final Consumer<ThreadHandle> consumer;
     private final int priority;
 
-    PriorityConsumer(final Consumer<Thread> consumer, final int priority) {
+    PriorityConsumer(final Consumer<ThreadHandle> consumer, final int priority) {
       this.consumer = consumer;
       this.priority = priority < 0 ? priority : 0;
     }
@@ -279,16 +279,16 @@ abstract class Executor implements AutoCloseable {
     }
 
     @Override
-    public void accept(final Thread thread) {
-      consumer.accept(thread);
+    public void accept(final ThreadHandle threadHandle) {
+      consumer.accept(threadHandle);
     }
   }
 
   private static final PriorityConsumer STOP =
       new PriorityConsumer(
-          new Consumer<Thread>() {
+          new Consumer<ThreadHandle>() {
             @Override
-            public void accept(final Thread thread) {}
+            public void accept(final ThreadHandle threadHandle) {}
           },
           -1);
 }

@@ -1,5 +1,6 @@
 package com.swoval.files;
 
+import com.swoval.files.Executor.ThreadHandle;
 import com.swoval.files.FileTreeDataViews.Converter;
 import com.swoval.files.FileTreeDataViews.OnError;
 import com.swoval.files.FileTreeViews.Observer;
@@ -42,10 +43,10 @@ public class FileTreeRepositories {
           @Override
           public void onNext(final Event event) {
             copy.run(
-                new Consumer<Executor.Thread>() {
+                new Consumer<ThreadHandle>() {
                   @Override
-                  public void accept(final Executor.Thread thread) {
-                    tree.handleEvent(event, thread);
+                  public void accept(final ThreadHandle threadHandle) {
+                    tree.handleEvent(event, threadHandle);
                   }
                 });
           }

@@ -1,5 +1,6 @@
 package com.swoval.files;
 
+import com.swoval.files.Executor.ThreadHandle;
 import com.swoval.files.FileTreeDataViews.Entry;
 import java.nio.file.Path;
 import java.util.List;
@@ -14,7 +15,7 @@ interface UpdatableFileTreeDataView<T> extends FileTreeDataView<T> {
    *     it is a directory. For an existing path, the List contains a single Updates that contains
    *     the previous and new {@link Entry}.
    */
-  FileTreeViews.Updates<T> update(final TypedPath typedPath, final Executor.Thread thread);
+  FileTreeViews.Updates<T> update(final TypedPath typedPath, final ThreadHandle threadHandle);
 
   /**
    * Remove a path from the directory.
@@ -23,5 +24,5 @@ interface UpdatableFileTreeDataView<T> extends FileTreeDataView<T> {
    * @return a List containing the Entry instances for the removed path. The result also contains
    *     the cache entries for any children of the path when the path is a non-empty directory.
    */
-  List<Entry<T>> remove(final Path path, final Executor.Thread thread);
+  List<Entry<T>> remove(final Path path, final ThreadHandle threadHandle);
 }
