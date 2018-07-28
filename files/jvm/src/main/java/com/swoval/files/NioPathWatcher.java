@@ -19,6 +19,7 @@ import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -340,10 +341,12 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
           add(file, threadHandle);
         }
       } catch (final IOException e) {
-        final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> removed =
-            root.remove(path, threadHandle).iterator();
-        while (removed.hasNext()) {
-          maybeRunCallback(new Event(Entries.setExists(removed.next(), false), Delete));
+        final List<FileTreeDataViews.Entry<WatchedDirectory>> removed =
+            root.remove(path, threadHandle);
+        Collections.sort(removed);
+        final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> removedIt = removed.iterator();
+        while (removedIt.hasNext()) {
+          maybeRunCallback(new Event(Entries.setExists(removedIt.next(), false), Delete));
         }
       }
     }
