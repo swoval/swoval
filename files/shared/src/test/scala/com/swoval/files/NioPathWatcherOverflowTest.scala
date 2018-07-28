@@ -12,6 +12,7 @@ import utest._
 
 import scala.collection.mutable
 import scala.util.Failure
+import TestHelpers._
 
 object NioPathWatcherOverflowTest extends TestSuite {
   val tests = if (Platform.isJVM || !Platform.isMac) Tests {

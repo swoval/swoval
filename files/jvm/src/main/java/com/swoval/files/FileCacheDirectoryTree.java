@@ -158,7 +158,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
     if (typedPath.exists()) {
       final CachedDirectory<T> dir = find(typedPath.getPath());
       if (dir != null) {
-        dir.update(typedPath, threadHandle).observe(callbackObserver(callbacks));
+        dir.update(typedPath, threadHandle).observe(callbackObserver(callbacks, threadHandle));
       } else if (pendingFiles.remove(path)) {
         try {
           CachedDirectory<T> cachedDirectory;
@@ -171,12 +171,12 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
           }
           final CachedDirectory<T> previous = directories.put(path, cachedDirectory);
           if (previous != null) previous.close();
-          addCallback(callbacks, typedPath, null, cachedDirectory.getEntry(), Create, null);
+          addCallback(callbacks, typedPath, null, cachedDirectory.getEntry(), Create, null, threadHandle);
           final Iterator<FileTreeDataViews.Entry<T>> it =
               cachedDirectory.listEntries(cachedDirectory.getMaxDepth(), AllPass).iterator();
           while (it.hasNext()) {
             final FileTreeDataViews.Entry<T> entry = it.next();
-            addCallback(callbacks, entry, null, entry, Create, null);
+            addCallback(callbacks, entry, null, entry, Create, null, threadHandle);
           }
         } catch (final IOException e) {
           pendingFiles.add(path);
@@ -208,7 +208,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         final Iterator<FileTreeDataViews.Entry<T>> removeIterator = it.next();
         while (removeIterator.hasNext()) {
           final FileTreeDataViews.Entry<T> entry = Entries.setExists(removeIterator.next(), false);
-          addCallback(callbacks, entry, entry, null, Delete, null);
+          addCallback(callbacks, entry, entry, null, Delete, null, threadHandle);
         }
       }
     }
@@ -303,11 +303,12 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
       final FileTreeDataViews.Entry<T> oldEntry,
       final FileTreeDataViews.Entry<T> newEntry,
       final Kind kind,
-      final IOException ioException) {
+      final IOException ioException,
+      final ThreadHandle threadHandle) {
     if (typedPath.isSymbolicLink()) {
       final Path path = typedPath.getPath();
       if (typedPath.exists()) {
-        symlinkWatcher.addSymlink(path, directoryRegistry.maxDepthFor(path));
+        symlinkWatcher.addSymlink(path, directoryRegistry.maxDepthFor(path), threadHandle);
       } else {
         try {
           symlinkWatcher.remove(path);
@@ -367,27 +368,27 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
     }
   }
 
-  private FileTreeViews.CacheObserver<T> callbackObserver(final List<Callback> callbacks) {
+  private FileTreeViews.CacheObserver<T> callbackObserver(final List<Callback> callbacks, final ThreadHandle threadHandle) {
     return new FileTreeViews.CacheObserver<T>() {
       @Override
       public void onCreate(final FileTreeDataViews.Entry<T> newEntry) {
-        addCallback(callbacks, newEntry, null, newEntry, Create, null);
+        addCallback(callbacks, newEntry, null, newEntry, Create, null, threadHandle);
       }
 
       @Override
       public void onDelete(final FileTreeDataViews.Entry<T> oldEntry) {
-        addCallback(callbacks, oldEntry, oldEntry, null, Delete, null);
+        addCallback(callbacks, oldEntry, oldEntry, null, Delete, null, threadHandle);
       }
 
       @Override
       public void onUpdate(
           final FileTreeDataViews.Entry<T> oldEntry, final FileTreeDataViews.Entry<T> newEntry) {
-        addCallback(callbacks, oldEntry, oldEntry, newEntry, Modify, null);
+        addCallback(callbacks, oldEntry, oldEntry, newEntry, Modify, null, threadHandle);
       }
 
       @Override
       public void onError(final IOException exception) {
-        addCallback(callbacks, null, null, null, Error, exception);
+        addCallback(callbacks, null, null, null, Error, exception, threadHandle);
       }
     };
   }

@@ -11,6 +11,7 @@ import utest._
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
+import TestHelpers._
 
 object FileTreeViewTest {
   implicit class RepositoryOps[T <: AnyRef](val d: DirectoryView) {

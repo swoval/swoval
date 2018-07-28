@@ -20,6 +20,8 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 
+import TestHelpers._
+
 trait PathWatcherTest extends TestSuite {
   type Event = PathWatchers.Event
   val DEFAULT_LATENCY = 5.milliseconds

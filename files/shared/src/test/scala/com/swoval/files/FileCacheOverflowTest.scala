@@ -4,7 +4,6 @@ import java.io.IOException
 import java.nio.file.{ Files, Path, Paths }
 
 import FileTreeDataViews.Entry
-import com.swoval.files.EntryOps._
 import com.swoval.files.Executor.ThreadHandle
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.test._
@@ -16,6 +15,8 @@ import utest._
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
+import TestHelpers._
+import EntryOps._
 
 trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
   def getBounded[T <: AnyRef](

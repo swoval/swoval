@@ -4,7 +4,6 @@ import java.io.IOException
 import java.nio.file.{ Files, Path }
 
 import FileTreeDataViews.Entry
-import com.swoval.files.EntryOps._
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.test._
 import com.swoval.runtime.Platform
@@ -16,6 +15,8 @@ import scala.collection.mutable
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 import scala.util.Failure
+import TestHelpers._
+import EntryOps._
 
 trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
   val testsImpl = Tests {

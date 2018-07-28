@@ -5,7 +5,6 @@ import java.nio.file.attribute.FileTime
 import java.nio.file.{ Files, Path, Paths }
 
 import FileTreeDataViews.Entry
-import com.swoval.files.EntryOps._
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.test._
 import com.swoval.functional.Filters.AllPass
@@ -18,6 +17,8 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
+import TestHelpers._
+import EntryOps._
 
 trait BasicFileCacheTest extends TestSuite with FileCacheTest {
   val testsImpl: Tests = Tests {

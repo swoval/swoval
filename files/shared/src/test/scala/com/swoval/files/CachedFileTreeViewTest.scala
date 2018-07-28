@@ -5,7 +5,6 @@ import java.nio.file.{ Files, Path }
 import java.util
 
 import FileTreeDataViews.Entry
-import com.swoval.files.EntryOps._
 import com.swoval.files.Executor.ThreadHandle
 import com.swoval.files.FileTreeViewTest.RepositoryOps
 import com.swoval.files.FileTreeViews.{ CacheObserver, Observer }
@@ -18,6 +17,8 @@ import utest._
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.Future
+import TestHelpers._
+import EntryOps._
 
 object CachedFileTreeViewTest extends TestSuite {
   def newCachedView(path: Path): CachedDirectory[Path] = newCachedView(path, Integer.MAX_VALUE)

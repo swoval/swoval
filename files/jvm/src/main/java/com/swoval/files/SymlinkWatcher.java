@@ -189,47 +189,36 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
    * @param path The symlink base file.
    */
   @SuppressWarnings("EmptyCatchBlock")
-  void addSymlink(final Path path, final int maxDepth) {
-    internalExecutor.run(
-        new Consumer<ThreadHandle>() {
-          @Override
-          public String toString() {
-            return "Add symlink " + path;
-          }
-
-          @Override
-          public void accept(final ThreadHandle threadHandle) {
-            if (!isClosed.get()) {
-              try {
-                final Path realPath = path.toRealPath();
-                if (path.startsWith(realPath) && !path.equals(realPath)) {
-                  onError.apply(new FileSystemLoopException(path.toString()));
-                } else {
-                  final RegisteredPath targetRegistrationPath =
-                      watchedSymlinksByTarget.get(realPath);
-                  if (targetRegistrationPath == null) {
-                    final RegisteredPath registeredPath = watchedSymlinksByDirectory.get(realPath);
-                    if (registeredPath == null) {
-                      final Either<IOException, Boolean> result =
-                          watcher.register(realPath, maxDepth);
-                      if (getOrElse(result, false)) {
-                        watchedSymlinksByDirectory.put(
-                            realPath, new RegisteredPath(path, realPath));
-                        watchedSymlinksByTarget.put(realPath, new RegisteredPath(realPath, path));
-                      } else if (result.isLeft()) {
-                        onError.apply(leftProjection(result).getValue());
-                      }
-                    }
-                  } else {
-                    targetRegistrationPath.paths.add(path);
-                  }
-                }
-              } catch (IOException e) {
-                onError.apply(e);
+  void addSymlink(final Path path, final int maxDepth, final ThreadHandle threadHandle) {
+    if (!isClosed.get()) {
+      try {
+        final Path realPath = path.toRealPath();
+        if (path.startsWith(realPath) && !path.equals(realPath)) {
+          onError.apply(new FileSystemLoopException(path.toString()));
+        } else {
+          final RegisteredPath targetRegistrationPath =
+              watchedSymlinksByTarget.get(realPath);
+          if (targetRegistrationPath == null) {
+            final RegisteredPath registeredPath = watchedSymlinksByDirectory.get(realPath);
+            if (registeredPath == null) {
+              final Either<IOException, Boolean> result =
+                  watcher.register(realPath, maxDepth);
+              if (getOrElse(result, false)) {
+                watchedSymlinksByDirectory.put(
+                    realPath, new RegisteredPath(path, realPath));
+                watchedSymlinksByTarget.put(realPath, new RegisteredPath(realPath, path));
+              } else if (result.isLeft()) {
+                onError.apply(leftProjection(result).getValue());
               }
             }
+          } else {
+            targetRegistrationPath.paths.add(path);
           }
-        });
+        }
+      } catch (IOException e) {
+        onError.apply(e);
+      }
+    }
   }
 
   /**

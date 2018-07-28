@@ -31,7 +31,7 @@ class FileCachePathWatcher<T> {
         if (entry.isSymbolicLink()) {
           final int depth = path.relativize(entry.getPath()).getNameCount();
           symlinkWatcher.addSymlink(
-              entry.getPath(), maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - depth);
+              entry.getPath(), maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - depth, threadHandle);
         }
       }
     }

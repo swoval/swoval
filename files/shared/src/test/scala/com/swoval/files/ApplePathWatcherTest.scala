@@ -11,6 +11,7 @@ import com.swoval.test._
 import utest._
 
 import scala.concurrent.duration._
+import TestHelpers._
 
 object ApplePathWatcherTest extends TestSuite {
   val DEFAULT_LATENCY = 5.milliseconds

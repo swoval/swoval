@@ -1,9 +1,10 @@
 package com.swoval
+package files
 
 import java.io.{ File, FileFilter, IOException }
 import java.nio.file.Path
 
-import com.swoval.files.FileTreeDataViews._
+import com.swoval.files.FileTreeDataViews.{ Converter, Entry, OnError }
 import com.swoval.files.FileTreeViews.{ CacheObserver, Observer }
 import com.swoval.files.test.platform.Bool
 import com.swoval.functional.{ Consumer, Filter }
@@ -17,7 +18,7 @@ import utest._
  * flag set.
  *
  */
-package object files extends PlatformFiles {
+object TestHelpers extends PlatformFiles {
   val Ignore: CacheObserver[_] = getObserver[Path]((_: Entry[Path]) => {})
 
   def getObserver[T <: AnyRef](

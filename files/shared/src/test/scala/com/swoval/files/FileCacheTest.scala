@@ -13,6 +13,7 @@ import com.swoval.functional.{ Filter, Filters, Either => SEither }
 import utest._
 
 import scala.collection.JavaConverters._
+import TestHelpers._
 
 trait FileCacheTest { self: TestSuite =>
   val factory: (Executor, DirectoryRegistry) => PathWatcher[Event]

@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
+import TestHelpers._
 
 class BoundedWatchService(val queueSize: Int, underlying: RegisterableWatchService)
     extends RegisterableWatchService {
