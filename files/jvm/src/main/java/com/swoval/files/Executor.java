@@ -17,6 +17,7 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 abstract class Executor implements AutoCloseable {
   Executor() {}
+  private final ThreadHandle threadHandle = new ThreadHandle();
 
   public static final class ThreadHandle {
     private ThreadHandle() {}
@@ -28,7 +29,10 @@ abstract class Executor implements AutoCloseable {
     }
   }
 
-  abstract ThreadHandle getThreadHandle() throws InterruptedException;
+  ThreadHandle getThreadHandle() throws InterruptedException {
+    threadHandle.reentrantLock.lockInterruptibly();
+    return threadHandle;
+  }
 
   /**
    * Runs the task on a threadHandle.
@@ -73,12 +77,6 @@ abstract class Executor implements AutoCloseable {
 
   static class ExecutorImpl extends Executor {
     private final AtomicBoolean closed = new AtomicBoolean(false);
-    private final ThreadHandle threadHandle = new ThreadHandle();
-
-    ThreadHandle getThreadHandle() throws InterruptedException {
-      threadHandle.reentrantLock.lockInterruptibly();
-      return threadHandle;
-    }
 
     final ThreadFactory factory;
     final ExecutorService service;
@@ -103,7 +101,7 @@ abstract class Executor implements AutoCloseable {
                     assert (consumer != null);
                     stop = consumer.priority < 0;
                     if (!stop) {
-                      threadHandle.reentrantLock.lockInterruptibly();
+                      final ThreadHandle threadHandle = getThreadHandle();
                       try {
                         consumer.accept(threadHandle);
                       } catch (final Exception e) {

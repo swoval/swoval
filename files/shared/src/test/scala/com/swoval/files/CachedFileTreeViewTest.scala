@@ -53,7 +53,6 @@ object CachedFileTreeViewTest extends TestSuite {
   val executor = new Executor {
     override def run(threadConsumer: Consumer[ThreadHandle], priority: Int): Unit =
       threadConsumer.accept(getThreadHandle())
-    override def getThreadHandle(): ThreadHandle = null
   }
   implicit class CachedDirectoryOps[T <: AnyRef](val cd: CachedDirectory[T]) extends AnyVal {
     def remove(path: Path): java.util.List[Entry[T]] = {
