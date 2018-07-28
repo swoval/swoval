@@ -1,4 +1,5 @@
-package com.swoval.files
+package com.swoval
+package files
 
 import java.io.IOException
 import java.nio.file.{ Files, Path }
@@ -217,6 +218,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           val linkLatch = new CountDownLatch(1)
           val link = dir.resolve("link")
           usingAsync(FileCacheTest.getCached[Path](
+            true,
             identity,
             new FileTreeViews.CacheObserver[Path] {
               override def onCreate(newEntry: Entry[Path]): Unit = {}
@@ -244,6 +246,22 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
         }
       }
     }
+    'noFollow - withTempDirectory { dir =>
+      withTempDirectory { otherDir =>
+        val file = otherDir.resolve("file").createFile()
+        Files.write(file, "foo".getBytes)
+        val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
+        using(FileTreeRepositories.get(false, identity)) { c =>
+          c.register(dir)
+          c.ls(dir, true, functional.Filters.AllPass) === Set(link)
+        } flatMap { _ =>
+          using(FileTreeRepositories.get(true, identity)) { c =>
+            c.register(dir)
+            c.ls(dir, true, functional.Filters.AllPass) === Set(link, link.resolve("file"))
+          }
+        }
+      }
+    }
     'multiple - {
       'static - withTempDirectory { dir =>
         val latch = new CountDownLatch(2)
@@ -253,6 +271,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
             val link = Files.createSymbolicLink(dir.resolve("link"), file)
             val otherLink = Files.createSymbolicLink(otherDir.resolve("link"), file)
             usingAsync(FileCacheTest.getCached[Path](
+              true,
               identity,
               new FileTreeViews.CacheObserver[Path] {
                 override def onCreate(newEntry: Entry[Path]): Unit = {}
@@ -291,6 +310,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
             val link = Files.createSymbolicLink(dir.resolve("link"), file)
             val otherLink = Files.createSymbolicLink(otherDir.resolve("link"), file)
             usingAsync(FileCacheTest.getCached[Path](
+              true,
               identity,
               new FileTreeViews.CacheObserver[Path] {
                 override def onCreate(newEntry: Entry[Path]): Unit = {}

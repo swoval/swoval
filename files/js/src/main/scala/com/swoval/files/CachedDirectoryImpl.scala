@@ -74,17 +74,14 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
 
   private val pathFilter: Filter[_ >: TypedPath] = filter
 
+  private val subdirectories: LockableMap[Path, CachedDirectoryImpl[T]] =
+    new LockableMap()
+
+  private val files: Map[Path, Entry[T]] = new HashMap()
+
   val typedPath: TypedPath = TypedPaths.get(path)
 
   this._cacheEntry.set(Entries.get(TypedPaths.getDelegate(path, typedPath), converter, typedPath))
-
-  val lock: ReentrantLock = new ReentrantLock()
-
-  private val subdirectories: LockableMap[Path, CachedDirectoryImpl[T]] =
-    new LockableMap(new HashMap[Path, CachedDirectoryImpl[T]](), lock)
-
-  private val files: LockableMap[Path, Entry[T]] =
-    new LockableMap(new HashMap[Path, Entry[T]](), lock)
 
   def getMaxDepth(): Int = depth
 
@@ -185,7 +182,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
     if (path.isAbsolute && path.startsWith(this.path)) {
       removeImpl(parts(this.path.relativize(path)))
     } else {
-      new ArrayList()
+      Collections.emptyList()
     }
 
   override def toString(): String =

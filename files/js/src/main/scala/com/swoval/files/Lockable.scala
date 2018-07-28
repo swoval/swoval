@@ -15,7 +15,7 @@ import java.util.concurrent.locks.ReentrantLock
 class Lockable(private val reentrantLock: ReentrantLock) {
 
   def lock(): Boolean =
-    try reentrantLock.tryLock(5000, TimeUnit.SECONDS)
+    try reentrantLock.tryLock(1, TimeUnit.MINUTES)
     catch {
       case e: InterruptedException => false
 
@@ -27,7 +27,7 @@ class Lockable(private val reentrantLock: ReentrantLock) {
 
 }
 
-class LockableMap[K, V](private val map: Map[K, V], reentrantLock: ReentrantLock)
+class LockableMap[K, V <: AutoCloseable](private val map: Map[K, V], reentrantLock: ReentrantLock)
     extends Lockable(reentrantLock) {
 
   def this() = this(new HashMap[K, V](), new ReentrantLock())
@@ -38,8 +38,7 @@ class LockableMap[K, V](private val map: Map[K, V], reentrantLock: ReentrantLock
         val values: Iterator[V] = new ArrayList(map.values).iterator()
         while (values.hasNext) try {
           val v: V = values.next()
-          if (v.isInstanceOf[AutoCloseable])
-            v.asInstanceOf[AutoCloseable].close()
+          v.close()
         } catch {
           case e: Exception => {}
 

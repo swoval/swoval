@@ -274,8 +274,12 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
 class ApplePathWatchers {
   private ApplePathWatchers() {}
 
-  public static PathWatcher<PathWatchers.Event> get(final DirectoryRegistry directoryRegistry)
-      throws InterruptedException {
-    return new ApplePathWatcher(directoryRegistry);
+  public static PathWatcher<PathWatchers.Event> get(
+      final Boolean followLinks, final DirectoryRegistry directoryRegistry)
+      throws InterruptedException, IOException {
+    final ApplePathWatcher pathWatcher = new ApplePathWatcher(directoryRegistry);
+    return followLinks
+        ? new SymlinkFollowingPathWatcher(pathWatcher, directoryRegistry)
+        : pathWatcher;
   }
 }

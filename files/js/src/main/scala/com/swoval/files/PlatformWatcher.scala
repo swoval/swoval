@@ -4,11 +4,14 @@ import com.swoval.files.PathWatchers.Event
 import com.swoval.functional.Consumer
 
 private[files] object PlatformWatcher {
-  def make(registerable: RegisterableWatchService,
+  def make(followLinks: Boolean,
+           registerable: RegisterableWatchService,
            directoryRegistry: DirectoryRegistry): PathWatcher[PathWatchers.Event] = {
-    new NioPathWatcher(directoryRegistry, registerable)
+    val watcher = new NioPathWatcher(directoryRegistry, registerable)
+    if (followLinks) new SymlinkFollowingPathWatcher(watcher, directoryRegistry) else watcher
   }
-  def make(directoryRegistry: DirectoryRegistry): PathWatcher[PathWatchers.Event] = {
-    make(null, directoryRegistry)
+  def make(followLinks: Boolean,
+           directoryRegistry: DirectoryRegistry): PathWatcher[PathWatchers.Event] = {
+    make(followLinks, null, directoryRegistry)
   }
 }

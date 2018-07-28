@@ -23,6 +23,7 @@ class JsFileCache[T <: AnyRef](converter: js.UndefOr[js.Function1[TypedPath, T]]
                                callback: js.UndefOr[js.Function1[JSEntry[T], Unit]])
     extends js.Object {
   private[this] val inner: FileTreeRepository[T] = FileTreeRepositories.get(
+    true,
     converter.toOption
       .map(c =>
         new Converter[T] {
@@ -30,7 +31,8 @@ class JsFileCache[T <: AnyRef](converter: js.UndefOr[js.Function1[TypedPath, T]]
       })
       .getOrElse(new Converter[T] {
         override def apply(path: TypedPath): T = path.asInstanceOf[T]
-      }))
+      })
+  )
   callback.toOption.foreach(addCallback)
   def list(path: String,
            recursive: js.UndefOr[Boolean],

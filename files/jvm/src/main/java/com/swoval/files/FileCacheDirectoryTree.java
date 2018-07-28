@@ -84,7 +84,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   private final Converter<T> converter;
   private final CacheObservers<T> observers = new CacheObservers<>();
   private final Executor callbackExecutor;
-  private final boolean followLinks = true;
+  private final boolean followLinks;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   final SymlinkWatcher symlinkWatcher;
 
@@ -95,18 +95,21 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
     this.converter = converter;
     this.callbackExecutor = callbackExecutor;
     this.symlinkWatcher = symlinkWatcher;
-    symlinkWatcher.addObserver(
-        new Observer<Event>() {
-          @Override
-          public void onError(final Throwable t) {
-            t.printStackTrace(System.err);
-          }
+    this.followLinks = symlinkWatcher != null;
+    if (symlinkWatcher != null) {
+      symlinkWatcher.addObserver(
+          new Observer<Event>() {
+            @Override
+            public void onError(final Throwable t) {
+              t.printStackTrace(System.err);
+            }
 
-          @Override
-          public void onNext(final Event event) {
-            handleEvent(event);
-          }
-        });
+            @Override
+            public void onNext(final Event event) {
+              handleEvent(event);
+            }
+          });
+    }
     final ReentrantLock reentrantLock = new ReentrantLock();
     pendingFiles = new FileCachePendingFiles(reentrantLock);
     directories = new FileCacheDirectories<>(reentrantLock);
@@ -275,14 +278,16 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
       while (it.hasNext()) {
         final TypedPath tp = it.next();
         final Path path = tp.getPath();
-        if (tp.exists()) {
-          try {
-            symlinkWatcher.addSymlink(path, directoryRegistry.maxDepthFor(path));
-          } catch (final IOException e) {
-            observers.onError(e);
+        if (symlinkWatcher != null) {
+          if (tp.exists()) {
+            try {
+              symlinkWatcher.addSymlink(path, directoryRegistry.maxDepthFor(path));
+            } catch (final IOException e) {
+              observers.onError(e);
+            }
+          } else {
+            symlinkWatcher.remove(path);
           }
-        } else {
-          symlinkWatcher.remove(path);
         }
       }
       runCallbacks(callbacks);

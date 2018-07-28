@@ -13,7 +13,7 @@ class JsPathWatcher(callback: js.UndefOr[js.Function2[String, String, Unit]]) ex
   private[this] val callbacks = new Observers[Event]()
   callback.toOption.foreach(addCallback)
   private[this] val inner: PathWatcher[PathWatchers.Event] = {
-    val res = PathWatchers.get()
+    val res = PathWatchers.get(true)
     res.addObserver(callbacks)
     res
   }

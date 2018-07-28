@@ -480,6 +480,7 @@ object Build {
                 "RegisterableWatchService",
                 "SimpleFileTreeView",
                 "SymlinkWatcher",
+                "SymlinkFollowingPathWatcher",
                 "TypedPath",
                 "UpdatableFileTreeDataView",
                 "WatchedDirectory"

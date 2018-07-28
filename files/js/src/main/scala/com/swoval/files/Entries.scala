@@ -102,7 +102,7 @@ object Entries {
         .getPath == getPath &&
         getValue == other.asInstanceOf[Entry[_]].getValue
 
-    override def compareTo(that: TypedPath): Int =
+    override def compareTo(that: Entry[T]): Int =
       this.getPath.compareTo(that.getPath)
 
   }

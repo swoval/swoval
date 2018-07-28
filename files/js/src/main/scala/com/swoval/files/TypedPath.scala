@@ -16,7 +16,7 @@ import scala.beans.{ BeanProperty, BooleanBeanProperty }
  * A mix-in for an object that represents a file system path. Provides (possibly) fast accessors for
  * the type of the file.
  */
-trait TypedPath extends Comparable[TypedPath] {
+trait TypedPath {
 
   /**
    * Return the path.
@@ -86,23 +86,6 @@ object TypedPaths {
 
     override def hashCode(): Int = getPath.hashCode
 
-    override def compareTo(that: TypedPath): Int =
-      this.path.compareTo(that.getPath)
-
-  }
-
-  def show(path: TypedPath): String = show(path, false)
-
-  def show(path: TypedPath, realPath: Boolean): String = {
-    val result: StringBuilder = new StringBuilder()
-    result.append("TypedPath: ").append(path.toString).append('\n')
-    if (realPath)
-      result.append("  realPath: ").append(path.toRealPath()).append('\n')
-    result.append("  exists: ").append(path.isDirectory).append('\n')
-    result.append("  isDirectory: ").append(path.isDirectory).append('\n')
-    result.append("  isFile: ").append(path.isFile).append('\n')
-    result.append("  isSymbolicLink: ").append(path.isSymbolicLink)
-    result.toString
   }
 
   def getDelegate(path: Path, typedPath: TypedPath): TypedPath =

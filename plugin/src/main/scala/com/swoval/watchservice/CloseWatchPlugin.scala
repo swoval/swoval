@@ -238,7 +238,7 @@ object CloseWatchPlugin extends AutoPlugin {
     parsed.fold(_ => commands(taskDef.mkString(" ").trim), paths)
   }
   override lazy val globalSettings: Seq[Def.Setting[_]] = super.globalSettings ++ Seq(
-    closeWatchFileCache := FileTreeRepositories.get(new Converter[Path] {
+    closeWatchFileCache := FileTreeRepositories.get(true, new Converter[Path] {
       override def apply(path: TypedPath): Path = path.getPath
     }),
     closeWatchUseDefaultWatchService := false,

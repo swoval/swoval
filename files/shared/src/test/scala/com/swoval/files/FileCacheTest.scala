@@ -19,23 +19,25 @@ trait FileCacheTest { self: TestSuite =>
   def identity: Converter[Path] = (_: TypedPath).getPath
 
   def simpleCache(f: Entry[Path] => Unit): FileTreeRepository[Path] =
-    FileCacheTest.get(identity, getObserver(f), factory)
+    FileCacheTest.get(true, identity, getObserver(f), factory)
 
   def lastModifiedCache(f: Entry[LastModified] => Unit): FileTreeRepository[LastModified] =
-    FileCacheTest.get(LastModified(_: TypedPath), getObserver(f), factory)
+    FileCacheTest.get(false, LastModified(_: TypedPath), getObserver(f), factory)
 
   def lastModifiedCache(onCreate: Entry[LastModified] => Unit,
                         onUpdate: (Entry[LastModified], Entry[LastModified]) => Unit,
                         onDelete: Entry[LastModified] => Unit): FileTreeRepository[LastModified] =
-    FileCacheTest.get(LastModified(_: TypedPath),
+    FileCacheTest.get(false,
+                      LastModified(_: TypedPath),
                       getObserver(onCreate, onUpdate, onDelete),
                       factory)
 }
 
 object FileCacheTest {
-  def getCached[T <: AnyRef](converter: Converter[T],
+  def getCached[T <: AnyRef](followLinks: Boolean,
+                             converter: Converter[T],
                              cacheObserver: CacheObserver[T]): FileTreeRepository[T] = {
-    val res = FileTreeRepositories.get(converter)
+    val res = FileTreeRepositories.get(followLinks, converter)
     res.addCacheObserver(cacheObserver)
     res
   }
@@ -67,12 +69,13 @@ object FileCacheTest {
    * @return a file cache.
    */
   private[files] def get[T <: AnyRef](
+      followLinks: Boolean,
       converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeViews.CacheObserver[T],
       watcherFactory: (DirectoryRegistry) => PathWatcher[PathWatchers.Event])
     : FileTreeRepository[T] = {
     val symlinkWatcher =
-      new SymlinkWatcher(watcherFactory(new DirectoryRegistryImpl))
+      if (followLinks) new SymlinkWatcher(watcherFactory(new DirectoryRegistryImpl)) else null
     val callbackExecutor = Executor.make("FileTreeRepository-callback-executor")
     val tree = new FileCacheDirectoryTree(converter, callbackExecutor, symlinkWatcher)
     val pathWatcher = watcherFactory(tree.readOnlyDirectoryRegistry)
@@ -85,8 +88,9 @@ object FileCacheTest {
 }
 
 trait DefaultFileCacheTest { self: FileCacheTest =>
-  val factory = (directoryRegistry: DirectoryRegistry) => PathWatchers.get(directoryRegistry)
+  val factory = (directoryRegistry: DirectoryRegistry) => PathWatchers.get(false, directoryRegistry)
 }
 trait NioFileCacheTest { self: FileCacheTest =>
-  val factory = (directoryRegistry: DirectoryRegistry) => PlatformWatcher.make(directoryRegistry)
+  val factory = (directoryRegistry: DirectoryRegistry) =>
+    PlatformWatcher.make(false, directoryRegistry)
 }

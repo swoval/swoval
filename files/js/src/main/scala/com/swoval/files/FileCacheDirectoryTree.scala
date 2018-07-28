@@ -75,19 +75,21 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
 
   private val observers: CacheObservers[T] = new CacheObservers()
 
-  private val followLinks: Boolean = true
+  private val followLinks: Boolean = symlinkWatcher != null
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
 
-  symlinkWatcher.addObserver(new Observer[Event]() {
-    override def onError(t: Throwable): Unit = {
-      t.printStackTrace(System.err)
-    }
+  if (symlinkWatcher != null) {
+    symlinkWatcher.addObserver(new Observer[Event]() {
+      override def onError(t: Throwable): Unit = {
+        t.printStackTrace(System.err)
+      }
 
-    override def onNext(event: Event): Unit = {
-      handleEvent(event)
-    }
-  })
+      override def onNext(event: Event): Unit = {
+        handleEvent(event)
+      }
+    })
+  }
 
   val reentrantLock: ReentrantLock = new ReentrantLock()
 
@@ -242,14 +244,16 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
       while (it.hasNext) {
         val tp: TypedPath = it.next()
         val path: Path = tp.getPath
-        if (tp.exists()) {
-          try symlinkWatcher.addSymlink(path, directoryRegistry.maxDepthFor(path))
-          catch {
-            case e: IOException => observers.onError(e)
+        if (symlinkWatcher != null) {
+          if (tp.exists()) {
+            try symlinkWatcher.addSymlink(path, directoryRegistry.maxDepthFor(path))
+            catch {
+              case e: IOException => observers.onError(e)
 
+            }
+          } else {
+            symlinkWatcher.remove(path)
           }
-        } else {
-          symlinkWatcher.remove(path)
         }
       }
       runCallbacks(callbacks)
@@ -348,7 +352,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     if (typedPath.isSymbolicLink) {
       symlinks.add(typedPath)
     }
-    callbacks.add(new Callback(typedPath, kind) {
+    callbacks.add(new Callback(typedPath.getPath) {
       override def run(): Unit = {
         try if (ioException != null) {
           observers.onError(ioException)
@@ -383,7 +387,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
       try {
         val dir: CachedDirectory[T] = find(path)
         if (dir == null) {
-          new ArrayList()
+          Collections.emptyList()
         } else {
           if (dir.getPath == path && dir.getMaxDepth == -1) {
             val result: List[FileTreeDataViews.Entry[T]] =
@@ -425,7 +429,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
       try {
         val dir: CachedDirectory[T] = find(path)
         if (dir == null) {
-          new ArrayList()
+          Collections.emptyList()
         } else {
           if (dir.getPath == path && dir.getMaxDepth == -1) {
             val result: List[TypedPath] = new ArrayList[TypedPath]()

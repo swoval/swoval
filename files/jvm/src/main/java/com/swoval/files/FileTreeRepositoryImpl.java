@@ -3,7 +3,6 @@ package com.swoval.files;
 import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.files.FileTreeViews.CacheObserver;
 import com.swoval.files.FileTreeViews.Observer;
-import com.swoval.files.PathWatchers.Event.Kind;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
 import com.swoval.runtime.ShutdownHooks;

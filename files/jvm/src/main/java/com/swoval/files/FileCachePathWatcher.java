@@ -42,6 +42,6 @@ class FileCachePathWatcher<T> implements AutoCloseable {
 
   public void close() {
     pathWatcher.close();
-    symlinkWatcher.close();
+    if (symlinkWatcher != null) symlinkWatcher.close();
   }
 }

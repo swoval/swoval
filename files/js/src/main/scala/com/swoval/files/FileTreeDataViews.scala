@@ -13,7 +13,7 @@ object FileTreeDataViews {
    *
    * @tparam T The value wrapped in the Entry
    */
-  trait Entry[T] extends TypedPath {
+  trait Entry[T] extends TypedPath with Comparable[Entry[T]] {
 
     /**
      * Return the value associated with this entry. jjj

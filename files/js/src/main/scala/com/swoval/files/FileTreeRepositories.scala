@@ -12,19 +12,27 @@ object FileTreeRepositories {
   /**
    * Create a file tree repository.
    *
+   * @param followLinks toggles whether or not to follow symbolic links. When true, any symbolic
+   *     links that point to a regular file will trigger an event when the target file is modified.
+   *     For any symbolic links that point to a directory, the children of the target directory will
+   *     be included (up to the max depth parameter specified by [[    FileTreeRepository.register]]) and will trigger an event when any of the included children
+   *     are modified. When false, symbolic links are not followed and only events for the symbolic
+   *     link itself are reported.
    * @param converter converts a path to the cached value type T
    * @tparam T the value type of the cache entries
    * @return a file tree repository.
    */
-  def get[T <: AnyRef](converter: Converter[T]): FileTreeRepository[T] = {
-    val symlinkWatcher: SymlinkWatcher = new SymlinkWatcher(
-      PathWatchers.get(new DirectoryRegistryImpl()))
+  def get[T <: AnyRef](followLinks: Boolean, converter: Converter[T]): FileTreeRepository[T] = {
+    val symlinkWatcher: SymlinkWatcher =
+      if (followLinks)
+        new SymlinkWatcher(PathWatchers.get(false, new DirectoryRegistryImpl()))
+      else null
     val callbackExecutor: Executor =
       Executor.make("FileTreeRepository-callback-executor")
     val tree: FileCacheDirectoryTree[T] =
       new FileCacheDirectoryTree[T](converter, callbackExecutor, symlinkWatcher)
     val pathWatcher: PathWatcher[PathWatchers.Event] =
-      PathWatchers.get(tree.readOnlyDirectoryRegistry())
+      PathWatchers.get(false, tree.readOnlyDirectoryRegistry())
     pathWatcher.addObserver(new Observer[Event]() {
       override def onError(t: Throwable): Unit = {}
 

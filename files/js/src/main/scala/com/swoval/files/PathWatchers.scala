@@ -12,30 +12,35 @@ object PathWatchers {
   /**
    * Create a PathWatcher for the runtime platform.
    *
+   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
    * @return PathWatcher for the runtime platform
    *     initialized
    */
-  def get(): PathWatcher[PathWatchers.Event] = get(new DirectoryRegistryImpl())
+  def get(followLinks: Boolean): PathWatcher[PathWatchers.Event] =
+    get(followLinks, new DirectoryRegistryImpl())
+
+  /**
+   * Create a PathWatcher for the runtime platform.
+   *
+   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
+   * @param registry The registry of directories to monitor
+   * @return PathWatcher for the runtime platform
+   *     initialized
+   */
+  def get(followLinks: Boolean, registry: DirectoryRegistry): PathWatcher[Event] =
+    if (Platform.isMac) ApplePathWatchers.get(followLinks, registry)
+    else PlatformWatcher.make(followLinks, registry)
 
   /**
    * Create a PathWatcher for the runtime platform.
    *
    * @param registry The registry of directories to monitor
    * @return PathWatcher for the runtime platform
-   *     initialized
    */
-  def get(registry: DirectoryRegistry): PathWatcher[Event] =
-    if (Platform.isMac) ApplePathWatchers.get(registry)
-    else PlatformWatcher.make(registry)
-
-  /**
-   * Create a PathWatcher for the runtime platform.
-   *
-   * @param registry The registry of directories to monitor
-   * @return PathWatcher for the runtime platform
-   */
-  def get(service: RegisterableWatchService, registry: DirectoryRegistry): PathWatcher[Event] =
-    PlatformWatcher.make(service, registry)
+  def get(followLinks: Boolean,
+          service: RegisterableWatchService,
+          registry: DirectoryRegistry): PathWatcher[Event] =
+    PlatformWatcher.make(followLinks, service, registry)
 
   class Overflow(@BeanProperty val path: Path)
 
@@ -69,7 +74,7 @@ object PathWatchers {
      * An enum like class to indicate the type of file event. It isn't an actual enum because the
      * scala.js codegen has problems with enum types.
      */
-    class Kind(private val name: String, private val priority: Int) extends Comparable[Kind] {
+    class Kind(private val name: String, private val priority: Int) {
 
       override def toString(): String = name
 
@@ -80,9 +85,6 @@ object PathWatchers {
       }
 
       override def hashCode(): Int = name.hashCode
-
-      override def compareTo(that: Kind): Int =
-        java.lang.Integer.compare(this.priority, that.priority)
 
     }
 
@@ -125,9 +127,6 @@ object PathWatchers {
 
     override def toString(): String =
       "Event(" + typedPath.getPath + ", " + kind + ")"
-
-    override def compareTo(that: TypedPath): Int =
-      this.getPath.compareTo(that.getPath)
 
   }
 

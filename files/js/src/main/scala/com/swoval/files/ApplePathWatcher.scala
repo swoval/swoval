@@ -240,7 +240,12 @@ class ApplePathWatcher(private val latency: Long,
 
 object ApplePathWatchers {
 
-  def get(directoryRegistry: DirectoryRegistry): PathWatcher[PathWatchers.Event] =
-    new ApplePathWatcher(directoryRegistry)
+  def get(followLinks: Boolean,
+          directoryRegistry: DirectoryRegistry): PathWatcher[PathWatchers.Event] = {
+    val pathWatcher: ApplePathWatcher = new ApplePathWatcher(directoryRegistry)
+    if (followLinks)
+      new SymlinkFollowingPathWatcher(pathWatcher, directoryRegistry)
+    else pathWatcher
+  }
 
 }

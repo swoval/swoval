@@ -39,7 +39,7 @@ class FileCachePathWatcher[T <: AnyRef](private val tree: FileCacheDirectoryTree
 
   def close(): Unit = {
     pathWatcher.close()
-    symlinkWatcher.close()
+    if (symlinkWatcher != null) symlinkWatcher.close()
   }
 
 }

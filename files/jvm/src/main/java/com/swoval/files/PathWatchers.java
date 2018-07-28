@@ -14,27 +14,32 @@ public class PathWatchers {
   /**
    * Create a PathWatcher for the runtime platform.
    *
+   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
    * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
-  public static PathWatcher<PathWatchers.Event> get() throws IOException, InterruptedException {
-    return get(new DirectoryRegistryImpl());
+  public static PathWatcher<PathWatchers.Event> get(final boolean followLinks)
+      throws IOException, InterruptedException {
+    return get(followLinks, new DirectoryRegistryImpl());
   }
 
   /**
    * Create a PathWatcher for the runtime platform.
    *
+   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
    * @param registry The registry of directories to monitor
    * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
-  static PathWatcher<Event> get(final DirectoryRegistry registry)
-      throws IOException, InterruptedException {
-    return Platform.isMac() ? ApplePathWatchers.get(registry) : PlatformWatcher.make(registry);
+  static PathWatcher<Event> get(final boolean followLinks, final DirectoryRegistry registry)
+      throws InterruptedException, IOException {
+    return Platform.isMac()
+        ? ApplePathWatchers.get(followLinks, registry)
+        : PlatformWatcher.make(followLinks, registry);
   }
 
   /**
@@ -45,9 +50,11 @@ public class PathWatchers {
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
   static PathWatcher<Event> get(
-      final RegisterableWatchService service, final DirectoryRegistry registry)
-      throws InterruptedException {
-    return PlatformWatcher.make(service, registry);
+      final boolean followLinks,
+      final RegisterableWatchService service,
+      final DirectoryRegistry registry)
+      throws InterruptedException, IOException {
+    return PlatformWatcher.make(followLinks, service, registry);
   }
 
   static final class Overflow {

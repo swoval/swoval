@@ -88,7 +88,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           val onUpdate = (_: Entry[Path], _: Entry[Path]) => {}
           val onError = (_: IOException) => {}
           val observer = getObserver(onChange, onUpdate, onChange, onError)
-          usingAsync(FileCacheTest.getCached(identity, observer)) { c =>
+          usingAsync(FileCacheTest.getCached(false, identity, observer)) { c =>
             c.reg(dir, recursive = false)
             c.ls(dir, recursive = false) === Seq(initial)
             initial.renameTo(moved)
@@ -244,6 +244,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         val latch = new CountDownLatch(1)
         usingAsync(
           FileCacheTest.getCached[LastModified](
+            false,
             LastModified(_: TypedPath),
             new FileTreeViews.CacheObserver[LastModified] {
               override def onCreate(newEntry: Entry[LastModified]): Unit = {}
@@ -323,7 +324,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
 
           override def onError(exception: IOException): Unit = {}
         }
-        usingAsync(FileCacheTest.getCached(identity, observer)) { c =>
+        usingAsync(FileCacheTest.getCached(false, identity, observer)) { c =>
           c.reg(dir)
           c.ls(dir) === Seq(file)
           dir.deleteRecursive()

@@ -10,6 +10,7 @@ import java.io.IOException
 import java.nio.file.Path
 import java.util.ArrayList
 import java.util.Collections
+import java.util.Comparator
 import java.util.Iterator
 import java.util.List
 
@@ -234,6 +235,7 @@ object FileTreeViews {
         val entries: Array[Entry[T]] = updateIterator.next()
         cacheObserver.onUpdate(entries(0), entries(1))
       }
+      Collections.sort(deletions)
       val deletionIterator: Iterator[Entry[T]] = deletions.iterator()
       while (deletionIterator.hasNext) cacheObserver.onDelete(
         Entries.setExists(deletionIterator.next(), false))

@@ -366,7 +366,7 @@ object PathWatcherTest extends PathWatcherTest {
   val tests = testsImpl
 
   def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] = {
-    val res = PathWatchers.get()
+    val res = PathWatchers.get(false)
     res.addObserver(callback)
     res
   }
