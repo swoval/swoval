@@ -14,7 +14,6 @@ import com.swoval.files.apple.FileEventMonitors.Handle;
 import com.swoval.files.apple.FileEventMonitors.Handles;
 import com.swoval.files.apple.Flags.Create;
 import com.swoval.functional.Consumer;
-import com.swoval.functional.Either;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.Files;
@@ -137,8 +136,8 @@ class MacOSXWatchService implements RegisterableWatchService {
   @Override
   @SuppressWarnings("EmptyCatchBlock")
   public void close() {
-    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-    if (threadHandle.lock()) {
+    try {
+      final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
       try {
         if (open.compareAndSet(true, false)) {
           final Iterator<WatchKey> it = new ArrayList<>(registered.values()).iterator();
@@ -161,8 +160,9 @@ class MacOSXWatchService implements RegisterableWatchService {
           fileEventMonitor.close();
         }
       } finally {
-        threadHandle.unlock();
+        threadHandle.release();
       }
+    } catch (final InterruptedException e) {
     }
     internalExecutor.close();
   }
@@ -201,8 +201,8 @@ class MacOSXWatchService implements RegisterableWatchService {
   @Override
   public java.nio.file.WatchKey register(final Path path, final Kind<?>... kinds)
       throws IOException {
-    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-    if (threadHandle.lock()) {
+    try {
+      final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
       try {
         if (isOpen()) {
           final Path realPath = path.toRealPath();
@@ -238,10 +238,10 @@ class MacOSXWatchService implements RegisterableWatchService {
           throw new ClosedWatchServiceException();
         }
       } finally {
-        threadHandle.unlock();
+        threadHandle.release();
       }
-    } else {
-      throw new RuntimeException("Couldn't lock executor thread");
+    } catch (final InterruptedException e) {
+      return null;
     }
   }
 
@@ -403,24 +403,22 @@ class MacOSXWatchService implements RegisterableWatchService {
       keys.add(key);
     }
 
-    void remove(final MacOSXWatchKey key) {
+    void remove(final MacOSXWatchKey key) throws InterruptedException {
       final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-      if (threadHandle.lock()) {
-        try {
-          keys.remove(key);
-          if (keys.isEmpty()) {
-            if (handle != Handles.INVALID) {
-              try {
-                fileEventMonitor.stopStream(handle);
-              } catch (final ClosedFileEventMonitorException e) {
-                e.printStackTrace(System.err);
-              }
+      try {
+        keys.remove(key);
+        if (keys.isEmpty()) {
+          if (handle != Handles.INVALID) {
+            try {
+              fileEventMonitor.stopStream(handle);
+            } catch (final ClosedFileEventMonitorException e) {
+              e.printStackTrace(System.err);
             }
-            registered.remove(key.watchable);
           }
-        } finally {
-          threadHandle.unlock();
+          registered.remove(key.watchable);
         }
+      } finally {
+        threadHandle.release();
       }
     }
   }

@@ -140,7 +140,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
    */
   void add(final TypedPath typedPath, final ThreadHandle threadHandle) {
     if (directoryRegistry.maxDepthFor(typedPath.getPath()) >= 0) {
-      final CachedDirectory<WatchedDirectory> dir = getOrAdd(typedPath.getPath());
+      final CachedDirectory<WatchedDirectory> dir = getOrAdd(typedPath.getPath(), threadHandle);
       if (dir != null) {
         update(dir, typedPath, threadHandle);
       }
@@ -149,9 +149,9 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
   @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
-    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-    Either<IOException, Boolean> either = Either.right(false);
-    if (threadHandle.lock()) {
+    try {
+      final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+      Either<IOException, Boolean> either = Either.right(false);
       try {
         final int existingMaxDepth = directoryRegistry.maxDepthFor(path);
         boolean result = existingMaxDepth < maxDepth;
@@ -178,16 +178,18 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
           }
         }
       } finally {
-        threadHandle.unlock();
+        threadHandle.release();
       }
+      return either;
+    } catch (final InterruptedException e) {
+      return Either.right(false);
     }
-    return either;
   }
 
   private CachedDirectory<WatchedDirectory> findOrAddRoot(final Path rawPath) {
     final Path parent = Platform.isMac() ? rawPath : rawPath.getRoot();
     final Path path = parent == null ? rawPath.getRoot() : parent;
-    assert(path != null);
+    assert (path != null);
     final Iterator<Entry<Path, CachedDirectory<WatchedDirectory>>> it =
         rootDirectories.entrySet().iterator();
     CachedDirectory<WatchedDirectory> result = null;
@@ -235,25 +237,29 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
     return result;
   }
 
-  private CachedDirectory<WatchedDirectory> getOrAdd(final Path path) {
+  private CachedDirectory<WatchedDirectory> getOrAdd(final Path path) throws InterruptedException {
     final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+    try {
+      return getOrAdd(path, threadHandle);
+    } finally {
+      threadHandle.release();
+    }
+  }
+
+  private CachedDirectory<WatchedDirectory> getOrAdd(
+      final Path path, final ThreadHandle threadHandle) {
     CachedDirectory<WatchedDirectory> result = null;
-    if (threadHandle.lock()) {
-      try {
-        if (!closed.get()) {
-          result = findOrAddRoot(path);
-        }
-      } finally {
-        threadHandle.unlock();
-      }
+    if (!closed.get()) {
+      result = findOrAddRoot(path);
     }
     return result;
   }
 
   @Override
+  @SuppressWarnings("EmptyCatchBlock")
   public void unregister(final Path path) {
-    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-    if (threadHandle.lock()) {
+    try {
+      final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
       try {
         directoryRegistry.removeDirectory(path);
         final CachedDirectory<WatchedDirectory> dir = rootDirectories.get(path.getRoot());
@@ -282,15 +288,17 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
           }
         }
       } finally {
-        threadHandle.unlock();
+        threadHandle.release();
       }
+    } catch (final InterruptedException e) {
     }
   }
 
   @Override
+  @SuppressWarnings("EmptyCatchBlock")
   public void close() {
-    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-    if (threadHandle.lock()) {
+    try {
+      final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
       try {
         if (closed.compareAndSet(false, true)) {
           service.close();
@@ -303,8 +311,9 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
           rootDirectories.clear();
         }
       } finally {
-        threadHandle.unlock();
+        threadHandle.release();
       }
+    } catch (final InterruptedException e) {
     }
     internalExecutor.close();
   }
@@ -318,7 +327,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
   private void handleOverflow(final Overflow overflow, final ThreadHandle threadHandle) {
     final Path path = overflow.getPath();
-    final CachedDirectory<WatchedDirectory> root = getOrAdd(path);
+    final CachedDirectory<WatchedDirectory> root = getOrAdd(path, threadHandle);
     if (root != null) {
       try {
         final Iterator<TypedPath> it =
@@ -358,7 +367,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
     if (directoryRegistry.acceptPrefix(event.getPath())) {
       final TypedPath typedPath = TypedPaths.get(event.getPath());
       if (!typedPath.exists()) {
-        final CachedDirectory<WatchedDirectory> root = getOrAdd(event.getPath());
+        final CachedDirectory<WatchedDirectory> root = getOrAdd(event.getPath(), threadHandle);
         if (root != null) {
           final boolean isRoot = root.getPath().equals(event.getPath());
           final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> it =
@@ -375,7 +384,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
           }
           if (isRoot) {
             rootDirectories.remove(root.getPath());
-            getOrAdd(event.getPath());
+            getOrAdd(event.getPath(), threadHandle);
           }
         }
       }

@@ -3,7 +3,6 @@ package com.swoval.files;
 import static com.swoval.files.PathWatchers.Event.Kind.Create;
 import static com.swoval.files.PathWatchers.Event.Kind.Delete;
 import static com.swoval.files.PathWatchers.Event.Kind.Modify;
-import static com.swoval.functional.Either.leftProjection;
 
 import com.swoval.files.Executor.ThreadHandle;
 import com.swoval.files.FileTreeViews.Observer;
@@ -92,15 +91,15 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
    */
   public Either<IOException, Boolean> register(
       final Path path, final Flags.Create flags, final int maxDepth) {
+    try {
     final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-    if (threadHandle.lock()) {
       try {
         return Either.right(registerImpl(path, flags, maxDepth, threadHandle));
       } finally {
-        threadHandle.unlock();
+        threadHandle.release();
       }
-    } else {
-      throw new RuntimeException("Couldn't lock executor thread");
+    } catch (final InterruptedException e) {
+      return Either.right(false);
     }
   }
 
@@ -165,23 +164,25 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
    * @param path The directory to remove from monitoring
    */
   @Override
+  @SuppressWarnings("EmptyCatchBlock")
   public void unregister(final Path path) {
+    try {
     final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-    if (threadHandle.lock()) {
       try {
         unregisterImpl(path, threadHandle);
       } finally {
-        threadHandle.unlock();
+        threadHandle.release();
       }
-    }
+    } catch (final InterruptedException e) {}
   }
 
   /** Closes the FileEventsApi and shuts down the {@code internalExecutor}. */
   @Override
+  @SuppressWarnings("EmptyCatchBlock")
   public void close() {
     if (closed.compareAndSet(false, true)) {
-      final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-      if (threadHandle.lock()) {
+      try {
+        final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
         try {
           final Iterator<Stream> it = streams.values().iterator();
           boolean stop = false;
@@ -195,8 +196,9 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
           streams.clear();
           fileEventMonitor.close();
         } finally {
-          threadHandle.unlock();
+          threadHandle.release();
         }
+      } catch (final InterruptedException e) {
       }
       internalExecutor.close();
     }
@@ -294,16 +296,18 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
             },
             new Consumer<String>() {
               @Override
+              @SuppressWarnings("EmptyCatchBlock")
               public void accept(final String stream) {
                 if (!closed.get()) {
-                  final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-                  if (threadHandle.lock()) {
+                  try {
+                    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
                     try {
                       streams.remove(Paths.get(stream));
                       onStreamRemoved.accept(stream, threadHandle);
                     } finally {
-                      threadHandle.unlock();
+                      threadHandle.release();
                     }
+                  } catch (final InterruptedException e) {
                   }
                 }
               }

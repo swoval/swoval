@@ -296,6 +296,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
     }
   }
 
+  @SuppressWarnings("EmptyCatchBlock")
   private void addCallback(
       final List<Callback> callbacks,
       final TypedPath typedPath,
@@ -308,7 +309,10 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
       if (typedPath.exists()) {
         symlinkWatcher.addSymlink(path, directoryRegistry.maxDepthFor(path));
       } else {
-        symlinkWatcher.remove(path);
+        try {
+          symlinkWatcher.remove(path);
+        } catch (final InterruptedException e) {
+        }
       }
     }
     callbacks.add(

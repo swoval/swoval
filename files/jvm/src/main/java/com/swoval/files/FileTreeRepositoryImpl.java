@@ -5,7 +5,6 @@ import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.files.FileTreeViews.CacheObserver;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event.Kind;
-import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
 import com.swoval.runtime.ShutdownHooks;
@@ -23,17 +22,19 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
   private final Runnable closeRunnable =
       new Runnable() {
         @Override
+        @SuppressWarnings("EmptyCatchBlock")
         public void run() {
           if (closed.compareAndSet(false, true)) {
-            final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-            if (threadHandle.lock()) {
+            try {
+              final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
               try {
                 ShutdownHooks.removeHook(shutdownHookId);
                 watcher.close(threadHandle);
                 directoryTree.close(threadHandle);
               } finally {
-                threadHandle.unlock();
+                threadHandle.release();
               }
+            } catch (final InterruptedException e) {
             }
             internalExecutor.close();
           }
@@ -94,43 +95,45 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
       final Path path,
       final int maxDepth,
       final Filter<? super FileTreeDataViews.Entry<T>> filter) {
-    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-    if (threadHandle.lock()) {
+    try {
+      final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
       try {
         return directoryTree.listEntries(path, maxDepth, filter);
       } finally {
-        threadHandle.unlock();
+        threadHandle.release();
       }
-    } else {
+    } catch (final InterruptedException e) {
       return new ArrayList<>();
     }
   }
 
   @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
-    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-    if (threadHandle.lock()) {
+    try {
+      final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
       try {
         return Either.right(watcher.register(path, maxDepth, threadHandle));
       } catch (final IOException e) {
         return Either.left(e);
       } finally {
-        threadHandle.unlock();
+        threadHandle.release();
       }
-    } else {
-      throw new RuntimeException("Couldn't lock executor thread");
+    } catch (final InterruptedException e) {
+      return Either.right(false);
     }
   }
 
   @Override
+  @SuppressWarnings("EmptyCatchBlock")
   public void unregister(final Path path) {
-    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-    if (threadHandle.lock()) {
+    try {
+      final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
       try {
         watcher.unregister(path, threadHandle);
       } finally {
-        threadHandle.unlock();
+        threadHandle.release();
       }
+    } catch (final InterruptedException e) {
     }
   }
 

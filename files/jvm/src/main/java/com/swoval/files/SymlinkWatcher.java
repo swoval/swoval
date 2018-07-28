@@ -153,9 +153,10 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
   private final PathWatcher<PathWatchers.Event> watcher;
 
   @Override
+  @SuppressWarnings("EmptyCatchBlock")
   public void close() {
-    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-    if (threadHandle.lock()) {
+    try {
+      final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
       try {
         if (isClosed.compareAndSet(false, true)) {
           final Iterator<RegisteredPath> targetIt = watchedSymlinksByTarget.values().iterator();
@@ -171,8 +172,9 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
           watcher.close();
         }
       } finally {
-        threadHandle.unlock();
+        threadHandle.release();
       }
+    } catch (final InterruptedException e) {
     }
     internalExecutor.close();
   }
@@ -236,43 +238,41 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
    *
    * @param path The symlink base to stop monitoring
    */
-  void remove(final Path path) {
+  void remove(final Path path) throws InterruptedException {
     final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-    if (threadHandle.lock()) {
-      try {
-        if (!isClosed.get()) {
-          Path target = null;
-          {
-            final Iterator<Entry<Path, RegisteredPath>> it =
-                watchedSymlinksByTarget.entrySet().iterator();
-            while (it.hasNext() && target == null) {
-              final Entry<Path, RegisteredPath> entry = it.next();
-              if (entry.getValue().paths.remove(path)) {
-                target = entry.getKey();
-              }
+    try {
+      if (!isClosed.get()) {
+        Path target = null;
+        {
+          final Iterator<Entry<Path, RegisteredPath>> it =
+              watchedSymlinksByTarget.entrySet().iterator();
+          while (it.hasNext() && target == null) {
+            final Entry<Path, RegisteredPath> entry = it.next();
+            if (entry.getValue().paths.remove(path)) {
+              target = entry.getKey();
             }
           }
-          if (target != null) {
-            final RegisteredPath targetRegisteredPath = watchedSymlinksByTarget.get(target);
-            if (targetRegisteredPath != null) {
-              targetRegisteredPath.paths.remove(path);
-              if (targetRegisteredPath.paths.isEmpty()) {
-                watchedSymlinksByTarget.remove(target);
-                final RegisteredPath registeredPath = watchedSymlinksByDirectory.get(target);
-                if (registeredPath != null) {
-                  registeredPath.paths.remove(target);
-                  if (registeredPath.paths.isEmpty()) {
-                    watcher.unregister(target);
-                    watchedSymlinksByDirectory.remove(target);
-                  }
+        }
+        if (target != null) {
+          final RegisteredPath targetRegisteredPath = watchedSymlinksByTarget.get(target);
+          if (targetRegisteredPath != null) {
+            targetRegisteredPath.paths.remove(path);
+            if (targetRegisteredPath.paths.isEmpty()) {
+              watchedSymlinksByTarget.remove(target);
+              final RegisteredPath registeredPath = watchedSymlinksByDirectory.get(target);
+              if (registeredPath != null) {
+                registeredPath.paths.remove(target);
+                if (registeredPath.paths.isEmpty()) {
+                  watcher.unregister(target);
+                  watchedSymlinksByDirectory.remove(target);
                 }
               }
             }
           }
         }
-      } finally {
-        threadHandle.unlock();
       }
+    } finally {
+      threadHandle.release();
     }
   }
 }

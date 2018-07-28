@@ -58,26 +58,18 @@ object CachedFileTreeViewTest extends TestSuite {
   implicit class CachedDirectoryOps[T <: AnyRef](val cd: CachedDirectory[T]) extends AnyVal {
     def remove(path: Path): java.util.List[Entry[T]] = {
       val threadHandle = executor.getThreadHandle
-      if (threadHandle.lock()) {
-        try {
-          cd.remove(path, threadHandle);
-        } finally {
-          threadHandle.unlock();
-        }
-      } else {
-        new util.ArrayList[Entry[T]]()
+      try {
+        cd.remove(path, threadHandle);
+      } finally {
+        threadHandle.release();
       }
     }
     def update(path: TypedPath): FileTreeViews.Updates[T] = {
       val threadHandle = executor.getThreadHandle
-      if (threadHandle.lock()) {
-        try {
-          cd.update(path, threadHandle)
-        } finally {
-          threadHandle.unlock()
-        }
-      } else {
-        new FileTreeViews.Updates[T]
+      try {
+        cd.update(path, threadHandle)
+      } finally {
+        threadHandle.release()
       }
     }
   }

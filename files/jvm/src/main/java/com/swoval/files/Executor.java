@@ -2,12 +2,9 @@ package com.swoval.files;
 
 import com.swoval.concurrent.ThreadFactory;
 import com.swoval.functional.Consumer;
-import com.swoval.functional.Either;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -26,21 +23,12 @@ abstract class Executor implements AutoCloseable {
 
     private final ReentrantLock reentrantLock = new ReentrantLock();
 
-    boolean lock() {
-      try {
-        reentrantLock.lockInterruptibly();
-        return true;
-      } catch (final InterruptedException e) {
-        return false;
-      }
-    }
-
-    void unlock() {
+    void release() {
       reentrantLock.unlock();
     }
   }
 
-  abstract ThreadHandle getThreadHandle();
+  abstract ThreadHandle getThreadHandle() throws InterruptedException;
 
   /**
    * Runs the task on a threadHandle.
@@ -68,7 +56,7 @@ abstract class Executor implements AutoCloseable {
     final Executor self = this;
     return new Executor() {
       @Override
-      ThreadHandle getThreadHandle() {
+      ThreadHandle getThreadHandle() throws InterruptedException {
         return self.getThreadHandle();
       }
 
@@ -87,7 +75,8 @@ abstract class Executor implements AutoCloseable {
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final ThreadHandle threadHandle = new ThreadHandle();
 
-    ThreadHandle getThreadHandle() {
+    ThreadHandle getThreadHandle() throws InterruptedException {
+      threadHandle.reentrantLock.lockInterruptibly();
       return threadHandle;
     }
 
@@ -114,14 +103,13 @@ abstract class Executor implements AutoCloseable {
                     assert (consumer != null);
                     stop = consumer.priority < 0;
                     if (!stop) {
-                      if (threadHandle.lock()) {
-                        try {
-                          consumer.accept(getThreadHandle());
-                        } catch (final Exception e) {
-                          e.printStackTrace();
-                        } finally {
-                          threadHandle.unlock();
-                        }
+                      threadHandle.reentrantLock.lockInterruptibly();
+                      try {
+                        consumer.accept(threadHandle);
+                      } catch (final Exception e) {
+                        e.printStackTrace();
+                      } finally {
+                        threadHandle.release();
                       }
                     }
                   }
