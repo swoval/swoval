@@ -2,16 +2,17 @@
 
 package com.swoval.files
 
+import com.swoval.files.Executor.ThreadHandle
 import com.swoval.files.FileTreeDataViews.Entry
 import com.swoval.files.FileTreeViews.CacheObserver
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event.Kind
-import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
 import com.swoval.runtime.ShutdownHooks
 import java.io.IOException
 import java.nio.file.Path
+import java.util.ArrayList
 import java.util.List
 import java.util.concurrent.atomic.AtomicBoolean
 import FileTreeRepositoryImpl._
@@ -44,13 +45,17 @@ class FileTreeRepositoryImpl[T <: AnyRef](private val directoryTree: FileCacheDi
   private val closeRunnable: Runnable = new Runnable() {
     override def run(): Unit = {
       if (closed.compareAndSet(false, true)) {
-        internalExecutor.block(new Consumer[Executor.Thread]() {
-          override def accept(thread: Executor.Thread): Unit = {
+        try {
+          val threadHandle: ThreadHandle = internalExecutor.getThreadHandle
+          try {
             ShutdownHooks.removeHook(shutdownHookId)
-            watcher.close(thread)
-            directoryTree.close(thread)
-          }
-        })
+            watcher.close(threadHandle)
+            directoryTree.close(threadHandle)
+          } finally threadHandle.release()
+        } catch {
+          case e: InterruptedException => {}
+
+        }
         internalExecutor.close()
       }
     }
@@ -94,27 +99,37 @@ class FileTreeRepositoryImpl[T <: AnyRef](private val directoryTree: FileCacheDi
       path: Path,
       maxDepth: Int,
       filter: Filter[_ >: FileTreeDataViews.Entry[T]]): List[FileTreeDataViews.Entry[T]] =
-    internalExecutor
-      .block(new Function[Executor.Thread, List[FileTreeDataViews.Entry[T]]]() {
-        override def apply(thread: Executor.Thread): List[FileTreeDataViews.Entry[T]] =
-          directoryTree.listEntries(path, maxDepth, filter)
-      })
-      .get
+    try {
+      val threadHandle: ThreadHandle = internalExecutor.getThreadHandle
+      try directoryTree.listEntries(path, maxDepth, filter)
+      finally threadHandle.release()
+    } catch {
+      case e: InterruptedException => new ArrayList()
+
+    }
 
   override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] =
-    internalExecutor
-      .block(new Function[Executor.Thread, Boolean]() {
-        override def apply(thread: Executor.Thread): Boolean =
-          watcher.register(path, maxDepth, thread)
-      })
-      .castLeft(classOf[IOException], false)
+    try {
+      val threadHandle: ThreadHandle = internalExecutor.getThreadHandle
+      try Either.right(watcher.register(path, maxDepth, threadHandle))
+      catch {
+        case e: IOException => Either.left(e)
+
+      } finally threadHandle.release()
+    } catch {
+      case e: InterruptedException => Either.right(false)
+
+    }
 
   override def unregister(path: Path): Unit = {
-    internalExecutor.block(new Consumer[Executor.Thread]() {
-      override def accept(thread: Executor.Thread): Unit = {
-        watcher.unregister(path, thread)
-      }
-    })
+    try {
+      val threadHandle: ThreadHandle = internalExecutor.getThreadHandle
+      try watcher.unregister(path, threadHandle)
+      finally threadHandle.release()
+    } catch {
+      case e: InterruptedException => {}
+
+    }
   }
 
   override def list(path: Path, maxDepth: Int, filter: Filter[_ >: TypedPath]): List[TypedPath] =

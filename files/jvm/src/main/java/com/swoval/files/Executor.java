@@ -17,6 +17,7 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 abstract class Executor implements AutoCloseable {
   Executor() {}
+
   private final ThreadHandle threadHandle = new ThreadHandle();
 
   public static final class ThreadHandle {

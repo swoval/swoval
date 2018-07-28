@@ -2,6 +2,7 @@
 
 package com.swoval.files
 
+import com.swoval.files.Executor.ThreadHandle
 import com.swoval.files.FileTreeDataViews.Entry
 import java.nio.file.Path
 import java.util.List
@@ -17,7 +18,7 @@ trait UpdatableFileTreeDataView[T <: AnyRef] extends FileTreeDataView[T] {
    *     it is a directory. For an existing path, the List contains a single Updates that contains
    *     the previous and new [[Entry]].
    */
-  def update(typedPath: TypedPath, thread: Executor.Thread): FileTreeViews.Updates[T]
+  def update(typedPath: TypedPath, threadHandle: ThreadHandle): FileTreeViews.Updates[T]
 
   /**
    * Remove a path from the directory.
@@ -26,6 +27,6 @@ trait UpdatableFileTreeDataView[T <: AnyRef] extends FileTreeDataView[T] {
    * @return a List containing the Entry instances for the removed path. The result also contains
    *     the cache entries for any children of the path when the path is a non-empty directory.
    */
-  def remove(path: Path, thread: Executor.Thread): List[Entry[T]]
+  def remove(path: Path, threadHandle: ThreadHandle): List[Entry[T]]
 
 }

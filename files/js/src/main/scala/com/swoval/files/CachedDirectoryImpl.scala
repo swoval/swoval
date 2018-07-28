@@ -4,6 +4,7 @@ package com.swoval.files
 
 import com.swoval.functional.Either.leftProjection
 import com.swoval.functional.Filters.AllPass
+import com.swoval.files.Executor.ThreadHandle
 import com.swoval.files.FileTreeDataViews.Converter
 import com.swoval.files.FileTreeDataViews.Entry
 import com.swoval.files.FileTreeViews.Updates
@@ -153,7 +154,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
    *     the previous and new [[Entry]].
    *     traversing the directory.
    */
-  override def update(typedPath: TypedPath, thread: Executor.Thread): Updates[T] =
+  override def update(typedPath: TypedPath, threadHandle: ThreadHandle): Updates[T] =
     if (pathFilter.accept(typedPath))
       updateImpl(if (typedPath.getPath == this.path) new ArrayList[Path]()
                  else parts(this.path.relativize(typedPath.getPath)),
@@ -167,7 +168,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
    * @return a List containing the Entry instances for the removed path. The result also contains
    *     the cache entries for any children of the path when the path is a non-empty directory.
    */
-  def remove(path: Path, thread: Executor.Thread): List[Entry[T]] =
+  def remove(path: Path, threadHandle: ThreadHandle): List[Entry[T]] =
     if (path.isAbsolute && path.startsWith(this.path)) {
       removeImpl(parts(this.path.relativize(path)))
     } else {

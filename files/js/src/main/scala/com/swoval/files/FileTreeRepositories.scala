@@ -2,6 +2,7 @@
 
 package com.swoval.files
 
+import com.swoval.files.Executor.ThreadHandle
 import com.swoval.files.FileTreeDataViews.Converter
 import com.swoval.files.FileTreeDataViews.OnError
 import com.swoval.files.FileTreeViews.Observer
@@ -37,9 +38,9 @@ object FileTreeRepositories {
       override def onError(t: Throwable): Unit = {}
 
       override def onNext(event: Event): Unit = {
-        copy.run(new Consumer[Executor.Thread]() {
-          override def accept(thread: Executor.Thread): Unit = {
-            tree.handleEvent(event, thread)
+        copy.run(new Consumer[ThreadHandle]() {
+          override def accept(threadHandle: ThreadHandle): Unit = {
+            tree.handleEvent(event, threadHandle)
           }
         })
       }

@@ -3,6 +3,7 @@
 package com.swoval.files
 
 import com.swoval.functional.Filters.AllPass
+import com.swoval.files.Executor.ThreadHandle
 import com.swoval.files.FileTreeDataViews.Entry
 import com.swoval.functional.Either
 import java.io.IOException
@@ -14,38 +15,32 @@ class FileCachePathWatcher[T <: AnyRef](private val tree: FileCacheDirectoryTree
 
   private val symlinkWatcher: SymlinkWatcher = tree.symlinkWatcher
 
-  def register(path: Path, maxDepth: Int, thread: Executor.Thread): Boolean = {
-    var treeResult: Either[IOException, CachedDirectory[T]] = null
-    try treeResult = Either.right(tree.register(path, maxDepth, pathWatcher, thread))
-    catch {
-      case e: IOException => treeResult = Either.left(e)
-
-    }
-    if (treeResult.isRight && symlinkWatcher != null) {
-      val dir: CachedDirectory[T] = treeResult.get
-      if (dir != null) {
-        val it: Iterator[Entry[T]] =
-          dir.listEntries(dir.getMaxDepth, AllPass).iterator()
-        while (it.hasNext) {
-          val entry: FileTreeDataViews.Entry[T] = it.next()
-          if (entry.isSymbolicLink) {
-            val depth: Int = path.relativize(entry.getPath).getNameCount
-            symlinkWatcher.addSymlink(entry.getPath,
-                                      if (maxDepth == java.lang.Integer.MAX_VALUE) maxDepth
-                                      else maxDepth - depth)
-          }
+  def register(path: Path, maxDepth: Int, threadHandle: ThreadHandle): Boolean = {
+    val dir: CachedDirectory[T] =
+      tree.register(path, maxDepth, pathWatcher, threadHandle)
+    if (dir != null && symlinkWatcher != null) {
+      val it: Iterator[Entry[T]] =
+        dir.listEntries(dir.getMaxDepth, AllPass).iterator()
+      while (it.hasNext) {
+        val entry: FileTreeDataViews.Entry[T] = it.next()
+        if (entry.isSymbolicLink) {
+          val depth: Int = path.relativize(entry.getPath).getNameCount
+          symlinkWatcher.addSymlink(entry.getPath,
+                                    if (maxDepth == java.lang.Integer.MAX_VALUE) maxDepth
+                                    else maxDepth - depth,
+                                    threadHandle)
         }
       }
     }
-    treeResult.isRight
+    dir != null
   }
 
-  def unregister(path: Path, thread: Executor.Thread): Unit = {
-    tree.unregister(path, thread)
+  def unregister(path: Path, threadHandle: ThreadHandle): Unit = {
+    tree.unregister(path, threadHandle)
     pathWatcher.unregister(path)
   }
 
-  def close(thread: Executor.Thread): Unit = {
+  def close(threadHandle: ThreadHandle): Unit = {
     pathWatcher.close()
     symlinkWatcher.close()
   }

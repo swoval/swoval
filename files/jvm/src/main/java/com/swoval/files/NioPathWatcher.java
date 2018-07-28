@@ -149,9 +149,9 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
   @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
+    Either<IOException, Boolean> either = Either.right(false);
     try {
       final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
-      Either<IOException, Boolean> either = Either.right(false);
       try {
         final int existingMaxDepth = directoryRegistry.maxDepthFor(path);
         boolean result = existingMaxDepth < maxDepth;
@@ -161,13 +161,6 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         if (result) {
           directoryRegistry.addDirectory(typedPath.getPath(), maxDepth);
         }
-        //    else if (!typedPath.getPath().equals(realPath)) {
-        //      /*
-        //       * Note that watchedDir is not null, which means that this typedPath has been
-        //       * registered with a different alias.
-        //       */
-        //      throw new FileSystemLoopException(typedPath.toString());
-        //    }
         final CachedDirectory<WatchedDirectory> dir = getOrAdd(realPath);
         if (dir != null) {
           final List<FileTreeDataViews.Entry<WatchedDirectory>> directories =
@@ -180,10 +173,10 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
       } finally {
         threadHandle.release();
       }
-      return either;
     } catch (final InterruptedException e) {
-      return Either.right(false);
+      either = Either.right(false);
     }
+    return either;
   }
 
   private CachedDirectory<WatchedDirectory> findOrAddRoot(final Path rawPath) {

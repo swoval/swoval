@@ -171,7 +171,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
           }
           final CachedDirectory<T> previous = directories.put(path, cachedDirectory);
           if (previous != null) previous.close();
-          addCallback(callbacks, typedPath, null, cachedDirectory.getEntry(), Create, null, threadHandle);
+          addCallback(
+              callbacks, typedPath, null, cachedDirectory.getEntry(), Create, null, threadHandle);
           final Iterator<FileTreeDataViews.Entry<T>> it =
               cachedDirectory.listEntries(cachedDirectory.getMaxDepth(), AllPass).iterator();
           while (it.hasNext()) {
@@ -368,7 +369,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
     }
   }
 
-  private FileTreeViews.CacheObserver<T> callbackObserver(final List<Callback> callbacks, final ThreadHandle threadHandle) {
+  private FileTreeViews.CacheObserver<T> callbackObserver(
+      final List<Callback> callbacks, final ThreadHandle threadHandle) {
     return new FileTreeViews.CacheObserver<T>() {
       @Override
       public void onCreate(final FileTreeDataViews.Entry<T> newEntry) {

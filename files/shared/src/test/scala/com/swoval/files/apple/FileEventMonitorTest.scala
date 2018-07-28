@@ -4,7 +4,7 @@ import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
 import com.swoval.files.test.{ CountDownLatch, _ }
-import com.swoval.files._
+import com.swoval.files.TestHelpers._
 import com.swoval.test._
 import utest._
 import utest.framework.ExecutionContext.RunNow

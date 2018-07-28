@@ -231,7 +231,7 @@ trait PathWatcherTest extends TestSuite {
                          dir.deleteRecursive()
                          deletionLatch
                            .waitFor(DEFAULT_TIMEOUT) {
-                             deletions.toSet === expected
+                             (deletions.toSet intersect expected) === expected
                              creationPending = true
                              Files.createDirectory(dir)
                            }

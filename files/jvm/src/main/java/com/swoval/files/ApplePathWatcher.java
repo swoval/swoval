@@ -92,7 +92,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   public Either<IOException, Boolean> register(
       final Path path, final Flags.Create flags, final int maxDepth) {
     try {
-    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+      final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
       try {
         return Either.right(registerImpl(path, flags, maxDepth, threadHandle));
       } finally {
@@ -167,13 +167,14 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   @SuppressWarnings("EmptyCatchBlock")
   public void unregister(final Path path) {
     try {
-    final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
+      final ThreadHandle threadHandle = internalExecutor.getThreadHandle();
       try {
         unregisterImpl(path, threadHandle);
       } finally {
         threadHandle.release();
       }
-    } catch (final InterruptedException e) {}
+    } catch (final InterruptedException e) {
+    }
   }
 
   /** Closes the FileEventsApi and shuts down the {@code internalExecutor}. */

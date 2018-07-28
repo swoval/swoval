@@ -1,23 +1,23 @@
-//package com.swoval.files;
+// package com.swoval.files;
 //
-//import com.swoval.files.Executor.ThreadHandle;
-//import com.swoval.files.FileTreeDataViews.OnError;
-//import com.swoval.files.FileTreeViews.Observer;
-//import com.swoval.files.PathWatchers.Event;
-//import com.swoval.functional.Consumer;
-//import com.swoval.functional.Either;
-//import com.swoval.functional.Filter;
-//import java.io.IOException;
-//import java.nio.file.Path;
-//import java.util.Iterator;
+// import com.swoval.files.Executor.ThreadHandle;
+// import com.swoval.files.FileTreeDataViews.OnError;
+// import com.swoval.files.FileTreeViews.Observer;
+// import com.swoval.files.PathWatchers.Event;
+// import com.swoval.functional.Consumer;
+// import com.swoval.functional.Either;
+// import com.swoval.functional.Filter;
+// import java.io.IOException;
+// import java.nio.file.Path;
+// import java.util.Iterator;
 //
-///**
+/// **
 // * This is a {@link PathWatcher} that follows symlinks and monitors the target of the links for
 // * changes.
 // */
-//public interface SymlinkFollowingPathWatcher extends PathWatcher<PathWatchers.Event> {}
+// public interface SymlinkFollowingPathWatcher extends PathWatcher<PathWatchers.Event> {}
 //
-//class SymlinkFollowingPathWatcherImpl implements SymlinkFollowingPathWatcher {
+// class SymlinkFollowingPathWatcherImpl implements SymlinkFollowingPathWatcher {
 //  private final SymlinkWatcher symlinkWatcher;
 //  private final PathWatcher<PathWatchers.Event> pathWatcher;
 //  private final Observers<PathWatchers.Event> observers = new Observers<>();
@@ -82,7 +82,8 @@
 //                          .iterator();
 //                  while (it.hasNext()) {
 //                    final Path path = it.next().getPath();
-//                    symlinkWatcher.addSymlink(path, pathWatcherDirectoryRegistry.maxDepthFor(path));
+//                    symlinkWatcher.addSymlink(path,
+// pathWatcherDirectoryRegistry.maxDepthFor(path));
 //                  }
 //                  return true;
 //                } else {
@@ -126,4 +127,4 @@
 //  public void removeObserver(int handle) {
 //    observers.removeObserver(handle);
 //  }
-//}
+// }

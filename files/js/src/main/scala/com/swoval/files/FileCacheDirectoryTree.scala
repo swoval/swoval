@@ -7,9 +7,9 @@ import com.swoval.files.PathWatchers.Event.Kind.Delete
 import com.swoval.files.PathWatchers.Event.Kind.Error
 import com.swoval.files.PathWatchers.Event.Kind.Modify
 import com.swoval.functional.Filters.AllPass
+import com.swoval.files.Executor.ThreadHandle
 import com.swoval.files.FileTreeDataViews.Converter
 import com.swoval.files.FileTreeDataViews.Entry
-import com.swoval.files.Executor.Thread
 import com.swoval.files.FileTreeRepositoryImpl.Callback
 import com.swoval.files.FileTreeViews.CacheObserver
 import com.swoval.files.FileTreeViews.ObservableCache
@@ -56,9 +56,9 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     }
 
     override def onNext(event: Event): Unit = {
-      internalExecutor.run(new Consumer[Executor.Thread]() {
-        override def accept(thread: Executor.Thread): Unit = {
-          handleEvent(event, thread)
+      internalExecutor.run(new Consumer[ThreadHandle]() {
+        override def accept(threadHandle: ThreadHandle): Unit = {
+          handleEvent(event, threadHandle)
         }
       })
     }
@@ -86,7 +86,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
   def readOnlyDirectoryRegistry(): DirectoryRegistry =
     READ_ONLY_DIRECTORY_REGISTRY
 
-  def unregister(path: Path, thread: Executor.Thread): Unit = {
+  def unregister(path: Path, threadHandle: ThreadHandle): Unit = {
     directoryRegistry.removeDirectory(path)
     if (!directoryRegistry.accept(path)) {
       val dir: CachedDirectory[T] = find(path)
@@ -94,7 +94,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         if (dir.getPath == path) {
           directories.remove(path)
         } else {
-          dir.remove(path, thread)
+          dir.remove(path, threadHandle)
         }
       }
     }
@@ -115,8 +115,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
 
   private def runCallbacks(callbacks: List[Callback]): Unit = {
     if (!callbacks.isEmpty) {
-      callbackExecutor.run(new Consumer[Thread]() {
-        override def accept(thread: Thread): Unit = {
+      callbackExecutor.run(new Consumer[ThreadHandle]() {
+        override def accept(threadHandle: ThreadHandle): Unit = {
           Collections.sort(callbacks)
           val it: Iterator[Callback] = callbacks.iterator()
           while (it.hasNext) it.next().run()
@@ -125,13 +125,15 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     }
   }
 
-  def handleEvent(typedPath: TypedPath, thread: Executor.Thread): Unit = {
+  def handleEvent(typedPath: TypedPath, threadHandle: ThreadHandle): Unit = {
     val path: Path = typedPath.getPath
     val callbacks: List[Callback] = new ArrayList[Callback]()
     if (typedPath.exists()) {
       val dir: CachedDirectory[T] = find(typedPath.getPath)
       if (dir != null) {
-        dir.update(typedPath, thread).observe(callbackObserver(callbacks))
+        dir
+          .update(typedPath, threadHandle)
+          .observe(callbackObserver(callbacks, threadHandle))
       } else if (pendingFiles.remove(path)) {
         try {
           var cachedDirectory: CachedDirectory[T] = null
@@ -145,13 +147,19 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
           val previous: CachedDirectory[T] =
             directories.put(path, cachedDirectory)
           if (previous != null) previous.close()
-          addCallback(callbacks, typedPath, null, cachedDirectory.getEntry, Create, null)
+          addCallback(callbacks,
+                      typedPath,
+                      null,
+                      cachedDirectory.getEntry,
+                      Create,
+                      null,
+                      threadHandle)
           val it: Iterator[FileTreeDataViews.Entry[T]] = cachedDirectory
             .listEntries(cachedDirectory.getMaxDepth, AllPass)
             .iterator()
           while (it.hasNext) {
             val entry: FileTreeDataViews.Entry[T] = it.next()
-            addCallback(callbacks, entry, null, entry, Create, null)
+            addCallback(callbacks, entry, null, entry, Create, null, threadHandle)
           }
         } catch {
           case e: IOException => pendingFiles.add(path)
@@ -167,7 +175,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         val dir: CachedDirectory[T] = directoryIterator.next()
         if (path.startsWith(dir.getPath)) {
           val updates: List[FileTreeDataViews.Entry[T]] =
-            dir.remove(path, thread)
+            dir.remove(path, threadHandle)
           val it: Iterator[Path] = directoryRegistry.registered().iterator()
           while (it.hasNext) if (it.next() == path) {
             pendingFiles.add(path)
@@ -186,7 +194,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         while (removeIterator.hasNext) {
           val entry: FileTreeDataViews.Entry[T] =
             Entries.setExists(removeIterator.next(), false)
-          addCallback(callbacks, entry, entry, null, Delete, null)
+          addCallback(callbacks, entry, entry, null, Delete, null, threadHandle)
         }
       }
     }
@@ -197,7 +205,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     throw new UnsupportedOperationException("close")
   }
 
-  def close(thread: Executor.Thread): Unit = {
+  def close(threadHandle: ThreadHandle): Unit = {
     callbackExecutor.close()
     if (symlinkWatcher != null) symlinkWatcher.close()
     val directoryIterator: Iterator[CachedDirectory[T]] =
@@ -212,7 +220,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
   def register(path: Path,
                maxDepth: Int,
                watcher: PathWatcher[PathWatchers.Event],
-               thread: Thread): CachedDirectory[T] =
+               threadHandle: ThreadHandle): CachedDirectory[T] =
     if (directoryRegistry.addDirectory(path, maxDepth)) {
       watcher.register(path, maxDepth)
       val dirs: List[CachedDirectory[T]] =
@@ -269,7 +277,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
 
         }
       } else {
-        existing.update(TypedPaths.get(path), thread)
+        existing.update(TypedPaths.get(path), threadHandle)
         dir = existing
       }
       dir
@@ -282,13 +290,18 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                           oldEntry: FileTreeDataViews.Entry[T],
                           newEntry: FileTreeDataViews.Entry[T],
                           kind: Kind,
-                          ioException: IOException): Unit = {
+                          ioException: IOException,
+                          threadHandle: ThreadHandle): Unit = {
     if (typedPath.isSymbolicLink) {
       val path: Path = typedPath.getPath
       if (typedPath.exists()) {
-        symlinkWatcher.addSymlink(path, directoryRegistry.maxDepthFor(path))
+        symlinkWatcher.addSymlink(path, directoryRegistry.maxDepthFor(path), threadHandle)
       } else {
-        symlinkWatcher.remove(path)
+        try symlinkWatcher.remove(path)
+        catch {
+          case e: InterruptedException => {}
+
+        }
       }
     }
     callbacks.add(new Callback(typedPath, kind) {
@@ -337,23 +350,24 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     }
   }
 
-  private def callbackObserver(callbacks: List[Callback]): FileTreeViews.CacheObserver[T] =
+  private def callbackObserver(callbacks: List[Callback],
+                               threadHandle: ThreadHandle): FileTreeViews.CacheObserver[T] =
     new FileTreeViews.CacheObserver[T]() {
       override def onCreate(newEntry: FileTreeDataViews.Entry[T]): Unit = {
-        addCallback(callbacks, newEntry, null, newEntry, Create, null)
+        addCallback(callbacks, newEntry, null, newEntry, Create, null, threadHandle)
       }
 
       override def onDelete(oldEntry: FileTreeDataViews.Entry[T]): Unit = {
-        addCallback(callbacks, oldEntry, oldEntry, null, Delete, null)
+        addCallback(callbacks, oldEntry, oldEntry, null, Delete, null, threadHandle)
       }
 
       override def onUpdate(oldEntry: FileTreeDataViews.Entry[T],
                             newEntry: FileTreeDataViews.Entry[T]): Unit = {
-        addCallback(callbacks, oldEntry, oldEntry, newEntry, Modify, null)
+        addCallback(callbacks, oldEntry, oldEntry, newEntry, Modify, null, threadHandle)
       }
 
       override def onError(exception: IOException): Unit = {
-        addCallback(callbacks, null, null, null, Error, exception)
+        addCallback(callbacks, null, null, null, Error, exception, threadHandle)
       }
     }
 

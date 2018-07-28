@@ -196,16 +196,13 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
         if (path.startsWith(realPath) && !path.equals(realPath)) {
           onError.apply(new FileSystemLoopException(path.toString()));
         } else {
-          final RegisteredPath targetRegistrationPath =
-              watchedSymlinksByTarget.get(realPath);
+          final RegisteredPath targetRegistrationPath = watchedSymlinksByTarget.get(realPath);
           if (targetRegistrationPath == null) {
             final RegisteredPath registeredPath = watchedSymlinksByDirectory.get(realPath);
             if (registeredPath == null) {
-              final Either<IOException, Boolean> result =
-                  watcher.register(realPath, maxDepth);
+              final Either<IOException, Boolean> result = watcher.register(realPath, maxDepth);
               if (getOrElse(result, false)) {
-                watchedSymlinksByDirectory.put(
-                    realPath, new RegisteredPath(path, realPath));
+                watchedSymlinksByDirectory.put(realPath, new RegisteredPath(path, realPath));
                 watchedSymlinksByTarget.put(realPath, new RegisteredPath(realPath, path));
               } else if (result.isLeft()) {
                 onError.apply(leftProjection(result).getValue());

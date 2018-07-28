@@ -7,8 +7,8 @@ import com.swoval.files.PathWatchers.Event.Kind.Delete
 import com.swoval.files.PathWatchers.Event.Kind.Modify
 import com.swoval.functional.Filters.AllPass
 import java.util.Map.Entry
+import com.swoval.files.Executor.ThreadHandle
 import com.swoval.files.FileTreeDataViews.Converter
-import com.swoval.files.Executor.Thread
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.PathWatchers.Event.Kind
@@ -18,7 +18,6 @@ import com.swoval.functional.Either
 import com.swoval.functional.Filter
 import com.swoval.runtime.Platform
 import java.io.IOException
-import java.nio.file.FileSystemLoopException
 import java.nio.file.Path
 import java.util.ArrayList
 import java.util.Iterator
@@ -87,13 +86,13 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     new Consumer[Either[Overflow, Event]]() {
       override def accept(either: Either[Overflow, Event]): Unit = {
         if (!closed.get) {
-          internalExecutor.run(new Consumer[Thread]() {
-            override def accept(thread: Thread): Unit = {
+          internalExecutor.run(new Consumer[ThreadHandle]() {
+            override def accept(threadHandle: ThreadHandle): Unit = {
               if (either.isRight) {
                 val event: Event = either.get
-                handleEvent(new Event(TypedPaths.get(event.getPath), event.getKind), thread)
+                handleEvent(new Event(TypedPaths.get(event.getPath), event.getKind), threadHandle)
               } else {
-                handleOverflow(Either.leftProjection(either).getValue, thread)
+                handleOverflow(Either.leftProjection(either).getValue, threadHandle)
               }
             }
           })
@@ -115,53 +114,53 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
    *
    * @param typedPath The newly created directory to add
    */
-  def add(typedPath: TypedPath, thread: Thread): Unit = {
+  def add(typedPath: TypedPath, threadHandle: ThreadHandle): Unit = {
     if (directoryRegistry.maxDepthFor(typedPath.getPath) >= 0) {
-      val dir: CachedDirectory[WatchedDirectory] = getOrAdd(typedPath.getPath)
+      val dir: CachedDirectory[WatchedDirectory] =
+        getOrAdd(typedPath.getPath, threadHandle)
       if (dir != null) {
-        update(dir, typedPath, thread)
+        update(dir, typedPath, threadHandle)
       }
     }
   }
 
-  override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] =
-    internalExecutor
-      .block(new Function[Thread, Boolean]() {
-        override def apply(thread: Thread): Boolean = {
-          val existingMaxDepth: Int = directoryRegistry.maxDepthFor(path)
-          val result: Boolean = existingMaxDepth < maxDepth
-          val typedPath: TypedPath = TypedPaths.get(path)
-          val realPath: Path = typedPath.toRealPath()
-          if (result) {
-            directoryRegistry.addDirectory(typedPath.getPath, maxDepth)
-          } else if (typedPath.getPath != realPath) {
-            /*
-             * Note that watchedDir is not null, which means that this typedPath has been
-             * registered with a different alias.
-             */
-
-            throw new FileSystemLoopException(typedPath.toString)
-          }
-          val dir: CachedDirectory[WatchedDirectory] = getOrAdd(realPath)
-          if (dir != null) {
-            val directories: List[FileTreeDataViews.Entry[WatchedDirectory]] =
-              dir.listEntries(typedPath.getPath, -1, AllPass)
-            if (result || directories.isEmpty || directories
-                  .get(0)
-                  .getValue
-                  .isRight) {
-              val toUpdate: Path = typedPath.getPath
-              if (toUpdate != null) update(dir, typedPath, thread)
-            }
-          }
-          result
+  override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] = {
+    var either: Either[IOException, Boolean] = Either.right(false)
+    try {
+      val threadHandle: ThreadHandle = internalExecutor.getThreadHandle
+      try {
+        val existingMaxDepth: Int = directoryRegistry.maxDepthFor(path)
+        val result: Boolean = existingMaxDepth < maxDepth
+        either = Either.right(result)
+        val typedPath: TypedPath = TypedPaths.get(path)
+        val realPath: Path = typedPath.toRealPath()
+        if (result) {
+          directoryRegistry.addDirectory(typedPath.getPath, maxDepth)
         }
-      })
-      .castLeft(classOf[IOException], false)
+        val dir: CachedDirectory[WatchedDirectory] = getOrAdd(realPath)
+        if (dir != null) {
+          val directories: List[FileTreeDataViews.Entry[WatchedDirectory]] =
+            dir.listEntries(typedPath.getPath, -1, AllPass)
+          if (result || directories.isEmpty || directories
+                .get(0)
+                .getValue
+                .isRight) {
+            val toUpdate: Path = typedPath.getPath
+            if (toUpdate != null) update(dir, typedPath, threadHandle)
+          }
+        }
+      } finally threadHandle.release()
+    } catch {
+      case e: InterruptedException => either = Either.right(false)
+
+    }
+    either
+  }
 
   private def findOrAddRoot(rawPath: Path): CachedDirectory[WatchedDirectory] = {
     val parent: Path = if (Platform.isMac) rawPath else rawPath.getRoot
     val path: Path = if (parent == null) rawPath.getRoot else parent
+    assert((path != null))
     val it: Iterator[Entry[Path, CachedDirectory[WatchedDirectory]]] =
       rootDirectories.entrySet().iterator()
     var result: CachedDirectory[WatchedDirectory] = null
@@ -202,22 +201,25 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     result
   }
 
-  private def getOrAdd(path: Path): CachedDirectory[WatchedDirectory] =
-    Either.getOrElse(
-      internalExecutor.block(new Function[Thread, CachedDirectory[WatchedDirectory]]() {
-        override def apply(thread: Thread): CachedDirectory[WatchedDirectory] =
-          if (!closed.get) {
-            findOrAddRoot(path)
-          } else {
-            null
-          }
-      }),
-      null
-    )
+  private def getOrAdd(path: Path): CachedDirectory[WatchedDirectory] = {
+    val threadHandle: ThreadHandle = internalExecutor.getThreadHandle
+    try getOrAdd(path, threadHandle)
+    finally threadHandle.release()
+  }
+
+  private def getOrAdd(path: Path,
+                       threadHandle: ThreadHandle): CachedDirectory[WatchedDirectory] = {
+    var result: CachedDirectory[WatchedDirectory] = null
+    if (!closed.get) {
+      result = findOrAddRoot(path)
+    }
+    result
+  }
 
   override def unregister(path: Path): Unit = {
-    internalExecutor.block(new Consumer[Thread]() {
-      override def accept(thread: Thread): Unit = {
+    try {
+      val threadHandle: ThreadHandle = internalExecutor.getThreadHandle
+      try {
         directoryRegistry.removeDirectory(path)
         val dir: CachedDirectory[WatchedDirectory] =
           rootDirectories.get(path.getRoot)
@@ -237,7 +239,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
             val entry: FileTreeDataViews.Entry[WatchedDirectory] = it.next()
             if (!directoryRegistry.acceptPrefix(entry.getPath)) {
               val toCancel: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
-                dir.remove(entry.getPath, thread).iterator()
+                dir.remove(entry.getPath, threadHandle).iterator()
               while (toCancel.hasNext) {
                 val either: Either[IOException, WatchedDirectory] =
                   toCancel.next().getValue
@@ -246,38 +248,43 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
             }
           }
         }
-      }
-    })
+      } finally threadHandle.release()
+    } catch {
+      case e: InterruptedException => {}
+
+    }
   }
 
   override def close(): Unit = {
-    internalExecutor.block(new Consumer[Thread]() {
-      override def accept(thread: Thread): Unit = {
-        if (closed.compareAndSet(false, true)) {
-          service.close()
-          val it: Iterator[CachedDirectory[WatchedDirectory]] =
-            rootDirectories.values.iterator()
-          while (it.hasNext) {
-            val either: Either[IOException, WatchedDirectory] =
-              it.next().getEntry.getValue
-            if (either.isRight) either.get.close()
-          }
-          rootDirectories.clear()
+    try {
+      val threadHandle: ThreadHandle = internalExecutor.getThreadHandle
+      try if (closed.compareAndSet(false, true)) {
+        service.close()
+        val it: Iterator[CachedDirectory[WatchedDirectory]] =
+          rootDirectories.values.iterator()
+        while (it.hasNext) {
+          val either: Either[IOException, WatchedDirectory] =
+            it.next().getEntry.getValue
+          if (either.isRight) either.get.close()
         }
-      }
-    })
+        rootDirectories.clear()
+      } finally threadHandle.release()
+    } catch {
+      case e: InterruptedException => {}
+
+    }
     internalExecutor.close()
   }
 
   private def update(dir: CachedDirectory[WatchedDirectory],
                      typedPath: TypedPath,
-                     thread: Thread): Unit = {
-    dir.update(typedPath, thread).observe(updateCacheObserver)
+                     threadHandle: ThreadHandle): Unit = {
+    dir.update(typedPath, threadHandle).observe(updateCacheObserver)
   }
 
-  private def handleOverflow(overflow: Overflow, thread: Thread): Unit = {
+  private def handleOverflow(overflow: Overflow, threadHandle: ThreadHandle): Unit = {
     val path: Path = overflow.getPath
-    val root: CachedDirectory[WatchedDirectory] = getOrAdd(path)
+    val root: CachedDirectory[WatchedDirectory] = getOrAdd(path, threadHandle)
     if (root != null) {
       try {
         val it: Iterator[TypedPath] = FileTreeViews
@@ -292,12 +299,12 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           .iterator()
         while (it.hasNext) {
           val file: TypedPath = it.next()
-          add(file, thread)
+          add(file, threadHandle)
         }
       } catch {
         case e: IOException => {
           val removed: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
-            root.remove(path, thread).iterator()
+            root.remove(path, threadHandle).iterator()
           while (removed.hasNext) maybeRunCallback(
             new Event(Entries.setExists(removed.next(), false), Delete))
         }
@@ -313,16 +320,17 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     }
   }
 
-  private def handleEvent(event: Event, thread: Thread): Unit = {
+  private def handleEvent(event: Event, threadHandle: ThreadHandle): Unit = {
     if (directoryRegistry.acceptPrefix(event.getPath)) {
       val typedPath: TypedPath = TypedPaths.get(event.getPath)
       if (!typedPath.exists()) {
-        val root: CachedDirectory[WatchedDirectory] = getOrAdd(event.getPath)
+        val root: CachedDirectory[WatchedDirectory] =
+          getOrAdd(event.getPath, threadHandle)
         if (root != null) {
           val isRoot: Boolean = root.getPath == event.getPath
           val it: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
             if (isRoot) root.listEntries(root.getMaxDepth, AllPass).iterator()
-            else root.remove(event.getPath, thread).iterator()
+            else root.remove(event.getPath, threadHandle).iterator()
           while (it.hasNext) {
             val entry: FileTreeDataViews.Entry[WatchedDirectory] = it.next()
             val either: Either[IOException, WatchedDirectory] = entry.getValue
@@ -333,13 +341,13 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           }
           if (isRoot) {
             rootDirectories.remove(root.getPath)
-            getOrAdd(event.getPath)
+            getOrAdd(event.getPath, threadHandle)
           }
         }
       }
       maybeRunCallback(event)
       if (typedPath.isDirectory) {
-        add(typedPath, thread)
+        add(typedPath, threadHandle)
       }
     }
   }
