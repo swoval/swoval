@@ -12,48 +12,52 @@ import java.util.Map
 
 object MapOps {
 
-  def diffDirectoryEntries[T](oldEntries: List[Directory.Entry[T]],
-                              newEntries: List[Directory.Entry[T]],
-                              observer: Directory.Observer[T]): Unit = {
-    val oldMap: Map[Path, Directory.Entry[T]] =
-      new HashMap[Path, Directory.Entry[T]]()
-    val oldIterator: Iterator[Directory.Entry[T]] = oldEntries.iterator()
+  def diffDirectoryEntries[T](oldEntries: List[FileTreeDataViews.Entry[T]],
+                              newEntries: List[FileTreeDataViews.Entry[T]],
+                              cacheObserver: FileTreeViews.CacheObserver[T]): Unit = {
+    val oldMap: Map[Path, FileTreeDataViews.Entry[T]] =
+      new HashMap[Path, FileTreeDataViews.Entry[T]]()
+    val oldIterator: Iterator[FileTreeDataViews.Entry[T]] =
+      oldEntries.iterator()
     while (oldIterator.hasNext) {
-      val entry: Directory.Entry[T] = oldIterator.next()
+      val entry: FileTreeDataViews.Entry[T] = oldIterator.next()
       oldMap.put(entry.getPath, entry)
     }
-    val newMap: Map[Path, Directory.Entry[T]] =
-      new HashMap[Path, Directory.Entry[T]]()
-    val newIterator: Iterator[Directory.Entry[T]] = newEntries.iterator()
+    val newMap: Map[Path, FileTreeDataViews.Entry[T]] =
+      new HashMap[Path, FileTreeDataViews.Entry[T]]()
+    val newIterator: Iterator[FileTreeDataViews.Entry[T]] =
+      newEntries.iterator()
     while (newIterator.hasNext) {
-      val entry: Directory.Entry[T] = newIterator.next()
+      val entry: FileTreeDataViews.Entry[T] = newIterator.next()
       newMap.put(entry.getPath, entry)
     }
-    diffDirectoryEntries(oldMap, newMap, observer)
+    diffDirectoryEntries(oldMap, newMap, cacheObserver)
   }
 
-  def diffDirectoryEntries[K, V](oldMap: Map[K, Directory.Entry[V]],
-                                 newMap: Map[K, Directory.Entry[V]],
-                                 observer: Directory.Observer[V]): Unit = {
-    val newIterator: Iterator[Entry[K, Directory.Entry[V]]] =
+  def diffDirectoryEntries[K, V](oldMap: Map[K, FileTreeDataViews.Entry[V]],
+                                 newMap: Map[K, FileTreeDataViews.Entry[V]],
+                                 cacheObserver: FileTreeViews.CacheObserver[V]): Unit = {
+    val newIterator: Iterator[Entry[K, FileTreeDataViews.Entry[V]]] =
       new ArrayList(newMap.entrySet()).iterator()
-    val oldIterator: Iterator[Entry[K, Directory.Entry[V]]] =
+    val oldIterator: Iterator[Entry[K, FileTreeDataViews.Entry[V]]] =
       new ArrayList(oldMap.entrySet()).iterator()
     while (newIterator.hasNext) {
-      val entry: Entry[K, Directory.Entry[V]] = newIterator.next()
-      val oldValue: Directory.Entry[V] = oldMap.get(entry.getKey)
+      val entry: Entry[K, FileTreeDataViews.Entry[V]] = newIterator.next()
+      val oldValue: FileTreeDataViews.Entry[V] = oldMap.get(entry.getKey)
       if (oldValue != null) {
-        observer.onUpdate(oldValue, entry.getValue)
+        cacheObserver.onUpdate(oldValue, entry.getValue)
       } else {
-        observer.onCreate(entry.getValue)
+        cacheObserver.onCreate(entry.getValue)
       }
     }
     while (oldIterator.hasNext) {
-      val entry: Entry[K, Directory.Entry[V]] = oldIterator.next()
+      val entry: Entry[K, FileTreeDataViews.Entry[V]] = oldIterator.next()
       if (!newMap.containsKey(entry.getKey)) {
-        observer.onDelete(entry.getValue)
+        cacheObserver.onDelete(entry.getValue)
       }
     }
+    newMap.clear()
+    oldMap.clear()
   }
 
 }

@@ -2,7 +2,6 @@
 
 package com.swoval.files
 
-import com.swoval.functional.Consumer
 import com.swoval.runtime.Platform
 import java.io.IOException
 import java.nio.file.Path
@@ -10,80 +9,40 @@ import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
 object PathWatchers {
 
-  val DEFAULT_FACTORY: Factory = new Factory() {
-    override def create(callback: Consumer[Event],
-                        executor: Executor,
-                        directoryRegistry: DirectoryRegistry): PathWatcher =
-      get(callback, executor, directoryRegistry)
-  }
-
   /**
    * Create a PathWatcher for the runtime platform.
    *
-   * @param callback [[com.swoval.functional.Consumer]] to run on file events
+   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
    * @return PathWatcher for the runtime platform
    *     initialized
    */
-  def get(callback: Consumer[Event]): PathWatcher =
-    get(callback, Executor.make("com.swoval.files.PathWatcher-internal-executor"), null)
+  def get(followLinks: Boolean): PathWatcher[PathWatchers.Event] =
+    get(followLinks, new DirectoryRegistryImpl())
 
   /**
    * Create a PathWatcher for the runtime platform.
    *
-   * @param callback [[Consumer]] to run on file events
-   * @param executor provides a single threaded context to manage state
-   * @return PathWatcher for the runtime platform
-   *     initialized
-   */
-  def get(callback: Consumer[Event], executor: Executor): PathWatcher =
-    get(callback, executor, null)
-
-  /**
-   * Create a PathWatcher for the runtime platform.
-   *
-   * @param callback [[Consumer]] to run on file events
-   * @param executor provides a single threaded context to manage state
+   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
    * @param registry The registry of directories to monitor
    * @return PathWatcher for the runtime platform
    *     initialized
    */
-  def get(callback: Consumer[Event], executor: Executor, registry: DirectoryRegistry): PathWatcher =
-    if (Platform.isMac) new ApplePathWatcher(callback, executor, registry)
-    else PlatformWatcher.make(callback, executor, registry)
+  def get(followLinks: Boolean, registry: DirectoryRegistry): PathWatcher[Event] =
+    if (Platform.isMac) ApplePathWatchers.get(followLinks, registry)
+    else PlatformWatcher.make(followLinks, registry)
 
   /**
-   * Instantiates new [[PathWatcher]] instances with a [[Consumer]]. This is primarily so
-   * that the [[PathWatcher]] in [[FileCache]] may be changed in testing.
+   * Create a PathWatcher for the runtime platform.
+   *
+   * @param registry The registry of directories to monitor
+   * @return PathWatcher for the runtime platform
    */
-  abstract class Factory {
+  def get(followLinks: Boolean,
+          service: RegisterableWatchService,
+          registry: DirectoryRegistry): PathWatcher[Event] =
+    PlatformWatcher.make(followLinks, service, registry)
 
-    /**
-     * Creates a new PathWatcher.
-     *
-     * @param callback the callback to invoke on directory updates
-     * @param executor the executor on which internal updates are invoked
-     * @return a PathWatcher instance.
-     *     can occur on mac.
-     *     and windows.
-     */
-    def create(callback: Consumer[Event], executor: Executor): PathWatcher =
-      create(callback, executor, null)
-
-    /**
-     * Creates a new PathWatcher.
-     *
-     * @param callback the callback to invoke on directory updates
-     * @param executor the executor on which internal updates are invoked
-     * @param directoryRegistry the registry of directories to monitor
-     * @return A PathWatcher instance
-     *     can occur on mac
-     *     and windows
-     */
-    def create(callback: Consumer[Event],
-               executor: Executor,
-               directoryRegistry: DirectoryRegistry): PathWatcher
-
-  }
+  class Overflow(@BeanProperty val path: Path)
 
   object Event {
 
@@ -109,18 +68,13 @@ object PathWatchers {
        */
       val Modify: Kind = new Kind("Modify", 3)
 
-      /**
- An overflow occurred in the underlying path monitor.
-       */
-      val Overflow: Kind = new Kind("Overflow", 0)
-
     }
 
     /**
      * An enum like class to indicate the type of file event. It isn't an actual enum because the
      * scala.js codegen has problems with enum types.
      */
-    class Kind(private val name: String, private val priority: Int) extends Comparable[Kind] {
+    class Kind(private val name: String, private val priority: Int) {
 
       override def toString(): String = name
 
@@ -132,30 +86,47 @@ object PathWatchers {
 
       override def hashCode(): Int = name.hashCode
 
-      override def compareTo(that: Kind): Int =
-        java.lang.Integer.compare(this.priority, that.priority)
-
     }
 
   }
 
   /**
- Container for [[PathWatcher]] events
+ Container for [[PathWatcher]] events.
    */
-  class Event(@BeanProperty val path: Path, @BeanProperty val kind: Event.Kind) {
+  class Event(path: TypedPath, @BeanProperty val kind: Event.Kind) extends TypedPath {
+
+    private val typedPath: TypedPath = path
+
+    /**
+     * Returns the path that triggered the event.
+     *
+     * @return the path that triggered the event.
+     */
+    def getPath(): Path = typedPath.getPath
+
+    override def exists(): Boolean = typedPath.exists()
+
+    override def isDirectory(): Boolean = typedPath.isDirectory
+
+    override def isFile(): Boolean = typedPath.isFile
+
+    override def isSymbolicLink(): Boolean = typedPath.isSymbolicLink
+
+    override def toRealPath(): Path = typedPath.toRealPath()
 
     override def equals(other: Any): Boolean = other match {
       case other: Event => {
         val that: Event = other
-        this.path == that.path && this.kind == that.kind
+        this.typedPath == that.typedPath && this.kind == that.kind
       }
       case _ => false
 
     }
 
-    override def hashCode(): Int = path.hashCode ^ kind.hashCode
+    override def hashCode(): Int = typedPath.hashCode ^ kind.hashCode
 
-    override def toString(): String = "Event(" + path + ", " + kind + ")"
+    override def toString(): String =
+      "Event(" + typedPath.getPath + ", " + kind + ")"
 
   }
 

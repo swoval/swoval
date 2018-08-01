@@ -19,10 +19,10 @@ class NioDirectoryLister implements DirectoryLister {
   public NioDirectoryLister() {}
 
   @Override
-  public QuickListerImpl.ListResults apply(final String dir, final boolean followLinks)
+  public SimpleFileTreeView.ListResults apply(final String dir, final boolean followLinks)
       throws IOException {
     final Path basePath = Paths.get(dir);
-    final QuickListerImpl.ListResults results = new QuickListerImpl.ListResults();
+    final SimpleFileTreeView.ListResults results = new SimpleFileTreeView.ListResults();
     final Set<FileVisitOption> linkOptions = new HashSet<>();
     final AtomicReference<IOException> exception = new AtomicReference<>();
     final AtomicBoolean isSymlink = new AtomicBoolean(false);

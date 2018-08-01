@@ -2,71 +2,58 @@
 
 package com.swoval.files
 
-import com.swoval.files.Directory.Entry
-import com.swoval.files.Directory.Observer
-import java.io.IOException
-import java.nio.file.Path
+import com.swoval.files.FileTreeViews.Observer
 import java.util.ArrayList
-import java.util.HashMap
 import java.util.Iterator
+import java.util.LinkedHashMap
 import java.util.List
 import java.util.Map
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Container class that wraps multiple [[com.swoval.files.Directory.Observer]] and runs the
- * callbacks for each whenever the [[com.swoval.files.FileCache]] detects an event.
+ * Container class that wraps multiple [[FileTreeViews.Observer]] and runs the callbacks for
+ * each whenever the [[PathWatcher]] detects an event.
  *
- * @tparam T the data type for the [[com.swoval.files.FileCache]] to which the observers
- *     correspond
+ * @tparam T the data type for the [[PathWatcher]] to which the observers correspond
  */
-class Observers[T] extends Observer[T] with AutoCloseable {
+class Observers[T] extends FileTreeViews.Observer[T] with AutoCloseable {
 
   private val counter: AtomicInteger = new AtomicInteger(0)
 
-  private val observers: Map[Integer, Observer[T]] = new HashMap()
+  private val observers: Map[Integer, FileTreeViews.Observer[T]] =
+    new LinkedHashMap()
 
-  override def onCreate(newEntry: Entry[T]): Unit = {
-    var cbs: List[Observer[T]] = null
+  override def onNext(t: T): Unit = {
+    var cbs: List[FileTreeViews.Observer[T]] = null
     observers.synchronized {
       cbs = new ArrayList(observers.values)
     }
-    val it: Iterator[Observer[T]] = cbs.iterator()
-    while (it.hasNext) it.next().onCreate(newEntry)
+    val it: Iterator[FileTreeViews.Observer[T]] = cbs.iterator()
+    while (it.hasNext) try it.next().onNext(t)
+    catch {
+      case e: Exception => e.printStackTrace()
+
+    }
   }
 
-  override def onDelete(oldEntry: Entry[T]): Unit = {
-    var cbs: List[Observer[T]] = null
+  override def onError(throwable: Throwable): Unit = {
+    var cbs: List[FileTreeViews.Observer[T]] = null
     observers.synchronized {
       cbs = new ArrayList(observers.values)
     }
-    val it: Iterator[Observer[T]] = cbs.iterator()
-    while (it.hasNext) it.next().onDelete(oldEntry)
-  }
+    val it: Iterator[FileTreeViews.Observer[T]] = cbs.iterator()
+    while (it.hasNext) try it.next().onError(throwable)
+    catch {
+      case e: Exception => e.printStackTrace()
 
-  override def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit = {
-    var cbs: List[Observer[T]] = null
-    observers.synchronized {
-      cbs = new ArrayList(observers.values)
     }
-    val it: Iterator[Observer[T]] = cbs.iterator()
-    while (it.hasNext) it.next().onUpdate(oldEntry, newEntry)
-  }
-
-  override def onError(path: Path, exception: IOException): Unit = {
-    var cbs: List[Observer[T]] = null
-    observers.synchronized {
-      cbs = new ArrayList(observers.values)
-    }
-    val it: Iterator[Observer[T]] = cbs.iterator()
-    while (it.hasNext) it.next().onError(path, exception)
   }
 
   /**
-   * Add an observer to receive events.
+   * Add an cacheObserver to receive events.
    *
-   * @param observer the new observer
-   * @return a handle to the added observer that can be used to halt observation using [[    com.swoval.files.Observers.removeObserver]] .
+   * @param observer the new cacheObserver
+   * @return a handle to the added cacheObserver that can be used to halt observation using [[    com.swoval.files.Observers.removeObserver]] .
    */
   def addObserver(observer: Observer[T]): Int = {
     val key: Int = counter.getAndIncrement
@@ -77,8 +64,8 @@ class Observers[T] extends Observer[T] with AutoCloseable {
   }
 
   /**
-   * Remove an instance of [[com.swoval.files.Directory.Observer]] that was previously added
-   * using [[com.swoval.files.Observers.addObserver]].
+   * Remove an instance of [[FileTreeViews.CacheObserver]] that was previously added using
+   * [[com.swoval.files.Observers.addObserver]].
    *
    * @param handle the handle to remove
    */

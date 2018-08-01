@@ -2,6 +2,8 @@ package com.swoval.runtime;
 
 /** Provides some platform specific properties. */
 public class Platform {
+  private Platform() {}
+
   private static final boolean isLinuxValue = System.getProperty("os.name", "").startsWith("Linux");
   private static final boolean isMacValue =
       System.getProperty("os.name", "").startsWith("Mac OS X");

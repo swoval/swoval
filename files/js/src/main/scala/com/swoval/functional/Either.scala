@@ -167,36 +167,4 @@ abstract class Either[+L, +R] private () {
 
   override def equals(other: Any): Boolean
 
-  /**
-   * Casts an either to a more specific left type.
-   *
-   * @param clazz the left type to which we downcast
-   * @tparam L the original left type
-   * @tparam R the right type
-   * @tparam T the downcasted left type
-   * @return the original either with the left type downcasted to T.
-   */
-  def castLeft[L, R, T <: L](clazz: Class[T]): Either[T, R] =
-    if (isRight) this.asInstanceOf[Either[T, R]]
-    else if (clazz.isAssignableFrom(leftProjection(this).getValue.getClass))
-      this.asInstanceOf[Either[T, R]]
-    else
-      throw new ClassCastException(leftProjection(this) + " is not an instance of " + clazz)
-
-  /**
-   * Casts an either to a more specific right type.
-   *
-   * @param clazz The right type to which we downcast
-   * @tparam L The original left type
-   * @tparam R The right type
-   * @tparam T The downcasted right type
-   * @return The original either with the right type downcasted to T.
-   */
-  def castRight[L, R, T <: R](clazz: Class[T]): Either[L, T] =
-    if (this.isLeft) this.asInstanceOf[Either[L, T]]
-    else if (clazz.isAssignableFrom(get.getClass))
-      this.asInstanceOf[Either[L, T]]
-    else
-      throw new ClassCastException(rightProjection(this) + " is not an instance of " + clazz)
-
 }

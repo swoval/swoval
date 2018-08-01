@@ -1,13 +1,10 @@
 package com.swoval.files;
 
 import com.swoval.concurrent.ThreadFactory;
-import com.swoval.functional.Either;
+import com.swoval.functional.Consumer;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
+import java.util.PriorityQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -21,117 +18,54 @@ abstract class Executor implements AutoCloseable {
   Executor() {}
 
   /**
-   * Runs the task on a thread.
+   * Runs the task on a threadHandle.
    *
    * @param runnable task to run
    */
-  abstract void run(final Runnable runnable);
-
-  /**
-   * Returns a copy of the executor. The purpose of this is to provide the executor to a class or
-   * method without allowing the class or method to close the underlying executor.
-   *
-   * @return An executor that
-   */
-  Executor copy() {
-    final Executor self = this;
-    return new Executor() {
-      @Override
-      public void run(final Runnable runnable) {
-        self.run(runnable);
-      }
-    };
+  void run(final java.lang.Runnable runnable) {
+    run(runnable, Integer.MAX_VALUE);
   }
 
   /**
-   * Blocks the current thread until the executor runs the Callable and returns the value.
+   * Runs the task with a given priority.
    *
-   * @param callable The callable whose value we're waiting on.
-   * @param <T> The result type of the Callable
-   * @return The result evaluated by the Callable
+   * @param runnable task to run
    */
-  <T> Either<Exception, T> block(final Callable<T> callable) {
-    final ArrayBlockingQueue<Either<Exception, T>> queue = new ArrayBlockingQueue<>(1);
-    try {
-      run(
-          new Runnable() {
-            @Override
-            public void run() {
-              try {
-                queue.add(Either.<Exception, T, T>right(callable.call()));
-              } catch (Exception e) {
-                queue.add(Either.<Exception, T, Exception>left(e));
-              }
-            }
-          });
-      try {
-        return queue.take();
-      } catch (InterruptedException e) {
-        return Either.left(e);
-      }
-    } catch (final Exception e) {
-      return Either.left(e);
-    }
-  }
-
-  /**
-   * Blocks the current thread until the executor runs the provided Runnable.
-   *
-   * @param runnable The Runnable to invoke.
-   */
-  @SuppressWarnings("EmptyCatchBlock")
-  void block(final Runnable runnable) {
-    final CountDownLatch latch = new CountDownLatch(1);
-    try {
-      run(
-          new Runnable() {
-            @Override
-            public void run() {
-              runnable.run();
-              latch.countDown();
-            }
-          });
-      latch.await();
-    } catch (InterruptedException e) {
-    }
-  }
+  abstract void run(final java.lang.Runnable runnable, final int priority);
 
   /** Close the executor. All exceptions must be handled by the implementation. */
   @Override
   public void close() {}
 
-  private static class ExecutorImpl extends Executor {
+  static class ExecutorImpl extends Executor {
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     final ThreadFactory factory;
     final ExecutorService service;
-    final LinkedBlockingQueue<Either<Integer, Runnable>> runnables = new LinkedBlockingQueue<>();
+    final LinkedBlockingQueue<PriorityRunnable> consumers = new LinkedBlockingQueue<>();
 
     ExecutorImpl(final ThreadFactory factory, final ExecutorService service) {
       this.factory = factory;
       this.service = service;
       service.submit(
-          new Runnable() {
+          new java.lang.Runnable() {
             @Override
             public void run() {
               boolean stop = false;
-              while (!stop && !closed.get() && !Thread.currentThread().isInterrupted()) {
+              while (!stop && !closed.get() && !java.lang.Thread.currentThread().isInterrupted()) {
                 try {
-                  final List<Either<Integer, Runnable>> eithers = new ArrayList<>();
-                  eithers.add(runnables.take());
-                  synchronized (runnables) {
-                    runnables.drainTo(eithers);
-                  }
-                  final Iterator<Either<Integer, Runnable>> it = eithers.iterator();
-                  while (!stop && it.hasNext()) {
-                    final Either<Integer, Runnable> runnable = it.next();
-                    stop = runnable.isLeft();
-                    if (!stop) {
-                      try {
-                        runnable.get().run();
-                      } catch (final Exception e) {
-                        e.printStackTrace();
-                      }
+                  final PriorityQueue<PriorityRunnable> queue = new PriorityQueue<>();
+                  queue.add(consumers.take());
+                  drainRunnables(queue);
+                  while (queue.peek() != null && !stop) {
+                    drainRunnables(queue);
+                    final PriorityRunnable runnable = queue.poll();
+                    assert (runnable != null);
+                    stop = runnable.priority < 0;
+                    try {
+                      runnable.run();
+                    } catch (final Exception e) {
+                      e.printStackTrace();
                     }
                   }
                 } catch (final InterruptedException e) {
@@ -147,10 +81,9 @@ abstract class Executor implements AutoCloseable {
     public void close() {
       if (closed.compareAndSet(false, true)) {
         super.close();
-        final Either<Integer, Runnable> stop = Either.left(1);
-        synchronized (runnables) {
-          runnables.clear();
-          runnables.offer(stop);
+        synchronized (consumers) {
+          consumers.clear();
+          consumers.offer(STOP);
         }
         service.shutdownNow();
         try {
@@ -159,47 +92,47 @@ abstract class Executor implements AutoCloseable {
           }
         } catch (InterruptedException e) {
         }
-        factory.close();
       }
     }
 
-    void run(final Runnable runnable) {
-      if (factory.created(Thread.currentThread())) {
-        try {
-          runnable.run();
-        } catch (final Exception e) {
-          e.printStackTrace();
-        }
+    @Override
+    void run(final Runnable runnable, final int priority) {
+      if (closed.get()) {
+        new Exception("Tried to submit to closed executor").printStackTrace(System.err);
       } else {
-        synchronized (runnables) {
-          final Either<Integer, Runnable> either = Either.right(runnable);
-          if (!runnables.offer(either)) {
+        synchronized (consumers) {
+          if (!consumers.offer(new PriorityRunnable(runnable, priority))) {
             throw new IllegalStateException(
-                "Couldn't run task due to full queue (" + runnables.size() + ")");
+                "Couldn't run task due to full queue (" + consumers.size() + ")");
           }
         }
       }
     }
+
+    private void drainRunnables(final PriorityQueue<PriorityRunnable> queue) {
+      synchronized (consumers) {
+        if (consumers.size() > 0) {
+          final List<PriorityRunnable> list = new ArrayList<>();
+          consumers.drainTo(list);
+          queue.addAll(list);
+        }
+      }
+    }
   }
+
   /**
    * Make a new instance of an Executor
    *
-   * @param name The name of the executor thread
+   * @param name The name of the executor threadHandle
    * @return Executor
    */
   static Executor make(final String name) {
     final ThreadFactory factory = new ThreadFactory(name);
     final ExecutorService service =
         new ThreadPoolExecutor(
-            1, 1, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(), factory) {
+            1, 1, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<java.lang.Runnable>(), factory) {
           @Override
-          protected void finalize() {
-            shutdown();
-            super.finalize();
-          }
-
-          @Override
-          protected void afterExecute(Runnable r, Throwable t) {
+          protected void afterExecute(java.lang.Runnable r, Throwable t) {
             super.afterExecute(r, t);
             if (t != null) {
               System.err.println("Error running: " + r + "\n" + t);
@@ -209,4 +142,32 @@ abstract class Executor implements AutoCloseable {
         };
     return new ExecutorImpl(factory, service);
   }
+
+  private static final class PriorityRunnable implements Runnable, Comparable<PriorityRunnable> {
+    private final Runnable runnable;
+    private final int priority;
+
+    PriorityRunnable(final Runnable runnable, final int priority) {
+      this.runnable = runnable;
+      this.priority = priority < 0 ? priority : 0;
+    }
+
+    @Override
+    public int compareTo(final PriorityRunnable that) {
+      return Integer.compare(this.priority, that.priority);
+    }
+
+    @Override
+    public void run() {
+      runnable.run();
+    }
+  }
+
+  private static final PriorityRunnable STOP =
+      new PriorityRunnable(
+          new Runnable() {
+            @Override
+            public void run() {}
+          },
+          -1);
 }

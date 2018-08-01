@@ -15,7 +15,7 @@ ifeq ($(UNAME_S),Darwin)
 	JNI_INCLUDE := -I/System/Library/Frameworks/JavaVM.framework/Versions/Current/Headers/
 	LD := /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++
 	OBJS := $(BUILD_DIR)/x86_64/darwin/$(QUICKLIST_SOURCE).o \
-		$(BUILD_DIR)/x86_64/darwin/com_swoval_files_FileEventsApi.o \
+		$(BUILD_DIR)/x86_64/darwin/com_swoval_files_FileEventMonitorImpl.o \
 		$(BUILD_DIR)/x86_64/windows/$(QUICKLIST_SOURCE).o \
 		$(BUILD_DIR)/i686/windows/$(QUICKLIST_SOURCE).o \
 
@@ -69,16 +69,16 @@ $(BUILD_DIR)/x86_64/darwin/$(QUICKLIST_SOURCE).o: posix/$(QUICKLIST_SOURCE).cc
 	mkdir -p $(BUILD_DIR)/x86_64/darwin; \
 	$(CC) -c $< $(CCFLAGS) -framework Carbon -o $@
 
-$(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventsApi.o: $(NPMDIR)/swoval_apple_file_system.hpp
-$(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventsApi.o: apple/com_swoval_files_apple_FileEventsApi.cc
+$(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventMonitorImpl.o: $(NPMDIR)/swoval_apple_file_system.hpp
+$(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventMonitorImpl.o: apple/com_swoval_files_apple_FileEventMonitorImpl.cc
 	mkdir -p $(BUILD_DIR)/x86_64/darwin; \
 	$(CC) -c $< $(CCFLAGS) -framework Carbon -o $@
 
-$(TARGET_DIR)/x86_64/$(POSIX_LIB_NAME).dylib: $(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventsApi.o \
+$(TARGET_DIR)/x86_64/$(POSIX_LIB_NAME).dylib: $(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventMonitorImpl.o \
 	$(BUILD_DIR)/x86_64/darwin/$(QUICKLIST_SOURCE).o 
 	mkdir -p $(TARGET_DIR)/x86_64; \
 	$(LD) -dynamiclib -framework Carbon $(CCFLAGS) -Wl,-headerpad_max_install_names -install_name @rpath/$(POSIX_LIB_NAME) \
-	$(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventsApi.o \
+	$(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventMonitorImpl.o \
 	$(BUILD_DIR)/x86_64/darwin/$(QUICKLIST_SOURCE).o  \
 	 -o $@ ; \
 	mkdir -p ../resources/native/x86_64; \

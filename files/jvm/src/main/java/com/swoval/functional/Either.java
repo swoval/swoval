@@ -89,41 +89,6 @@ public abstract class Either<L, R> {
   public abstract boolean equals(final Object other);
 
   /**
-   * Casts an either to a more specific left type.
-   *
-   * @param clazz the left type to which we downcast
-   * @param <L> the original left type
-   * @param <R> the right type
-   * @param <T> the downcasted left type
-   * @return the original either with the left type downcasted to T.
-   * @throws ClassCastException if the wrapped value is not a subtype of T.
-   */
-  @SuppressWarnings("unchecked")
-  public <L, R, T extends L> Either<T, R> castLeft(final Class<T> clazz) {
-    if (isRight()) return (Either<T, R>) this;
-    else if (clazz.isAssignableFrom(leftProjection(this).getValue().getClass()))
-      return (Either<T, R>) this;
-    else throw new ClassCastException(leftProjection(this) + " is not an instance of " + clazz);
-  }
-
-  /**
-   * Casts an either to a more specific right type.
-   *
-   * @param clazz The right type to which we downcast
-   * @param <L> The original left type
-   * @param <R> The right type
-   * @param <T> The downcasted right type
-   * @return The original either with the right type downcasted to T.
-   * @throws ClassCastException if the wrapped value is not a subtype of T.
-   */
-  @SuppressWarnings("unchecked")
-  public <L, R, T extends R> Either<L, T> castRight(final Class<T> clazz) {
-    if (this.isLeft()) return (Either<L, T>) this;
-    else if (clazz.isAssignableFrom(get().getClass())) return (Either<L, T>) this;
-    else throw new ClassCastException(rightProjection(this) + " is not an instance of " + clazz);
-  }
-
-  /**
    * Returns a left projected either.
    *
    * @param value the value to wrap

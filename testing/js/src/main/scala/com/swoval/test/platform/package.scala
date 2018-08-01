@@ -10,6 +10,10 @@ import scala.scalajs.js.timers._
 
 package object platform {
   def sleep(duration: FiniteDuration): Unit = {}
+  val shutdownHooks = new ShutdownHooks {
+    override def add(thread: Thread): Unit = ()
+    override def remove(thread: Thread): Unit = ()
+  }
   object executionContext extends ExecutionContext {
     val callbacks: mutable.Queue[Runnable] = mutable.Queue.empty
     override def execute(runnable: Runnable): Unit = {
@@ -23,18 +27,20 @@ package object platform {
         s"Caught error running runnable $cause\n${cause.getStackTrace mkString "\n"}")
     }
   }
-  def createTempFile(dir: String, prefix: String): String = {
+  def createTempFile(dir: String, prefix: String): (String, Thread) = {
     val path = s"$dir$sep$prefix${new scala.util.Random().alphanumeric.take(10).mkString}"
     Fs.closeSync(Fs.openSync(path, "w"))
-    path
+    (path, thread)
   }
+  private val thread = new Thread
 
-  def createTempDirectory(): String = {
+  def createTempDirectory(): (String, Thread) = {
     if (!Fs.existsSync("/tmp/swoval")) util.Try(Fs.mkdirSync("/tmp/swoval"))
-    Fs.realpathSync(Fs.mkdtempSync("/tmp/swoval/"))
+    (Fs.realpathSync(Fs.mkdtempSync("/tmp/swoval/")), thread)
   }
 
-  def createTempSubdirectory(dir: String): String = Fs.realpathSync(Fs.mkdtempSync(s"$dir$sep"))
+  def createTempSubdirectory(dir: String): (String, Thread) =
+    (Fs.realpathSync(Fs.mkdtempSync(s"$dir$sep")), thread)
 
   def delete(dir: String): Unit = {
     if (Fs.existsSync(dir)) {

@@ -1,23 +1,13 @@
 package com.swoval.files
 
-import java.util.concurrent.Callable
-import com.swoval.functional.Either
-
 /**
  * Provides an execution context to run tasks. Exists to allow source interoperability with the jvm
  * interoperability.
  */
-abstract class Executor extends AutoCloseable {
+private[files] abstract class Executor extends AutoCloseable {
   private[this] var _closed = false
 
-  def copy(): Executor = this
-
-  /**
-   * Runs the task on a thread
-   *
-   * @param runnable task to run
-   */
-  def run(runnable: Runnable): Unit = {
+  def run(runnable: Runnable, priority: Int): Unit = {
     try {
       runnable.run()
     } catch {
@@ -25,13 +15,7 @@ abstract class Executor extends AutoCloseable {
         System.err.println(s"Error running: $runnable\n$e\n${e.getStackTrace mkString "\n"}")
     }
   }
-  def block(runnable: Runnable): Unit = runnable.run()
-  def block[T](callable: Callable[T]): Either[Exception, T] =
-    try {
-      Either.right(callable.call())
-    } catch {
-      case e: Exception => Either.left(e)
-    }
+  def run(runnable: Runnable): Unit = run(runnable, -1)
 
   /**
    * Is this executor available to invoke callbacks?

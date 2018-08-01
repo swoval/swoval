@@ -1,6 +1,6 @@
 package com.swoval.files;
 
-import com.swoval.files.QuickListerImpl.ListResults;
+import com.swoval.files.SimpleFileTreeView.ListResults;
 import java.io.IOException;
 
 interface DirectoryLister {

@@ -3,7 +3,7 @@
 package com.swoval.functional
 
 /**
- * Generic Filter functional interface. Primarily used by [[com.swoval.files.QuickList]].
+ * Generic Filter functional interface.
  *
  * @tparam T The type of object to filter
  */
