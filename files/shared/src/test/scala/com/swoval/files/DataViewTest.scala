@@ -17,7 +17,7 @@ object DataViewTest extends TestSuite {
   import FileTreeViewTest.RepositoryOps
   def directory: Future[Unit] = withTempFileSync { file =>
     val parent = file.getParent
-    val dir = FileTreeViews.cached[Integer](parent, (p: TypedPath) => {
+    val dir = FileTreeDataViews.cached[Integer](parent, (p: TypedPath) => {
       if (p.isDirectory) throw new IOException("die")
       1: Integer
     }, Integer.MAX_VALUE, true)
@@ -28,7 +28,7 @@ object DataViewTest extends TestSuite {
   }
   def subdirectory: Future[Unit] = withTempDirectorySync { dir =>
     val subdir = Files.createDirectory(dir.resolve("subdir"))
-    val directory = FileTreeViews.cached(dir, (p: TypedPath) => {
+    val directory = FileTreeDataViews.cached(dir, (p: TypedPath) => {
       if (p.getPath.toString.contains("subdir")) throw new IOException("die")
       1: Integer
     }, 0, true)
@@ -41,7 +41,7 @@ object DataViewTest extends TestSuite {
   }
   def file: Future[Unit] = withTempFileSync { file =>
     val parent = file.getParent
-    val dir = FileTreeViews.cached(parent, (p: TypedPath) => {
+    val dir = FileTreeDataViews.cached(parent, (p: TypedPath) => {
       if (!p.isDirectory) throw new IOException("die")
       1: Integer
     }, Integer.MAX_VALUE, true)

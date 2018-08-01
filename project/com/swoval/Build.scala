@@ -453,10 +453,10 @@ object Build {
               convertSources(
                 "com/swoval/files",
                 "ApplePathWatcher",
-                "BiConsumer",
                 "CachedDirectory",
                 "CachedDirectoryImpl",
                 "CacheObservers",
+                "DirectoryDataView",
                 "DirectoryLister",
                 "DirectoryView",
                 "DirectoryRegistry",

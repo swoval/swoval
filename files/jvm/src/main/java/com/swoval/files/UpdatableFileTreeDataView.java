@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
-interface UpdatableFileTreeDataView<T> extends FileTreeDataView<T> {
+interface UpdatableFileTreeDataView<T> {
   /**
    * Updates the CachedDirectory entry for a particular typed path.
    *

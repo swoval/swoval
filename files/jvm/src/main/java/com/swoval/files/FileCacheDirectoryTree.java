@@ -14,7 +14,6 @@ import com.swoval.files.FileTreeViews.ObservableCache;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Event.Kind;
-import com.swoval.functional.Consumer;
 import com.swoval.functional.Filter;
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
@@ -225,10 +224,11 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
               CachedDirectory<T> cachedDirectory;
               try {
                 cachedDirectory =
-                    FileTreeViews.<T>cached(
+                    FileTreeDataViews.<T>cachedUpdatable(
                         path, converter, directoryRegistry.maxDepthFor(path), followLinks);
               } catch (final NotDirectoryException nde) {
-                cachedDirectory = FileTreeViews.<T>cached(path, converter, -1, followLinks);
+                cachedDirectory =
+                    FileTreeDataViews.<T>cachedUpdatable(path, converter, -1, followLinks);
               }
               final CachedDirectory<T> previous = directories.put(path, cachedDirectory);
               if (previous != null) previous.close();
@@ -351,7 +351,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
                     maxDepth < Integer.MAX_VALUE - depth - 1
                         ? maxDepth + depth + 1
                         : Integer.MAX_VALUE;
-                existing = FileTreeViews.<T>cached(dir.getPath(), converter, md, followLinks);
+                existing =
+                    FileTreeDataViews.<T>cachedUpdatable(dir.getPath(), converter, md, followLinks);
                 directories.put(dir.getPath(), existing);
               } catch (IOException e) {
                 existing = null;
@@ -363,14 +364,14 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         if (existing == null) {
           try {
             try {
-              dir = FileTreeViews.<T>cached(path, converter, maxDepth, followLinks);
+              dir = FileTreeDataViews.<T>cachedUpdatable(path, converter, maxDepth, followLinks);
             } catch (final NotDirectoryException e) {
-              dir = FileTreeViews.<T>cached(path, converter, -1, followLinks);
+              dir = FileTreeDataViews.<T>cachedUpdatable(path, converter, -1, followLinks);
             }
             directories.put(path, dir);
           } catch (final NoSuchFileException e) {
             pendingFiles.add(path);
-            dir = FileTreeViews.<T>cached(path, converter, -1, followLinks);
+            dir = FileTreeDataViews.<T>cachedUpdatable(path, converter, -1, followLinks);
           }
         } else {
           existing.update(TypedPaths.get(path));

@@ -219,8 +219,11 @@ object CachedFileTreeViewTest extends TestSuite {
   object subTypes {
     def overrides: Future[Unit] = withTempFileSync { f =>
       val dir =
-        FileTreeViews
-          .cached[LastModified](f.getParent, LastModified(_: TypedPath), Integer.MAX_VALUE, true)
+        FileTreeDataViews
+          .cachedUpdatable[LastModified](f.getParent,
+                                         LastModified(_: TypedPath),
+                                         Integer.MAX_VALUE,
+                                         true)
       val lastModified = f.lastModified
       val updatedLastModified = 2000
       f.setLastModifiedTime(updatedLastModified)
@@ -232,8 +235,8 @@ object CachedFileTreeViewTest extends TestSuite {
       f.write("foo")
       val initialBytes = "foo".getBytes.toIndexedSeq
       val dir =
-        FileTreeViews
-          .cached[FileBytes](f.getParent, FileBytes(_: TypedPath), Integer.MAX_VALUE, true)
+        FileTreeDataViews
+          .cachedUpdatable[FileBytes](f.getParent, FileBytes(_: TypedPath), Integer.MAX_VALUE, true)
       def filter(bytes: Seq[Byte]): Filter[Entry[FileBytes]] =
         (e: Entry[FileBytes]) => e.getValue.get().bytes == bytes
       val cachedFile = dir.listEntries(f, Integer.MAX_VALUE, filter(initialBytes)).get(0)

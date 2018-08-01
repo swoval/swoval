@@ -15,7 +15,6 @@ import com.swoval.files.FileTreeViews.ObservableCache
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.PathWatchers.Event.Kind
-import com.swoval.functional.Consumer
 import com.swoval.functional.Filter
 import java.io.IOException
 import java.nio.file.NoSuchFileException
@@ -181,11 +180,15 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
           } else if (pendingFiles.remove(path)) {
             try {
               var cachedDirectory: CachedDirectory[T] = null
-              try cachedDirectory = FileTreeViews
-                .cached[T](path, converter, directoryRegistry.maxDepthFor(path), followLinks)
+              try cachedDirectory = FileTreeDataViews.cachedUpdatable[T](
+                path,
+                converter,
+                directoryRegistry.maxDepthFor(path),
+                followLinks)
               catch {
                 case nde: NotDirectoryException =>
-                  cachedDirectory = FileTreeViews.cached[T](path, converter, -1, followLinks)
+                  cachedDirectory = FileTreeDataViews
+                    .cachedUpdatable[T](path, converter, -1, followLinks)
 
               }
               val previous: CachedDirectory[T] =
@@ -313,8 +316,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                   if (maxDepth < java.lang.Integer.MAX_VALUE - depth - 1)
                     maxDepth + depth + 1
                   else java.lang.Integer.MAX_VALUE
-                existing = FileTreeViews
-                  .cached[T](dir.getPath, converter, md, followLinks)
+                existing = FileTreeDataViews
+                  .cachedUpdatable[T](dir.getPath, converter, md, followLinks)
                 directories.put(dir.getPath, existing)
               } catch {
                 case e: IOException => existing = null
@@ -326,17 +329,20 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         var dir: CachedDirectory[T] = null
         if (existing == null) {
           try {
-            try dir = FileTreeViews.cached[T](path, converter, maxDepth, followLinks)
+            try dir = FileTreeDataViews
+              .cachedUpdatable[T](path, converter, maxDepth, followLinks)
             catch {
               case e: NotDirectoryException =>
-                dir = FileTreeViews.cached[T](path, converter, -1, followLinks)
+                dir = FileTreeDataViews
+                  .cachedUpdatable[T](path, converter, -1, followLinks)
 
             }
             directories.put(path, dir)
           } catch {
             case e: NoSuchFileException => {
               pendingFiles.add(path)
-              dir = FileTreeViews.cached[T](path, converter, -1, followLinks)
+              dir = FileTreeDataViews
+                .cachedUpdatable[T](path, converter, -1, followLinks)
             }
 
           }

@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 
@@ -58,26 +57,6 @@ public class FileTreeViews {
       throws IOException {
     return new CachedDirectoryImpl<>(
             path, path, PATH_CONVERTER, depth, Filters.AllPass, getDefault(followLinks))
-        .init();
-  }
-
-  /**
-   * Make a new CachedDirectory with a cache entries created by {@code converter}.
-   *
-   * @param path the path to cache
-   * @param converter a function to create the cache value for each path
-   * @param depth determines how many levels of children of subdirectories to include in the results
-   * @param followLinks sets whether or not to treat symbolic links whose targets as directories or
-   *     files
-   * @param <T> the cache value type
-   * @return a directory with entries of type T.
-   * @throws IOException when an error is encountered traversing the directory.
-   */
-  static <T> CachedDirectory<T> cached(
-      final Path path, final Converter<T> converter, final int depth, final boolean followLinks)
-      throws IOException {
-    return new CachedDirectoryImpl<>(
-            path, path, converter, depth, Filters.AllPass, getDefault(followLinks))
         .init();
   }
 
