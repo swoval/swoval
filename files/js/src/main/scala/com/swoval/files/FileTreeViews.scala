@@ -208,7 +208,6 @@ object FileTreeViews {
     private val updates: List[Array[Entry[T]]] = new ArrayList()
 
     def observe(cacheObserver: CacheObserver[T]): Unit = {
-      Collections.sort(creations)
       val creationIterator: Iterator[Entry[T]] = creations.iterator()
       while (creationIterator.hasNext) cacheObserver.onCreate(creationIterator.next())
       val updateIterator: Iterator[Array[Entry[T]]] = updates.iterator()
@@ -216,7 +215,6 @@ object FileTreeViews {
         val entries: Array[Entry[T]] = updateIterator.next()
         cacheObserver.onUpdate(entries(0), entries(1))
       }
-      Collections.sort(deletions)
       val deletionIterator: Iterator[Entry[T]] = deletions.iterator()
       while (deletionIterator.hasNext) cacheObserver.onDelete(
         Entries.setExists(deletionIterator.next(), false))

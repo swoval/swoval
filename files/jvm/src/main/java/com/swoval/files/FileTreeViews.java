@@ -215,7 +215,6 @@ public class FileTreeViews {
     private final List<Entry<T>[]> updates = new ArrayList<>();
 
     void observe(final CacheObserver<T> cacheObserver) {
-      Collections.sort(creations);
       final Iterator<Entry<T>> creationIterator = creations.iterator();
       while (creationIterator.hasNext()) {
         cacheObserver.onCreate(creationIterator.next());
@@ -225,7 +224,6 @@ public class FileTreeViews {
         final Entry<T>[] entries = updateIterator.next();
         cacheObserver.onUpdate(entries[0], entries[1]);
       }
-      Collections.sort(deletions);
       final Iterator<Entry<T>> deletionIterator = deletions.iterator();
       while (deletionIterator.hasNext()) {
         cacheObserver.onDelete(Entries.setExists(deletionIterator.next(), false));
