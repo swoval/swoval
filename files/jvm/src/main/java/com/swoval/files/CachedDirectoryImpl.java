@@ -206,7 +206,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
    *     traversing the directory.
    */
   @Override
-  public Updates<T> update(final TypedPath typedPath) {
+  public Updates<T> update(final TypedPath typedPath) throws IOException {
     return pathFilter.accept(typedPath)
         ? updateImpl(
             typedPath.getPath().equals(this.path)
@@ -301,7 +301,8 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
     return path.startsWith(realPath) && !path.equals(realPath);
   }
 
-  private Updates<T> updateImpl(final List<Path> parts, final TypedPath typedPath) {
+  private Updates<T> updateImpl(final List<Path> parts, final TypedPath typedPath)
+      throws IOException {
     final Updates<T> result = new Updates<>();
     if (this.subdirectories.lock()) {
       try {
@@ -363,10 +364,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
           }
         } else if (typedPath.isDirectory()) {
           final List<Entry<T>> oldEntries = listEntries(getMaxDepth(), AllPass);
-          try {
-            init();
-          } catch (final IOException e) {
-          }
+          init();
           final List<Entry<T>> newEntries = listEntries(getMaxDepth(), AllPass);
           MapOps.diffDirectoryEntries(oldEntries, newEntries, result);
         } else {

@@ -315,11 +315,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
         }
       } else if (typedPath.isDirectory) {
         val oldEntries: List[Entry[T]] = listEntries(getMaxDepth, AllPass)
-        try init()
-        catch {
-          case e: IOException => {}
-
-        }
+        init()
         val newEntries: List[Entry[T]] = listEntries(getMaxDepth, AllPass)
         MapOps.diffDirectoryEntries(oldEntries, newEntries, result)
       } else {

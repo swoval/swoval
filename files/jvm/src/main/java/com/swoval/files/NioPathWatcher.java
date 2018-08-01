@@ -16,6 +16,7 @@ import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
 import com.swoval.runtime.Platform;
 import java.io.IOException;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -274,7 +275,6 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   }
 
   @Override
-  @SuppressWarnings("EmptyCatchBlock")
   public void close() {
     if (closed.compareAndSet(false, true)) {
       service.close();
@@ -282,11 +282,27 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
     }
   }
 
+  @SuppressWarnings("EmptyCatchBlock")
   private void update(
       final CachedDirectory<WatchedDirectory> dir,
       final TypedPath typedPath,
       final List<Event> events) {
-    dir.update(typedPath).observe(updateCacheObserver(events));
+    try {
+      dir.update(typedPath).observe(updateCacheObserver(events));
+    } catch (final NoSuchFileException e) {
+      dir.remove(typedPath.getPath());
+      final TypedPath newTypedPath = TypedPaths.get(typedPath.getPath());
+      events.add(new Event(newTypedPath, newTypedPath.exists() ? Kind.Modify : Kind.Delete));
+      final CachedDirectory<WatchedDirectory> root = rootDirectories.remove(typedPath.getPath());
+      if (root != null) {
+        final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> it =
+            root.listEntries(Integer.MAX_VALUE, AllPass).iterator();
+        while (it.hasNext()) {
+          it.next().getValue().get().close();
+        }
+      }
+    } catch (final IOException e) {
+    }
   }
 
   private void handleOverflow(final Overflow overflow) {

@@ -17,6 +17,7 @@ import com.swoval.functional.Either
 import com.swoval.functional.Filter
 import com.swoval.runtime.Platform
 import java.io.IOException
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.util.ArrayList
 import java.util.HashSet
@@ -256,7 +257,24 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
   private def update(dir: CachedDirectory[WatchedDirectory],
                      typedPath: TypedPath,
                      events: List[Event]): Unit = {
-    dir.update(typedPath).observe(updateCacheObserver(events))
+    try dir.update(typedPath).observe(updateCacheObserver(events))
+    catch {
+      case e: NoSuchFileException => {
+        dir.remove(typedPath.getPath)
+        val newTypedPath: TypedPath = TypedPaths.get(typedPath.getPath)
+        events.add(new Event(newTypedPath, if (newTypedPath.exists()) Kind.Modify else Kind.Delete))
+        val root: CachedDirectory[WatchedDirectory] =
+          rootDirectories.remove(typedPath.getPath)
+        if (root != null) {
+          val it: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
+            root.listEntries(java.lang.Integer.MAX_VALUE, AllPass).iterator()
+          while (it.hasNext) it.next().getValue.get.close()
+        }
+      }
+
+      case e: IOException => {}
+
+    }
   }
 
   private def handleOverflow(overflow: Overflow): Unit = {

@@ -215,7 +215,11 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         if (typedPath.exists()) {
           final CachedDirectory<T> dir = find(typedPath.getPath());
           if (dir != null) {
-            dir.update(typedPath).observe(callbackObserver(callbacks, symlinks));
+            try {
+              dir.update(typedPath).observe(callbackObserver(callbacks, symlinks));
+            } catch (final IOException e) {
+              handleDelete(path, callbacks, symlinks);
+            }
           } else if (pendingFiles.remove(path)) {
             try {
               CachedDirectory<T> cachedDirectory;
@@ -241,35 +245,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
             }
           }
         } else {
-          final List<Iterator<FileTreeDataViews.Entry<T>>> removeIterators = new ArrayList<>();
-          final Iterator<CachedDirectory<T>> directoryIterator =
-              new ArrayList<>(directories.values()).iterator();
-          while (directoryIterator.hasNext()) {
-            final CachedDirectory<T> dir = directoryIterator.next();
-            if (path.startsWith(dir.getPath())) {
-              List<FileTreeDataViews.Entry<T>> updates = dir.remove(path);
-              final Iterator<Path> it = directoryRegistry.registered().iterator();
-              while (it.hasNext()) {
-                if (it.next().equals(path)) {
-                  pendingFiles.add(path);
-                }
-              }
-              if (dir.getPath().equals(path)) {
-                directories.remove(path);
-                updates.add(dir.getEntry());
-              }
-              removeIterators.add(updates.iterator());
-            }
-          }
-          final Iterator<Iterator<FileTreeDataViews.Entry<T>>> it = removeIterators.iterator();
-          while (it.hasNext()) {
-            final Iterator<FileTreeDataViews.Entry<T>> removeIterator = it.next();
-            while (removeIterator.hasNext()) {
-              final FileTreeDataViews.Entry<T> entry =
-                  Entries.setExists(removeIterator.next(), false);
-              addCallback(callbacks, symlinks, entry, entry, null, Delete, null);
-            }
-          }
+          handleDelete(path, callbacks, symlinks);
         }
       } finally {
         directories.unlock();
@@ -291,6 +267,38 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         }
       }
       runCallbacks(callbacks);
+    }
+  }
+
+  private void handleDelete(
+      final Path path, final List<Callback> callbacks, final List<TypedPath> symlinks) {
+    final List<Iterator<FileTreeDataViews.Entry<T>>> removeIterators = new ArrayList<>();
+    final Iterator<CachedDirectory<T>> directoryIterator =
+        new ArrayList<>(directories.values()).iterator();
+    while (directoryIterator.hasNext()) {
+      final CachedDirectory<T> dir = directoryIterator.next();
+      if (path.startsWith(dir.getPath())) {
+        List<FileTreeDataViews.Entry<T>> updates = dir.remove(path);
+        final Iterator<Path> it = directoryRegistry.registered().iterator();
+        while (it.hasNext()) {
+          if (it.next().equals(path)) {
+            pendingFiles.add(path);
+          }
+        }
+        if (dir.getPath().equals(path)) {
+          directories.remove(path);
+          updates.add(dir.getEntry());
+        }
+        removeIterators.add(updates.iterator());
+      }
+    }
+    final Iterator<Iterator<FileTreeDataViews.Entry<T>>> it = removeIterators.iterator();
+    while (it.hasNext()) {
+      final Iterator<FileTreeDataViews.Entry<T>> removeIterator = it.next();
+      while (removeIterator.hasNext()) {
+        final FileTreeDataViews.Entry<T> entry = Entries.setExists(removeIterator.next(), false);
+        addCallback(callbacks, symlinks, entry, entry, null, Delete, null);
+      }
     }
   }
 

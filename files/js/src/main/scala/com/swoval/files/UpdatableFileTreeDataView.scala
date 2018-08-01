@@ -3,6 +3,7 @@
 package com.swoval.files
 
 import com.swoval.files.FileTreeDataViews.Entry
+import java.io.IOException
 import java.nio.file.Path
 import java.util.List
 

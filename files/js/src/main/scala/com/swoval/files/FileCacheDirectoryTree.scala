@@ -171,9 +171,13 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         if (typedPath.exists()) {
           val dir: CachedDirectory[T] = find(typedPath.getPath)
           if (dir != null) {
-            dir
+            try dir
               .update(typedPath)
               .observe(callbackObserver(callbacks, symlinks))
+            catch {
+              case e: IOException => handleDelete(path, callbacks, symlinks)
+
+            }
           } else if (pendingFiles.remove(path)) {
             try {
               var cachedDirectory: CachedDirectory[T] = null
@@ -207,37 +211,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
             }
           }
         } else {
-          val removeIterators: List[Iterator[FileTreeDataViews.Entry[T]]] =
-            new ArrayList[Iterator[FileTreeDataViews.Entry[T]]]()
-          val directoryIterator: Iterator[CachedDirectory[T]] =
-            new ArrayList(directories.values).iterator()
-          while (directoryIterator.hasNext) {
-            val dir: CachedDirectory[T] = directoryIterator.next()
-            if (path.startsWith(dir.getPath)) {
-              val updates: List[FileTreeDataViews.Entry[T]] = dir.remove(path)
-              val it: Iterator[Path] =
-                directoryRegistry.registered().iterator()
-              while (it.hasNext) if (it.next() == path) {
-                pendingFiles.add(path)
-              }
-              if (dir.getPath == path) {
-                directories.remove(path)
-                updates.add(dir.getEntry)
-              }
-              removeIterators.add(updates.iterator())
-            }
-          }
-          val it: Iterator[Iterator[FileTreeDataViews.Entry[T]]] =
-            removeIterators.iterator()
-          while (it.hasNext) {
-            val removeIterator: Iterator[FileTreeDataViews.Entry[T]] =
-              it.next()
-            while (removeIterator.hasNext) {
-              val entry: FileTreeDataViews.Entry[T] =
-                Entries.setExists(removeIterator.next(), false)
-              addCallback(callbacks, symlinks, entry, entry, null, Delete, null)
-            }
-          }
+          handleDelete(path, callbacks, symlinks)
         }
       } finally directories.unlock()
       val it: Iterator[TypedPath] = symlinks.iterator()
@@ -257,6 +231,40 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         }
       }
       runCallbacks(callbacks)
+    }
+  }
+
+  private def handleDelete(path: Path,
+                           callbacks: List[Callback],
+                           symlinks: List[TypedPath]): Unit = {
+    val removeIterators: List[Iterator[FileTreeDataViews.Entry[T]]] =
+      new ArrayList[Iterator[FileTreeDataViews.Entry[T]]]()
+    val directoryIterator: Iterator[CachedDirectory[T]] =
+      new ArrayList(directories.values).iterator()
+    while (directoryIterator.hasNext) {
+      val dir: CachedDirectory[T] = directoryIterator.next()
+      if (path.startsWith(dir.getPath)) {
+        val updates: List[FileTreeDataViews.Entry[T]] = dir.remove(path)
+        val it: Iterator[Path] = directoryRegistry.registered().iterator()
+        while (it.hasNext) if (it.next() == path) {
+          pendingFiles.add(path)
+        }
+        if (dir.getPath == path) {
+          directories.remove(path)
+          updates.add(dir.getEntry)
+        }
+        removeIterators.add(updates.iterator())
+      }
+    }
+    val it: Iterator[Iterator[FileTreeDataViews.Entry[T]]] =
+      removeIterators.iterator()
+    while (it.hasNext) {
+      val removeIterator: Iterator[FileTreeDataViews.Entry[T]] = it.next()
+      while (removeIterator.hasNext) {
+        val entry: FileTreeDataViews.Entry[T] =
+          Entries.setExists(removeIterator.next(), false)
+        addCallback(callbacks, symlinks, entry, entry, null, Delete, null)
+      }
     }
   }
 
