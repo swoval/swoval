@@ -10,6 +10,7 @@ import com.swoval.files.FileTreeViews.Updates
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
 import java.io.IOException
+import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.util.ArrayList
@@ -443,12 +444,16 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
                                                  subdirectoryDepth(),
                                                  pathFilter,
                                                  fileTreeView)
-                    try dir.init()
-                    catch {
-                      case e: IOException => {}
+                    try {
+                      dir.init()
+                      subdirectories.put(key, dir)
+                    } catch {
+                      case e: IOException =>
+                        if (Files.exists(dir.getPath)) {
+                          subdirectories.put(key, dir)
+                        }
 
                     }
-                    subdirectories.put(key, dir)
                   } else {
                     subdirectories.put(key,
                                        new CachedDirectoryImpl(path,

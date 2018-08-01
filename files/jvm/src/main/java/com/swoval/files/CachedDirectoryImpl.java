@@ -9,6 +9,7 @@ import com.swoval.files.FileTreeViews.Updates;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -242,9 +243,8 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
 
   @SuppressWarnings({"unchecked", "EmptyCatchBlock"})
   private void addDirectory(
-      final CachedDirectoryImpl<T> currentDir,
-      final TypedPath typedPath,
-      final Updates<T> updates) throws IOException {
+      final CachedDirectoryImpl<T> currentDir, final TypedPath typedPath, final Updates<T> updates)
+      throws IOException {
     final Path path = typedPath.getPath();
     final CachedDirectoryImpl<T> dir =
         new CachedDirectoryImpl<>(
@@ -501,9 +501,12 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
                             fileTreeView);
                     try {
                       dir.init();
+                      subdirectories.put(key, dir);
                     } catch (final IOException e) {
+                      if (Files.exists(dir.getPath())) {
+                        subdirectories.put(key, dir);
+                      }
                     }
-                    subdirectories.put(key, dir);
                   } else {
                     subdirectories.put(
                         key,
