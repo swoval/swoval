@@ -212,9 +212,9 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
       case e: IOException => {}
 
     }
-    val oldEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
-    val newEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
     if (exists) {
+      val oldEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
+      val newEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
       val previous: CachedDirectoryImpl[T] =
         currentDir.subdirectories.put(path.getFileName, dir)
       if (previous != null) {
@@ -234,20 +234,11 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
         val entry: Entry[T] = it.next()
         newEntries.put(entry.getPath, entry)
       }
+      MapOps.diffDirectoryEntries(oldEntries, newEntries, updates)
     } else {
-      val previous: CachedDirectoryImpl[T] =
-        currentDir.subdirectories.get(path.getFileName)
-      if (previous != null) {
-        oldEntries.put(previous.realPath, Entries.setExists(previous.getEntry, false))
-        val entryIterator: Iterator[Entry[T]] =
-          previous.listEntries(java.lang.Integer.MAX_VALUE, AllPass).iterator()
-        while (entryIterator.hasNext) {
-          val entry: Entry[T] = entryIterator.next()
-          oldEntries.put(entry.getPath, entry)
-        }
-      }
+      val it: Iterator[Entry[T]] = remove(dir.getPath).iterator()
+      while (it.hasNext) updates.onDelete(it.next())
     }
-    MapOps.diffDirectoryEntries(oldEntries, newEntries, updates)
   }
 
   private def isLoop(path: Path, realPath: Path): Boolean =

@@ -244,7 +244,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
   private void addDirectory(
       final CachedDirectoryImpl<T> currentDir,
       final TypedPath typedPath,
-      final Updates<T> updates) {
+      final Updates<T> updates) throws IOException {
     final Path path = typedPath.getPath();
     final CachedDirectoryImpl<T> dir =
         new CachedDirectoryImpl<>(
@@ -261,9 +261,9 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
       exists = false;
     } catch (final IOException e) {
     }
-    final Map<Path, Entry<T>> oldEntries = new HashMap<>();
-    final Map<Path, Entry<T>> newEntries = new HashMap<>();
     if (exists) {
+      final Map<Path, Entry<T>> oldEntries = new HashMap<>();
+      final Map<Path, Entry<T>> newEntries = new HashMap<>();
       final CachedDirectoryImpl<T> previous =
           currentDir.subdirectories.put(path.getFileName(), dir);
       if (previous != null) {
@@ -282,19 +282,13 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
         final Entry<T> entry = it.next();
         newEntries.put(entry.getPath(), entry);
       }
+      MapOps.diffDirectoryEntries(oldEntries, newEntries, updates);
     } else {
-      final CachedDirectoryImpl<T> previous = currentDir.subdirectories.get(path.getFileName());
-      if (previous != null) {
-        oldEntries.put(previous.realPath, Entries.setExists(previous.getEntry(), false));
-        final Iterator<Entry<T>> entryIterator =
-            previous.listEntries(Integer.MAX_VALUE, AllPass).iterator();
-        while (entryIterator.hasNext()) {
-          final Entry<T> entry = entryIterator.next();
-          oldEntries.put(entry.getPath(), entry);
-        }
+      final Iterator<Entry<T>> it = remove(dir.getPath()).iterator();
+      while (it.hasNext()) {
+        updates.onDelete(it.next());
       }
     }
-    MapOps.diffDirectoryEntries(oldEntries, newEntries, updates);
   }
 
   private boolean isLoop(final Path path, final Path realPath) {
