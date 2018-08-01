@@ -132,4 +132,9 @@ class LockableMap<K, V extends AutoCloseable> extends Lockable {
       return (V) null;
     }
   }
+
+  @Override
+  public String toString() {
+    return "LockableMap(" + map + ")";
+  }
 }
