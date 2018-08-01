@@ -329,8 +329,8 @@ object Build {
     .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin).dependsOn(nio.js))
     .settings(
       commonSettings,
-      name := "file-utilities",
-      bintrayPackage := "file-utilities",
+      name := "file-tree-views",
+      bintrayPackage := "file-tree-views",
       description := "File system apis.",
       watchSources in Compile ++= {
         Files
