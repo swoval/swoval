@@ -170,10 +170,15 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         if (typedPath.exists()) {
           val dir: CachedDirectory[T] = find(typedPath.getPath)
           if (dir != null) {
-            try dir
-              .update(typedPath)
-              .observe(callbackObserver(callbacks, symlinks))
-            catch {
+            try {
+              val updatePath: TypedPath =
+                if ((followLinks || !typedPath.isSymbolicLink)) typedPath
+                else
+                  TypedPaths.get(typedPath.getPath, Entries.LINK | Entries.FILE)
+              dir
+                .update(updatePath)
+                .observe(callbackObserver(callbacks, symlinks))
+            } catch {
               case e: IOException => handleDelete(path, callbacks, symlinks)
 
             }

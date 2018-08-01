@@ -204,6 +204,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                         @Override
                         public boolean accept(final TypedPath typedPath) {
                           return typedPath.isDirectory()
+                              && !typedPath.isSymbolicLink()
                               && directoryRegistry.acceptPrefix(typedPath.getPath());
                         }
                       },

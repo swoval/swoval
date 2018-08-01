@@ -359,7 +359,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           }
         }
         events.add(event)
-        if (typedPath.isDirectory) {
+        if (typedPath.isDirectory && !typedPath.isSymbolicLink) {
           add(typedPath, events)
         }
       } finally rootDirectories.unlock()
