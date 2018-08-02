@@ -1,11 +1,11 @@
 package sbt
 
 import java.io.{ File => JFile }
-import java.nio.file.{ Path => JPath, WatchEvent, WatchKey }
+import java.nio.file.{ WatchEvent, WatchKey, Path => JPath }
 
 import com.swoval.watchservice.Continuously.{ State => CState }
+import sbt.internal.BuildStructure
 import sbt.internal.io.{ Source, WatchState }
-import sbt.internal.{ BuildStructure, Load }
 import sbt.io.WatchService
 
 import scala.concurrent.duration.Duration
@@ -43,8 +43,32 @@ object WatchedWrapper {
 }
 
 object Reapply {
+  private val method = {
+    val clazz = Class.forName("sbt.internal.Load$")
+    val instance = clazz.getDeclaredField("MODULE$").get(null)
+    try {
+      val m = clazz.getMethod("reapply", classOf[Seq[_]], classOf[BuildStructure], classOf[Show[_]])
+      (settings: Seq[Setting[_]], structure: BuildStructure, show: Show[_]) =>
+        m.invoke(instance, settings, structure, show).asInstanceOf[BuildStructure]
+    } catch {
+      case _: Exception =>
+        val m = clazz.getMethod("reapply",
+                                classOf[Seq[_]],
+                                classOf[BuildStructure],
+                                classOf[Logger],
+                                classOf[Show[_]])
+        val logger = new Logger {
+          override def trace(t: => Throwable): Unit = {}
+          override def success(message: => String): Unit = {}
+          override def log(level: Level.Value, message: => String): Unit = {}
+        }
+        (settings: Seq[Setting[_]], structure: BuildStructure, show: Show[_]) =>
+          m.invoke(instance, settings, structure, logger, show)
+            .asInstanceOf[BuildStructure]
+    }
+  }
   def apply(newSettings: Seq[Setting[_]],
             structure: BuildStructure,
             showKey: Show[Def.ScopedKey[_]]): BuildStructure =
-    Load.reapply(newSettings, structure)(showKey)
+    method(newSettings, structure, showKey)
 }
