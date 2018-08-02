@@ -11,7 +11,7 @@ matrix:
      env:
        CMD="checkFormat filesJVM/jacoco filesJS/test reflect/jacoco plugin/compile filesJVM/travisQuickListReflectionTest filesJVM/allTests"
        TRAVIS_SCALA_VERSION=2.12.6
-     osx_image: xcode9.3
+     osx_image: xcode9.4
      before_install:
        - unset _JAVA_OPTIONS;
        - wget https://github.com/sbt/sbt/releases/download/v1.1.4/sbt-1.1.4.tgz
