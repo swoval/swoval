@@ -15,6 +15,7 @@
 #define EVENT_INIT_SIG "(Ljava/lang/String;I)V"
 
 extern "C" {
+namespace swoval {
 
 struct service_handle {
     jobject callback;
@@ -115,5 +116,6 @@ JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventMonitorImpl_stopStre
     auto *h = reinterpret_cast<JNIHandle *>(handle);
     if (h)
         h->stopStream(stream_handle);
+}
 }
 }
