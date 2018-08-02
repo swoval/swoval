@@ -4,8 +4,8 @@ package files
 import java.io.{ File, FileFilter, IOException }
 import java.nio.file.Path
 
-import com.swoval.files.FileTreeDataViews.{ Converter, Entry }
-import com.swoval.files.FileTreeViews.{ CacheObserver, Observer }
+import com.swoval.files.FileTreeDataViews.{ CacheObserver, Converter, Entry }
+import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.test.platform.Bool
 import com.swoval.functional.{ Consumer, Filter }
 import com.swoval.test._
@@ -25,8 +25,8 @@ object TestHelpers extends PlatformFiles {
       oncreate: Entry[T] => Unit,
       onupdate: (Entry[T], Entry[T]) => Unit,
       ondelete: Entry[T] => Unit,
-      onerror: IOException => Unit = _ => {}): FileTreeViews.CacheObserver[T] =
-    new FileTreeViews.CacheObserver[T] {
+      onerror: IOException => Unit = _ => {}): FileTreeDataViews.CacheObserver[T] =
+    new FileTreeDataViews.CacheObserver[T] {
       override def onCreate(newEntry: Entry[T]): Unit = oncreate(newEntry)
 
       override def onDelete(oldEntry: Entry[T]): Unit = ondelete(oldEntry)
@@ -37,7 +37,7 @@ object TestHelpers extends PlatformFiles {
       override def onError(exception: IOException): Unit = onerror(exception)
     }
 
-  def getObserver[T <: AnyRef](onUpdate: Entry[T] => Unit): FileTreeViews.CacheObserver[T] =
+  def getObserver[T <: AnyRef](onUpdate: Entry[T] => Unit): FileTreeDataViews.CacheObserver[T] =
     getObserver[T](onUpdate, (_: Entry[T], e: Entry[T]) => onUpdate(e), onUpdate)
 
   implicit class PathWatcherOps[T](val watcher: PathWatcher[T]) extends AnyVal {
@@ -85,7 +85,7 @@ object TestHelpers extends PlatformFiles {
     override def onNext(t: PathWatchers.Event): Unit = f(t)
   }
   implicit class CacheObserverFunctionOps[T](val f: Entry[T] => Unit)
-      extends FileTreeViews.CacheObserver[T] {
+      extends FileTreeDataViews.CacheObserver[T] {
     override def onCreate(newCachedPath: Entry[T]): Unit = f(newCachedPath)
 
     override def onDelete(oldCachedPath: Entry[T]): Unit = f(oldCachedPath)

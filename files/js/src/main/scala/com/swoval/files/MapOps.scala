@@ -3,6 +3,7 @@
 package com.swoval.files
 
 import java.util.Map.Entry
+import com.swoval.files.FileTreeDataViews.CacheObserver
 import java.nio.file.Path
 import java.util.ArrayList
 import java.util.HashMap
@@ -14,7 +15,7 @@ object MapOps {
 
   def diffDirectoryEntries[T](oldEntries: List[FileTreeDataViews.Entry[T]],
                               newEntries: List[FileTreeDataViews.Entry[T]],
-                              cacheObserver: FileTreeViews.CacheObserver[T]): Unit = {
+                              cacheObserver: CacheObserver[T]): Unit = {
     val oldMap: Map[Path, FileTreeDataViews.Entry[T]] =
       new HashMap[Path, FileTreeDataViews.Entry[T]]()
     val oldIterator: Iterator[FileTreeDataViews.Entry[T]] =
@@ -36,7 +37,7 @@ object MapOps {
 
   def diffDirectoryEntries[K, V](oldMap: Map[K, FileTreeDataViews.Entry[V]],
                                  newMap: Map[K, FileTreeDataViews.Entry[V]],
-                                 cacheObserver: FileTreeViews.CacheObserver[V]): Unit = {
+                                 cacheObserver: CacheObserver[V]): Unit = {
     val newIterator: Iterator[Entry[K, FileTreeDataViews.Entry[V]]] =
       new ArrayList(newMap.entrySet()).iterator()
     val oldIterator: Iterator[Entry[K, FileTreeDataViews.Entry[V]]] =

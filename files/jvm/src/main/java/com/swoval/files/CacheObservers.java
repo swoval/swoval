@@ -1,7 +1,7 @@
 package com.swoval.files;
 
 import com.swoval.files.FileTreeDataViews.Entry;
-import com.swoval.files.FileTreeViews.CacheObserver;
+import com.swoval.files.FileTreeDataViews.CacheObserver;
 import com.swoval.files.FileTreeViews.Observer;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-class CacheObservers<T> implements FileTreeViews.CacheObserver<T>, AutoCloseable {
+class CacheObservers<T> implements CacheObserver<T>, AutoCloseable {
   private final AtomicInteger counter = new AtomicInteger(0);
   private final Map<Integer, CacheObserver<T>> observers = new LinkedHashMap<>();
 
@@ -33,11 +33,11 @@ class CacheObservers<T> implements FileTreeViews.CacheObserver<T>, AutoCloseable
 
   @Override
   public void onDelete(final Entry<T> oldEntry) {
-    final List<FileTreeViews.CacheObserver<T>> cbs;
+    final List<CacheObserver<T>> cbs;
     synchronized (observers) {
       cbs = new ArrayList<>(observers.values());
     }
-    final Iterator<FileTreeViews.CacheObserver<T>> it = cbs.iterator();
+    final Iterator<CacheObserver<T>> it = cbs.iterator();
     while (it.hasNext()) {
       try {
         it.next().onDelete(oldEntry);
@@ -49,11 +49,11 @@ class CacheObservers<T> implements FileTreeViews.CacheObserver<T>, AutoCloseable
 
   @Override
   public void onUpdate(final Entry<T> oldEntry, final Entry<T> newEntry) {
-    final List<FileTreeViews.CacheObserver<T>> cbs;
+    final List<CacheObserver<T>> cbs;
     synchronized (observers) {
       cbs = new ArrayList<>(observers.values());
     }
-    final Iterator<FileTreeViews.CacheObserver<T>> it = cbs.iterator();
+    final Iterator<CacheObserver<T>> it = cbs.iterator();
     while (it.hasNext()) {
       try {
         it.next().onUpdate(oldEntry, newEntry);
@@ -65,11 +65,11 @@ class CacheObservers<T> implements FileTreeViews.CacheObserver<T>, AutoCloseable
 
   @Override
   public void onError(IOException exception) {
-    final List<FileTreeViews.CacheObserver<T>> cbs;
+    final List<CacheObserver<T>> cbs;
     synchronized (observers) {
       cbs = new ArrayList<>(observers.values());
     }
-    final Iterator<FileTreeViews.CacheObserver<T>> it = cbs.iterator();
+    final Iterator<CacheObserver<T>> it = cbs.iterator();
     while (it.hasNext()) it.next().onError(exception);
   }
 
@@ -88,7 +88,7 @@ class CacheObservers<T> implements FileTreeViews.CacheObserver<T>, AutoCloseable
     return key;
   }
 
-  int addCacheObserver(final FileTreeViews.CacheObserver<T> cacheObserver) {
+  int addCacheObserver(final CacheObserver<T> cacheObserver) {
     final int key = counter.getAndIncrement();
     synchronized (observers) {
       observers.put(key, cacheObserver);
@@ -97,8 +97,8 @@ class CacheObservers<T> implements FileTreeViews.CacheObserver<T>, AutoCloseable
   }
 
   /**
-   * Remove an instance of {@link FileTreeViews.CacheObserver} that was previously added using
-   * {@link com.swoval.files.Observers#addObserver(FileTreeViews.Observer)}.
+   * Remove an instance of {@link CacheObserver} that was previously added using {@link
+   * com.swoval.files.Observers#addObserver(FileTreeViews.Observer)}.
    *
    * @param handle the handle to remove
    */

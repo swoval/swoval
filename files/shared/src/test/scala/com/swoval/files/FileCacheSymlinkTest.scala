@@ -18,7 +18,7 @@ import scala.concurrent.duration._
 import scala.util.Failure
 import TestHelpers._
 import EntryOps._
-import com.swoval.files.FileTreeViews.CacheObserver
+import com.swoval.files.FileTreeDataViews.CacheObserver
 
 trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
   val testsImpl = Tests {
@@ -221,7 +221,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           usingAsync(FileCacheTest.getCached[Path](
             true,
             identity,
-            new FileTreeViews.CacheObserver[Path] {
+            new FileTreeDataViews.CacheObserver[Path] {
               override def onCreate(newEntry: Entry[Path]): Unit = {}
 
               override def onDelete(oldEntry: Entry[Path]): Unit = {
@@ -311,7 +311,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
             usingAsync(FileCacheTest.getCached[Path](
               true,
               identity,
-              new FileTreeViews.CacheObserver[Path] {
+              new FileTreeDataViews.CacheObserver[Path] {
                 override def onCreate(newEntry: Entry[Path]): Unit = {}
 
                 override def onDelete(oldEntry: Entry[Path]): Unit = {}
@@ -350,7 +350,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
             usingAsync(FileCacheTest.getCached[Path](
               true,
               identity,
-              new FileTreeViews.CacheObserver[Path] {
+              new FileTreeDataViews.CacheObserver[Path] {
                 override def onCreate(newEntry: Entry[Path]): Unit = {}
 
                 override def onDelete(oldEntry: Entry[Path]): Unit = {

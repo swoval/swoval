@@ -20,7 +20,7 @@ import scala.util.{ Failure, Success, Try }
 trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
   def getBounded[T <: AnyRef](
       converter: FileTreeDataViews.Converter[T],
-      cacheObserver: FileTreeViews.CacheObserver[T]
+      cacheObserver: FileTreeDataViews.CacheObserver[T]
   ): FileTreeRepository[T] =
     FileCacheTest.get[T](
       false,
@@ -170,7 +170,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
 object FileCacheOverflowTest extends FileCacheOverflowTest with DefaultFileCacheTest {
   override def getBounded[T <: AnyRef](
       converter: FileTreeDataViews.Converter[T],
-      cacheObserver: FileTreeViews.CacheObserver[T]): FileTreeRepository[T] =
+      cacheObserver: FileTreeDataViews.CacheObserver[T]): FileTreeRepository[T] =
     if (Platform.isMac) FileCacheTest.getCached(false, converter, cacheObserver)
     else super.getBounded(converter, cacheObserver)
   val tests = testsImpl
