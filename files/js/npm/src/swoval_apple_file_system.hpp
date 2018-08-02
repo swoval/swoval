@@ -5,6 +5,7 @@
 #include <thread>
 #include <vector>
 
+namespace swoval {
 static std::mutex id_mutex;
 static int32_t current_id     = 0;
 static const CFStringRef mode = CFSTR("kCFRunLoopDefaultMode");
@@ -217,3 +218,4 @@ template <typename T> static void cleanupFunc(handle<T> *h) {
     h->cond.notify_all();
     lock.unlock();
 }
+}   // namespace swoval
