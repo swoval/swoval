@@ -99,7 +99,7 @@ object Build {
               res.split("\n").find { n =>
                 !n.endsWith("alt-rt.jar") && {
                   val version =
-                    Option(new JarFile(n).getManifest)
+                    Try(Option(new JarFile(n).getManifest)).toOption.flatten
                       .map(_.getMainAttributes.getValue("Specification-Version"))
                   version.getOrElse("0").split("\\.").last == "8"
                 }
