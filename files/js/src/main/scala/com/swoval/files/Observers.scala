@@ -65,8 +65,7 @@ class Observers[T] extends FileTreeViews.Observer[T] with AutoCloseable {
   }
 
   /**
-   * Remove an instance of [[CacheObserver]] that was previously added using
-   * [[com.swoval.files.Observers.addObserver]].
+   * Remove an instance of [[CacheObserver]] that was previously added using [[com.swoval.files.Observers.addObserver]].
    *
    * @param handle the handle to remove
    */

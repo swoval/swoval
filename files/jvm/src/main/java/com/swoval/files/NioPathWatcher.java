@@ -65,7 +65,9 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
       @Override
       public void onDelete(final FileTreeDataViews.Entry<WatchedDirectory> oldEntry) {
-        if (oldEntry.getValue().isRight()) oldEntry.getValue().get().close();
+        if (oldEntry.getValue().isRight()) {
+          oldEntry.getValue().get().close();
+        }
         events.add(new Event(oldEntry, Delete));
       }
 
@@ -381,6 +383,11 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                   either.get().close();
                 }
                 events.add(new Event(Entries.setExists(entry, false), Kind.Delete));
+              }
+              final CachedDirectory<WatchedDirectory> parent =
+                  find(event.getPath().getParent(), new ArrayList<Path>());
+              if (parent != null) {
+                update(parent, parent.getEntry(), events);
               }
               if (isRoot) {
                 rootDirectories.remove(root.getPath());

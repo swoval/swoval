@@ -60,16 +60,31 @@ trait PathWatcherTest extends TestSuite {
           events.poll(DEFAULT_TIMEOUT)(_.getPath ==> f)
         }
       }
-      'onDelete - withTempFile { f =>
-        val callback = (e: PathWatchers.Event) => {
-          if (!e.getPath.exists && e.getKind == Delete && e.getPath == f)
-            events.add(e)
+      'onDelete - {
+        'file - withTempFile { f =>
+          val callback = (e: PathWatchers.Event) => {
+            if (!e.getPath.exists && e.getKind == Delete && e.getPath == f)
+              events.add(e)
+          }
+          usingAsync(defaultWatcher(callback)) { w =>
+            w.register(f.getParent)
+            f.delete()
+            events.poll(DEFAULT_TIMEOUT) { e =>
+              e ==> new Event(TypedPaths.get(f), Delete)
+            }
+          }
         }
-        usingAsync(defaultWatcher(callback)) { w =>
-          w.register(f.getParent)
-          f.delete()
-          events.poll(DEFAULT_TIMEOUT) { e =>
-            e ==> new Event(TypedPaths.get(f), Delete)
+        'directory - withTempDirectory { dir =>
+          val callback = (e: PathWatchers.Event) => {
+            if (!e.getPath.exists && e.getKind == Delete && e.getPath == dir)
+              events.add(e)
+          }
+          usingAsync(defaultWatcher(callback)) { w =>
+            w.register(dir)
+            dir.delete()
+            events.poll(DEFAULT_TIMEOUT) { e =>
+              e ==> new Event(TypedPaths.get(dir), Delete)
+            }
           }
         }
       }
@@ -96,7 +111,8 @@ trait PathWatcherTest extends TestSuite {
         }
       }
       'unregister - withTempDirectory { root =>
-        val dir = Files.createDirectory(root.resolve("unregister"))
+        val base = Files.createDirectory(root.resolve("unregister"))
+        val dir = Files.createDirectory(base.resolve("nested"))
         val firstLatch = new CountDownLatch(1)
         val secondLatch = new CountDownLatch(2)
         val callback = (e: PathWatchers.Event) => {
@@ -108,14 +124,14 @@ trait PathWatcherTest extends TestSuite {
         }
         import Implicits.executionContext
         usingAsync(defaultWatcher(callback)) { c =>
-          c.register(dir)
+          c.register(base)
           val file = dir.resolve("foo").createFile()
           firstLatch
             .waitFor(DEFAULT_TIMEOUT) {
               assert(Files.exists(file))
             }
             .flatMap { _ =>
-              c.unregister(dir)
+              c.unregister(base)
               dir.resolve("bar").createFile()
               secondLatch
                 .waitFor(100.millis) {

@@ -73,7 +73,9 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
       }
 
       override def onDelete(oldEntry: FileTreeDataViews.Entry[WatchedDirectory]): Unit = {
-        if (oldEntry.getValue.isRight) oldEntry.getValue.get.close()
+        if (oldEntry.getValue.isRight) {
+          oldEntry.getValue.get.close()
+        }
         events.add(new Event(oldEntry, Delete))
       }
 
@@ -243,6 +245,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
               }
             }
           }
+          rootDirectories.remove(dir.getPath)
         }
       } finally rootDirectories.unlock()
     }
@@ -352,6 +355,11 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
                 either.get.close()
               }
               events.add(new Event(Entries.setExists(entry, false), Kind.Delete))
+            }
+            val parent: CachedDirectory[WatchedDirectory] =
+              find(event.getPath.getParent, new ArrayList[Path]())
+            if (parent != null) {
+              update(parent, parent.getEntry, events)
             }
             if (isRoot) {
               rootDirectories.remove(root.getPath)
