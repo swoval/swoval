@@ -1,5 +1,6 @@
 package com.swoval.files;
 
+import com.swoval.files.FileTreeDataViews.CacheObserver;
 import com.swoval.files.FileTreeViews.Observer;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -66,8 +67,8 @@ class Observers<T> implements FileTreeViews.Observer<T>, AutoCloseable {
   }
 
   /**
-   * Remove an instance of {@link FileTreeViews.CacheObserver} that was previously added using
-   * {@link com.swoval.files.Observers#addObserver(FileTreeViews.Observer)}.
+   * Remove an instance of {@link CacheObserver} that was previously added using {@link
+   * com.swoval.files.Observers#addObserver(FileTreeViews.Observer)}.
    *
    * @param handle the handle to remove
    */

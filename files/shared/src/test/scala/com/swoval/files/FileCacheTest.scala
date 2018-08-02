@@ -4,7 +4,7 @@ import java.io.IOException
 import java.nio.file.Path
 
 import com.swoval.files.FileTreeDataViews.{ Converter, Entry }
-import com.swoval.files.FileTreeViews.CacheObserver
+import com.swoval.files.FileTreeDataViews.CacheObserver
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.TestHelpers._
 import com.swoval.files.test._
@@ -41,7 +41,7 @@ object FileCacheTest {
     res.addCacheObserver(cacheObserver)
     res
   }
-  class LoopCacheObserver(val latch: CountDownLatch) extends FileTreeViews.CacheObserver[Path] {
+  class LoopCacheObserver(val latch: CountDownLatch) extends FileTreeDataViews.CacheObserver[Path] {
     override def onCreate(newEntry: Entry[Path]): Unit = {}
     override def onDelete(oldEntry: Entry[Path]): Unit = {}
     override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
@@ -71,7 +71,7 @@ object FileCacheTest {
   private[files] def get[T <: AnyRef](
       followLinks: Boolean,
       converter: FileTreeDataViews.Converter[T],
-      cacheObserver: FileTreeViews.CacheObserver[T],
+      cacheObserver: FileTreeDataViews.CacheObserver[T],
       watcherFactory: (DirectoryRegistry) => PathWatcher[PathWatchers.Event])
     : FileTreeRepository[T] = {
     val symlinkWatcher =

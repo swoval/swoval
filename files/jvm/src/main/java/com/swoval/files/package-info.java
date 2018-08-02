@@ -4,7 +4,7 @@
  * {@link com.swoval.files.FileTreeRepository} generates an in memory cache of a set of directories
  * that can be listed. The cache can store arbitrary user data that is returned to the user whenever
  * the cache is listed or fires a callback (see {@link
- * com.swoval.files.FileTreeViews.CacheObserver}).
+ * com.swoval.files.FileTreeDataViews.CacheObserver}).
  *
  * <p>The implementation of all of the classes in this package uses only apis and code constructs
  * that can be translated by <a href="https://github.com/timowest/scalagen">scalagen</a>. This can

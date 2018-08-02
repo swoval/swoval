@@ -9,8 +9,8 @@ import static com.swoval.functional.Filters.AllPass;
 import com.swoval.files.FileTreeDataViews.Converter;
 import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.files.FileTreeRepositoryImpl.Callback;
-import com.swoval.files.FileTreeViews.CacheObserver;
-import com.swoval.files.FileTreeViews.ObservableCache;
+import com.swoval.files.FileTreeDataViews.CacheObserver;
+import com.swoval.files.FileTreeDataViews.ObservableCache;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Event.Kind;
@@ -462,9 +462,9 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
     }
   }
 
-  private FileTreeViews.CacheObserver<T> callbackObserver(
+  private CacheObserver<T> callbackObserver(
       final List<Callback> callbacks, final List<TypedPath> symlinks) {
-    return new FileTreeViews.CacheObserver<T>() {
+    return new CacheObserver<T>() {
       @Override
       public void onCreate(final FileTreeDataViews.Entry<T> newEntry) {
         addCallback(callbacks, symlinks, newEntry, null, newEntry, Create, null);

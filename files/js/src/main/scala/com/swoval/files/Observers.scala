@@ -2,6 +2,7 @@
 
 package com.swoval.files
 
+import com.swoval.files.FileTreeDataViews.CacheObserver
 import com.swoval.files.FileTreeViews.Observer
 import java.util.ArrayList
 import java.util.Iterator
@@ -64,7 +65,7 @@ class Observers[T] extends FileTreeViews.Observer[T] with AutoCloseable {
   }
 
   /**
-   * Remove an instance of [[FileTreeViews.CacheObserver]] that was previously added using
+   * Remove an instance of [[CacheObserver]] that was previously added using
    * [[com.swoval.files.Observers.addObserver]].
    *
    * @param handle the handle to remove

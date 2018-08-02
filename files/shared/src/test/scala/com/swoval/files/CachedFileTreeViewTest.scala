@@ -4,9 +4,9 @@ import java.io.IOException
 import java.nio.file.{ Files, Path }
 import java.util
 
-import FileTreeDataViews.Entry
+import FileTreeDataViews.{ CacheObserver, Entry }
 import com.swoval.files.FileTreeViewTest.RepositoryOps
-import com.swoval.files.FileTreeViews.{ CacheObserver, Observer }
+import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.test._
 import com.swoval.functional.{ Consumer, Filter }
 import com.swoval.functional.Filters.AllPass

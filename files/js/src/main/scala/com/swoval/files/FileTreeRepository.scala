@@ -4,7 +4,7 @@ package com.swoval.files
 
 import com.swoval.files.FileTreeDataViews.Converter
 import com.swoval.files.FileTreeDataViews.Entry
-import com.swoval.files.FileTreeViews.ObservableCache
+import com.swoval.files.FileTreeDataViews.ObservableCache
 import com.swoval.functional.Either
 import java.io.IOException
 import java.nio.file.Path

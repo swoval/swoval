@@ -246,7 +246,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           FileCacheTest.getCached[LastModified](
             false,
             LastModified(_: TypedPath),
-            new FileTreeViews.CacheObserver[LastModified] {
+            new FileTreeDataViews.CacheObserver[LastModified] {
               override def onCreate(newEntry: Entry[LastModified]): Unit = {}
 
               override def onDelete(oldEntry: Entry[LastModified]): Unit = {}
@@ -312,7 +312,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         val deletionLatch = new CountDownLatch(1)
         val newFileLatch = new CountDownLatch(1)
         val newFile = dir.resolve("new-file")
-        val observer = new FileTreeViews.CacheObserver[Path] {
+        val observer = new FileTreeDataViews.CacheObserver[Path] {
           override def onCreate(newEntry: Entry[Path]): Unit = {
             if (newEntry.getPath == newFile) newFileLatch.countDown()
           }

@@ -7,6 +7,7 @@ import com.swoval.files.PathWatchers.Event.Kind.Delete
 import com.swoval.files.PathWatchers.Event.Kind.Modify
 import com.swoval.functional.Filters.AllPass
 import java.util.Map.Entry
+import com.swoval.files.FileTreeDataViews.CacheObserver
 import com.swoval.files.FileTreeDataViews.Converter
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
@@ -50,9 +51,8 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
         else WatchedDirectories.INVALID
     }
 
-  private def updateCacheObserver(
-      events: List[Event]): FileTreeViews.CacheObserver[WatchedDirectory] =
-    new FileTreeViews.CacheObserver[WatchedDirectory]() {
+  private def updateCacheObserver(events: List[Event]): CacheObserver[WatchedDirectory] =
+    new CacheObserver[WatchedDirectory]() {
       override def onCreate(newEntry: FileTreeDataViews.Entry[WatchedDirectory]): Unit = {
         events.add(new Event(newEntry, Create))
         try {
@@ -186,7 +186,8 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           java.lang.Integer.MAX_VALUE,
           new Filter[TypedPath]() {
             override def accept(typedPath: TypedPath): Boolean =
-              typedPath.isDirectory && directoryRegistry.acceptPrefix(typedPath.getPath)
+              typedPath.isDirectory && !typedPath.isSymbolicLink && directoryRegistry
+                .acceptPrefix(typedPath.getPath)
           },
           FileTreeViews.getDefault(false)
         ).init()
@@ -359,7 +360,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           }
         }
         events.add(event)
-        if (typedPath.isDirectory && !typedPath.isSymbolicLink) {
+        if (typedPath.isDirectory) {
           add(typedPath, events)
         }
       } finally rootDirectories.unlock()

@@ -3,7 +3,7 @@
 package com.swoval.files
 
 import com.swoval.files.FileTreeDataViews.Entry
-import com.swoval.files.FileTreeViews.CacheObserver
+import com.swoval.files.FileTreeDataViews.CacheObserver
 import com.swoval.files.FileTreeViews.Observer
 import java.io.IOException
 import java.util.ArrayList
@@ -37,7 +37,7 @@ object CacheObservers {
 
 }
 
-class CacheObservers[T] extends FileTreeViews.CacheObserver[T] with AutoCloseable {
+class CacheObservers[T] extends CacheObserver[T] with AutoCloseable {
 
   private val counter: AtomicInteger = new AtomicInteger(0)
 
@@ -57,11 +57,11 @@ class CacheObservers[T] extends FileTreeViews.CacheObserver[T] with AutoCloseabl
   }
 
   override def onDelete(oldEntry: Entry[T]): Unit = {
-    var cbs: List[FileTreeViews.CacheObserver[T]] = null
+    var cbs: List[CacheObserver[T]] = null
     observers.synchronized {
       cbs = new ArrayList(observers.values)
     }
-    val it: Iterator[FileTreeViews.CacheObserver[T]] = cbs.iterator()
+    val it: Iterator[CacheObserver[T]] = cbs.iterator()
     while (it.hasNext) try it.next().onDelete(oldEntry)
     catch {
       case e: Exception => e.printStackTrace()
@@ -70,11 +70,11 @@ class CacheObservers[T] extends FileTreeViews.CacheObserver[T] with AutoCloseabl
   }
 
   override def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit = {
-    var cbs: List[FileTreeViews.CacheObserver[T]] = null
+    var cbs: List[CacheObserver[T]] = null
     observers.synchronized {
       cbs = new ArrayList(observers.values)
     }
-    val it: Iterator[FileTreeViews.CacheObserver[T]] = cbs.iterator()
+    val it: Iterator[CacheObserver[T]] = cbs.iterator()
     while (it.hasNext) try it.next().onUpdate(oldEntry, newEntry)
     catch {
       case e: Exception => e.printStackTrace()
@@ -83,11 +83,11 @@ class CacheObservers[T] extends FileTreeViews.CacheObserver[T] with AutoCloseabl
   }
 
   override def onError(exception: IOException): Unit = {
-    var cbs: List[FileTreeViews.CacheObserver[T]] = null
+    var cbs: List[CacheObserver[T]] = null
     observers.synchronized {
       cbs = new ArrayList(observers.values)
     }
-    val it: Iterator[FileTreeViews.CacheObserver[T]] = cbs.iterator()
+    val it: Iterator[CacheObserver[T]] = cbs.iterator()
     while (it.hasNext) it.next().onError(exception)
   }
 
@@ -105,7 +105,7 @@ class CacheObservers[T] extends FileTreeViews.CacheObserver[T] with AutoCloseabl
     key
   }
 
-  def addCacheObserver(cacheObserver: FileTreeViews.CacheObserver[T]): Int = {
+  def addCacheObserver(cacheObserver: CacheObserver[T]): Int = {
     val key: Int = counter.getAndIncrement
     observers.synchronized {
       observers.put(key, cacheObserver)
@@ -114,7 +114,7 @@ class CacheObservers[T] extends FileTreeViews.CacheObserver[T] with AutoCloseabl
   }
 
   /**
-   * Remove an instance of [[FileTreeViews.CacheObserver]] that was previously added using
+   * Remove an instance of [[CacheObserver]] that was previously added using
    * [[com.swoval.files.Observers.addObserver]].
    *
    * @param handle the handle to remove

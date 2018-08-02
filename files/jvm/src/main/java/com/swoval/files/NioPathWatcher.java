@@ -6,6 +6,7 @@ import static com.swoval.files.PathWatchers.Event.Kind.Modify;
 import static com.swoval.functional.Filters.AllPass;
 import static java.util.Map.Entry;
 
+import com.swoval.files.FileTreeDataViews.CacheObserver;
 import com.swoval.files.FileTreeDataViews.Converter;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
@@ -34,9 +35,8 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   private final DirectoryRegistry directoryRegistry;
   private final Converter<WatchedDirectory> converter;
 
-  private FileTreeViews.CacheObserver<WatchedDirectory> updateCacheObserver(
-      final List<Event> events) {
-    return new FileTreeViews.CacheObserver<WatchedDirectory>() {
+  private CacheObserver<WatchedDirectory> updateCacheObserver(final List<Event> events) {
+    return new CacheObserver<WatchedDirectory>() {
       @Override
       @SuppressWarnings("EmptyCatchBlock")
       public void onCreate(final FileTreeDataViews.Entry<WatchedDirectory> newEntry) {

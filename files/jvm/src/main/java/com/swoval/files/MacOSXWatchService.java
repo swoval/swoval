@@ -200,7 +200,7 @@ class MacOSXWatchService implements RegisterableWatchService {
             }
           }
           result = new MacOSXWatchKey(realPath, queueSize, handle, kinds);
-          if (registered.put(realPath, new WatchKey(handle, result)) == null) {
+          if (registered.put(realPath, new WatchKey(handle, result)) != null) {
             result.cancel();
             throw new ClosedWatchServiceException();
           }

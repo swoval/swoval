@@ -10,8 +10,8 @@ import com.swoval.functional.Filters.AllPass
 import com.swoval.files.FileTreeDataViews.Converter
 import com.swoval.files.FileTreeDataViews.Entry
 import com.swoval.files.FileTreeRepositoryImpl.Callback
-import com.swoval.files.FileTreeViews.CacheObserver
-import com.swoval.files.FileTreeViews.ObservableCache
+import com.swoval.files.FileTreeDataViews.CacheObserver
+import com.swoval.files.FileTreeDataViews.ObservableCache
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.PathWatchers.Event.Kind
@@ -423,8 +423,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     }
 
   private def callbackObserver(callbacks: List[Callback],
-                               symlinks: List[TypedPath]): FileTreeViews.CacheObserver[T] =
-    new FileTreeViews.CacheObserver[T]() {
+                               symlinks: List[TypedPath]): CacheObserver[T] =
+    new CacheObserver[T]() {
       override def onCreate(newEntry: FileTreeDataViews.Entry[T]): Unit = {
         addCallback(callbacks, symlinks, newEntry, null, newEntry, Create, null)
       }
