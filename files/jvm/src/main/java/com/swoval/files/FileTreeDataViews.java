@@ -36,9 +36,11 @@ public class FileTreeDataViews {
    * with each value.
    *
    * @param path the path to monitor
+   * @param converter computes the data value for each path found in the directory
    * @param depth sets how the limit for how deep to traverse the children of this directory
    * @param followLinks sets whether or not to treat symbolic links whose targets as directories or
    *     files
+   * @param <T> the data type for this view
    * @return a directory whose entries just contain the path itself.
    * @throws IOException when an error is encountered traversing the directory.
    */
