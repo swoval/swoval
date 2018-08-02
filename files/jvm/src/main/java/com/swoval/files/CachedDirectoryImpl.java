@@ -9,6 +9,7 @@ import com.swoval.files.FileTreeViews.Updates;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -206,7 +207,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
    *     traversing the directory.
    */
   @Override
-  public Updates<T> update(final TypedPath typedPath) {
+  public Updates<T> update(final TypedPath typedPath) throws IOException {
     return pathFilter.accept(typedPath)
         ? updateImpl(
             typedPath.getPath().equals(this.path)
@@ -242,9 +243,8 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
 
   @SuppressWarnings({"unchecked", "EmptyCatchBlock"})
   private void addDirectory(
-      final CachedDirectoryImpl<T> currentDir,
-      final TypedPath typedPath,
-      final Updates<T> updates) {
+      final CachedDirectoryImpl<T> currentDir, final TypedPath typedPath, final Updates<T> updates)
+      throws IOException {
     final Path path = typedPath.getPath();
     final CachedDirectoryImpl<T> dir =
         new CachedDirectoryImpl<>(
@@ -261,9 +261,9 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
       exists = false;
     } catch (final IOException e) {
     }
-    final Map<Path, Entry<T>> oldEntries = new HashMap<>();
-    final Map<Path, Entry<T>> newEntries = new HashMap<>();
     if (exists) {
+      final Map<Path, Entry<T>> oldEntries = new HashMap<>();
+      final Map<Path, Entry<T>> newEntries = new HashMap<>();
       final CachedDirectoryImpl<T> previous =
           currentDir.subdirectories.put(path.getFileName(), dir);
       if (previous != null) {
@@ -282,26 +282,21 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
         final Entry<T> entry = it.next();
         newEntries.put(entry.getPath(), entry);
       }
+      MapOps.diffDirectoryEntries(oldEntries, newEntries, updates);
     } else {
-      final CachedDirectoryImpl<T> previous = currentDir.subdirectories.get(path.getFileName());
-      if (previous != null) {
-        oldEntries.put(previous.realPath, Entries.setExists(previous.getEntry(), false));
-        final Iterator<Entry<T>> entryIterator =
-            previous.listEntries(Integer.MAX_VALUE, AllPass).iterator();
-        while (entryIterator.hasNext()) {
-          final Entry<T> entry = entryIterator.next();
-          oldEntries.put(entry.getPath(), entry);
-        }
+      final Iterator<Entry<T>> it = remove(dir.getPath()).iterator();
+      while (it.hasNext()) {
+        updates.onDelete(it.next());
       }
     }
-    MapOps.diffDirectoryEntries(oldEntries, newEntries, updates);
   }
 
   private boolean isLoop(final Path path, final Path realPath) {
     return path.startsWith(realPath) && !path.equals(realPath);
   }
 
-  private Updates<T> updateImpl(final List<Path> parts, final TypedPath typedPath) {
+  private Updates<T> updateImpl(final List<Path> parts, final TypedPath typedPath)
+      throws IOException {
     final Updates<T> result = new Updates<>();
     if (this.subdirectories.lock()) {
       try {
@@ -363,10 +358,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
           }
         } else if (typedPath.isDirectory()) {
           final List<Entry<T>> oldEntries = listEntries(getMaxDepth(), AllPass);
-          try {
-            init();
-          } catch (final IOException e) {
-          }
+          init();
           final List<Entry<T>> newEntries = listEntries(getMaxDepth(), AllPass);
           MapOps.diffDirectoryEntries(oldEntries, newEntries, result);
         } else {
@@ -509,9 +501,12 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
                             fileTreeView);
                     try {
                       dir.init();
+                      subdirectories.put(key, dir);
                     } catch (final IOException e) {
+                      if (Files.exists(dir.getPath())) {
+                        subdirectories.put(key, dir);
+                      }
                     }
-                    subdirectories.put(key, dir);
                   } else {
                     subdirectories.put(
                         key,

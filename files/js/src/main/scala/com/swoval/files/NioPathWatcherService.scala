@@ -39,11 +39,15 @@ private[files] class NioPathWatcherService(
       applyImpl(path)
     }
   }
+  private def isValid(path: Path): Boolean = {
+    val attrs = NioWrappers.readAttributes(path, LinkOption.NOFOLLOW_LINKS)
+    attrs.isDirectory && !attrs.isSymbolicLink
+  }
   private def applyImpl(path: Path): functional.Either[IOException, WatchedDirectory] = {
     try {
       functional.Either.right(watchedDirectoriesByPath get path match {
         case Some(w) => w
-        case _ if Files.isDirectory(path) =>
+        case _ if isValid(path) =>
           val cb: js.Function2[nodejs.EventType, String, Unit] =
             (tpe: nodejs.EventType, name: String) => {
               val watchPath = path.resolve(Paths.get(name))

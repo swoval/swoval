@@ -10,7 +10,6 @@ import java.io.IOException
 import java.nio.file.Path
 import java.util.ArrayList
 import java.util.Collections
-import java.util.Comparator
 import java.util.Iterator
 import java.util.List
 
@@ -55,24 +54,6 @@ object FileTreeViews {
                             depth,
                             Filters.AllPass,
                             getDefault(followLinks)).init()
-
-  /**
-   * Make a new CachedDirectory with a cache entries created by {@code converter}.
-   *
-   * @param path the path to cache
-   * @param converter a function to create the cache value for each path
-   * @param depth determines how many levels of children of subdirectories to include in the results
-   * @param followLinks sets whether or not to treat symbolic links whose targets as directories or
-   *     files
-   * @tparam T the cache value type
-   * @return a directory with entries of type T.
-   */
-  def cached[T <: AnyRef](path: Path,
-                          converter: Converter[T],
-                          depth: Int,
-                          followLinks: Boolean): CachedDirectory[T] =
-    new CachedDirectoryImpl(path, path, converter, depth, Filters.AllPass, getDefault(followLinks))
-      .init()
 
   /**
    * Returns an instance of [[FileTreeView]] that uses only apis available in java.nio.file.
@@ -227,7 +208,6 @@ object FileTreeViews {
     private val updates: List[Array[Entry[T]]] = new ArrayList()
 
     def observe(cacheObserver: CacheObserver[T]): Unit = {
-      Collections.sort(creations)
       val creationIterator: Iterator[Entry[T]] = creations.iterator()
       while (creationIterator.hasNext) cacheObserver.onCreate(creationIterator.next())
       val updateIterator: Iterator[Array[Entry[T]]] = updates.iterator()
@@ -235,7 +215,6 @@ object FileTreeViews {
         val entries: Array[Entry[T]] = updateIterator.next()
         cacheObserver.onUpdate(entries(0), entries(1))
       }
-      Collections.sort(deletions)
       val deletionIterator: Iterator[Entry[T]] = deletions.iterator()
       while (deletionIterator.hasNext) cacheObserver.onDelete(
         Entries.setExists(deletionIterator.next(), false))

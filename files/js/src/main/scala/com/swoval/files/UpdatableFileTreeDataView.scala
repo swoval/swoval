@@ -3,10 +3,11 @@
 package com.swoval.files
 
 import com.swoval.files.FileTreeDataViews.Entry
+import java.io.IOException
 import java.nio.file.Path
 import java.util.List
 
-trait UpdatableFileTreeDataView[T <: AnyRef] extends FileTreeDataView[T] {
+trait UpdatableFileTreeDataView[T <: AnyRef] {
 
   /**
    * Updates the CachedDirectory entry for a particular typed path.

@@ -72,10 +72,12 @@ object Converter {
       Set(
         "CachedDirectory",
         "CachedDirectoryImpl",
+        "DirectoryDataView",
         "FileCachePathWatcher",
         "FileCacheDirectoryTree",
         "FileCacheDirectories",
         "FileTreeDataView",
+        "FileTreeDataViews",
         "FileTreeRepositories",
         "FileTreeRepository",
         "FileTreeRepositoryImpl",
@@ -98,7 +100,7 @@ object Converter {
        newLines.map(regex.replaceAllIn(_, "class Either[+L, +R]"))
      } else if (needAnyRef.contains(fileName)) {
        val regex =
-         s"(def (?:get|apply|cached)|trait (?:${needAnyRef.mkString("|")})|class (?:${needAnyRef
+         s"(def (?:get|apply|cached(?:Updatable)?)|trait (?:${needAnyRef.mkString("|")})|class (?:${needAnyRef
            .mkString("|")}}))[\\[]T".r
        val contraRegex = "^(.*result: List).R".r
        newLines.view

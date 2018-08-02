@@ -9,7 +9,7 @@ import java.util.List
 
 trait CachedDirectory[T <: AnyRef]
     extends UpdatableFileTreeDataView[T]
-    with DirectoryView
+    with DirectoryDataView[T]
     with AutoCloseable {
 
   /**
@@ -22,7 +22,20 @@ trait CachedDirectory[T <: AnyRef]
    * @param filter only include entries matching this filter
    * @return a list containing all of the entries included by the filter up to the max depth.
    */
-  def listEntries(maxDepth: Int, filter: Filter[_ >: Entry[T]]): List[Entry[T]]
+  override def listEntries(maxDepth: Int, filter: Filter[_ >: Entry[T]]): List[Entry[T]]
+
+  /**
+   * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
+   *
+   * @param path the path to list. If this is a file, returns a list containing the Entry for the
+   *     file or an empty list if the file is not monitored by the path.
+   * @param maxDepth the maximum depth of subdirectories to return
+   * @param filter include only paths accepted by this
+   * @return a List of Entry instances accepted by the filter. The list will be empty if the path is
+   *     not a subdirectory of this CachedDirectory or if it is a subdirectory, but the
+   *     CachedDirectory was created without the recursive flag.
+   */
+  override def listEntries(path: Path, maxDepth: Int, filter: Filter[_ >: Entry[T]]): List[Entry[T]]
 
   /**
    * List all of the files in the root directory, returning only those files that are accepted by

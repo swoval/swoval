@@ -10,6 +10,7 @@ import com.swoval.files.FileTreeViews.Updates
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
 import java.io.IOException
+import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.util.ArrayList
@@ -212,9 +213,9 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
       case e: IOException => {}
 
     }
-    val oldEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
-    val newEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
     if (exists) {
+      val oldEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
+      val newEntries: Map[Path, Entry[T]] = new HashMap[Path, Entry[T]]()
       val previous: CachedDirectoryImpl[T] =
         currentDir.subdirectories.put(path.getFileName, dir)
       if (previous != null) {
@@ -234,20 +235,11 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
         val entry: Entry[T] = it.next()
         newEntries.put(entry.getPath, entry)
       }
+      MapOps.diffDirectoryEntries(oldEntries, newEntries, updates)
     } else {
-      val previous: CachedDirectoryImpl[T] =
-        currentDir.subdirectories.get(path.getFileName)
-      if (previous != null) {
-        oldEntries.put(previous.realPath, Entries.setExists(previous.getEntry, false))
-        val entryIterator: Iterator[Entry[T]] =
-          previous.listEntries(java.lang.Integer.MAX_VALUE, AllPass).iterator()
-        while (entryIterator.hasNext) {
-          val entry: Entry[T] = entryIterator.next()
-          oldEntries.put(entry.getPath, entry)
-        }
-      }
+      val it: Iterator[Entry[T]] = remove(dir.getPath).iterator()
+      while (it.hasNext) updates.onDelete(it.next())
     }
-    MapOps.diffDirectoryEntries(oldEntries, newEntries, updates)
   }
 
   private def isLoop(path: Path, realPath: Path): Boolean =
@@ -315,11 +307,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
         }
       } else if (typedPath.isDirectory) {
         val oldEntries: List[Entry[T]] = listEntries(getMaxDepth, AllPass)
-        try init()
-        catch {
-          case e: IOException => {}
-
-        }
+        init()
         val newEntries: List[Entry[T]] = listEntries(getMaxDepth, AllPass)
         MapOps.diffDirectoryEntries(oldEntries, newEntries, result)
       } else {
@@ -456,12 +444,16 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
                                                  subdirectoryDepth(),
                                                  pathFilter,
                                                  fileTreeView)
-                    try dir.init()
-                    catch {
-                      case e: IOException => {}
+                    try {
+                      dir.init()
+                      subdirectories.put(key, dir)
+                    } catch {
+                      case e: IOException =>
+                        if (Files.exists(dir.getPath)) {
+                          subdirectories.put(key, dir)
+                        }
 
                     }
-                    subdirectories.put(key, dir)
                   } else {
                     subdirectories.put(key,
                                        new CachedDirectoryImpl(path,

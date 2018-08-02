@@ -1,10 +1,11 @@
 package com.swoval.files;
 
 import com.swoval.files.FileTreeDataViews.Entry;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
-interface UpdatableFileTreeDataView<T> extends FileTreeDataView<T> {
+interface UpdatableFileTreeDataView<T> {
   /**
    * Updates the CachedDirectory entry for a particular typed path.
    *
@@ -14,7 +15,7 @@ interface UpdatableFileTreeDataView<T> extends FileTreeDataView<T> {
    *     it is a directory. For an existing path, the List contains a single Updates that contains
    *     the previous and new {@link Entry}.
    */
-  FileTreeViews.Updates<T> update(final TypedPath typedPath);
+  FileTreeViews.Updates<T> update(final TypedPath typedPath) throws IOException;
 
   /**
    * Remove a path from the directory.

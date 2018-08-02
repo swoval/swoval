@@ -13,11 +13,12 @@ import com.swoval.test._
 import utest._
 
 import scala.collection.mutable
-import scala.concurrent.TimeoutException
+import scala.concurrent.{ Future, TimeoutException }
 import scala.concurrent.duration._
 import scala.util.Failure
 import TestHelpers._
 import EntryOps._
+import com.swoval.files.FileTreeViews.CacheObserver
 
 trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
   val testsImpl = Tests {
@@ -246,18 +247,55 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
         }
       }
     }
-    'noFollow - withTempDirectory { dir =>
-      withTempDirectory { otherDir =>
-        val file = otherDir.resolve("file").createFile()
-        Files.write(file, "foo".getBytes)
-        val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
-        using(FileTreeRepositories.get(false, identity)) { c =>
-          c.register(dir)
-          c.ls(dir, true, functional.Filters.AllPass) === Set(link)
-        } flatMap { _ =>
-          using(FileTreeRepositories.get(true, identity)) { c =>
-            c.register(dir)
-            c.ls(dir, true, functional.Filters.AllPass) === Set(link, link.resolve("file"))
+    'noFollow - {
+      'initially - withTempDirectory { root =>
+        val dir = Files.createDirectory(root.resolve("no-follow"))
+        withTempDirectory { otherDir =>
+          val file = otherDir.resolve("file").createFile()
+          Files.write(file, "foo".getBytes)
+          val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
+          Future.sequence(
+            Seq(
+              using(FileTreeRepositories.get(false, identity)) { c =>
+                c.register(dir, Integer.MAX_VALUE)
+                c.ls(dir, true, functional.Filters.AllPass) === Set(link)
+              },
+              using(FileTreeRepositories.get(true, identity)) { c =>
+                c.register(dir)
+                c.ls(dir, true, functional.Filters.AllPass) === Set(link, link.resolve("file"))
+              }
+            )
+          )
+        }
+      }
+      'updated - withTempDirectory { root =>
+        val dir = Files.createDirectory(root.resolve("no-follow"))
+        withTempDirectory { otherDir =>
+          val file = otherDir.resolve("file").createFile()
+          Files.write(file, "foo".getBytes)
+          val latch = new CountDownLatch(1)
+          val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
+          usingAsync(FileTreeRepositories.get(false, identity)) { c =>
+            c.register(dir, Integer.MAX_VALUE)
+            c.addCacheObserver(new CacheObserver[Path] {
+              override def onCreate(newEntry: Entry[Path]): Unit =
+                if (newEntry.getPath == link) latch.countDown()
+              override def onDelete(oldEntry: Entry[Path]): Unit = {}
+              override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
+                if (newEntry.getPath == link) latch.countDown()
+              }
+              override def onError(exception: IOException): Unit = {}
+            })
+            link.delete()
+            Files.createSymbolicLink(link, otherDir)
+            latch.waitFor(DEFAULT_TIMEOUT) {
+              c.ls(dir, true, functional.Filters.AllPass) === Set(link)
+            }
+          }.flatMap { _ =>
+            using(FileTreeRepositories.get(true, identity)) { c =>
+              c.register(dir)
+              c.ls(dir, true, functional.Filters.AllPass) === Set(link, link.resolve("file"))
+            }
           }
         }
       }

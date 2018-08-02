@@ -15,7 +15,6 @@ import com.swoval.files.FileTreeViews.ObservableCache
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.PathWatchers.Event.Kind
-import com.swoval.functional.Consumer
 import com.swoval.functional.Filter
 import java.io.IOException
 import java.nio.file.NoSuchFileException
@@ -171,17 +170,30 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         if (typedPath.exists()) {
           val dir: CachedDirectory[T] = find(typedPath.getPath)
           if (dir != null) {
-            dir
-              .update(typedPath)
-              .observe(callbackObserver(callbacks, symlinks))
+            try {
+              val updatePath: TypedPath =
+                if ((followLinks || !typedPath.isSymbolicLink)) typedPath
+                else
+                  TypedPaths.get(typedPath.getPath, Entries.LINK | Entries.FILE)
+              dir
+                .update(updatePath)
+                .observe(callbackObserver(callbacks, symlinks))
+            } catch {
+              case e: IOException => handleDelete(path, callbacks, symlinks)
+
+            }
           } else if (pendingFiles.remove(path)) {
             try {
               var cachedDirectory: CachedDirectory[T] = null
-              try cachedDirectory = FileTreeViews
-                .cached[T](path, converter, directoryRegistry.maxDepthFor(path), followLinks)
+              try cachedDirectory = FileTreeDataViews.cachedUpdatable[T](
+                path,
+                converter,
+                directoryRegistry.maxDepthFor(path),
+                followLinks)
               catch {
                 case nde: NotDirectoryException =>
-                  cachedDirectory = FileTreeViews.cached[T](path, converter, -1, followLinks)
+                  cachedDirectory = FileTreeDataViews
+                    .cachedUpdatable[T](path, converter, -1, followLinks)
 
               }
               val previous: CachedDirectory[T] =
@@ -207,37 +219,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
             }
           }
         } else {
-          val removeIterators: List[Iterator[FileTreeDataViews.Entry[T]]] =
-            new ArrayList[Iterator[FileTreeDataViews.Entry[T]]]()
-          val directoryIterator: Iterator[CachedDirectory[T]] =
-            new ArrayList(directories.values).iterator()
-          while (directoryIterator.hasNext) {
-            val dir: CachedDirectory[T] = directoryIterator.next()
-            if (path.startsWith(dir.getPath)) {
-              val updates: List[FileTreeDataViews.Entry[T]] = dir.remove(path)
-              val it: Iterator[Path] =
-                directoryRegistry.registered().iterator()
-              while (it.hasNext) if (it.next() == path) {
-                pendingFiles.add(path)
-              }
-              if (dir.getPath == path) {
-                directories.remove(path)
-                updates.add(dir.getEntry)
-              }
-              removeIterators.add(updates.iterator())
-            }
-          }
-          val it: Iterator[Iterator[FileTreeDataViews.Entry[T]]] =
-            removeIterators.iterator()
-          while (it.hasNext) {
-            val removeIterator: Iterator[FileTreeDataViews.Entry[T]] =
-              it.next()
-            while (removeIterator.hasNext) {
-              val entry: FileTreeDataViews.Entry[T] =
-                Entries.setExists(removeIterator.next(), false)
-              addCallback(callbacks, symlinks, entry, entry, null, Delete, null)
-            }
-          }
+          handleDelete(path, callbacks, symlinks)
         }
       } finally directories.unlock()
       val it: Iterator[TypedPath] = symlinks.iterator()
@@ -257,6 +239,40 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         }
       }
       runCallbacks(callbacks)
+    }
+  }
+
+  private def handleDelete(path: Path,
+                           callbacks: List[Callback],
+                           symlinks: List[TypedPath]): Unit = {
+    val removeIterators: List[Iterator[FileTreeDataViews.Entry[T]]] =
+      new ArrayList[Iterator[FileTreeDataViews.Entry[T]]]()
+    val directoryIterator: Iterator[CachedDirectory[T]] =
+      new ArrayList(directories.values).iterator()
+    while (directoryIterator.hasNext) {
+      val dir: CachedDirectory[T] = directoryIterator.next()
+      if (path.startsWith(dir.getPath)) {
+        val updates: List[FileTreeDataViews.Entry[T]] = dir.remove(path)
+        val it: Iterator[Path] = directoryRegistry.registered().iterator()
+        while (it.hasNext) if (it.next() == path) {
+          pendingFiles.add(path)
+        }
+        if (dir.getPath == path) {
+          directories.remove(path)
+          updates.add(dir.getEntry)
+        }
+        removeIterators.add(updates.iterator())
+      }
+    }
+    val it: Iterator[Iterator[FileTreeDataViews.Entry[T]]] =
+      removeIterators.iterator()
+    while (it.hasNext) {
+      val removeIterator: Iterator[FileTreeDataViews.Entry[T]] = it.next()
+      while (removeIterator.hasNext) {
+        val entry: FileTreeDataViews.Entry[T] =
+          Entries.setExists(removeIterator.next(), false)
+        addCallback(callbacks, symlinks, entry, entry, null, Delete, null)
+      }
     }
   }
 
@@ -305,8 +321,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                   if (maxDepth < java.lang.Integer.MAX_VALUE - depth - 1)
                     maxDepth + depth + 1
                   else java.lang.Integer.MAX_VALUE
-                existing = FileTreeViews
-                  .cached[T](dir.getPath, converter, md, followLinks)
+                existing = FileTreeDataViews
+                  .cachedUpdatable[T](dir.getPath, converter, md, followLinks)
                 directories.put(dir.getPath, existing)
               } catch {
                 case e: IOException => existing = null
@@ -318,17 +334,20 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         var dir: CachedDirectory[T] = null
         if (existing == null) {
           try {
-            try dir = FileTreeViews.cached[T](path, converter, maxDepth, followLinks)
+            try dir = FileTreeDataViews
+              .cachedUpdatable[T](path, converter, maxDepth, followLinks)
             catch {
               case e: NotDirectoryException =>
-                dir = FileTreeViews.cached[T](path, converter, -1, followLinks)
+                dir = FileTreeDataViews
+                  .cachedUpdatable[T](path, converter, -1, followLinks)
 
             }
             directories.put(path, dir)
           } catch {
             case e: NoSuchFileException => {
               pendingFiles.add(path)
-              dir = FileTreeViews.cached[T](path, converter, -1, followLinks)
+              dir = FileTreeDataViews
+                .cachedUpdatable[T](path, converter, -1, followLinks)
             }
 
           }

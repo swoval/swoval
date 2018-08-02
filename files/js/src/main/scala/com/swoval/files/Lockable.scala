@@ -96,4 +96,6 @@ class LockableMap[K, V <: AutoCloseable](private val map: Map[K, V], reentrantLo
       null.asInstanceOf[V]
     }
 
+  override def toString(): String = "LockableMap(" + map + ")"
+
 }

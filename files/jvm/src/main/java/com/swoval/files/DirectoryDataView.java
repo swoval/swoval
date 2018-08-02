@@ -6,12 +6,39 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
-/**
- * A repository for which each {@link java.nio.file.Path} has an associated data value.
- *
- * @param <T> the data value for each path
- */
-public interface FileTreeDataView<T> extends FileTreeView, AutoCloseable {
+public interface DirectoryDataView<T> extends FileTreeDataView<T>, DirectoryView {
+
+  /**
+   * Returns the cache entry associated with the directory returned by {@link
+   * DirectoryView#getPath()} }.
+   *
+   * @return the cache entry.
+   */
+  Entry<T> getEntry();
+  /**
+   * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
+   *
+   * @param maxDepth the maximum depth of subdirectories to return
+   * @param filter include only paths accepted by this
+   * @return a List of Entry instances accepted by the filter. The list will be empty if the path is
+   *     not a subdirectory of this CachedDirectory or if it is a subdirectory, but the
+   *     CachedDirectory was created without the recursive flag.
+   * @throws IOException if the path cannot be listed.
+   */
+  List<Entry<T>> listEntries(final int maxDepth, final Filter<? super Entry<T>> filter)
+      throws IOException;
+
+  /**
+   * List all of the files for the {@code path}, returning only those files that are accepted by the
+   * provided filter.
+   *
+   * @param maxDepth the maximum depth of subdirectories to query
+   * @param filter include only paths accepted by the filter
+   * @return a List of {@link java.nio.file.Path} instances accepted by the filter.
+   * @throws IOException if the path cannot be listed.
+   */
+  List<TypedPath> list(final int maxDepth, final Filter<? super TypedPath> filter)
+      throws IOException;
   /**
    * List all of the files for the {@code path</code> that are accepted by the <code>filter}.
    *
