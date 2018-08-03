@@ -35,7 +35,7 @@ public class FileTreeRepositories {
     final FileCacheDirectoryTree<T> tree =
         new FileCacheDirectoryTree<>(converter, callbackExecutor, symlinkWatcher);
     final PathWatcher<PathWatchers.Event> pathWatcher =
-        PathWatchers.get(false, tree.readOnlyDirectoryRegistry());
+        PathWatchers.get(followLinks, tree.readOnlyDirectoryRegistry());
     pathWatcher.addObserver(
         new Observer<Event>() {
           @Override
