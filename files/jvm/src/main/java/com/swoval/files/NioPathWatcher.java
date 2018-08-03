@@ -34,7 +34,6 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   private final RootDirectories rootDirectories = new RootDirectories();
   private final DirectoryRegistry directoryRegistry;
   private final Converter<WatchedDirectory> converter;
-  private final boolean followLinks;
 
   private CacheObserver<WatchedDirectory> updateCacheObserver(final List<Event> events) {
     return new CacheObserver<WatchedDirectory>() {
@@ -85,11 +84,8 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   private final NioPathWatcherService service;
 
   NioPathWatcher(
-      final DirectoryRegistry directoryRegistry,
-      final RegisterableWatchService watchService,
-      final boolean followLinks)
+      final DirectoryRegistry directoryRegistry, final RegisterableWatchService watchService)
       throws InterruptedException {
-    this.followLinks = followLinks;
     this.directoryRegistry = directoryRegistry;
     this.service =
         new NioPathWatcherService(
@@ -210,7 +206,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                         @Override
                         public boolean accept(final TypedPath typedPath) {
                           return typedPath.isDirectory()
-                              && (followLinks || !typedPath.isSymbolicLink())
+                              && !typedPath.isSymbolicLink()
                               && directoryRegistry.acceptPrefix(typedPath.getPath());
                         }
                       },

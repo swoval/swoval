@@ -81,6 +81,21 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           }
         }
       }
+      'link - withTempDirectory { dir =>
+        withTempDirectory { otherDir =>
+          val link = Files.createSymbolicLink(otherDir.resolve("link"), dir)
+          val file = dir.resolve("file").createFile()
+          val latch = new CountDownLatch(1)
+          usingAsync(lastModifiedCache((e: Entry[LastModified]) => {
+            if (e.getValue.get.lastModified == 3000) latch.countDown()
+          })) { c: FileTreeRepository[LastModified] =>
+            c.register(link, Integer.MAX_VALUE)
+            c.ls(link) === Set(link.resolve("file"))
+            file.setLastModifiedTime(3000)
+            latch.waitFor(DEFAULT_TIMEOUT) {}
+          }
+        }
+      }
       'loop - {
         'initial - withTempDirectory { dir =>
           withTempDirectory { otherDir =>
@@ -155,7 +170,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
             val fooLink = dirLink.resolve("foo")
             val newFile = foo.resolve("newfile")
             linkLatch
-              .waitFor(DEFAULT_TIMEOUT / 5) {
+              .waitFor(DEFAULT_TIMEOUT) {
                 Files.write(newFile, "foo".getBytes)
               }
               .flatMap { _ =>
@@ -275,7 +290,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           Files.write(file, "foo".getBytes)
           val latch = new CountDownLatch(1)
           val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
-          usingAsync(FileTreeRepositories.get(false, identity)) { c =>
+          usingAsync(FileTreeRepositories.get[Path](false, identity)) { c =>
             c.register(dir, Integer.MAX_VALUE)
             c.addCacheObserver(new CacheObserver[Path] {
               override def onCreate(newEntry: Entry[Path]): Unit =

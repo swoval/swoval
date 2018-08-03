@@ -17,6 +17,9 @@ class FileCachePathWatcher[T <: AnyRef](private val tree: FileCacheDirectoryTree
   def register(path: Path, maxDepth: Int): Boolean = {
     val dir: CachedDirectory[T] = tree.register(path, maxDepth, pathWatcher)
     if (dir != null && symlinkWatcher != null) {
+      if (dir.getEntry.isSymbolicLink) {
+        symlinkWatcher.addSymlink(path, maxDepth)
+      }
       val it: Iterator[Entry[T]] =
         dir.listEntries(dir.getMaxDepth, AllPass).iterator()
       while (it.hasNext) {
