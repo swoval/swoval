@@ -510,7 +510,7 @@ object Build {
           JacocoThresholds(instruction = 82,
                            branch = 75,
                            line = 84,
-                           clazz = 95,
+                           clazz = 100,
                            complexity = 70,
                            method = 84)),
       jacocoExcludes in Test := Seq(

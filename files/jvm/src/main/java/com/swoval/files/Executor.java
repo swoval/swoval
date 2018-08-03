@@ -1,7 +1,6 @@
 package com.swoval.files;
 
 import com.swoval.concurrent.ThreadFactory;
-import com.swoval.functional.Consumer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;

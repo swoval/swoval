@@ -22,6 +22,9 @@ class FileCachePathWatcher<T> implements AutoCloseable {
   boolean register(final Path path, final int maxDepth) throws IOException {
     final CachedDirectory<T> dir = tree.register(path, maxDepth, pathWatcher);
     if (dir != null && symlinkWatcher != null) {
+      if (dir.getEntry().isSymbolicLink()) {
+        symlinkWatcher.addSymlink(path, maxDepth);
+      }
       final Iterator<Entry<T>> it = dir.listEntries(dir.getMaxDepth(), AllPass).iterator();
       while (it.hasNext()) {
         final FileTreeDataViews.Entry<T> entry = it.next();

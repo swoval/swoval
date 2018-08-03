@@ -22,12 +22,13 @@ trait FileCacheTest { self: TestSuite =>
     FileCacheTest.get(true, identity, getObserver(f), factory)
 
   def lastModifiedCache(f: Entry[LastModified] => Unit): FileTreeRepository[LastModified] =
-    FileCacheTest.get(false, LastModified(_: TypedPath), getObserver(f), factory)
+    FileCacheTest.get(true, LastModified(_: TypedPath), getObserver(f), factory)
 
-  def lastModifiedCache(onCreate: Entry[LastModified] => Unit,
-                        onUpdate: (Entry[LastModified], Entry[LastModified]) => Unit,
-                        onDelete: Entry[LastModified] => Unit): FileTreeRepository[LastModified] =
-    FileCacheTest.get(false,
+  def lastModifiedCache(followLinks: Boolean)(
+      onCreate: Entry[LastModified] => Unit,
+      onUpdate: (Entry[LastModified], Entry[LastModified]) => Unit,
+      onDelete: Entry[LastModified] => Unit): FileTreeRepository[LastModified] =
+    FileCacheTest.get(followLinks,
                       LastModified(_: TypedPath),
                       getObserver(onCreate, onUpdate, onDelete),
                       factory)

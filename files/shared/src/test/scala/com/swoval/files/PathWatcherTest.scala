@@ -26,7 +26,42 @@ trait PathWatcherTest extends TestSuite {
   val DEFAULT_LATENCY = 5.milliseconds
   val fileFlags = new Flags.Create().setNoDefer().setFileEvents()
 
-  def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event]
+  def defaultWatcher(callback: PathWatchers.Event => _,
+                     followLinks: Boolean = false): PathWatcher[PathWatchers.Event]
+  def unregisterTest(followLinks: Boolean): Future[Unit] = withTempDirectory { root =>
+    val base = Files.createDirectory(root.resolve("unregister"))
+    val dir = Files.createDirectory(base.resolve("nested"))
+    val firstLatch = new CountDownLatch(1)
+    val secondLatch = new CountDownLatch(2)
+    val callback = (e: PathWatchers.Event) => {
+      if (e.getPath.endsWith("foo")) {
+        firstLatch.countDown()
+      } else if (e.getPath.endsWith("bar")) {
+        secondLatch.countDown()
+      }
+    }
+    import Implicits.executionContext
+    usingAsync(defaultWatcher(callback, followLinks)) { c =>
+      c.register(base)
+      val file = dir.resolve("foo").createFile()
+      firstLatch
+        .waitFor(DEFAULT_TIMEOUT) {
+          assert(Files.exists(file))
+        }
+        .flatMap { _ =>
+          c.unregister(base)
+          dir.resolve("bar").createFile()
+          secondLatch
+            .waitFor(100.millis) {
+              throw new IllegalStateException(
+                "Watcher triggered for path no longer under monitoring")
+            }
+            .recover {
+              case _: TimeoutException => ()
+            }
+        }
+    }
+  }
 
   val testsImpl = Tests {
     val events = new ArrayBlockingQueue[PathWatchers.Event](10)
@@ -110,39 +145,9 @@ trait PathWatcherTest extends TestSuite {
           Future.successful(())
         }
       }
-      'unregister - withTempDirectory { root =>
-        val base = Files.createDirectory(root.resolve("unregister"))
-        val dir = Files.createDirectory(base.resolve("nested"))
-        val firstLatch = new CountDownLatch(1)
-        val secondLatch = new CountDownLatch(2)
-        val callback = (e: PathWatchers.Event) => {
-          if (e.getPath.endsWith("foo")) {
-            firstLatch.countDown()
-          } else if (e.getPath.endsWith("bar")) {
-            secondLatch.countDown()
-          }
-        }
-        import Implicits.executionContext
-        usingAsync(defaultWatcher(callback)) { c =>
-          c.register(base)
-          val file = dir.resolve("foo").createFile()
-          firstLatch
-            .waitFor(DEFAULT_TIMEOUT) {
-              assert(Files.exists(file))
-            }
-            .flatMap { _ =>
-              c.unregister(base)
-              dir.resolve("bar").createFile()
-              secondLatch
-                .waitFor(100.millis) {
-                  throw new IllegalStateException(
-                    "Watcher triggered for path no longer under monitoring")
-                }
-                .recover {
-                  case _: TimeoutException => ()
-                }
-            }
-        }
+      'unregister - {
+        'follow - unregisterTest(true)
+        'noFollow - unregisterTest(false)
       }
     }
     'register - {
@@ -381,8 +386,9 @@ trait PathWatcherTest extends TestSuite {
 object PathWatcherTest extends PathWatcherTest {
   val tests = testsImpl
 
-  def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] = {
-    val res = PathWatchers.get(false)
+  override def defaultWatcher(callback: PathWatchers.Event => _,
+                              followLinks: Boolean): PathWatcher[PathWatchers.Event] = {
+    val res = PathWatchers.get(followLinks)
     res.addObserver(callback)
     res
   }
@@ -398,8 +404,9 @@ object NioPathWatcherTest extends PathWatcherTest {
         }
       }
 
-  def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] = {
-    val res = new NioPathWatcher(new DirectoryRegistryImpl(), RegisterableWatchServices.get(), true)
+  override def defaultWatcher(callback: PathWatchers.Event => _,
+                              followLinks: Boolean): PathWatcher[PathWatchers.Event] = {
+    val res = PlatformWatcher.make(followLinks, new DirectoryRegistryImpl())
     res.addObserver(callback)
     res
   }

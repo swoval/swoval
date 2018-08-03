@@ -1,6 +1,5 @@
 package com.swoval.files.apple;
 
-import com.swoval.files.apple.Flags.Create;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 

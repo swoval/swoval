@@ -390,7 +390,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         val updateLatch = new CountDownLatch(1)
         val deletionLatch = new CountDownLatch(1)
         usingAsync(
-          lastModifiedCache(
+          lastModifiedCache(false)(
             (_: Entry[LastModified]) => creationLatch.countDown(),
             (_: Entry[LastModified], newEntry: Entry[LastModified]) =>
               if (newEntry.getValue.isRight && newEntry.getValue.get.lastModified == 3000)
@@ -449,7 +449,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         val file = dir.resolve("simple").createFile()
         val latch = new CountDownLatch(1)
         usingAsync(
-          lastModifiedCache(
+          lastModifiedCache(true)(
             (_: Entry[LastModified]) => {},
             (_: Entry[LastModified], newEntry: Entry[LastModified]) =>
               if (newEntry.value.lastModified == 3000) latch.countDown(),
@@ -475,7 +475,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           withTempFile(subdir) { file =>
             val latch = new CountDownLatch(1)
             val secondLatch = new CountDownLatch(1)
-            usingAsync(lastModifiedCache(
+            usingAsync(lastModifiedCache(true)(
               (_: Entry[LastModified]) => {},
               (_: Entry[LastModified], newEntry: Entry[LastModified]) =>
                 newEntry.value.lastModified match {

@@ -33,8 +33,7 @@ class RootDirectories extends LockableMap[Path, CachedDirectory[WatchedDirectory
  Provides a PathWatcher that is backed by a [[java.nio.file.WatchService]].
  */
 class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
-                     watchService: RegisterableWatchService,
-                     private val followLinks: Boolean)
+                     watchService: RegisterableWatchService)
     extends PathWatcher[PathWatchers.Event]
     with AutoCloseable {
 
@@ -189,8 +188,8 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           java.lang.Integer.MAX_VALUE,
           new Filter[TypedPath]() {
             override def accept(typedPath: TypedPath): Boolean =
-              typedPath.isDirectory && (followLinks || !typedPath.isSymbolicLink) &&
-                directoryRegistry.acceptPrefix(typedPath.getPath)
+              typedPath.isDirectory && !typedPath.isSymbolicLink && directoryRegistry
+                .acceptPrefix(typedPath.getPath)
           },
           FileTreeViews.getDefault(false)
         ).init()

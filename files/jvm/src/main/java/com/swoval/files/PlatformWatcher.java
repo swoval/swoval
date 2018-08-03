@@ -16,7 +16,7 @@ class PlatformWatcher {
       final DirectoryRegistry directoryRegistry)
       throws InterruptedException, IOException {
     final PathWatcher<Event> pathWatcher =
-        new NioPathWatcher(directoryRegistry, registerableWatchService, followLinks);
+        new NioPathWatcher(directoryRegistry, registerableWatchService);
     return followLinks
         ? new SymlinkFollowingPathWatcher(pathWatcher, directoryRegistry)
         : pathWatcher;
