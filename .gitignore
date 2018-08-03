@@ -9,6 +9,7 @@ files/jvm/src/test/scala/com/swoval/files/BasicFileCacheTest.scala
 files/jvm/src/test/scala/com/swoval/files/BoundedWatchService.scala
 files/jvm/src/test/scala/com/swoval/files/CachedFileTreeViewTest.scala
 files/jvm/src/test/scala/com/swoval/files/DataViewTest.scala
+files/jvm/src/test/scala/com/swoval/files/EchoRepository.scala
 files/jvm/src/test/scala/com/swoval/files/FileCacheOverflowTest.scala
 files/jvm/src/test/scala/com/swoval/files/FileCacheSymlinkTest.scala
 files/jvm/src/test/scala/com/swoval/files/FileCacheTest.scala
