@@ -1,7 +1,7 @@
 package com.swoval.files;
 
-import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.files.FileTreeDataViews.CacheObserver;
+import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;

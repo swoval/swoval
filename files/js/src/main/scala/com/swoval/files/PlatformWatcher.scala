@@ -1,8 +1,5 @@
 package com.swoval.files
 
-import com.swoval.files.PathWatchers.Event
-import com.swoval.functional.Consumer
-
 private[files] object PlatformWatcher {
   def make(followLinks: Boolean,
            registerable: RegisterableWatchService,

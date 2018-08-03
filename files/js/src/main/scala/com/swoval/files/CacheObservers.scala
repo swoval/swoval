@@ -2,8 +2,8 @@
 
 package com.swoval.files
 
-import com.swoval.files.FileTreeDataViews.Entry
 import com.swoval.files.FileTreeDataViews.CacheObserver
+import com.swoval.files.FileTreeDataViews.Entry
 import com.swoval.files.FileTreeViews.Observer
 import java.io.IOException
 import java.util.ArrayList
