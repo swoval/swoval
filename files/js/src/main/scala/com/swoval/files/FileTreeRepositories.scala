@@ -32,7 +32,7 @@ object FileTreeRepositories {
     val tree: FileCacheDirectoryTree[T] =
       new FileCacheDirectoryTree[T](converter, callbackExecutor, symlinkWatcher)
     val pathWatcher: PathWatcher[PathWatchers.Event] =
-      PathWatchers.get(false, tree.readOnlyDirectoryRegistry())
+      PathWatchers.get(followLinks, tree.readOnlyDirectoryRegistry())
     pathWatcher.addObserver(new Observer[Event]() {
       override def onError(t: Throwable): Unit = {}
 

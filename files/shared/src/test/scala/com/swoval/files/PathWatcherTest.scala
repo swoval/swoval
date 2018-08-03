@@ -399,7 +399,7 @@ object NioPathWatcherTest extends PathWatcherTest {
       }
 
   def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] = {
-    val res = new NioPathWatcher(new DirectoryRegistryImpl(), RegisterableWatchServices.get())
+    val res = new NioPathWatcher(new DirectoryRegistryImpl(), RegisterableWatchServices.get(), true)
     res.addObserver(callback)
     res
   }

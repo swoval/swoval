@@ -7,7 +7,7 @@ private[files] object PlatformWatcher {
   def make(followLinks: Boolean,
            registerable: RegisterableWatchService,
            directoryRegistry: DirectoryRegistry): PathWatcher[PathWatchers.Event] = {
-    val watcher = new NioPathWatcher(directoryRegistry, registerable)
+    val watcher = new NioPathWatcher(directoryRegistry, registerable, followLinks)
     if (followLinks) new SymlinkFollowingPathWatcher(watcher, directoryRegistry) else watcher
   }
   def make(followLinks: Boolean,
