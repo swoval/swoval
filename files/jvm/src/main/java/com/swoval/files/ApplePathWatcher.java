@@ -275,7 +275,7 @@ class ApplePathWatchers {
   private ApplePathWatchers() {}
 
   public static PathWatcher<PathWatchers.Event> get(
-      final Boolean followLinks, final DirectoryRegistry directoryRegistry)
+      final boolean followLinks, final DirectoryRegistry directoryRegistry)
       throws InterruptedException, IOException {
     final ApplePathWatcher pathWatcher = new ApplePathWatcher(directoryRegistry);
     return followLinks
