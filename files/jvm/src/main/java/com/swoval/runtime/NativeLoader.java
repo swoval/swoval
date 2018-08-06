@@ -102,7 +102,10 @@ public class NativeLoader {
   private static void loadPackaged(final String arch) throws IOException {
     final Path swoval =
         Files.createDirectories(
-            Paths.get(System.getProperty("java.io.tmpdir", "/tmp")).resolve("swoval-jni"));
+            Paths.get(
+                    System.getProperty(
+                        "swoval.tmpdir", System.getProperty("java.io.tmpdir", "/tmp")))
+                .resolve("swoval-jni"));
     final String resourcePath = "/native/" + arch + "/" + lib;
     final InputStream resourceStream = NativeLoader.class.getResourceAsStream(resourcePath);
     if (resourceStream == null) {
