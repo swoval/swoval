@@ -2,10 +2,13 @@
 
 package com.swoval.files
 
+import com.swoval.functional.Filters.AllPass
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
+import com.swoval.files.PathWatchers.Event.Kind
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
+import com.swoval.runtime.Platform
 import java.io.IOException
 import java.nio.file.Path
 import java.util.Iterator
@@ -15,7 +18,8 @@ class SymlinkFollowingPathWatcher(private val pathWatcher: PathWatcher[PathWatch
     extends PathWatcher[PathWatchers.Event] {
 
   private val symlinkWatcher: SymlinkWatcher = new SymlinkWatcher(
-    PathWatchers.get(false, new DirectoryRegistryImpl()))
+    if (Platform.isMac) new ApplePathWatcher(new DirectoryRegistryImpl())
+    else PlatformWatcher.make(false, new DirectoryRegistryImpl()))
 
   private val observers: Observers[PathWatchers.Event] = new Observers()
 
@@ -29,8 +33,13 @@ class SymlinkFollowingPathWatcher(private val pathWatcher: PathWatcher[PathWatch
 
     override def onNext(event: Event): Unit = {
       if (event.exists() && event.isSymbolicLink) {
-        try symlinkWatcher.addSymlink(event.getPath, directoryRegistry.maxDepthFor(event.getPath))
-        catch {
+        try {
+          val maxDepth: Int = directoryRegistry.maxDepthFor(event.getPath)
+          symlinkWatcher.addSymlink(event.getPath, maxDepth)
+          if (event.isDirectory) {
+            handleNewDirectory(event.getPath, maxDepth, true)
+          }
+        } catch {
           case e: IOException => observers.onError(e)
 
         }
@@ -51,22 +60,28 @@ class SymlinkFollowingPathWatcher(private val pathWatcher: PathWatcher[PathWatch
     }
   })
 
+  private def handleNewDirectory(path: Path, maxDepth: Int, trigger: Boolean): Unit = {
+    val it: Iterator[TypedPath] =
+      FileTreeViews.list(path, maxDepth, AllPass).iterator()
+    while (it.hasNext) {
+      val tp: TypedPath = it.next()
+      if (tp.isSymbolicLink) {
+        val p: Path = tp.getPath
+        symlinkWatcher.addSymlink(p, pathWatcherDirectoryRegistry.maxDepthFor(p))
+      }
+      if (trigger) {
+        observers.onNext(new Event(tp, Kind.Create))
+      }
+    }
+  }
+
   override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] = {
     val pathWatcherResult: Either[IOException, Boolean] =
       pathWatcher.register(path, maxDepth)
     var listResult: Either[IOException, Boolean] = pathWatcherResult
     if (pathWatcherResult.isRight) {
       try {
-        val it: Iterator[TypedPath] = FileTreeViews
-          .list(path, maxDepth, new Filter[TypedPath]() {
-            override def accept(typedPath: TypedPath): Boolean =
-              typedPath.isSymbolicLink
-          })
-          .iterator()
-        while (it.hasNext) {
-          val p: Path = it.next().getPath
-          symlinkWatcher.addSymlink(p, pathWatcherDirectoryRegistry.maxDepthFor(p))
-        }
+        handleNewDirectory(path, maxDepth, false)
         listResult = Either.right(true)
       } catch {
         case e: IOException => listResult = Either.left(e)
