@@ -429,7 +429,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   }
 
   @Override
-  public void removeObserver(int handle) {
+  public void removeObserver(final int handle) {
     observers.removeObserver(handle);
   }
 
@@ -439,7 +439,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   }
 
   @Override
-  public List<Entry<T>> listEntries(Path path, int maxDepth, Filter<? super Entry<T>> filter) {
+  public List<Entry<T>> listEntries(
+      final Path path, final int maxDepth, final Filter<? super Entry<T>> filter) {
     if (directories.lock()) {
       try {
         final CachedDirectory<T> dir = find(path);

@@ -47,22 +47,22 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
     return addCacheObserver(
         new CacheObserver<T>() {
           @Override
-          public void onCreate(Entry<T> newEntry) {
+          public void onCreate(final Entry<T> newEntry) {
             observer.onNext(newEntry);
           }
 
           @Override
-          public void onDelete(Entry<T> oldEntry) {
+          public void onDelete(final Entry<T> oldEntry) {
             observer.onNext(oldEntry);
           }
 
           @Override
-          public void onUpdate(Entry<T> oldEntry, Entry<T> newEntry) {
+          public void onUpdate(final Entry<T> oldEntry, final Entry<T> newEntry) {
             observer.onNext(newEntry);
           }
 
           @Override
-          public void onError(IOException exception) {
+          public void onError(final IOException exception) {
             observer.onError(exception);
           }
         });
