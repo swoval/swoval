@@ -133,7 +133,7 @@ object FileTreeViews {
      * @param observer the observer to add
      * @return the handle to the observer.
      */
-    def addObserver(observer: Observer[T]): Int
+    def addObserver(observer: Observer[_ >: T]): Int
 
     /**
      * Remove an observer.

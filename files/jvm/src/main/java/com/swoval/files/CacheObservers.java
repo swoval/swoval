@@ -80,7 +80,7 @@ class CacheObservers<T> implements CacheObserver<T>, AutoCloseable {
    * @return a handle to the added cacheObserver that can be used to halt observation using {@link
    *     com.swoval.files.Observers#removeObserver(int)} .
    */
-  int addObserver(final Observer<Entry<T>> observer) {
+  int addObserver(final Observer<? super Entry<T>> observer) {
     final int key = counter.getAndIncrement();
     synchronized (observers) {
       observers.put(key, CacheObservers.fromObserver(observer));
@@ -113,7 +113,7 @@ class CacheObservers<T> implements CacheObserver<T>, AutoCloseable {
     observers.clear();
   }
 
-  static <T> CacheObserver<T> fromObserver(final Observer<Entry<T>> observer) {
+  static <T> CacheObserver<T> fromObserver(final Observer<? super Entry<T>> observer) {
     return new CacheObserver<T>() {
       @Override
       public void onCreate(final Entry<T> newEntry) {

@@ -114,7 +114,7 @@ class SymlinkFollowingPathWatcher implements PathWatcher<PathWatchers.Event> {
   }
 
   @Override
-  public int addObserver(final Observer<PathWatchers.Event> observer) {
+  public int addObserver(final Observer<? super PathWatchers.Event> observer) {
     return observers.addObserver(observer);
   }
 

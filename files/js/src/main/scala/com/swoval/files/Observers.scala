@@ -56,10 +56,10 @@ class Observers[T] extends FileTreeViews.Observer[T] with AutoCloseable {
    * @param observer the new cacheObserver
    * @return a handle to the added cacheObserver that can be used to halt observation using [[    com.swoval.files.Observers.removeObserver]] .
    */
-  def addObserver(observer: Observer[T]): Int = {
+  def addObserver(observer: Observer[_ >: T]): Int = {
     val key: Int = counter.getAndIncrement
     observers.synchronized {
-      observers.put(key, observer)
+      observers.put(key, observer.asInstanceOf[Observer[T]])
     }
     key
   }

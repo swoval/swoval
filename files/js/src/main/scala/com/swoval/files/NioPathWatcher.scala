@@ -376,7 +376,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     runCallbacks(events)
   }
 
-  override def addObserver(observer: Observer[Event]): Int =
+  override def addObserver(observer: Observer[_ >: Event]): Int =
     observers.addObserver(observer)
 
   override def removeObserver(handle: Int): Unit = {

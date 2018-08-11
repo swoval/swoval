@@ -50,7 +50,7 @@ class FileTreeRepositoryImpl[T <: AnyRef](private val directoryTree: FileCacheDi
     closeRunnable.run()
   }
 
-  override def addObserver(observer: Observer[FileTreeDataViews.Entry[T]]): Int =
+  override def addObserver(observer: Observer[_ >: FileTreeDataViews.Entry[T]]): Int =
     addCacheObserver(new CacheObserver[T]() {
       override def onCreate(newEntry: Entry[T]): Unit = {
         observer.onNext(newEntry)

@@ -389,7 +389,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     })
   }
 
-  override def addObserver(observer: Observer[Entry[T]]): Int =
+  override def addObserver(observer: Observer[_ >: Entry[T]]): Int =
     observers.addObserver(observer)
 
   override def removeObserver(handle: Int): Unit = {

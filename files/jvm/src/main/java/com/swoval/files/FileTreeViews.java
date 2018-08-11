@@ -147,7 +147,7 @@ public class FileTreeViews {
      * @param observer the observer to add
      * @return the handle to the observer.
      */
-    int addObserver(final Observer<T> observer);
+    int addObserver(final Observer<? super T> observer);
 
     /**
      * Remove an observer.

@@ -97,7 +97,7 @@ class SymlinkFollowingPathWatcher(private val pathWatcher: PathWatcher[PathWatch
     symlinkWatcher.close()
   }
 
-  override def addObserver(observer: Observer[PathWatchers.Event]): Int =
+  override def addObserver(observer: Observer[_ >: PathWatchers.Event]): Int =
     observers.addObserver(observer)
 
   override def removeObserver(handle: Int): Unit = {

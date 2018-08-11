@@ -58,10 +58,11 @@ class Observers<T> implements FileTreeViews.Observer<T>, AutoCloseable {
    * @return a handle to the added cacheObserver that can be used to halt observation using {@link
    *     com.swoval.files.Observers#removeObserver(int)} .
    */
-  int addObserver(final Observer<T> observer) {
+  @SuppressWarnings("unchecked")
+  int addObserver(final Observer<? super T> observer) {
     final int key = counter.getAndIncrement();
     synchronized (observers) {
-      observers.put(key, observer);
+      observers.put(key, (Observer<T>) observer);
     }
     return key;
   }

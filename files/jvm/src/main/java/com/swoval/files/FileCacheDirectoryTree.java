@@ -424,7 +424,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   }
 
   @Override
-  public int addObserver(final Observer<Entry<T>> observer) {
+  public int addObserver(final Observer<? super Entry<T>> observer) {
     return observers.addObserver(observer);
   }
 

@@ -43,7 +43,7 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
   }
 
   @Override
-  public int addObserver(final Observer<FileTreeDataViews.Entry<T>> observer) {
+  public int addObserver(final Observer<? super FileTreeDataViews.Entry<T>> observer) {
     return addCacheObserver(
         new CacheObserver<T>() {
           @Override
