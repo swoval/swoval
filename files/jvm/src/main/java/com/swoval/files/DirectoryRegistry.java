@@ -25,6 +25,19 @@ interface DirectoryRegistry extends Filter<Path>, AutoCloseable {
   void close();
 }
 
+class DirectoryRegistries {
+  private DirectoryRegistries() {}
+
+  static Filter<TypedPath> toTypedPathFilter(final DirectoryRegistry registry) {
+    return new Filter<TypedPath>() {
+      @Override
+      public boolean accept(final TypedPath typedPath) {
+        return registry.accept(typedPath.getPath());
+      }
+    };
+  }
+}
+
 class DirectoryRegistryImpl implements DirectoryRegistry {
   private final Map<Path, RegisteredDirectory> registeredDirectoriesByPath = new HashMap<>();
   private final Object lock = new Object();
@@ -99,6 +112,7 @@ class DirectoryRegistryImpl implements DirectoryRegistry {
     return acceptImpl(path, false);
   }
 
+  @Override
   public boolean acceptPrefix(final Path path) {
     return acceptImpl(path, true);
   }

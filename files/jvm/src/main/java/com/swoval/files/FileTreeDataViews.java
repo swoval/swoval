@@ -13,26 +13,6 @@ public class FileTreeDataViews {
   private FileTreeDataViews() {}
 
   /**
-   * Make a new CachedDirectory with a cache entries created by {@code converter}.
-   *
-   * @param path the path to cache
-   * @param converter a function to create the cache value for each path
-   * @param depth determines how many levels of children of subdirectories to include in the results
-   * @param followLinks sets whether or not to treat symbolic links whose targets as directories or
-   *     files
-   * @param <T> the cache value type
-   * @return a directory with entries of type T.
-   * @throws IOException when an error is encountered traversing the directory.
-   */
-  static <T> CachedDirectory<T> cachedUpdatable(
-      final Path path, final Converter<T> converter, final int depth, final boolean followLinks)
-      throws IOException {
-    return new CachedDirectoryImpl<>(
-            path, path, converter, depth, Filters.AllPass, FileTreeViews.getDefault(followLinks))
-        .init();
-  }
-
-  /**
    * Make a new {@link DirectoryView} that caches the file tree but has no data value associated
    * with each value.
    *
@@ -48,7 +28,9 @@ public class FileTreeDataViews {
   public static <T> DirectoryDataView<T> cached(
       final Path path, final Converter<T> converter, final int depth, final boolean followLinks)
       throws IOException {
-    return cachedUpdatable(path, converter, depth, followLinks);
+    return new CachedDirectoryImpl<>(
+            path, path, converter, depth, Filters.AllPass, FileTreeViews.getDefault(followLinks))
+        .init();
   }
 
   /**

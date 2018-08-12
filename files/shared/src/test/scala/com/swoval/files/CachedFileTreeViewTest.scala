@@ -217,13 +217,15 @@ object CachedFileTreeViewTest extends TestSuite {
     }
   }
   object subTypes {
+    private def newDirectory[T <: AnyRef](path: Path, converter: TypedPath => T) =
+      new CachedDirectoryImpl(path,
+                              path,
+                              converter,
+                              Integer.MAX_VALUE,
+                              (_: TypedPath) => true,
+                              FileTreeViews.getDefault(true)).init()
     def overrides: Future[Unit] = withTempFileSync { f =>
-      val dir =
-        FileTreeDataViews
-          .cachedUpdatable[LastModified](f.getParent,
-                                         LastModified(_: TypedPath),
-                                         Integer.MAX_VALUE,
-                                         true)
+      val dir = newDirectory(f.getParent, LastModified(_: TypedPath))
       val lastModified = f.lastModified
       val updatedLastModified = 2000
       f.setLastModifiedTime(updatedLastModified)
@@ -234,9 +236,7 @@ object CachedFileTreeViewTest extends TestSuite {
     def newFields: Future[Unit] = withTempFileSync { f =>
       f.write("foo")
       val initialBytes = "foo".getBytes.toIndexedSeq
-      val dir =
-        FileTreeDataViews
-          .cachedUpdatable[FileBytes](f.getParent, FileBytes(_: TypedPath), Integer.MAX_VALUE, true)
+      val dir = newDirectory(f.getParent, FileBytes(_: TypedPath))
       def filter(bytes: Seq[Byte]): Filter[Entry[FileBytes]] =
         (e: Entry[FileBytes]) => e.getValue.get().bytes == bytes
       val cachedFile = dir.listEntries(f, Integer.MAX_VALUE, filter(initialBytes)).get(0)

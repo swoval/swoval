@@ -80,6 +80,7 @@ class FileCachePendingFiles extends Lockable {
 
 class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<T> {
   private final DirectoryRegistry directoryRegistry = new DirectoryRegistryImpl();
+  private final Filter<TypedPath> filter = DirectoryRegistries.toTypedPathFilter(directoryRegistry);
   private final Converter<T> converter;
   private final CacheObservers<T> observers = new CacheObservers<>();
   private final Executor callbackExecutor;
@@ -177,12 +178,28 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
 
   private CachedDirectory<T> find(final Path path) {
     CachedDirectory<T> foundDir = null;
-    final Iterator<CachedDirectory<T>> it = directories.values().iterator();
-    while (it.hasNext()) {
+    final List<CachedDirectory<T>> dirs = directories.values();
+    Collections.sort(
+        dirs,
+        new Comparator<CachedDirectory<T>>() {
+          @Override
+          public int compare(final CachedDirectory<T> left, final CachedDirectory<T> right) {
+            // Descending order so that we find the most specific path
+            return right.getPath().compareTo(left.getPath());
+          }
+        });
+    final Iterator<CachedDirectory<T>> it = dirs.iterator();
+    while (it.hasNext() && foundDir == null) {
       final CachedDirectory<T> dir = it.next();
-      if (path.startsWith(dir.getPath())
-          && (foundDir == null || dir.getPath().startsWith(foundDir.getPath()))) {
-        foundDir = dir;
+      if (path.startsWith(dir.getPath())) {
+        if (dir.getMaxDepth() == Integer.MAX_VALUE || path.equals(dir.getPath())) {
+          foundDir = dir;
+        } else {
+          int depth = dir.getPath().relativize(path).getNameCount() - 1;
+          if (depth <= dir.getMaxDepth()) {
+            foundDir = dir;
+          }
+        }
       }
     }
     return foundDir;
@@ -227,12 +244,9 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
             try {
               CachedDirectory<T> cachedDirectory;
               try {
-                cachedDirectory =
-                    FileTreeDataViews.<T>cachedUpdatable(
-                        path, converter, directoryRegistry.maxDepthFor(path), followLinks);
+                cachedDirectory = newCachedDirectory(path, directoryRegistry.maxDepthFor(path));
               } catch (final NotDirectoryException nde) {
-                cachedDirectory =
-                    FileTreeDataViews.<T>cachedUpdatable(path, converter, -1, followLinks);
+                cachedDirectory = newCachedDirectory(path, -1);
               }
               final CachedDirectory<T> previous = directories.put(path, cachedDirectory);
               if (previous != null) previous.close();
@@ -333,7 +347,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
             dirs,
             new Comparator<CachedDirectory<T>>() {
               @Override
-              public int compare(CachedDirectory<T> left, CachedDirectory<T> right) {
+              public int compare(final CachedDirectory<T> left, final CachedDirectory<T> right) {
                 return left.getPath().compareTo(right.getPath());
               }
             });
@@ -342,51 +356,56 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         while (it.hasNext() && existing == null) {
           final CachedDirectory<T> dir = it.next();
           if (path.startsWith(dir.getPath())) {
-            final int depth =
-                path.equals(dir.getPath())
-                    ? 0
-                    : (dir.getPath().relativize(path).getNameCount() - 1);
-            if (dir.getMaxDepth() == Integer.MAX_VALUE || maxDepth < dir.getMaxDepth() - depth) {
-              existing = dir;
-            } else if (depth <= dir.getMaxDepth()) {
-              dir.close();
-              try {
-                final int md =
-                    maxDepth < Integer.MAX_VALUE - depth - 1
-                        ? maxDepth + depth + 1
-                        : Integer.MAX_VALUE;
-                existing =
-                    FileTreeDataViews.<T>cachedUpdatable(dir.getPath(), converter, md, followLinks);
-                directories.put(dir.getPath(), existing);
-              } catch (IOException e) {
-                existing = null;
-              }
-            }
+            existing = dir;
           }
         }
         CachedDirectory<T> dir;
         if (existing == null) {
+          final FileTreeView view = FileTreeViews.getDefault(followLinks);
           try {
             try {
-              dir = FileTreeDataViews.<T>cachedUpdatable(path, converter, maxDepth, followLinks);
+              dir = newCachedDirectory(path, maxDepth == -1 ? -1 : Integer.MAX_VALUE);
             } catch (final NotDirectoryException e) {
-              dir = FileTreeDataViews.<T>cachedUpdatable(path, converter, -1, followLinks);
+              dir = newCachedDirectory(path, -1);
             }
             directories.put(path, dir);
           } catch (final NoSuchFileException e) {
             pendingFiles.add(path);
-            dir = FileTreeDataViews.<T>cachedUpdatable(path, converter, -1, followLinks);
+            dir = newCachedDirectory(path, -1);
           }
         } else {
           existing.update(TypedPaths.get(path));
           dir = existing;
         }
+        cleanupDirectories(path, maxDepth);
         return dir;
       } finally {
         directories.unlock();
       }
     } else {
       return null;
+    }
+  }
+
+  private void cleanupDirectories(final Path path, final int maxDepth) {
+    final Iterator<CachedDirectory<T>> it = directories.values().iterator();
+    final List<Path> toRemove = new ArrayList<>();
+    while (it.hasNext()) {
+      final CachedDirectory<T> dir = it.next();
+      if (dir.getPath().startsWith(path) && !dir.getPath().equals(path)) {
+        if (maxDepth == Integer.MAX_VALUE) {
+          toRemove.add(dir.getPath());
+        } else {
+          int depth = path.relativize(dir.getPath()).getNameCount() - 1;
+          if (maxDepth - depth >= dir.getMaxDepth()) {
+            toRemove.add(dir.getPath());
+          }
+        }
+      }
+    }
+    final Iterator<Path> removeIterator = toRemove.iterator();
+    while (removeIterator.hasNext()) {
+      directories.remove(removeIterator.next());
     }
   }
 
@@ -452,7 +471,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
             result.add(dir.getEntry());
             return result;
           } else {
-            return dir.listEntries(path, maxDepth, filter);
+            final int depth = directoryRegistry.maxDepthFor(path);
+            return dir.listEntries(path, depth < maxDepth ? depth : maxDepth, filter);
           }
         }
       } finally {
@@ -511,5 +531,12 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
     } else {
       return Collections.emptyList();
     }
+  }
+
+  private CachedDirectory<T> newCachedDirectory(final Path path, final int depth)
+      throws IOException {
+    return new CachedDirectoryImpl<T>(
+            path, path, converter, depth, filter, FileTreeViews.getDefault(followLinks))
+        .init();
   }
 }

@@ -28,6 +28,16 @@ trait DirectoryRegistry extends Filter[Path] with AutoCloseable {
 
 }
 
+object DirectoryRegistries {
+
+  def toTypedPathFilter(registry: DirectoryRegistry): Filter[TypedPath] =
+    new Filter[TypedPath]() {
+      override def accept(typedPath: TypedPath): Boolean =
+        registry.accept(typedPath.getPath)
+    }
+
+}
+
 object DirectoryRegistryImpl {
 
   private class RegisteredDirectory(val path: Path, val maxDepth: Int) {
@@ -116,7 +126,7 @@ class DirectoryRegistryImpl extends DirectoryRegistry {
 
   override def accept(path: Path): Boolean = acceptImpl(path, false)
 
-  def acceptPrefix(path: Path): Boolean = acceptImpl(path, true)
+  override def acceptPrefix(path: Path): Boolean = acceptImpl(path, true)
 
   override def close(): Unit = {
     registeredDirectoriesByPath.clear()

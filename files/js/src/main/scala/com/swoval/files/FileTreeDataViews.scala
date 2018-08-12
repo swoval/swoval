@@ -11,28 +11,6 @@ import java.nio.file.Path
 object FileTreeDataViews {
 
   /**
-   * Make a new CachedDirectory with a cache entries created by {@code converter}.
-   *
-   * @param path the path to cache
-   * @param converter a function to create the cache value for each path
-   * @param depth determines how many levels of children of subdirectories to include in the results
-   * @param followLinks sets whether or not to treat symbolic links whose targets as directories or
-   *     files
-   * @tparam T the cache value type
-   * @return a directory with entries of type T.
-   */
-  def cachedUpdatable[T <: AnyRef](path: Path,
-                                   converter: Converter[T],
-                                   depth: Int,
-                                   followLinks: Boolean): CachedDirectory[T] =
-    new CachedDirectoryImpl(path,
-                            path,
-                            converter,
-                            depth,
-                            Filters.AllPass,
-                            FileTreeViews.getDefault(followLinks)).init()
-
-  /**
    * Make a new [[DirectoryView]] that caches the file tree but has no data value associated
    * with each value.
    *
@@ -48,7 +26,12 @@ object FileTreeDataViews {
                           converter: Converter[T],
                           depth: Int,
                           followLinks: Boolean): DirectoryDataView[T] =
-    cachedUpdatable(path, converter, depth, followLinks)
+    new CachedDirectoryImpl(path,
+                            path,
+                            converter,
+                            depth,
+                            Filters.AllPass,
+                            FileTreeViews.getDefault(followLinks)).init()
 
   /**
    * Container class for [[CachedDirectoryImpl]] entries. Contains both the path to which the
