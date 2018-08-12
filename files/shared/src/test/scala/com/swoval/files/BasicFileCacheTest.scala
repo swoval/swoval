@@ -133,32 +133,59 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
             }
           }
         }
-        'overlap - withTempDirectory { dir =>
+        'adjacent - withTempDirectory { dir =>
           withTempDirectory(dir) { subdir =>
             withTempDirectory(subdir) { nestedSubdir =>
               withTempFile(nestedSubdir) { file =>
-                val latch = new CountDownLatch(1)
-                usingAsync(simpleCache((e: Entry[Path]) =>
-                  if (e.getPath.endsWith("deep")) latch.countDown())) { c =>
-                  c.register(dir, 1)
-                  c.ls(dir) === Set(subdir, nestedSubdir)
-                  c.register(nestedSubdir, 0)
-                  c.ls(dir) === Set(subdir, nestedSubdir, file)
-                  val deep = Files.createDirectory(nestedSubdir.resolve("deep"))
-                  val deepFile = Files.createFile(deep.resolve("file"))
-                  latch.waitFor(DEFAULT_TIMEOUT) {
-                    var i = 0
-                    while (!Files.exists(deepFile) && i < 1000) {
-                      i += 1
+                using(simpleCache((e: Entry[Path]) => {})) { c =>
+                  c.register(dir, 0)
+                  c.ls(dir) === Set(subdir)
+                  c.register(subdir, Integer.MAX_VALUE)
+                  c.ls(dir) === Set(subdir)
+                  c.ls(subdir) === Set(nestedSubdir, file)
+                }
+              }
+            }
+          }
+        }
+        'overlap - {
+          'infinite - withTempDirectory { dir =>
+            withTempDirectory(dir) { subdir =>
+              withTempDirectory(subdir) { nestedSubdir =>
+                withTempFile(nestedSubdir) { file =>
+                  using(simpleCache((e: Entry[Path]) => {})) { c =>
+                    c.register(dir, 0)
+                    c.ls(dir) === Set(subdir)
+                    c.register(subdir, Integer.MAX_VALUE)
+                    c.ls(dir) === Set(subdir)
+                    c.ls(subdir) === Set(nestedSubdir, file)
+                    c.register(dir, Integer.MAX_VALUE)
+                    c.ls(dir).sorted === Seq(subdir, nestedSubdir, file)
+                  }
+                }
+              }
+            }
+          }
+          'finite - withTempDirectory { dir =>
+            withTempDirectory(dir) { subdir =>
+              withTempDirectory(subdir) { nestedSubdir =>
+                withTempDirectory(nestedSubdir) { nestedNestedSubdir =>
+                  val file = nestedSubdir.resolve("file")
+                  val latch = new CountDownLatch(1)
+                  usingAsync(simpleCache((e: Entry[Path]) => {
+                    if (e.getPath == file) latch.countDown()
+                  })) { c =>
+                    c.register(dir, 0)
+                    c.ls(dir) === Set(subdir)
+                    c.register(subdir, Integer.MAX_VALUE)
+                    c.ls(dir) === Set(subdir)
+                    c.ls(subdir) === Set(nestedSubdir, nestedNestedSubdir)
+                    c.register(dir, 1)
+                    c.ls(dir).sorted === Seq(subdir, nestedSubdir)
+                    file.createFile()
+                    latch.waitFor(DEFAULT_TIMEOUT) {
+                      c.ls(subdir).sorted === Seq(nestedSubdir, nestedNestedSubdir, file)
                     }
-                    val existing =
-                      FileTreeViews
-                        .list(dir, Integer.MAX_VALUE, AllPass)
-                        .asScala
-                        .map(_.getPath)
-                        .toSet
-                    existing === Set(subdir, nestedSubdir, file, deep, deepFile)
-                    c.ls(dir) === Set(subdir, nestedSubdir, file, deep)
                   }
                 }
               }
@@ -372,7 +399,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
             using(simpleCache((_: Entry[Path]) => {})) { c =>
               c.register(dir, -1)
               c.ls(dir) === Seq(dir)
-              c.list(dir, 0, AllPass).asScala.toSeq === Seq(TypedPaths.get(dir))
+              c.list(dir, 0, AllPass).asScala.toSeq.map(_.getPath).headOption ==> Some(dir)
             }
           }
           'nonExistent - using(simpleCache((_: Entry[Path]) => {})) { c =>

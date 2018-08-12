@@ -408,7 +408,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   }
 
   @Override
-  public int addObserver(final Observer<Event> observer) {
+  public int addObserver(final Observer<? super Event> observer) {
     return observers.addObserver(observer);
   }
 

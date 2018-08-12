@@ -105,7 +105,7 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
   private final RegisteredPaths watchedSymlinksByTarget;
 
   @Override
-  public int addObserver(final Observer<Event> observer) {
+  public int addObserver(final Observer<? super Event> observer) {
     return observers.addObserver(observer);
   }
 

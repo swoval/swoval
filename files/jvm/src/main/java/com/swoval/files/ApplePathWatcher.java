@@ -60,7 +60,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   private static final DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
 
   @Override
-  public int addObserver(final Observer<Event> observer) {
+  public int addObserver(final Observer<? super Event> observer) {
     return observers.addObserver(observer);
   }
 
@@ -275,7 +275,7 @@ class ApplePathWatchers {
   private ApplePathWatchers() {}
 
   public static PathWatcher<PathWatchers.Event> get(
-      final Boolean followLinks, final DirectoryRegistry directoryRegistry)
+      final boolean followLinks, final DirectoryRegistry directoryRegistry)
       throws InterruptedException, IOException {
     final ApplePathWatcher pathWatcher = new ApplePathWatcher(directoryRegistry);
     return followLinks
