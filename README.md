@@ -14,6 +14,8 @@ swoval
 
 A collection of small developer libraries.
 
+The latest version is `2.0.0-RC1`.
+
 Files
 =
 A cross platform (scala.js and jvm) project that provides a number of helpful utilities,
