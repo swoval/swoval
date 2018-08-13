@@ -16,11 +16,11 @@ A collection of small developer libraries.
 
 The latest version is `2.0.0-RC1`.
 
-Files
+File tree views
 =
 A cross platform (scala.js and jvm) project that provides a number of helpful utilities,
-including a reactive file system cache and a fast tool for listing the contents of a cachedDirectoryImpl.
-See documentation: [files](files/README.md).
+including a reactive file system cache and a fast tool for listing the contents of a driectory.
+See documentation: [file-tree-views](files/README.md).
 
 CloseWatch
 =
