@@ -1,4 +1,4 @@
-Files
+File tree views
 ===
 This is a scala.js and jvm cross platform package that provides three important interfaces:
 * PathWatcher: Monitor a set of paths for changes and run an arbitrary callback when changes
@@ -15,6 +15,13 @@ should be considered canonical.
 
 The remainder of this readme will provide a brief overview of the three main classes along with
 examples. Examples are provided in java 8 syntax to allow lambdas, but the library targets java 7.
+
+Setup
+==
+The file tree views package is available on
+[maven](https://mvnrepository.com/artifact/com.swoval/file-tree-views) and the latest version is
+`2.0.0-RC1`. For sbt builds, it can be added with
+`libraryDependencies += "com.swoval" % "file-tree-views" % "2.0.0-RC1"`.
 
 FileTreeRepository
 ==
