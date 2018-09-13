@@ -411,3 +411,13 @@ object NioPathWatcherTest extends PathWatcherTest {
     res
   }
 }
+
+object PollingPathWatcherTest extends PathWatcherTest {
+  val tests = testsImpl
+  override def defaultWatcher(callback: PathWatchers.Event => _,
+                              followLinks: Boolean): PathWatcher[PathWatchers.Event] = {
+    val res = PathWatchers.polling(followLinks, 100, TimeUnit.MILLISECONDS)
+    res.addObserver(callback)
+    res
+  }
+}

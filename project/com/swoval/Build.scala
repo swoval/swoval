@@ -477,6 +477,7 @@ object Build {
                 "Observers",
                 "PathWatcher",
                 "PathWatchers",
+                "PollingPathWatcher",
                 "RegisterableWatchService",
                 "SimpleFileTreeView",
                 "SymlinkWatcher",
