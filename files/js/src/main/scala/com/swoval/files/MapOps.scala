@@ -22,7 +22,7 @@ object MapOps {
       oldEntries.iterator()
     while (oldIterator.hasNext) {
       val entry: FileTreeDataViews.Entry[T] = oldIterator.next()
-      oldMap.put(entry.getPath, entry)
+      oldMap.put(entry.getTypedPath.getPath, entry)
     }
     val newMap: Map[Path, FileTreeDataViews.Entry[T]] =
       new HashMap[Path, FileTreeDataViews.Entry[T]]()
@@ -30,7 +30,7 @@ object MapOps {
       newEntries.iterator()
     while (newIterator.hasNext) {
       val entry: FileTreeDataViews.Entry[T] = newIterator.next()
-      newMap.put(entry.getPath, entry)
+      newMap.put(entry.getTypedPath.getPath, entry)
     }
     diffDirectoryEntries(oldMap, newMap, cacheObserver)
   }
@@ -57,8 +57,6 @@ object MapOps {
         cacheObserver.onDelete(entry.getValue)
       }
     }
-    newMap.clear()
-    oldMap.clear()
   }
 
 }

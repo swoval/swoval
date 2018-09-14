@@ -18,7 +18,7 @@ trait DirectoryRegistry extends Filter[Path] with AutoCloseable {
 
   def maxDepthFor(path: Path): Int
 
-  def registered(): List[Path]
+  def registered(): Map[Path, Integer]
 
   def removeDirectory(path: Path): Unit
 
@@ -96,8 +96,15 @@ class DirectoryRegistryImpl extends DirectoryRegistry {
     maxDepth
   }
 
-  override def registered(): List[Path] = lock.synchronized {
-    new ArrayList(registeredDirectoriesByPath.keySet)
+  override def registered(): Map[Path, Integer] = lock.synchronized {
+    val result: Map[Path, Integer] = new HashMap[Path, Integer]()
+    val it: Iterator[RegisteredDirectory] =
+      registeredDirectoriesByPath.values.iterator()
+    while (it.hasNext) {
+      val dir: RegisteredDirectory = it.next()
+      result.put(dir.path, dir.maxDepth)
+    }
+    result
   }
 
   override def removeDirectory(path: Path): Unit = {

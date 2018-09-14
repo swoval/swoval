@@ -36,14 +36,11 @@ object Compat {
   def extraProjectSettings: Seq[Def.Setting[_]] = Nil
   def settings(s: Seq[Def.Setting[_]]): Seq[Def.Setting[_]] = s
 
-  case class EntryImpl(getPath: Path) extends Entry[Path] {
-    override def getValue: functional.Either[IOException, Path] = functional.Either.right(getPath)
-    override def isDirectory: Boolean = Files.isDirectory(getPath)
-    override def isFile: Boolean = Files.isRegularFile(getPath)
-    override def isSymbolicLink: Boolean = Files.isSymbolicLink(getPath)
-    override def exists(): Boolean = Files.exists(getPath)
-    override def toRealPath: Path = Try(getPath.toRealPath()).getOrElse(getPath)
-    override def compareTo(other: Entry[Path]): Int = getPath.compareTo(other.getPath)
+  case class EntryImpl(getTypedPath: TypedPath) extends Entry[Path] {
+    override def getValue: functional.Either[IOException, Path] =
+      functional.Either.right(getTypedPath.getPath)
+    override def compareTo(other: Entry[Path]): Int =
+      getTypedPath.getPath.compareTo(other.getTypedPath.getPath)
   }
   private class PathFileFilter(val pathFilter: functional.Filter[Path]) extends FileFilter {
     override def accept(file: File): Boolean = pathFilter.accept(file.toPath)

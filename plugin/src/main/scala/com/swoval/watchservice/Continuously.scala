@@ -68,10 +68,10 @@ object Continuously {
 
     private[this] val onChange: Observer[Entry[Path]] = new Observer[Entry[Path]] {
       override def onNext(cacheEntry: Entry[Path]): Unit = {
-        if (sources.exists(s => s.filter.accept(cacheEntry.getPath))) {
-          offer(Triggered(cacheEntry.getPath))
+        if (sources.exists(s => s.filter.accept(cacheEntry.getTypedPath.getPath))) {
+          offer(Triggered(cacheEntry.getTypedPath.getPath))
         } else {
-          debug(s"No source filter found for ${cacheEntry.getPath}")
+          debug(s"No source filter found for ${cacheEntry.getTypedPath.getPath}")
         }
       }
 

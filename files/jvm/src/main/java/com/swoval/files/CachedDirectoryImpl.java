@@ -118,15 +118,17 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
                     new ListTransformer<T, TypedPath>() {
                       @Override
                       public TypedPath apply(final Entry<T> entry) {
-                        return TypedPaths.getDelegate(entry.getPath(), entry);
+                        return TypedPaths.getDelegate(
+                            entry.getTypedPath().getPath(), entry.getTypedPath());
                       }
                     });
             return result;
           } else {
             final Entry<T> entry = leftProjection(findResult).getValue();
             final List<TypedPath> result = new ArrayList<>();
-            if (entry != null && filter.accept(entry))
-              result.add(TypedPaths.getDelegate(entry.getPath(), entry));
+            if (entry != null && filter.accept(entry.getTypedPath()))
+              result.add(
+                  TypedPaths.getDelegate(entry.getTypedPath().getPath(), entry.getTypedPath()));
             return result;
           }
         } else {
@@ -243,8 +245,9 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
 
   @SuppressWarnings({"unchecked", "EmptyCatchBlock"})
   private void addDirectory(
-      final CachedDirectoryImpl<T> currentDir, final TypedPath typedPath, final Updates<T> updates)
-      throws IOException {
+      final CachedDirectoryImpl<T> currentDir,
+      final TypedPath typedPath,
+      final Updates<T> updates) {
     final Path path = typedPath.getPath();
     final CachedDirectoryImpl<T> dir =
         new CachedDirectoryImpl<>(
@@ -272,7 +275,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
             previous.listEntries(Integer.MAX_VALUE, AllPass).iterator();
         while (entryIterator.hasNext()) {
           final Entry<T> entry = entryIterator.next();
-          oldEntries.put(entry.getPath(), entry);
+          oldEntries.put(entry.getTypedPath().getPath(), entry);
         }
         previous.close();
       }
@@ -280,7 +283,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
       final Iterator<Entry<T>> it = dir.listEntries(Integer.MAX_VALUE, AllPass).iterator();
       while (it.hasNext()) {
         final Entry<T> entry = it.next();
-        newEntries.put(entry.getPath(), entry);
+        newEntries.put(entry.getTypedPath().getPath(), entry);
       }
       MapOps.diffDirectoryEntries(oldEntries, newEntries, updates);
     } else {
@@ -415,7 +418,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
       final List<R> result,
       final ListTransformer<T, R> function) {
     if (this.depth < 0 || maxDepth < 0) {
-      result.add((R) this.getEntry());
+      result.add(function.apply(this.getEntry()));
     } else {
       if (subdirectories.lock()) {
         try {
@@ -451,7 +454,6 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
         CachedDirectoryImpl<T> currentDir = this;
         while (it.hasNext() && currentDir != null) {
           final Path p = it.next();
-          final LockableMap<Path, CachedDirectoryImpl<T>> map = currentDir.subdirectories;
           if (!it.hasNext()) {
             final Entry<T> entry = currentDir.files.remove(p);
             if (entry != null) {

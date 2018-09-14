@@ -482,6 +482,7 @@ object Build {
                 "SymlinkWatcher",
                 "SymlinkFollowingPathWatcher",
                 "TypedPath",
+                "TypedPaths",
                 "UpdatableFileTreeDataView",
                 "WatchedDirectory"
               ).value

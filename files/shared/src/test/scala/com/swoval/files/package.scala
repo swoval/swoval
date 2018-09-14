@@ -109,9 +109,9 @@ object TestHelpers extends PlatformFiles {
   object EntryOps {
 
     implicit class SeqEntryOps[T](val l: Seq[Entry[T]]) extends AnyVal {
-      def ===(r: Seq[Path]): Unit = new RichTraversable(l.map(_.getPath)) === r
+      def ===(r: Seq[Path]): Unit = new RichTraversable(l.map(_.getTypedPath.getPath)) === r
 
-      def ===(r: Set[Path]): Unit = new RichTraversable(l.map(_.getPath).toSet) === r
+      def ===(r: Set[Path]): Unit = new RichTraversable(l.map(_.getTypedPath.getPath).toSet) === r
     }
 
   }

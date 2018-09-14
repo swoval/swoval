@@ -5,6 +5,7 @@ import java.io.File
 import java.nio.file.Path
 
 import com.swoval.files.FileTreeDataViews.Entry
+import com.swoval.files.TypedPaths
 import com.swoval.watchservice.Compat.EntryImpl
 import com.swoval.watchservice.Compat.io._
 import com.swoval.watchservice.Filter._
@@ -42,9 +43,9 @@ class SourceFilter(override val base: Path,
                    override val id: ID)
     extends Filter
     with Compat.FileFilter {
-  override def accept(path: Path): Boolean = apply(EntryImpl(path))
-  override def accept(file: File): Boolean = apply(EntryImpl(file.toPath))
-  def apply(p: Entry[Path]): Boolean = p.getPath.startsWith(base) && filter.accept(p)
+  override def accept(path: Path): Boolean = apply(EntryImpl(TypedPaths.get(path)))
+  override def accept(file: File): Boolean = apply(EntryImpl(TypedPaths.get(file.toPath)))
+  def apply(p: Entry[Path]): Boolean = p.getTypedPath.getPath.startsWith(base) && filter.accept(p)
   override lazy val toString: String = {
     val filterStr = Filter.show(filter, 0) match {
       case f if f.length > 80 =>

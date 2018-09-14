@@ -36,7 +36,7 @@ object DataViewTest extends TestSuite {
     directory
       .listEntries(Integer.MAX_VALUE, AllPass)
       .asScala
-      .map(e => e.getPath -> e.getValue.getOrElse(3))
+      .map(e => e.getTypedPath.getPath -> e.getValue.getOrElse(3))
       .toSeq === Seq(subdir -> 3)
   }
   def file: Future[Unit] = withTempFileSync { file =>
@@ -49,7 +49,7 @@ object DataViewTest extends TestSuite {
     dir
       .listEntries(parent, Integer.MAX_VALUE, AllPass)
       .asScala
-      .map(e => e.getPath -> e.getValue.getOrElse(3))
+      .map(e => e.getTypedPath.getPath -> e.getValue.getOrElse(3))
       .toSeq === Seq(file -> 3)
   }
   val tests = Tests {

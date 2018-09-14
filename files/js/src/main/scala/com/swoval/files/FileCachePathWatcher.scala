@@ -17,16 +17,17 @@ class FileCachePathWatcher[T <: AnyRef](private val tree: FileCacheDirectoryTree
   def register(path: Path, maxDepth: Int): Boolean = {
     val dir: CachedDirectory[T] = tree.register(path, maxDepth, pathWatcher)
     if (dir != null && symlinkWatcher != null) {
-      if (dir.getEntry.isSymbolicLink) {
+      if (dir.getEntry.getTypedPath.isSymbolicLink) {
         symlinkWatcher.addSymlink(path, maxDepth)
       }
       val it: Iterator[Entry[T]] =
         dir.listEntries(dir.getMaxDepth, AllPass).iterator()
       while (it.hasNext) {
         val entry: FileTreeDataViews.Entry[T] = it.next()
-        if (entry.isSymbolicLink) {
-          val depth: Int = path.relativize(entry.getPath).getNameCount
-          symlinkWatcher.addSymlink(entry.getPath,
+        if (entry.getTypedPath.isSymbolicLink) {
+          val depth: Int =
+            path.relativize(entry.getTypedPath.getPath).getNameCount
+          symlinkWatcher.addSymlink(entry.getTypedPath.getPath,
                                     if (maxDepth == java.lang.Integer.MAX_VALUE) maxDepth
                                     else maxDepth - depth)
         }

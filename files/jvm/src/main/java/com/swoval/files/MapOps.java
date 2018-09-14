@@ -26,13 +26,13 @@ class MapOps {
     final Iterator<FileTreeDataViews.Entry<T>> oldIterator = oldEntries.iterator();
     while (oldIterator.hasNext()) {
       final FileTreeDataViews.Entry<T> entry = oldIterator.next();
-      oldMap.put(entry.getPath(), entry);
+      oldMap.put(entry.getTypedPath().getPath(), entry);
     }
     final Map<Path, FileTreeDataViews.Entry<T>> newMap = new HashMap<>();
     final Iterator<FileTreeDataViews.Entry<T>> newIterator = newEntries.iterator();
     while (newIterator.hasNext()) {
       final FileTreeDataViews.Entry<T> entry = newIterator.next();
-      newMap.put(entry.getPath(), entry);
+      newMap.put(entry.getTypedPath().getPath(), entry);
     }
     diffDirectoryEntries(oldMap, newMap, cacheObserver);
   }
@@ -60,7 +60,5 @@ class MapOps {
         cacheObserver.onDelete(entry.getValue());
       }
     }
-    newMap.clear();
-    oldMap.clear();
   }
 }

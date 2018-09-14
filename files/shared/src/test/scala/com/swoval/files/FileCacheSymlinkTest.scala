@@ -71,8 +71,8 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
           val linkedFile = link.resolve(otherDir.relativize(file))
           val latch = new CountDownLatch(1)
-          usingAsync(
-            simpleCache((e: Entry[Path]) => if (e.getPath == linkedFile) latch.countDown())) { c =>
+          usingAsync(simpleCache((e: Entry[Path]) =>
+            if (e.getTypedPath.getPath == linkedFile) latch.countDown())) { c =>
             c.reg(dir)
             Files.write(file, "foo".getBytes)
             latch.waitFor(DEFAULT_TIMEOUT) {
@@ -116,7 +116,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
                 val latch = new CountDownLatch(1)
                 val loopLink = dir.resolve("other")
                 usingAsync(simpleCache((e: Entry[Path]) => {
-                  if (e.getPath == loopLink.resolve("dir")) {
+                  if (e.getTypedPath.getPath == loopLink.resolve("dir")) {
                     latch.countDown()
                   }
                 })) { c =>
@@ -136,7 +136,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
                 val link = Files.createSymbolicLink(dir.resolve("other"), otherDir)
                 val latch = new CountDownLatch(1)
                 usingAsync(simpleCache((e: Entry[Path]) => {
-                  if (e.getPath.endsWith("dir")) {
+                  if (e.getTypedPath.getPath.endsWith("dir")) {
                     latch.countDown()
                   }
                 })) { c =>
@@ -160,8 +160,8 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           val fileLatch = new CountDownLatch(1)
           val link = Files.createSymbolicLink(dir.resolve("link"), file)
           usingAsync(simpleCache((e: Entry[Path]) => {
-            if (e.getPath.endsWith("dir-link")) linkLatch.countDown()
-            if (e.getPath.endsWith("newfile")) fileLatch.countDown()
+            if (e.getTypedPath.getPath.endsWith("dir-link")) linkLatch.countDown()
+            if (e.getTypedPath.getPath.endsWith("newfile")) fileLatch.countDown()
           })) { c =>
             c.reg(dir)
             val otherDir = file.getParent
@@ -240,7 +240,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
               override def onCreate(newEntry: Entry[Path]): Unit = {}
 
               override def onDelete(oldEntry: Entry[Path]): Unit = {
-                if (oldEntry.getPath == link) linkLatch.countDown()
+                if (oldEntry.getTypedPath.getPath == link) linkLatch.countDown()
               }
 
               override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
@@ -294,10 +294,10 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
             c.register(dir, Integer.MAX_VALUE)
             c.addCacheObserver(new CacheObserver[Path] {
               override def onCreate(newEntry: Entry[Path]): Unit =
-                if (newEntry.getPath == link) latch.countDown()
+                if (newEntry.getTypedPath.getPath == link) latch.countDown()
               override def onDelete(oldEntry: Entry[Path]): Unit = {}
               override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
-                if (newEntry.getPath == link) latch.countDown()
+                if (newEntry.getTypedPath.getPath == link) latch.countDown()
               }
               override def onError(exception: IOException): Unit = {}
             })
@@ -332,7 +332,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
                 override def onDelete(oldEntry: Entry[Path]): Unit = {}
 
                 override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
-                  if (paths.add(newEntry.getPath)) latch.countDown()
+                  if (paths.add(newEntry.getTypedPath.getPath)) latch.countDown()
                 }
 
                 override def onError(exception: IOException): Unit = {}
@@ -369,15 +369,15 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
                 override def onCreate(newEntry: Entry[Path]): Unit = {}
 
                 override def onDelete(oldEntry: Entry[Path]): Unit = {
-                  if (oldEntry.getPath == otherLink) {
+                  if (oldEntry.getTypedPath.getPath == otherLink) {
                     deletionLatch.countDown()
                   }
-                  if (oldEntry.getPath == link) secondDeletionLatch.countDown()
+                  if (oldEntry.getTypedPath.getPath == link) secondDeletionLatch.countDown()
                 }
 
                 override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
-                  if (newEntry.getPath == link) {
-                    paths.add(newEntry.getPath)
+                  if (newEntry.getTypedPath.getPath == link) {
+                    paths.add(newEntry.getTypedPath.getPath)
                     updateLatch.countDown()
                   } else if (closed) {
                     secondUpdateLatch.countDown()

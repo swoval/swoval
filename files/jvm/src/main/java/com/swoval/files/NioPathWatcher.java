@@ -40,11 +40,11 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
       @Override
       @SuppressWarnings("EmptyCatchBlock")
       public void onCreate(final FileTreeDataViews.Entry<WatchedDirectory> newEntry) {
-        events.add(new Event(newEntry, Create));
+        events.add(new Event(newEntry.getTypedPath(), Create));
         try {
           final Iterator<TypedPath> it =
               FileTreeViews.list(
-                      newEntry.getPath(),
+                      newEntry.getTypedPath().getPath(),
                       0,
                       new Filter<TypedPath>() {
                         @Override
@@ -68,7 +68,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         if (oldEntry.getValue().isRight()) {
           oldEntry.getValue().get().close();
         }
-        events.add(new Event(oldEntry, Delete));
+        events.add(new Event(oldEntry.getTypedPath(), Delete));
       }
 
       @Override
@@ -255,15 +255,15 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                   new Filter<FileTreeDataViews.Entry<WatchedDirectory>>() {
                     @Override
                     public boolean accept(final FileTreeDataViews.Entry<WatchedDirectory> entry) {
-                      return !directoryRegistry.acceptPrefix(entry.getPath());
+                      return !directoryRegistry.acceptPrefix(entry.getTypedPath().getPath());
                     }
                   });
           final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> it = toRemove.iterator();
           while (it.hasNext()) {
             final FileTreeDataViews.Entry<WatchedDirectory> entry = it.next();
-            if (!directoryRegistry.acceptPrefix(entry.getPath())) {
+            if (!directoryRegistry.acceptPrefix(entry.getTypedPath().getPath())) {
               final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> toCancel =
-                  dir.remove(entry.getPath()).iterator();
+                  dir.remove(entry.getTypedPath().getPath()).iterator();
               while (toCancel.hasNext()) {
                 final Either<IOException, WatchedDirectory> either = toCancel.next().getValue();
                 if (either.isRight()) either.get().close();
@@ -338,7 +338,8 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
             final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> removedIt =
                 removed.iterator();
             while (removedIt.hasNext()) {
-              events.add(new Event(Entries.setExists(removedIt.next(), false), Delete));
+              events.add(
+                  new Event(Entries.setExists(removedIt.next(), false).getTypedPath(), Delete));
             }
           }
         }
@@ -382,12 +383,12 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                 if (either.isRight()) {
                   either.get().close();
                 }
-                events.add(new Event(Entries.setExists(entry, false), Kind.Delete));
+                events.add(new Event(Entries.setExists(entry, false).getTypedPath(), Kind.Delete));
               }
               final CachedDirectory<WatchedDirectory> parent =
                   find(event.getPath().getParent(), new ArrayList<Path>());
               if (parent != null) {
-                update(parent, parent.getEntry(), events);
+                update(parent, parent.getEntry().getTypedPath(), events);
               }
               if (isRoot) {
                 rootDirectories.remove(root.getPath());

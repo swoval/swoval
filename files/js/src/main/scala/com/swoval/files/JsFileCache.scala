@@ -44,13 +44,14 @@ class JsFileCache[T <: AnyRef](converter: js.UndefOr[js.Function1[TypedPath, T]]
         new Filter[Entry[T]] {
           override def accept(entry: Entry[T]): Boolean =
             filter.fold(true)(_.apply(
-              new JSEntry[T](entry.getPath().toString,
+              new JSEntry[T](entry.getTypedPath.getPath.toString,
                              functional.Either.getOrElse(entry.getValue(), null.asInstanceOf[T]))))
         }
       )
       .asScala
       .map(e =>
-        new JSEntry[T](e.getPath().toString, e.getValue().getOrElse[T](null.asInstanceOf[T])))
+        new JSEntry[T](e.getTypedPath.getPath.toString,
+                       e.getValue().getOrElse[T](null.asInstanceOf[T])))
       .toJSArray
   }
   def register(path: String,
@@ -64,7 +65,7 @@ class JsFileCache[T <: AnyRef](converter: js.UndefOr[js.Function1[TypedPath, T]]
       override def onError(t: Throwable): Unit = {}
       override def onNext(t: Entry[T]): Unit =
         callback(
-          new JSEntry[T](t.getPath().toString,
+          new JSEntry[T](t.getTypedPath.getPath.toString,
                          functional.Either.getOrElse(t.getValue(), null.asInstanceOf[T])))
     })
   def removeCallback(handle: Int): Unit = inner.removeObserver(handle)
