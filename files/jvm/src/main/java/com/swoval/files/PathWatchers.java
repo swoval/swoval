@@ -3,6 +3,7 @@ package com.swoval.files;
 import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Provides factory methods to create instances of {@link com.swoval.files.PathWatcher}. It also
@@ -23,6 +24,21 @@ public class PathWatchers {
   public static PathWatcher<PathWatchers.Event> get(final boolean followLinks)
       throws IOException, InterruptedException {
     return get(followLinks, new DirectoryRegistryImpl());
+  }
+
+  /**
+   * Create a path watcher that periodically polls the file system to detect changes
+   *
+   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
+   * @param pollInterval minimum duration between when polling ends and the next poll begins
+   * @param timeUnit the time unit for which the pollInterval corresponds
+   * @return the polling path watcher.
+   * @throws InterruptedException if the polling thread cannot be started.
+   */
+  public static PathWatcher<PathWatchers.Event> polling(
+      final boolean followLinks, final long pollInterval, final TimeUnit timeUnit)
+      throws InterruptedException {
+    return new PollingPathWatcher(followLinks, pollInterval, timeUnit);
   }
 
   /**

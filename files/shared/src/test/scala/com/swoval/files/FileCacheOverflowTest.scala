@@ -73,16 +73,16 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
       val deletedFiles = mutable.Set.empty[Path]
       val observer = getObserver[Path](
         (e: Entry[Path]) => {
-          if (foundFiles.add(e.getPath)) creationLatch.countDown()
+          if (foundFiles.add(e.getTypedPath.getPath)) creationLatch.countDown()
         },
         (_: Entry[Path], e: Entry[Path]) =>
-          if (Try(e.getPath.lastModified) == Success(3000)) {
-            if (updatedFiles.add(e.getPath)) {
-              e.getPath.setLastModifiedTime(4000)
+          if (Try(e.getTypedPath.getPath.lastModified) == Success(3000)) {
+            if (updatedFiles.add(e.getTypedPath.getPath)) {
+              e.getTypedPath.getPath.setLastModifiedTime(4000)
               updateLatch.countDown()
             }
         },
-        (e: Entry[Path]) => if (deletedFiles.add(e.getPath)) deletionLatch.countDown(),
+        (e: Entry[Path]) => if (deletedFiles.add(e.getTypedPath.getPath)) deletionLatch.countDown(),
         (_: IOException) => {}
       )
       usingAsync(getBounded[Path](identity, observer)) { c =>
@@ -93,7 +93,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
         })
         creationLatch
           .waitFor(timeout) {
-            val found = c.ls(dir).map(_.getPath).toSet
+            val found = c.ls(dir).map(_.getTypedPath.getPath).toSet
             // Need to synchronize since files is first set on a different thread
             allFiles.synchronized {
               found === allFiles
@@ -106,7 +106,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
             })
             updateLatch
               .waitFor(timeout) {
-                val found = c.ls(dir).map(_.getPath).toSet
+                val found = c.ls(dir).map(_.getTypedPath.getPath).toSet
                 allFiles.synchronized {
                   found === allFiles
                 }

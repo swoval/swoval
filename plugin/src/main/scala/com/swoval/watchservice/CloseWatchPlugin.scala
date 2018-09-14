@@ -100,8 +100,9 @@ object CloseWatchPlugin extends AutoPlugin {
       if (sourcesInBase.value && config != ConfigKey(Test.name)) {
         val pathFilter = new functional.Filter[Entry[Path]] {
           override def accept(cacheEntry: Entry[Path]): Boolean = {
-            val f = cacheEntry.getPath.toFile
-            cacheEntry.getPath.getParent == baseDir && include.accept(f) && !exclude.accept(f)
+            val path = cacheEntry.getTypedPath.getPath
+            val f = path.toFile
+            path.getParent == baseDir && include.accept(f) && !exclude.accept(f)
           }
           override def toString: String =
             s"""SourceFilter(
@@ -201,7 +202,7 @@ object CloseWatchPlugin extends AutoPlugin {
       def filter(dir: File): SourceFilter = {
         val pathFilter = new functional.Filter[Entry[Path]] {
           override def accept(cacheEntry: Entry[Path]): Boolean = {
-            val f = cacheEntry.getPath.toFile
+            val f = cacheEntry.getTypedPath.getPath.toFile
             include.accept(f) && !exclude.accept(f)
           }
           override def toString: String = s"${Filter.show(include)} && !${Filter.show(ef)}"

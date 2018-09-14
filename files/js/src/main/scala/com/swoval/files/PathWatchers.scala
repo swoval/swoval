@@ -5,6 +5,7 @@ package com.swoval.files
 import com.swoval.runtime.Platform
 import java.io.IOException
 import java.nio.file.Path
+import java.util.concurrent.TimeUnit
 import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
 object PathWatchers {
@@ -18,6 +19,18 @@ object PathWatchers {
    */
   def get(followLinks: Boolean): PathWatcher[PathWatchers.Event] =
     get(followLinks, new DirectoryRegistryImpl())
+
+  /**
+   * Create a path watcher that periodically polls the file system to detect changes
+   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
+   * @param pollInterval minimum duration between when polling ends and the next poll begins
+   * @param timeUnit the time unit for which the pollInterval corresponds
+   * @return the polling path watcher.
+   */
+  def polling(followLinks: Boolean,
+              pollInterval: Long,
+              timeUnit: TimeUnit): PathWatcher[PathWatchers.Event] =
+    new PollingPathWatcher(followLinks, pollInterval, timeUnit)
 
   /**
    * Create a PathWatcher for the runtime platform.

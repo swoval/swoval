@@ -172,7 +172,7 @@ object CachedFileTreeViewTest extends TestSuite {
         val updates = directory.update(TypedPaths.get(files.last, Entries.FILE))
         updates.observe(CacheObservers.fromObserver(new Observer[Entry[Path]] {
           override def onError(t: Throwable): Unit = {}
-          override def onNext(t: Entry[Path]): Unit = found.add(t.getPath())
+          override def onNext(t: Entry[Path]): Unit = found.add(t.getTypedPath.getPath())
         }))
         val expected = (files :+ subdir :+ subdir.getParent).toSet
         found.toSet === expected

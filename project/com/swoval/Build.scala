@@ -477,11 +477,13 @@ object Build {
                 "Observers",
                 "PathWatcher",
                 "PathWatchers",
+                "PollingPathWatcher",
                 "RegisterableWatchService",
                 "SimpleFileTreeView",
                 "SymlinkWatcher",
                 "SymlinkFollowingPathWatcher",
                 "TypedPath",
+                "TypedPaths",
                 "UpdatableFileTreeDataView",
                 "WatchedDirectory"
               ).value
@@ -508,7 +510,7 @@ object Build {
       jacocoReportSettings in Test := JacocoReportSettings()
         .withThresholds(
           JacocoThresholds(instruction = 82,
-                           branch = 75,
+                           branch = 73,
                            line = 84,
                            clazz = 100,
                            complexity = 70,

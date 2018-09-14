@@ -31,12 +31,12 @@ final class Entries {
   }
 
   static <T> Entry<T> setExists(final Entry<T> entry, final boolean exists) {
+    final TypedPath typedPath = entry.getTypedPath();
     final int kind =
         (exists ? 0 : NONEXISTENT)
-            | (entry.isFile() ? FILE : 0)
-            | (entry.isDirectory() ? DIRECTORY : 0)
-            | (entry.isSymbolicLink() ? LINK : 0);
-    final TypedPath typedPath = TypedPaths.get(entry.getPath(), kind);
+            | (typedPath.isFile() ? FILE : 0)
+            | (typedPath.isDirectory() ? DIRECTORY : 0)
+            | (typedPath.isSymbolicLink() ? LINK : 0);
     if (entry.getValue().isLeft()) {
       return new InvalidEntry<>(typedPath, Either.leftProjection(entry.getValue()).getValue());
     } else {
@@ -47,7 +47,7 @@ final class Entries {
   static <T> Entry<T> resolve(final Path path, final Entry<T> entry) {
     final Either<IOException, T> value = entry.getValue();
     final int kind = getKind(entry);
-    final TypedPath typedPath = TypedPaths.get(path.resolve(entry.getPath()), kind);
+    final TypedPath typedPath = TypedPaths.get(path.resolve(entry.getTypedPath().getPath()), kind);
     return value.isRight()
         ? new ValidEntry<>(typedPath, value.get())
         : new InvalidEntry<T>(typedPath, leftProjection(value).getValue());
@@ -71,9 +71,10 @@ final class Entries {
   }
 
   private static int getKind(final Entry<?> entry) {
-    return (entry.isSymbolicLink() ? LINK : 0)
-        | (entry.isDirectory() ? DIRECTORY : 0)
-        | (entry.isFile() ? FILE : 0);
+    final TypedPath typedPath = entry.getTypedPath();
+    return (typedPath.isSymbolicLink() ? LINK : 0)
+        | (typedPath.isDirectory() ? DIRECTORY : 0)
+        | (typedPath.isFile() ? FILE : 0);
   }
 
   private abstract static class EntryImpl<T> implements Entry<T> {
@@ -81,36 +82,6 @@ final class Entries {
 
     EntryImpl(final TypedPath typedPath) {
       this.typedPath = typedPath;
-    }
-
-    @Override
-    public boolean exists() {
-      return typedPath.exists();
-    }
-
-    @Override
-    public boolean isDirectory() {
-      return typedPath.isDirectory();
-    }
-
-    @Override
-    public boolean isFile() {
-      return typedPath.isFile();
-    }
-
-    @Override
-    public boolean isSymbolicLink() {
-      return typedPath.isSymbolicLink();
-    }
-
-    @Override
-    public Path getPath() {
-      return typedPath.getPath();
-    }
-
-    @Override
-    public Path toRealPath() {
-      return typedPath.toRealPath();
     }
 
     @Override
@@ -122,13 +93,18 @@ final class Entries {
     @Override
     public boolean equals(final Object other) {
       return other instanceof Entry<?>
-          && ((Entry<?>) other).getPath().equals(getPath())
+          && ((Entry<?>) other).getTypedPath().getPath().equals(getTypedPath().getPath())
           && getValue().equals(((Entry<?>) other).getValue());
     }
 
     @Override
     public int compareTo(final Entry<T> that) {
-      return this.getPath().compareTo(that.getPath());
+      return this.getTypedPath().getPath().compareTo(that.getTypedPath().getPath());
+    }
+
+    @Override
+    public TypedPath getTypedPath() {
+      return typedPath;
     }
   }
 
@@ -152,7 +128,7 @@ final class Entries {
 
     @Override
     public String toString() {
-      return "ValidEntry(" + getPath() + ", " + value + ")";
+      return "ValidEntry(" + getTypedPath().getPath() + ", " + value + ")";
     }
   }
 
@@ -171,7 +147,7 @@ final class Entries {
 
     @Override
     public String toString() {
-      return "InvalidEntry(" + getPath() + ", " + exception + ")";
+      return "InvalidEntry(" + getTypedPath().getPath() + ", " + exception + ")";
     }
   }
 }

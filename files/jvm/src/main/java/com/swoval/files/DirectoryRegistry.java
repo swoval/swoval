@@ -15,7 +15,7 @@ interface DirectoryRegistry extends Filter<Path>, AutoCloseable {
 
   int maxDepthFor(final Path path);
 
-  List<Path> registered();
+  Map<Path, Integer> registered();
 
   void removeDirectory(final Path path);
 
@@ -75,9 +75,15 @@ class DirectoryRegistryImpl implements DirectoryRegistry {
   }
 
   @Override
-  public List<Path> registered() {
+  public Map<Path, Integer> registered() {
     synchronized (lock) {
-      return new ArrayList<>(registeredDirectoriesByPath.keySet());
+      final Map<Path, Integer> result = new HashMap<>();
+      final Iterator<RegisteredDirectory> it = registeredDirectoriesByPath.values().iterator();
+      while (it.hasNext()) {
+        final RegisteredDirectory dir = it.next();
+        result.put(dir.path, dir.maxDepth);
+      }
+      return result;
     }
   }
 

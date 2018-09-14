@@ -96,17 +96,21 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
         if (findResult != null) {
           if (findResult.isRight) {
             val result: List[TypedPath] = new ArrayList[TypedPath]()
-            findResult.get
-              .listImpl[TypedPath](maxDepth, filter, result, new ListTransformer[T, TypedPath]() {
+            findResult.get.listImpl[TypedPath](
+              maxDepth,
+              filter,
+              result,
+              new ListTransformer[T, TypedPath]() {
                 override def apply(entry: Entry[T]): TypedPath =
-                  TypedPaths.getDelegate(entry.getPath, entry)
-              })
+                  TypedPaths.getDelegate(entry.getTypedPath.getPath, entry.getTypedPath)
+              }
+            )
             result
           } else {
             val entry: Entry[T] = leftProjection(findResult).getValue
             val result: List[TypedPath] = new ArrayList[TypedPath]()
-            if (entry != null && filter.accept(entry))
-              result.add(TypedPaths.getDelegate(entry.getPath, entry))
+            if (entry != null && filter.accept(entry.getTypedPath))
+              result.add(TypedPaths.getDelegate(entry.getTypedPath.getPath, entry.getTypedPath))
             result
           }
         } else {
@@ -224,7 +228,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
           previous.listEntries(java.lang.Integer.MAX_VALUE, AllPass).iterator()
         while (entryIterator.hasNext) {
           val entry: Entry[T] = entryIterator.next()
-          oldEntries.put(entry.getPath, entry)
+          oldEntries.put(entry.getTypedPath.getPath, entry)
         }
         previous.close()
       }
@@ -233,7 +237,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
         dir.listEntries(java.lang.Integer.MAX_VALUE, AllPass).iterator()
       while (it.hasNext) {
         val entry: Entry[T] = it.next()
-        newEntries.put(entry.getPath, entry)
+        newEntries.put(entry.getTypedPath.getPath, entry)
       }
       MapOps.diffDirectoryEntries(oldEntries, newEntries, updates)
     } else {
@@ -359,7 +363,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
                           result: List[_ >: R],
                           function: ListTransformer[T, R]): Unit = {
     if (this.depth < 0 || maxDepth < 0) {
-      result.add(this.getEntry.asInstanceOf[R])
+      result.add(function.apply(this.getEntry))
     } else {
       if (subdirectories.lock()) {
         try {
@@ -396,8 +400,6 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
         var currentDir: CachedDirectoryImpl[T] = this
         while (it.hasNext && currentDir != null) {
           val p: Path = it.next()
-          val map: LockableMap[Path, CachedDirectoryImpl[T]] =
-            currentDir.subdirectories
           if (!it.hasNext) {
             val entry: Entry[T] = currentDir.files.remove(p)
             if (entry != null) {

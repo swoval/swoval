@@ -5,7 +5,7 @@ import java.io.{ File, IOException }
 import java.nio.file._
 
 import com.swoval.files.FileTreeDataViews.{ Converter, Entry }
-import com.swoval.files.{ FileTreeRepositories, TypedPath }
+import com.swoval.files.{ FileTreeRepositories, TypedPath, TypedPaths }
 import com.swoval.watchservice.CloseWatchPlugin.autoImport.closeWatchFileCache
 import sbt.Keys._
 import scala.util.Try
@@ -47,7 +47,7 @@ class BaseFileSource(val file: File, filter: functional.Filter[Entry[Path]], _id
     extends FileSource(file, new Filter {
       override def id: Filter.ID = _id
       override def base: Path = file.toPath
-      override def accept(t: Path): Boolean = filter.accept(Compat.EntryImpl(t))
+      override def accept(t: Path): Boolean = filter.accept(Compat.EntryImpl(TypedPaths.get(t)))
     }) {
   override lazy val hashCode: Int = file.hashCode
   override def recursive = false
@@ -58,14 +58,9 @@ class BaseFileSource(val file: File, filter: functional.Filter[Entry[Path]], _id
 }
 
 object Compat {
-  case class EntryImpl(getPath: Path) extends Entry[Path] {
-    override def getValue: functional.Either[IOException, Path] = functional.Either.right(getPath)
-    override def isDirectory: Boolean = Files.isDirectory(getPath)
-    override def isFile: Boolean = Files.isRegularFile(getPath)
-    override def isSymbolicLink: Boolean = Files.isSymbolicLink(getPath)
-    override def exists(): Boolean = Files.exists(getPath)
-    override def toRealPath: Path = Try(getPath.toRealPath()).getOrElse(getPath)
-    override def compareTo(o: Entry[Path]): Int = getPath.compareTo(o.getPath)
+  case class EntryImpl(getTypedPath: TypedPath) extends Entry[Path] {
+    override def getValue: functional.Either[IOException, Path] = functional.Either.right(getTypedPath.getPath)
+    override def compareTo(o: Entry[Path]): Int = getTypedPath.getPath.compareTo(o.getTypedPath.getPath)
   }
   object internal {
     val Act = sbt.Act

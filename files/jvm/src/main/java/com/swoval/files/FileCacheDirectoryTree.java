@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
@@ -134,7 +135,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         }
 
         @Override
-        public List<Path> registered() {
+        public Map<Path, Integer> registered() {
           return directoryRegistry.registered();
         }
 
@@ -251,7 +252,13 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
               final CachedDirectory<T> previous = directories.put(path, cachedDirectory);
               if (previous != null) previous.close();
               addCallback(
-                  callbacks, symlinks, typedPath, null, cachedDirectory.getEntry(), Create, null);
+                  callbacks,
+                  symlinks,
+                  cachedDirectory.getEntry(),
+                  null,
+                  cachedDirectory.getEntry(),
+                  Create,
+                  null);
               final Iterator<FileTreeDataViews.Entry<T>> it =
                   cachedDirectory.listEntries(cachedDirectory.getMaxDepth(), AllPass).iterator();
               while (it.hasNext()) {
@@ -297,7 +304,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
       final CachedDirectory<T> dir = directoryIterator.next();
       if (path.startsWith(dir.getPath())) {
         List<FileTreeDataViews.Entry<T>> updates = dir.remove(path);
-        final Iterator<Path> it = directoryRegistry.registered().iterator();
+        final Iterator<Path> it = directoryRegistry.registered().keySet().iterator();
         while (it.hasNext()) {
           if (it.next().equals(path)) {
             pendingFiles.add(path);
@@ -413,11 +420,12 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   private void addCallback(
       final List<Callback> callbacks,
       final List<TypedPath> symlinks,
-      final TypedPath typedPath,
+      final FileTreeDataViews.Entry<T> entry,
       final FileTreeDataViews.Entry<T> oldEntry,
       final FileTreeDataViews.Entry<T> newEntry,
       final Kind kind,
       final IOException ioException) {
+    final TypedPath typedPath = entry.getTypedPath();
     if (typedPath.isSymbolicLink()) {
       symlinks.add(typedPath);
     }
@@ -519,7 +527,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         } else {
           if (dir.getPath().equals(path) && dir.getMaxDepth() == -1) {
             List<TypedPath> result = new ArrayList<>();
-            result.add(TypedPaths.getDelegate(dir.getPath(), dir.getEntry()));
+            result.add(TypedPaths.getDelegate(dir.getPath(), dir.getEntry().getTypedPath()));
             return result;
           } else {
             return dir.list(path, maxDepth, filter);

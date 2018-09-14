@@ -11,6 +11,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
+import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
 object Entries {
 
@@ -32,11 +33,12 @@ object Entries {
     }
 
   def setExists[T](entry: Entry[T], exists: Boolean): Entry[T] = {
-    val kind: Int = (if (exists) 0 else NONEXISTENT) | (if (entry.isFile) FILE
+    val typedPath: TypedPath = entry.getTypedPath
+    val kind: Int = (if (exists) 0 else NONEXISTENT) | (if (typedPath.isFile)
+                                                          FILE
                                                         else 0) |
-      (if (entry.isDirectory) DIRECTORY else 0) |
-      (if (entry.isSymbolicLink) LINK else 0)
-    val typedPath: TypedPath = TypedPaths.get(entry.getPath, kind)
+      (if (typedPath.isDirectory) DIRECTORY else 0) |
+      (if (typedPath.isSymbolicLink) LINK else 0)
     if (entry.getValue.isLeft) {
       new InvalidEntry(typedPath, Either.leftProjection(entry.getValue).getValue)
     } else {
@@ -48,7 +50,7 @@ object Entries {
     val value: Either[IOException, T] = entry.getValue
     val kind: Int = getKind(entry)
     val typedPath: TypedPath =
-      TypedPaths.get(path.resolve(entry.getPath), kind)
+      TypedPaths.get(path.resolve(entry.getTypedPath.getPath), kind)
     if (value.isRight) new ValidEntry(typedPath, value.get)
     else new InvalidEntry[T](typedPath, leftProjection(value).getValue)
   }
@@ -71,24 +73,15 @@ object Entries {
     getKindFromAttrs(path, attrs)
   }
 
-  private def getKind(entry: Entry[_]): Int =
-    (if (entry.isSymbolicLink) LINK else 0) | (if (entry.isDirectory) DIRECTORY
-                                               else 0) |
-      (if (entry.isFile) FILE else 0)
+  private def getKind(entry: Entry[_]): Int = {
+    val typedPath: TypedPath = entry.getTypedPath
+    (if (typedPath.isSymbolicLink) LINK else 0) | (if (typedPath.isDirectory)
+                                                     DIRECTORY
+                                                   else 0) |
+      (if (typedPath.isFile) FILE else 0)
+  }
 
-  private abstract class EntryImpl[T](private val typedPath: TypedPath) extends Entry[T] {
-
-    override def exists(): Boolean = typedPath.exists()
-
-    override def isDirectory(): Boolean = typedPath.isDirectory
-
-    override def isFile(): Boolean = typedPath.isFile
-
-    override def isSymbolicLink(): Boolean = typedPath.isSymbolicLink
-
-    override def getPath(): Path = typedPath.getPath
-
-    override def toRealPath(): Path = typedPath.toRealPath()
+  private abstract class EntryImpl[T](@BeanProperty val typedPath: TypedPath) extends Entry[T] {
 
     override def hashCode(): Int = {
       val value: Int =
@@ -97,13 +90,15 @@ object Entries {
     }
 
     override def equals(other: Any): Boolean =
-      other.isInstanceOf[Entry[_]] && other
-        .asInstanceOf[Entry[_]]
-        .getPath == getPath &&
+      other.isInstanceOf[Entry[_]] &&
+        other
+          .asInstanceOf[Entry[_]]
+          .getTypedPath
+          .getPath == getTypedPath.getPath &&
         getValue == other.asInstanceOf[Entry[_]].getValue
 
     override def compareTo(that: Entry[T]): Int =
-      this.getPath.compareTo(that.getPath)
+      this.getTypedPath.getPath.compareTo(that.getTypedPath.getPath)
 
   }
 
@@ -113,7 +108,8 @@ object Entries {
     override def getValue(): Either[IOException, T] = Either.right(value)
 
     override def toString(): String =
-      "ValidEntry(" + getPath + ", " + value + ")"
+      "ValidEntry(" + getTypedPath.getPath + ", " + value +
+        ")"
 
   }
 
@@ -123,7 +119,8 @@ object Entries {
     override def getValue(): Either[IOException, T] = Either.left(exception)
 
     override def toString(): String =
-      "InvalidEntry(" + getPath + ", " + exception + ")"
+      "InvalidEntry(" + getTypedPath.getPath + ", " + exception +
+        ")"
 
   }
 

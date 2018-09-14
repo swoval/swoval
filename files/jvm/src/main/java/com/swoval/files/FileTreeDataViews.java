@@ -39,7 +39,14 @@ public class FileTreeDataViews {
    *
    * @param <T> The value wrapped in the Entry
    */
-  public interface Entry<T> extends TypedPath, Comparable<Entry<T>> {
+  public interface Entry<T> extends Comparable<Entry<T>> {
+
+    /**
+     * Returns the {@link TypedPath} associated with this entry.
+     *
+     * @return the {@link TypedPath}.
+     */
+    TypedPath getTypedPath();
     /**
      * Return the value associated with this entry. jjj
      *

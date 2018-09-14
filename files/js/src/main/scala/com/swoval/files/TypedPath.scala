@@ -4,7 +4,6 @@ package com.swoval.files
 
 import java.io.IOException
 import java.nio.file.Path
-import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
 /**
  * A mix-in for an object that represents a file system path. Provides (possibly) fast accessors for
@@ -54,60 +53,5 @@ trait TypedPath {
    * @return the real path.
    */
   def toRealPath(): Path
-
-}
-
-object TypedPaths {
-
-  private abstract class TypedPathImpl(@BeanProperty val path: Path) extends TypedPath {
-
-    override def toRealPath(): Path =
-      try if (isSymbolicLink) path.toRealPath() else path
-      catch {
-        case e: IOException => path
-
-      }
-
-    override def toString(): String =
-      "TypedPath(" + path + ", " + isSymbolicLink + ", " + toRealPath() +
-        ")"
-
-    override def equals(other: Any): Boolean = other match {
-      case other: TypedPath => other.getPath == getPath
-      case _                => false
-
-    }
-
-    override def hashCode(): Int = getPath.hashCode
-
-  }
-
-  def getDelegate(path: Path, typedPath: TypedPath): TypedPath =
-    new TypedPathImpl(path) {
-      override def exists(): Boolean = typedPath.exists()
-
-      override def isDirectory(): Boolean = typedPath.isDirectory
-
-      override def isFile(): Boolean = typedPath.isFile
-
-      override def isSymbolicLink(): Boolean = typedPath.isSymbolicLink
-    }
-
-  def get(path: Path): TypedPath =
-    try get(path, Entries.getKind(path))
-    catch {
-      case e: IOException => get(path, Entries.NONEXISTENT)
-
-    }
-
-  def get(path: Path, kind: Int): TypedPath = new TypedPathImpl(path) {
-    override def exists(): Boolean = (kind & Entries.NONEXISTENT) == 0
-
-    override def isDirectory(): Boolean = (kind & Entries.DIRECTORY) != 0
-
-    override def isFile(): Boolean = (kind & Entries.FILE) != 0
-
-    override def isSymbolicLink(): Boolean = (kind & Entries.LINK) != 0
-  }
 
 }

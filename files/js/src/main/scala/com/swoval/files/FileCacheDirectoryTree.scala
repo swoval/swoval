@@ -27,6 +27,7 @@ import java.util.HashMap
 import java.util.HashSet
 import java.util.Iterator
 import java.util.List
+import java.util.Map
 import java.util.Set
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
@@ -108,7 +109,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
       override def maxDepthFor(path: Path): Int =
         directoryRegistry.maxDepthFor(path)
 
-      override def registered(): List[Path] = directoryRegistry.registered()
+      override def registered(): Map[Path, Integer] =
+        directoryRegistry.registered()
 
       override def removeDirectory(path: Path): Unit = {}
 
@@ -213,7 +215,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
               if (previous != null) previous.close()
               addCallback(callbacks,
                           symlinks,
-                          typedPath,
+                          cachedDirectory.getEntry,
                           null,
                           cachedDirectory.getEntry,
                           Create,
@@ -265,7 +267,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
       val dir: CachedDirectory[T] = directoryIterator.next()
       if (path.startsWith(dir.getPath)) {
         val updates: List[FileTreeDataViews.Entry[T]] = dir.remove(path)
-        val it: Iterator[Path] = directoryRegistry.registered().iterator()
+        val it: Iterator[Path] =
+          directoryRegistry.registered().keySet.iterator()
         while (it.hasNext) if (it.next() == path) {
           pendingFiles.add(path)
         }
@@ -376,11 +379,12 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
 
   private def addCallback(callbacks: List[Callback],
                           symlinks: List[TypedPath],
-                          typedPath: TypedPath,
+                          entry: FileTreeDataViews.Entry[T],
                           oldEntry: FileTreeDataViews.Entry[T],
                           newEntry: FileTreeDataViews.Entry[T],
                           kind: Kind,
                           ioException: IOException): Unit = {
+    val typedPath: TypedPath = entry.getTypedPath
     if (typedPath.isSymbolicLink) {
       symlinks.add(typedPath)
     }
@@ -466,7 +470,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         } else {
           if (dir.getPath == path && dir.getMaxDepth == -1) {
             val result: List[TypedPath] = new ArrayList[TypedPath]()
-            result.add(TypedPaths.getDelegate(dir.getPath, dir.getEntry))
+            result.add(TypedPaths.getDelegate(dir.getPath, dir.getEntry.getTypedPath))
             result
           } else {
             dir.list(path, maxDepth, filter)
