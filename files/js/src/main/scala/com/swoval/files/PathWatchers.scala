@@ -66,22 +66,22 @@ object PathWatchers {
       /**
  A new file was created.
        */
-      val Create: Kind = new Kind("Create", 1)
+      val Create: Kind = new Kind("Create")
 
       /**
  The file was deleted.
        */
-      val Delete: Kind = new Kind("Delete", 2)
+      val Delete: Kind = new Kind("Delete")
 
       /**
  An error occurred processing the event.
        */
-      val Error: Kind = new Kind("Error", 4)
+      val Error: Kind = new Kind("Error")
 
       /**
  An existing file was modified.
        */
-      val Modify: Kind = new Kind("Modify", 3)
+      val Modify: Kind = new Kind("Modify")
 
     }
 
@@ -89,7 +89,7 @@ object PathWatchers {
      * An enum like class to indicate the type of file event. It isn't an actual enum because the
      * scala.js codegen has problems with enum types.
      */
-    class Kind(private val name: String, private val priority: Int) {
+    class Kind(private val name: String) {
 
       override def toString(): String = name
 

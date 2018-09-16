@@ -140,20 +140,18 @@ public class PathWatchers {
     public static class Kind {
 
       /** A new file was created. */
-      public static final Kind Create = new Kind("Create", 1);
+      public static final Kind Create = new Kind("Create");
       /** The file was deleted. */
-      public static final Kind Delete = new Kind("Delete", 2);
+      public static final Kind Delete = new Kind("Delete");
       /** An error occurred processing the event. */
-      public static final Kind Error = new Kind("Error", 4);
+      public static final Kind Error = new Kind("Error");
       /** An existing file was modified. */
-      public static final Kind Modify = new Kind("Modify", 3);
+      public static final Kind Modify = new Kind("Modify");
 
       private final String name;
-      private final int priority;
 
-      Kind(final String name, final int priority) {
+      Kind(final String name) {
         this.name = name;
-        this.priority = priority;
       }
 
       @Override
