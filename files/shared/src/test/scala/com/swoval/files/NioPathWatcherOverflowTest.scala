@@ -27,10 +27,10 @@ object NioPathWatcherOverflowTest extends TestSuite {
       val addedFiles = mutable.Set.empty[Path]
       val files = subdirs.map(_.resolve("file"))
       val callback = (e: Event) => {
-        e.getPath.getFileName.toString match {
-          case name if name.startsWith("subdir") && addedSubdirs.add(e.getPath) =>
+        e.getTypedPath.getPath.getFileName.toString match {
+          case name if name.startsWith("subdir") && addedSubdirs.add(e.getTypedPath.getPath) =>
             subdirLatch.countDown()
-          case name if name == "file" && addedFiles.add(e.getPath) =>
+          case name if name == "file" && addedFiles.add(e.getTypedPath.getPath) =>
             fileLatch.countDown()
           case _ =>
         }

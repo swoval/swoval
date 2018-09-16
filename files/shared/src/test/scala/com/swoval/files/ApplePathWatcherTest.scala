@@ -38,7 +38,7 @@ object ApplePathWatcherTest extends TestSuite {
           usingAsync(defaultWatcher(callback)) { w =>
             w.register(dir)
             val f = dir.resolve(Paths.get("foo")).createFile()
-            events.poll(DEFAULT_TIMEOUT)(_.getPath === dir)
+            events.poll(DEFAULT_TIMEOUT)(_.getTypedPath.getPath === dir)
           }
         }
       }
@@ -51,7 +51,7 @@ object ApplePathWatcherTest extends TestSuite {
           f.setLastModifiedTime(0L)
           f.delete()
           f.createFile()
-          events.poll(DEFAULT_TIMEOUT)(_.getPath === dir)
+          events.poll(DEFAULT_TIMEOUT)(_.getTypedPath.getPath === dir)
         }
       }
       'onDelete - withTempDirectory { dir =>
@@ -61,18 +61,18 @@ object ApplePathWatcherTest extends TestSuite {
           val f = dir.resolve(Paths.get("foo")).createFile()
           w.register(dir)
           f.delete()
-          events.poll(DEFAULT_TIMEOUT)(_.getPath === dir)
+          events.poll(DEFAULT_TIMEOUT)(_.getTypedPath.getPath === dir)
         }
       }
       'subdirectories - {
         'onCreate - withTempDirectory { dir =>
           withTempDirectory(dir) { subdir =>
-            val callback = (e: Event) => if (e.getPath != dir) events.add(e)
+            val callback = (e: Event) => if (e.getTypedPath.getPath != dir) events.add(e)
 
             usingAsync(defaultWatcher(callback)) { w =>
               w.register(dir)
               subdir.resolve(Paths.get("foo")).createFile()
-              events.poll(DEFAULT_TIMEOUT)(_.getPath ==> subdir)
+              events.poll(DEFAULT_TIMEOUT)(_.getTypedPath.getPath ==> subdir)
             }
           }
         }

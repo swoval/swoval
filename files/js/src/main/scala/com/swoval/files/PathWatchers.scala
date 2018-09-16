@@ -2,6 +2,7 @@
 
 package com.swoval.files
 
+import com.swoval.files.PathWatchers.Event.Kind
 import com.swoval.runtime.Platform
 import java.io.IOException
 import java.nio.file.Path
@@ -22,6 +23,7 @@ object PathWatchers {
 
   /**
    * Create a path watcher that periodically polls the file system to detect changes
+   *
    * @param followLinks toggles whether or not the targets of symbolic links should be monitored
    * @param pollInterval minimum duration between when polling ends and the next poll begins
    * @param timeUnit the time unit for which the pollInterval corresponds
@@ -106,26 +108,7 @@ object PathWatchers {
   /**
  Container for [[PathWatcher]] events.
    */
-  class Event(path: TypedPath, @BeanProperty val kind: Event.Kind) extends TypedPath {
-
-    private val typedPath: TypedPath = path
-
-    /**
-     * Returns the path that triggered the event.
-     *
-     * @return the path that triggered the event.
-     */
-    def getPath(): Path = typedPath.getPath
-
-    override def exists(): Boolean = typedPath.exists()
-
-    override def isDirectory(): Boolean = typedPath.isDirectory
-
-    override def isFile(): Boolean = typedPath.isFile
-
-    override def isSymbolicLink(): Boolean = typedPath.isSymbolicLink
-
-    override def toRealPath(): Path = typedPath.toRealPath()
+  class Event(@BeanProperty val typedPath: TypedPath, @BeanProperty val kind: Event.Kind) {
 
     override def equals(other: Any): Boolean = other match {
       case other: Event => {

@@ -19,7 +19,7 @@ trait PathWatcherSymlinkTest extends TestSuite {
               val link = Files.createSymbolicLink(dir.resolve("link"), file)
               val latch = new CountDownLatch(1)
               usingAsync(defaultWatcher((e: PathWatchers.Event) => {
-                if (e.getPath == link) {
+                if (e.getTypedPath.getPath == link) {
                   latch.countDown()
                 }
               })) { c =>
@@ -38,7 +38,7 @@ trait PathWatcherSymlinkTest extends TestSuite {
               val latch = new CountDownLatch(1)
               val link = dir.resolve("link")
               usingAsync(defaultWatcher((e: PathWatchers.Event) => {
-                if (e.getPath == link) {
+                if (e.getTypedPath.getPath == link) {
                   latch.countDown()
                 }
               })) { c =>
@@ -60,7 +60,7 @@ trait PathWatcherSymlinkTest extends TestSuite {
           val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
           val linkedFile = link.resolve("file")
           usingAsync(defaultWatcher((e: PathWatchers.Event) => {
-            if (e.getPath == linkedFile) {
+            if (e.getTypedPath.getPath == linkedFile) {
               latch.countDown()
             }
           })) { c =>

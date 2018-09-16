@@ -52,7 +52,7 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
           public void onNext(final Event event) {
             if (!isClosed.get()) {
               final List<Event> events = new ArrayList<>();
-              final Path path = event.getPath();
+              final Path path = event.getTypedPath().getPath();
               if (watchedSymlinksByTarget.lock()) {
                 try {
                   final RegisteredPath registeredPath = find(path, watchedSymlinksByTarget);
@@ -72,17 +72,16 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
                   watchedSymlinksByTarget.unlock();
                 }
               }
-              if (!Files.exists(event.getPath())) {
+              if (!Files.exists(path)) {
                 if (watchedSymlinksByTarget.lock()) {
                   try {
-                    watchedSymlinksByTarget.remove(event.getPath());
-                    final RegisteredPath registeredPath =
-                        watchedSymlinksByDirectory.get(event.getPath());
+                    watchedSymlinksByTarget.remove(path);
+                    final RegisteredPath registeredPath = watchedSymlinksByDirectory.get(path);
                     if (registeredPath != null) {
-                      registeredPath.paths.remove(event.getPath());
+                      registeredPath.paths.remove(path);
                       if (registeredPath.paths.isEmpty()) {
-                        watcher.unregister(event.getPath());
-                        watchedSymlinksByDirectory.remove(event.getPath());
+                        watcher.unregister(path);
+                        watchedSymlinksByDirectory.remove(path);
                       }
                     }
                   } finally {
@@ -94,7 +93,8 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
               final Iterator<Event> it = events.iterator();
               while (it.hasNext()) {
                 final Event ev = it.next();
-                observers.onNext(new Event(TypedPaths.get(ev.getPath()), ev.getKind()));
+                observers.onNext(
+                    new Event(TypedPaths.get(ev.getTypedPath().getPath()), ev.getKind()));
               }
             }
           }

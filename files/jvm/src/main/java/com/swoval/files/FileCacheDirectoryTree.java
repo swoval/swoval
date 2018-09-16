@@ -107,7 +107,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
 
             @Override
             public void onNext(final Event event) {
-              handleEvent(event);
+              handleEvent(event.getTypedPath());
             }
           });
     }

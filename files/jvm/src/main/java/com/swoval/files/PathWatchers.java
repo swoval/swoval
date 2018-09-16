@@ -1,5 +1,6 @@
 package com.swoval.files;
 
+import com.swoval.files.PathWatchers.Event.Kind;
 import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -85,42 +86,17 @@ public class PathWatchers {
     }
   }
   /** Container for {@link PathWatcher} events. */
-  public static final class Event implements TypedPath {
+  public static final class Event {
     private final TypedPath typedPath;
     private final Event.Kind kind;
 
     /**
-     * Returns the path that triggered the event.
+     * Return the {@link TypedPath} associated with this Event.
      *
-     * @return the path that triggered the event.
+     * @return the {@link TypedPath}.
      */
-    public Path getPath() {
-      return typedPath.getPath();
-    }
-
-    @Override
-    public boolean exists() {
-      return typedPath.exists();
-    }
-
-    @Override
-    public boolean isDirectory() {
-      return typedPath.isDirectory();
-    }
-
-    @Override
-    public boolean isFile() {
-      return typedPath.isFile();
-    }
-
-    @Override
-    public boolean isSymbolicLink() {
-      return typedPath.isSymbolicLink();
-    }
-
-    @Override
-    public Path toRealPath() {
-      return typedPath.toRealPath();
+    public TypedPath getTypedPath() {
+      return typedPath;
     }
 
     /**
@@ -132,8 +108,8 @@ public class PathWatchers {
       return kind;
     }
 
-    public Event(final TypedPath path, final Event.Kind kind) {
-      this.typedPath = path;
+    public Event(final TypedPath typedPath, final Event.Kind kind) {
+      this.typedPath = typedPath;
       this.kind = kind;
     }
 

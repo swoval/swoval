@@ -32,19 +32,20 @@ class SymlinkFollowingPathWatcher(private val pathWatcher: PathWatcher[PathWatch
     }
 
     override def onNext(event: Event): Unit = {
-      if (event.exists() && event.isSymbolicLink) {
+      val typedPath: TypedPath = event.getTypedPath
+      if (typedPath.exists() && typedPath.isSymbolicLink) {
         try {
-          val maxDepth: Int = directoryRegistry.maxDepthFor(event.getPath)
-          symlinkWatcher.addSymlink(event.getPath, maxDepth)
-          if (event.isDirectory) {
-            handleNewDirectory(event.getPath, maxDepth, true)
+          val maxDepth: Int = directoryRegistry.maxDepthFor(typedPath.getPath)
+          symlinkWatcher.addSymlink(typedPath.getPath, maxDepth)
+          if (typedPath.isDirectory) {
+            handleNewDirectory(typedPath.getPath, maxDepth, true)
           }
         } catch {
           case e: IOException => observers.onError(e)
 
         }
-      } else if (!event.exists()) {
-        symlinkWatcher.remove(event.getPath)
+      } else if (!typedPath.exists()) {
+        symlinkWatcher.remove(typedPath.getPath)
       }
       observers.onNext(event)
     }

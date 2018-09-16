@@ -43,7 +43,7 @@ public class FileTreeRepositories {
 
           @Override
           public void onNext(final Event event) {
-            tree.handleEvent(event);
+            tree.handleEvent(event.getTypedPath());
           }
         });
     final FileCachePathWatcher<T> watcher = new FileCachePathWatcher<>(tree, pathWatcher);

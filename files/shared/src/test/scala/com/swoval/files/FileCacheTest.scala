@@ -80,7 +80,7 @@ object FileCacheTest {
     val callbackExecutor = Executor.make("FileTreeRepository-callback-executor")
     val tree = new FileCacheDirectoryTree(converter, callbackExecutor, symlinkWatcher)
     val pathWatcher = watcherFactory(tree.readOnlyDirectoryRegistry)
-    pathWatcher.addObserver((e: PathWatchers.Event) => tree.handleEvent(e))
+    pathWatcher.addObserver((e: PathWatchers.Event) => tree.handleEvent(e.getTypedPath))
     val watcher = new FileCachePathWatcher(tree, pathWatcher)
     val res = new FileTreeRepositoryImpl(tree, watcher)
     res.addCacheObserver(cacheObserver)

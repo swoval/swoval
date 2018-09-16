@@ -328,8 +328,9 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     val handled: Set[Path] = new HashSet[Path]()
     while (it.hasNext) {
       val event: Event = it.next()
-      if (directoryRegistry.accept(event.getPath) && handled.add(event.getPath)) {
-        observers.onNext(new Event(TypedPaths.get(event.getPath), event.getKind))
+      val path: Path = event.getTypedPath.getPath
+      if (directoryRegistry.accept(path) && handled.add(path)) {
+        observers.onNext(new Event(TypedPaths.get(path), event.getKind))
       }
     }
   }
@@ -337,16 +338,16 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
   private def handleEvent(event: Event): Unit = {
     val events: List[Event] = new ArrayList[Event]()
     if (!closed.get && rootDirectories.lock()) {
-      try if (directoryRegistry.acceptPrefix(event.getPath)) {
-        val typedPath: TypedPath = TypedPaths.get(event.getPath)
+      try if (directoryRegistry.acceptPrefix(event.getTypedPath.getPath)) {
+        val typedPath: TypedPath = TypedPaths.get(event.getTypedPath.getPath)
         if (!typedPath.exists()) {
-          val root: CachedDirectory[WatchedDirectory] = getOrAdd(event.getPath)
+          val root: CachedDirectory[WatchedDirectory] = getOrAdd(typedPath.getPath)
           if (root != null) {
-            val isRoot: Boolean = root.getPath == event.getPath
+            val isRoot: Boolean = root.getPath == typedPath.getPath
             val it: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
               if (isRoot)
                 root.listEntries(root.getMaxDepth, AllPass).iterator()
-              else root.remove(event.getPath).iterator()
+              else root.remove(typedPath.getPath).iterator()
             while (it.hasNext) {
               val entry: FileTreeDataViews.Entry[WatchedDirectory] = it.next()
               val either: Either[IOException, WatchedDirectory] =
@@ -357,13 +358,13 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
               events.add(new Event(Entries.setExists(entry, false).getTypedPath, Kind.Delete))
             }
             val parent: CachedDirectory[WatchedDirectory] =
-              find(event.getPath.getParent, new ArrayList[Path]())
+              find(typedPath.getPath.getParent, new ArrayList[Path]())
             if (parent != null) {
               update(parent, parent.getEntry.getTypedPath, events)
             }
             if (isRoot) {
               rootDirectories.remove(root.getPath)
-              getOrAdd(event.getPath)
+              getOrAdd(typedPath.getPath)
             }
           }
         }
