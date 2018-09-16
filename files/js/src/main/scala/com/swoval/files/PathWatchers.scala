@@ -2,7 +2,7 @@
 
 package com.swoval.files
 
-import com.swoval.files.PathWatchers.Event.Kind
+import com.swoval.files.FileTreeDataViews.Converter
 import com.swoval.runtime.Platform
 import java.io.IOException
 import java.nio.file.Path
@@ -24,13 +24,30 @@ object PathWatchers {
   /**
    * Create a path watcher that periodically polls the file system to detect changes
    *
+   * @param converter calculates the last modified time in milliseconds for the path watcher. This
+   * exists so that the converter can be replaced with a higher resolution calculation of the file
+   * system last modified time than is provided by the jvm, e.g. sbt.IO.getLastModifiedTimeOrZero.
+   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
+   * @param pollInterval minimum duration between when polling ends and the next poll begins
+   * @param timeUnit the time unit for which the pollInterval corresponds
+   * @return the polling path watcher.
+   */
+  def polling(converter: Converter[java.lang.Long],
+              followLinks: Boolean,
+              pollInterval: java.lang.Long,
+              timeUnit: TimeUnit): PathWatcher[PathWatchers.Event] =
+    new PollingPathWatcher(converter, followLinks, pollInterval, timeUnit)
+
+  /**
+   * Create a path watcher that periodically polls the file system to detect changes
+   *
    * @param followLinks toggles whether or not the targets of symbolic links should be monitored
    * @param pollInterval minimum duration between when polling ends and the next poll begins
    * @param timeUnit the time unit for which the pollInterval corresponds
    * @return the polling path watcher.
    */
   def polling(followLinks: Boolean,
-              pollInterval: Long,
+              pollInterval: java.lang.Long,
               timeUnit: TimeUnit): PathWatcher[PathWatchers.Event] =
     new PollingPathWatcher(followLinks, pollInterval, timeUnit)
 

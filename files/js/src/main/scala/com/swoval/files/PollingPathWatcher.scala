@@ -10,6 +10,7 @@ import com.swoval.files.PathWatchers.Event
 import com.swoval.files.PathWatchers.Event.Kind
 import com.swoval.functional.Either
 import java.io.IOException
+import java.nio.file.Files
 import java.nio.file.NotDirectoryException
 import java.nio.file.Path
 import java.util.ArrayList
@@ -22,7 +23,10 @@ import java.util.Map.Entry
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-class PollingPathWatcher(private val followLinks: Boolean, pollInterval: Long, timeUnit: TimeUnit)
+class PollingPathWatcher(private val converter: Converter[java.lang.Long],
+                         private val followLinks: Boolean,
+                         pollInterval: java.lang.Long,
+                         timeUnit: TimeUnit)
     extends PathWatcher[PathWatchers.Event] {
 
   private val isClosed: AtomicBoolean = new AtomicBoolean(false)
@@ -31,18 +35,29 @@ class PollingPathWatcher(private val followLinks: Boolean, pollInterval: Long, t
 
   private val observers: Observers[PathWatchers.Event] = new Observers()
 
-  private var oldEntries: Map[Path, FileTreeDataViews.Entry[Path]] = getEntries
+  private var oldEntries: Map[Path, FileTreeDataViews.Entry[java.lang.Long]] = getEntries
 
   private val periodicTask: PeriodicTask =
     new PeriodicTask(new PollingRunnable(), timeUnit.toMillis(pollInterval))
 
-  private val converter: Converter[Path] = new Converter[Path]() {
-    override def apply(typedPath: TypedPath): Path = typedPath.getPath
-  }
+  def this(followLinks: Boolean, pollInterval: java.lang.Long, timeUnit: TimeUnit) =
+    this(
+      new Converter[java.lang.Long]() {
+        override def apply(path: TypedPath): java.lang.Long =
+          try Files.getLastModifiedTime(path.getPath).toMillis()
+          catch {
+            case e: Exception => 0L
+
+          }
+      },
+      followLinks,
+      pollInterval,
+      timeUnit
+    )
 
   override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] = {
     var result: Boolean = false
-    val entries: List[FileTreeDataViews.Entry[Path]] =
+    val entries: List[FileTreeDataViews.Entry[java.lang.Long]] =
       getEntries(path, maxDepth)
     this.synchronized {
       addAll(oldEntries, entries)
@@ -73,27 +88,27 @@ class PollingPathWatcher(private val followLinks: Boolean, pollInterval: Long, t
     observers.removeObserver(handle)
   }
 
-  private def addAll(map: Map[Path, FileTreeDataViews.Entry[Path]],
-                     list: List[FileTreeDataViews.Entry[Path]]): Unit = {
-    val it: Iterator[FileTreeDataViews.Entry[Path]] = list.iterator()
+  private def addAll(map: Map[Path, FileTreeDataViews.Entry[java.lang.Long]],
+                     list: List[FileTreeDataViews.Entry[java.lang.Long]]): Unit = {
+    val it: Iterator[FileTreeDataViews.Entry[java.lang.Long]] = list.iterator()
     while (it.hasNext) {
-      val entry: FileTreeDataViews.Entry[Path] = it.next()
+      val entry: FileTreeDataViews.Entry[java.lang.Long] = it.next()
       map.put(entry.getTypedPath.getPath, entry)
     }
   }
 
-  private def getEntries(path: Path, maxDepth: Int): List[FileTreeDataViews.Entry[Path]] =
+  private def getEntries(path: Path, maxDepth: Int): List[FileTreeDataViews.Entry[java.lang.Long]] =
     try {
-      val view: DirectoryDataView[Path] =
+      val view: DirectoryDataView[java.lang.Long] =
         FileTreeDataViews.cached(path, converter, maxDepth, followLinks)
-      val entries: List[FileTreeDataViews.Entry[Path]] =
+      val entries: List[FileTreeDataViews.Entry[java.lang.Long]] =
         view.listEntries(-1, AllPass)
       entries.addAll(view.listEntries(maxDepth, AllPass))
       entries
     } catch {
       case e: NotDirectoryException => {
-        val result: List[FileTreeDataViews.Entry[Path]] =
-          new ArrayList[FileTreeDataViews.Entry[Path]]()
+        val result: List[FileTreeDataViews.Entry[java.lang.Long]] =
+          new ArrayList[FileTreeDataViews.Entry[java.lang.Long]]()
         val typedPath: TypedPath = TypedPaths.get(path)
         result.add(Entries.get(typedPath, converter, typedPath))
         result
@@ -103,18 +118,18 @@ class PollingPathWatcher(private val followLinks: Boolean, pollInterval: Long, t
 
     }
 
-  private def getEntries(): Map[Path, FileTreeDataViews.Entry[Path]] = {
+  private def getEntries(): Map[Path, FileTreeDataViews.Entry[java.lang.Long]] = {
 // I have to use putAll because scala.js doesn't handle new HashMap(registry.registered()).
     val map: HashMap[Path, Integer] = new HashMap[Path, Integer]()
     this.synchronized {
       map.putAll(registry.registered())
     }
     val it: Iterator[Entry[Path, Integer]] = map.entrySet().iterator()
-    val result: Map[Path, FileTreeDataViews.Entry[Path]] =
-      new HashMap[Path, FileTreeDataViews.Entry[Path]]()
+    val result: Map[Path, FileTreeDataViews.Entry[java.lang.Long]] =
+      new HashMap[Path, FileTreeDataViews.Entry[java.lang.Long]]()
     while (it.hasNext) {
       val entry: Entry[Path, Integer] = it.next()
-      val entries: List[FileTreeDataViews.Entry[Path]] =
+      val entries: List[FileTreeDataViews.Entry[java.lang.Long]] =
         getEntries(entry.getKey, entry.getValue)
       addAll(result, entries)
     }
@@ -123,18 +138,20 @@ class PollingPathWatcher(private val followLinks: Boolean, pollInterval: Long, t
 
   private class PollingRunnable extends Runnable {
 
-    val cacheObserver: CacheObserver[Path] = new CacheObserver[Path]() {
-      override def onCreate(newEntry: FileTreeDataViews.Entry[Path]): Unit = {
+    val cacheObserver: CacheObserver[java.lang.Long] = new CacheObserver[java.lang.Long]() {
+      override def onCreate(newEntry: FileTreeDataViews.Entry[java.lang.Long]): Unit = {
         observers.onNext(new Event(newEntry.getTypedPath, Kind.Create))
       }
 
-      override def onDelete(oldEntry: FileTreeDataViews.Entry[Path]): Unit = {
+      override def onDelete(oldEntry: FileTreeDataViews.Entry[java.lang.Long]): Unit = {
         observers.onNext(new Event(oldEntry.getTypedPath, Kind.Delete))
       }
 
-      override def onUpdate(oldEntry: FileTreeDataViews.Entry[Path],
-                            newEntry: FileTreeDataViews.Entry[Path]): Unit = {
-        observers.onNext(new Event(newEntry.getTypedPath, Kind.Modify))
+      override def onUpdate(oldEntry: FileTreeDataViews.Entry[java.lang.Long],
+                            newEntry: FileTreeDataViews.Entry[java.lang.Long]): Unit = {
+        if (oldEntry.getValue != newEntry.getValue) {
+          observers.onNext(new Event(newEntry.getTypedPath, Kind.Modify))
+        }
       }
 
       override def onError(exception: IOException): Unit = {
@@ -143,7 +160,7 @@ class PollingPathWatcher(private val followLinks: Boolean, pollInterval: Long, t
     }
 
     override def run(): Unit = {
-      val newEntries: Map[Path, FileTreeDataViews.Entry[Path]] = getEntries
+      val newEntries: Map[Path, FileTreeDataViews.Entry[java.lang.Long]] = getEntries
       MapOps.diffDirectoryEntries(oldEntries, newEntries, cacheObserver)
       this.synchronized {
         oldEntries = newEntries

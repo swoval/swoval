@@ -58,7 +58,7 @@ object ApplePathWatcher {
 /**
  * Implements the PathWatcher for Mac OSX using the [[https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/UsingtheFSEventsFramework/UsingtheFSEventsFramework.html Apple File System Events Api]].
  */
-class ApplePathWatcher(private val latency: Long,
+class ApplePathWatcher(private val latency: java.lang.Long,
                        private val timeUnit: TimeUnit,
                        private val flags: Flags.Create,
                        onStreamRemoved: Consumer[String],

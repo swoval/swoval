@@ -9,6 +9,7 @@ import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Event.Kind;
 import com.swoval.functional.Either;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -26,27 +27,44 @@ class PollingPathWatcher implements PathWatcher<PathWatchers.Event> {
   private final boolean followLinks;
   private final DirectoryRegistry registry = new DirectoryRegistryImpl();
   private final Observers<PathWatchers.Event> observers = new Observers<>();
-  private Map<Path, FileTreeDataViews.Entry<Path>> oldEntries;
+  private Map<Path, FileTreeDataViews.Entry<Long>> oldEntries;
   private final PeriodicTask periodicTask;
-  private final Converter<Path> converter =
-      new Converter<Path>() {
-        @Override
-        public Path apply(final TypedPath typedPath) {
-          return typedPath.getPath();
-        }
-      };
+  private final Converter<Long> converter;
 
-  PollingPathWatcher(final boolean followLinks, final long pollInterval, final TimeUnit timeUnit)
+  PollingPathWatcher(
+      final Converter<Long> converter,
+      final boolean followLinks,
+      final long pollInterval,
+      final TimeUnit timeUnit)
       throws InterruptedException {
+    this.converter = converter;
     this.followLinks = followLinks;
     oldEntries = getEntries();
     periodicTask = new PeriodicTask(new PollingRunnable(), timeUnit.toMillis(pollInterval));
   }
 
+  PollingPathWatcher(final boolean followLinks, final long pollInterval, final TimeUnit timeUnit)
+      throws InterruptedException {
+    this(
+        new Converter<Long>() {
+          @Override
+          public Long apply(final TypedPath path) {
+            try {
+              return Files.getLastModifiedTime(path.getPath()).toMillis();
+            } catch (final Exception e) {
+              return 0L;
+            }
+          }
+        },
+        followLinks,
+        pollInterval,
+        timeUnit);
+  }
+
   @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
     boolean result;
-    final List<FileTreeDataViews.Entry<Path>> entries = getEntries(path, maxDepth);
+    final List<FileTreeDataViews.Entry<Long>> entries = getEntries(path, maxDepth);
     synchronized (this) {
       addAll(oldEntries, entries);
       result = registry.addDirectory(path, maxDepth);
@@ -82,24 +100,24 @@ class PollingPathWatcher implements PathWatcher<PathWatchers.Event> {
   }
 
   private void addAll(
-      final Map<Path, FileTreeDataViews.Entry<Path>> map,
-      final List<FileTreeDataViews.Entry<Path>> list) {
-    final Iterator<FileTreeDataViews.Entry<Path>> it = list.iterator();
+      final Map<Path, FileTreeDataViews.Entry<Long>> map,
+      final List<FileTreeDataViews.Entry<Long>> list) {
+    final Iterator<FileTreeDataViews.Entry<Long>> it = list.iterator();
     while (it.hasNext()) {
-      final FileTreeDataViews.Entry<Path> entry = it.next();
+      final FileTreeDataViews.Entry<Long> entry = it.next();
       map.put(entry.getTypedPath().getPath(), entry);
     }
   }
 
-  private List<FileTreeDataViews.Entry<Path>> getEntries(final Path path, final int maxDepth) {
+  private List<FileTreeDataViews.Entry<Long>> getEntries(final Path path, final int maxDepth) {
     try {
-      final DirectoryDataView<Path> view =
+      final DirectoryDataView<Long> view =
           FileTreeDataViews.cached(path, converter, maxDepth, followLinks);
-      final List<FileTreeDataViews.Entry<Path>> entries = view.listEntries(-1, AllPass);
+      final List<FileTreeDataViews.Entry<Long>> entries = view.listEntries(-1, AllPass);
       entries.addAll(view.listEntries(maxDepth, AllPass));
       return entries;
     } catch (final NotDirectoryException e) {
-      final List<FileTreeDataViews.Entry<Path>> result = new ArrayList<>();
+      final List<FileTreeDataViews.Entry<Long>> result = new ArrayList<>();
       final TypedPath typedPath = TypedPaths.get(path);
       result.add(Entries.get(typedPath, converter, typedPath));
       return result;
@@ -108,17 +126,17 @@ class PollingPathWatcher implements PathWatcher<PathWatchers.Event> {
     }
   }
 
-  private Map<Path, FileTreeDataViews.Entry<Path>> getEntries() {
+  private Map<Path, FileTreeDataViews.Entry<Long>> getEntries() {
     // I have to use putAll because scala.js doesn't handle new HashMap(registry.registered()).
     final HashMap<Path, Integer> map = new HashMap<>();
     synchronized (this) {
       map.putAll(registry.registered());
     }
     final Iterator<Entry<Path, Integer>> it = map.entrySet().iterator();
-    final Map<Path, FileTreeDataViews.Entry<Path>> result = new HashMap<>();
+    final Map<Path, FileTreeDataViews.Entry<Long>> result = new HashMap<>();
     while (it.hasNext()) {
       final Entry<Path, Integer> entry = it.next();
-      final List<FileTreeDataViews.Entry<Path>> entries =
+      final List<FileTreeDataViews.Entry<Long>> entries =
           getEntries(entry.getKey(), entry.getValue());
       addAll(result, entries);
     }
@@ -126,23 +144,25 @@ class PollingPathWatcher implements PathWatcher<PathWatchers.Event> {
   }
 
   private class PollingRunnable implements Runnable {
-    final CacheObserver<Path> cacheObserver =
-        new CacheObserver<Path>() {
+    final CacheObserver<Long> cacheObserver =
+        new CacheObserver<Long>() {
           @Override
-          public void onCreate(final FileTreeDataViews.Entry<Path> newEntry) {
+          public void onCreate(final FileTreeDataViews.Entry<Long> newEntry) {
             observers.onNext(new Event(newEntry.getTypedPath(), Kind.Create));
           }
 
           @Override
-          public void onDelete(final FileTreeDataViews.Entry<Path> oldEntry) {
+          public void onDelete(final FileTreeDataViews.Entry<Long> oldEntry) {
             observers.onNext(new Event(oldEntry.getTypedPath(), Kind.Delete));
           }
 
           @Override
           public void onUpdate(
-              final FileTreeDataViews.Entry<Path> oldEntry,
-              FileTreeDataViews.Entry<Path> newEntry) {
-            observers.onNext(new Event(newEntry.getTypedPath(), Kind.Modify));
+              final FileTreeDataViews.Entry<Long> oldEntry,
+              FileTreeDataViews.Entry<Long> newEntry) {
+            if (!oldEntry.getValue().equals(newEntry.getValue())) {
+              observers.onNext(new Event(newEntry.getTypedPath(), Kind.Modify));
+            }
           }
 
           @Override
@@ -153,7 +173,7 @@ class PollingPathWatcher implements PathWatcher<PathWatchers.Event> {
 
     @Override
     public void run() {
-      final Map<Path, FileTreeDataViews.Entry<Path>> newEntries = getEntries();
+      final Map<Path, FileTreeDataViews.Entry<Long>> newEntries = getEntries();
       MapOps.diffDirectoryEntries(oldEntries, newEntries, cacheObserver);
       synchronized (this) {
         oldEntries = newEntries;
