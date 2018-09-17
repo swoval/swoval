@@ -1,5 +1,5 @@
 {
-  "name": "swoval_files",
+  "name": "swoval_file_tree_views",
   "version": "2.0.0-RC2",
   "description": "Utilities for listing and monitoring directories.",
   "main": "files.js",
