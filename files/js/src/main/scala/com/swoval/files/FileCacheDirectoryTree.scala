@@ -89,7 +89,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
       }
 
       override def onNext(event: Event): Unit = {
-        handleEvent(event)
+        handleEvent(event.getTypedPath)
       }
     })
   }

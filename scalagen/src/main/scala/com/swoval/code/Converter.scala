@@ -89,12 +89,14 @@ object Converter {
          s"(def (?:get|apply|cached)|trait (?:${needAnyRef.mkString("|")})|class (?:${needAnyRef
            .mkString("|")}}))[\\[]T".r
        val contraRegex = "^(.*result: List).R".r
-       newLines.view
+       val longRegex = "([^.])Long".r
+       val res = newLines.view
          .filterNot(_.contains("import Entry._"))
          .map(regex.replaceAllIn(_, "$1[T <: AnyRef"))
          .map(contraRegex.replaceAllIn(_, "$1[_ >: R"))
          .filterNot(l => l.contains("import Event._") || l.contains("import Kind._"))
          .map(varargsRegex.replaceAllIn(_, "$1options:_*)"))
+       res.map(longRegex.replaceAllIn(_, "$1java.lang.Long"))
      } else if (fileName == "Either") {
        val regex = "class Either\\[L, R\\]".r
        newLines.map(regex.replaceAllIn(_, "class Either[+L, +R]"))

@@ -2,6 +2,7 @@
 
 package com.swoval.files
 
+import com.swoval.files.FileTreeDataViews.Converter
 import com.swoval.runtime.Platform
 import java.io.IOException
 import java.nio.file.Path
@@ -22,13 +23,31 @@ object PathWatchers {
 
   /**
    * Create a path watcher that periodically polls the file system to detect changes
+   *
+   * @param converter calculates the last modified time in milliseconds for the path watcher. This
+   * exists so that the converter can be replaced with a higher resolution calculation of the file
+   * system last modified time than is provided by the jvm, e.g. sbt.IO.getLastModifiedTimeOrZero.
+   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
+   * @param pollInterval minimum duration between when polling ends and the next poll begins
+   * @param timeUnit the time unit for which the pollInterval corresponds
+   * @return the polling path watcher.
+   */
+  def polling(converter: Converter[java.lang.Long],
+              followLinks: Boolean,
+              pollInterval: java.lang.Long,
+              timeUnit: TimeUnit): PathWatcher[PathWatchers.Event] =
+    new PollingPathWatcher(converter, followLinks, pollInterval, timeUnit)
+
+  /**
+   * Create a path watcher that periodically polls the file system to detect changes
+   *
    * @param followLinks toggles whether or not the targets of symbolic links should be monitored
    * @param pollInterval minimum duration between when polling ends and the next poll begins
    * @param timeUnit the time unit for which the pollInterval corresponds
    * @return the polling path watcher.
    */
   def polling(followLinks: Boolean,
-              pollInterval: Long,
+              pollInterval: java.lang.Long,
               timeUnit: TimeUnit): PathWatcher[PathWatchers.Event] =
     new PollingPathWatcher(followLinks, pollInterval, timeUnit)
 
@@ -64,22 +83,22 @@ object PathWatchers {
       /**
  A new file was created.
        */
-      val Create: Kind = new Kind("Create", 1)
+      val Create: Kind = new Kind("Create")
 
       /**
  The file was deleted.
        */
-      val Delete: Kind = new Kind("Delete", 2)
+      val Delete: Kind = new Kind("Delete")
 
       /**
  An error occurred processing the event.
        */
-      val Error: Kind = new Kind("Error", 4)
+      val Error: Kind = new Kind("Error")
 
       /**
  An existing file was modified.
        */
-      val Modify: Kind = new Kind("Modify", 3)
+      val Modify: Kind = new Kind("Modify")
 
     }
 
@@ -87,7 +106,7 @@ object PathWatchers {
      * An enum like class to indicate the type of file event. It isn't an actual enum because the
      * scala.js codegen has problems with enum types.
      */
-    class Kind(private val name: String, private val priority: Int) {
+    class Kind(private val name: String) {
 
       override def toString(): String = name
 
@@ -106,26 +125,7 @@ object PathWatchers {
   /**
  Container for [[PathWatcher]] events.
    */
-  class Event(path: TypedPath, @BeanProperty val kind: Event.Kind) extends TypedPath {
-
-    private val typedPath: TypedPath = path
-
-    /**
-     * Returns the path that triggered the event.
-     *
-     * @return the path that triggered the event.
-     */
-    def getPath(): Path = typedPath.getPath
-
-    override def exists(): Boolean = typedPath.exists()
-
-    override def isDirectory(): Boolean = typedPath.isDirectory
-
-    override def isFile(): Boolean = typedPath.isFile
-
-    override def isSymbolicLink(): Boolean = typedPath.isSymbolicLink
-
-    override def toRealPath(): Path = typedPath.toRealPath()
+  class Event(@BeanProperty val typedPath: TypedPath, @BeanProperty val kind: Event.Kind) {
 
     override def equals(other: Any): Boolean = other match {
       case other: Event => {

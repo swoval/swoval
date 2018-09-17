@@ -43,6 +43,7 @@ object FileTreeDataViews {
 
     /**
      * Returns the [[TypedPath]] associated with this entry.
+     *
      * @return the [[TypedPath]].
      */
     def getTypedPath(): TypedPath

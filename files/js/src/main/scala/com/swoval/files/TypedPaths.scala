@@ -44,6 +44,7 @@ object TypedPaths {
 
   /**
    * Returns a typed path for the given path.
+   *
    * @param path the path to convert to a typed path
    * @return the [[TypedPath]] for the input path.
    */

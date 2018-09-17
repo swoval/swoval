@@ -67,7 +67,7 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
     override def onNext(event: Event): Unit = {
       if (!isClosed.get) {
         val events: List[Event] = new ArrayList[Event]()
-        val path: Path = event.getPath
+        val path: Path = event.getTypedPath.getPath
         if (watchedSymlinksByTarget.lock()) {
           try {
             val registeredPath: RegisteredPath =
@@ -85,17 +85,17 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
             }
           } finally watchedSymlinksByTarget.unlock()
         }
-        if (!Files.exists(event.getPath)) {
+        if (!Files.exists(path)) {
           if (watchedSymlinksByTarget.lock()) {
             try {
-              watchedSymlinksByTarget.remove(event.getPath)
+              watchedSymlinksByTarget.remove(path)
               val registeredPath: RegisteredPath =
-                watchedSymlinksByDirectory.get(event.getPath)
+                watchedSymlinksByDirectory.get(path)
               if (registeredPath != null) {
-                registeredPath.paths.remove(event.getPath)
+                registeredPath.paths.remove(path)
                 if (registeredPath.paths.isEmpty) {
-                  watcher.unregister(event.getPath)
-                  watchedSymlinksByDirectory.remove(event.getPath)
+                  watcher.unregister(path)
+                  watchedSymlinksByDirectory.remove(path)
                 }
               }
             } finally watchedSymlinksByTarget.unlock()
@@ -104,7 +104,7 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
         val it: Iterator[Event] = events.iterator()
         while (it.hasNext) {
           val ev: Event = it.next()
-          observers.onNext(new Event(TypedPaths.get(ev.getPath), ev.getKind))
+          observers.onNext(new Event(TypedPaths.get(ev.getTypedPath.getPath), ev.getKind))
         }
       }
     }

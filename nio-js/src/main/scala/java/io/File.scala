@@ -29,7 +29,12 @@ class File(pathname: String) {
   def isDirectory(): Boolean = exists && Fs.statSync(pathname).isDirectory
   def isFile(): Boolean = exists && Fs.statSync(pathname).isFile
   def isHidden(): Boolean = getName.startsWith(".")
-  def lastModified(): Long = Fs.statSync(pathname).mtime.getTime.toLong
+  def lastModified(): Long =
+    try {
+      Fs.statSync(pathname).mtime.getTime.toLong
+    } catch {
+      case e: Exception => throw new IOException(e)
+    }
   def length(): Long = Fs.statSync(pathname).size.toLong
   def createNewFile(): Boolean =
     !exists &&

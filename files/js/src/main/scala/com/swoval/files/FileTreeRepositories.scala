@@ -37,7 +37,7 @@ object FileTreeRepositories {
       override def onError(t: Throwable): Unit = {}
 
       override def onNext(event: Event): Unit = {
-        tree.handleEvent(event)
+        tree.handleEvent(event.getTypedPath)
       }
     })
     val watcher: FileCachePathWatcher[T] =

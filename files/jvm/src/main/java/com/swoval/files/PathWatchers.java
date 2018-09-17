@@ -1,5 +1,6 @@
 package com.swoval.files;
 
+import com.swoval.files.FileTreeDataViews.Converter;
 import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -24,6 +25,28 @@ public class PathWatchers {
   public static PathWatcher<PathWatchers.Event> get(final boolean followLinks)
       throws IOException, InterruptedException {
     return get(followLinks, new DirectoryRegistryImpl());
+  }
+
+  /**
+   * Create a path watcher that periodically polls the file system to detect changes
+   *
+   * @param converter calculates the last modified time in milliseconds for the path watcher. This
+   *     exists so that the converter can be replaced with a higher resolution calculation of the
+   *     file system last modified time than is provided by the jvm, e.g.
+   *     sbt.IO.getLastModifiedTimeOrZero.
+   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
+   * @param pollInterval minimum duration between when polling ends and the next poll begins
+   * @param timeUnit the time unit for which the pollInterval corresponds
+   * @return the polling path watcher.
+   * @throws InterruptedException if the polling thread cannot be started.
+   */
+  public static PathWatcher<PathWatchers.Event> polling(
+      final Converter<Long> converter,
+      final boolean followLinks,
+      final long pollInterval,
+      final TimeUnit timeUnit)
+      throws InterruptedException {
+    return new PollingPathWatcher(converter, followLinks, pollInterval, timeUnit);
   }
 
   /**
@@ -85,42 +108,17 @@ public class PathWatchers {
     }
   }
   /** Container for {@link PathWatcher} events. */
-  public static final class Event implements TypedPath {
+  public static final class Event {
     private final TypedPath typedPath;
     private final Event.Kind kind;
 
     /**
-     * Returns the path that triggered the event.
+     * Return the {@link TypedPath} associated with this Event.
      *
-     * @return the path that triggered the event.
+     * @return the {@link TypedPath}.
      */
-    public Path getPath() {
-      return typedPath.getPath();
-    }
-
-    @Override
-    public boolean exists() {
-      return typedPath.exists();
-    }
-
-    @Override
-    public boolean isDirectory() {
-      return typedPath.isDirectory();
-    }
-
-    @Override
-    public boolean isFile() {
-      return typedPath.isFile();
-    }
-
-    @Override
-    public boolean isSymbolicLink() {
-      return typedPath.isSymbolicLink();
-    }
-
-    @Override
-    public Path toRealPath() {
-      return typedPath.toRealPath();
+    public TypedPath getTypedPath() {
+      return typedPath;
     }
 
     /**
@@ -132,8 +130,8 @@ public class PathWatchers {
       return kind;
     }
 
-    public Event(final TypedPath path, final Event.Kind kind) {
-      this.typedPath = path;
+    public Event(final TypedPath typedPath, final Event.Kind kind) {
+      this.typedPath = typedPath;
       this.kind = kind;
     }
 
@@ -164,20 +162,18 @@ public class PathWatchers {
     public static class Kind {
 
       /** A new file was created. */
-      public static final Kind Create = new Kind("Create", 1);
+      public static final Kind Create = new Kind("Create");
       /** The file was deleted. */
-      public static final Kind Delete = new Kind("Delete", 2);
+      public static final Kind Delete = new Kind("Delete");
       /** An error occurred processing the event. */
-      public static final Kind Error = new Kind("Error", 4);
+      public static final Kind Error = new Kind("Error");
       /** An existing file was modified. */
-      public static final Kind Modify = new Kind("Modify", 3);
+      public static final Kind Modify = new Kind("Modify");
 
       private final String name;
-      private final int priority;
 
-      Kind(final String name, final int priority) {
+      Kind(final String name) {
         this.name = name;
-        this.priority = priority;
       }
 
       @Override

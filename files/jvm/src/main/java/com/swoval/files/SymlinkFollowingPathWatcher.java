@@ -37,18 +37,19 @@ class SymlinkFollowingPathWatcher implements PathWatcher<PathWatchers.Event> {
 
           @Override
           public void onNext(final Event event) {
-            if (event.exists() && event.isSymbolicLink()) {
+            final TypedPath typedPath = event.getTypedPath();
+            if (typedPath.exists() && typedPath.isSymbolicLink()) {
               try {
-                final int maxDepth = directoryRegistry.maxDepthFor(event.getPath());
-                symlinkWatcher.addSymlink(event.getPath(), maxDepth);
-                if (event.isDirectory()) {
-                  handleNewDirectory(event.getPath(), maxDepth, true);
+                final int maxDepth = directoryRegistry.maxDepthFor(typedPath.getPath());
+                symlinkWatcher.addSymlink(typedPath.getPath(), maxDepth);
+                if (typedPath.isDirectory()) {
+                  handleNewDirectory(typedPath.getPath(), maxDepth, true);
                 }
               } catch (final IOException e) {
                 observers.onError(e);
               }
-            } else if (!event.exists()) {
-              symlinkWatcher.remove(event.getPath());
+            } else if (!typedPath.exists()) {
+              symlinkWatcher.remove(typedPath.getPath());
             }
             observers.onNext(event);
           }
