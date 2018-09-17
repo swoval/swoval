@@ -266,7 +266,10 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     while (directoryIterator.hasNext) {
       val dir: CachedDirectory[T] = directoryIterator.next()
       if (path.startsWith(dir.getPath)) {
-        val updates: List[FileTreeDataViews.Entry[T]] = dir.remove(path)
+        val updates: List[FileTreeDataViews.Entry[T]] =
+          if (path == dir.getPath)
+            dir.listEntries(java.lang.Integer.MAX_VALUE, AllPass)
+          else dir.remove(path)
         val it: Iterator[Path] =
           directoryRegistry.registered().keySet.iterator()
         while (it.hasNext) if (it.next() == path) {

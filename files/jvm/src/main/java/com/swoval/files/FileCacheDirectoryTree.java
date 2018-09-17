@@ -303,7 +303,10 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
     while (directoryIterator.hasNext()) {
       final CachedDirectory<T> dir = directoryIterator.next();
       if (path.startsWith(dir.getPath())) {
-        List<FileTreeDataViews.Entry<T>> updates = dir.remove(path);
+        final List<FileTreeDataViews.Entry<T>> updates =
+            path.equals(dir.getPath())
+                ? dir.listEntries(Integer.MAX_VALUE, AllPass)
+                : dir.remove(path);
         final Iterator<Path> it = directoryRegistry.registered().keySet().iterator();
         while (it.hasNext()) {
           if (it.next().equals(path)) {
