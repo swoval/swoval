@@ -15,14 +15,13 @@ import scala.scalajs.js.JSConverters._
 import scala.scalajs.js.UndefOr
 import scala.scalajs.js.annotation.{ JSExport, JSExportAll, JSExportTopLevel }
 
-@JSExportTopLevel("FileRepositories")
-object JSFileRepositories {
+@JSExportTopLevel("FileTreeRepositories")
+object JSFileTreeRepositories {
   @JSExport
   def get[T <: AnyRef](converter: js.UndefOr[js.Function1[JSTypedPath, T]],
                        followLinks: js.UndefOr[Boolean]): JSFileTreeRepository[T] = {
     val underlying =
       FileTreeRepositories.get(
-        followLinks.toOption.getOrElse(true),
         new Converter[T] {
           val function = converter.toOption match {
             case Some(f) =>
@@ -33,7 +32,8 @@ object JSFileRepositories {
                 new JSTypedPath(typedPath).asInstanceOf[T]
           }
           override def apply(typedPath: TypedPath): T = function(typedPath)
-        }
+        },
+        followLinks.toOption.getOrElse(true)
       )
     new JSFileTreeRepository[T](underlying)
   }

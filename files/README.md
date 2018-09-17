@@ -203,3 +203,44 @@ Note that this library is tested on Mac, Linux and Windows. That is also the ord
 of the development work is done. This makes Windows the platform likely to have the most bugs.
 Please report any that you find. 
 
+Javascript
+==
+There is also an npm module available [swoval-file-tree-views](https://www.npmjs.com/package/swoval_file_tree_views),
+that exports a subset of the public api as documented in [files-jvm](https://swoval.github.io/files/jvm).
+In general, it should have very similar semantics except that all of the types in the public api
+are javascript native types, i.e. String instead of java.nio.file.Path. Eventually this should be
+documented, but the api can be viewed in
+[javascript public api](https://github.com/eatkins/swoval/blob/js-api/files/js/src/main/scala/com/swoval/files/PublicApi.scala).
+
+To use, add `"swoval_file_tree_views": "2.0.0-RC2"` to your package.json file.
+
+A simple example:
+```javascript
+  const swoval = require("swoval_file_tree_views")
+  const fs = require("fs")
+  const repo = swoval.FileTreeRepositories.get(typedPath => fs.statSync(typedPath.getPath).mtimeMs)
+  repo.addCacheObserver(
+    new swoval.CacheObserver(
+      e => console.log("creation " + e.getTypedPath.getPath + " " + e.getValue.getOrElse(0)),
+      e => console.log("deletion " + e.getTypedPath.getPath + " " + e.getValue.getOrElse(0)),
+      (old, e) => console.log("update " + e.getTypedPath.getPath + " " + e.getValue.getOrElse(0))
+    )
+  )
+  const tmp = fs.realpathSync("/tmp")
+  const foo = tmp + "/foo"
+  fs.mkdirSync(foo)
+  repo.register(tmp + "/foo")
+  const bar = foo + "/bar.txt"
+  fs.closeSync(fs.openSync(bar, "w"))
+  {
+    setTimeout(() => {
+      repo.list(foo).forEach(f => console.log(f.getPath))
+      fs.writeFileSync(bar, "bar")
+      setTimeout(() => {
+        fs.unlinkSync(bar)
+        fs.rmdirSync(foo)
+      }, 200)
+    }, 200)
+    undefined
+  }
+```

@@ -82,9 +82,9 @@ object Compat {
   val global = Scope(Global, Global, Global, Global)
   def extraProjectSettings: Seq[Def.Setting[_]] = Seq(
     pollInterval := 75,
-    closeWatchFileCache := FileTreeRepositories.get(true, new Converter[Path] {
+    closeWatchFileCache := FileTreeRepositories.get(new Converter[Path] {
       override def apply(p: TypedPath): Path = p.getPath()
-    })
+    }, true)
   )
   implicit class FileFilterOps(val filter: java.io.FileFilter) extends AnyVal {
     def &&(other: java.io.FileFilter) = new sbt.FileFilter {

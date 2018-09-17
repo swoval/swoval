@@ -25,8 +25,9 @@ object PathWatchers {
    * Create a path watcher that periodically polls the file system to detect changes
    *
    * @param converter calculates the last modified time in milliseconds for the path watcher. This
-   * exists so that the converter can be replaced with a higher resolution calculation of the file
-   * system last modified time than is provided by the jvm, e.g. sbt.IO.getLastModifiedTimeOrZero.
+   *     exists so that the converter can be replaced with a higher resolution calculation of the
+   *     file system last modified time than is provided by the jvm, e.g.
+   *     sbt.IO.getLastModifiedTimeOrZero.
    * @param followLinks toggles whether or not the targets of symbolic links should be monitored
    * @param pollInterval minimum duration between when polling ends and the next poll begins
    * @param timeUnit the time unit for which the pollInterval corresponds

@@ -12,17 +12,17 @@ object FileTreeRepositories {
   /**
    * Create a file tree repository.
    *
+   * @param converter converts a path to the cached value type T
    * @param followLinks toggles whether or not to follow symbolic links. When true, any symbolic
    *     links that point to a regular file will trigger an event when the target file is modified.
    *     For any symbolic links that point to a directory, the children of the target directory will
    *     be included (up to the max depth parameter specified by [[    FileTreeRepository.register]]) and will trigger an event when any of the included children
    *     are modified. When false, symbolic links are not followed and only events for the symbolic
    *     link itself are reported.
-   * @param converter converts a path to the cached value type T
    * @tparam T the value type of the cache entries
    * @return a file tree repository.
    */
-  def get[T <: AnyRef](followLinks: Boolean, converter: Converter[T]): FileTreeRepository[T] = {
+  def get[T <: AnyRef](converter: Converter[T], followLinks: Boolean): FileTreeRepository[T] = {
     val symlinkWatcher: SymlinkWatcher =
       if (followLinks)
         new SymlinkWatcher(PathWatchers.get(false, new DirectoryRegistryImpl()))

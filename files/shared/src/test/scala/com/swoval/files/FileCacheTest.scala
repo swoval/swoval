@@ -38,7 +38,7 @@ object FileCacheTest {
   def getCached[T <: AnyRef](followLinks: Boolean,
                              converter: Converter[T],
                              cacheObserver: CacheObserver[T]): FileTreeRepository[T] = {
-    val res = FileTreeRepositories.get(followLinks, converter)
+    val res = FileTreeRepositories.get(converter, followLinks)
     res.addCacheObserver(cacheObserver)
     res
   }
