@@ -212,7 +212,7 @@ are javascript native types, i.e. String instead of java.nio.file.Path. The api 
 can be found here: 
 [javascript public api](https://swoval.github.io/files/js/com/swoval/files/node/index.html).
 
-To use, add `"swoval_file_tree_views": "2.0.0-RC2"` to your package.json file.
+To use, add `"swoval_file_tree_views": "2.0.0-RC2.1"` to your package.json file.
 
 A simple example:
 ```javascript
@@ -243,4 +243,13 @@ A simple example:
     }, 200)
     undefined
   }
+```
+Running this in a node console (or as a source file), you should see console output like:
+```
+creation /private/tmp/foo/bar.txt 1537159860459.1897
+update /private/tmp/foo/bar.txt 1537159860459.1897
+/private/tmp/foo/bar.txt
+update /private/tmp/foo/bar.txt 1537159860665.4883
+deletion /private/tmp/foo 1537159860445.2976
+deletion /private/tmp/foo/bar.txt 1537159860665.4883
 ```
