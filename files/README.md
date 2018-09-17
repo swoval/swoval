@@ -208,9 +208,9 @@ Javascript
 There is also an npm module available [swoval-file-tree-views](https://www.npmjs.com/package/swoval_file_tree_views),
 that exports a subset of the public api as documented in [files-jvm](https://swoval.github.io/files/jvm).
 In general, it should have very similar semantics except that all of the types in the public api
-are javascript native types, i.e. String instead of java.nio.file.Path. Eventually this should be
-documented, but the api can be viewed in
-[javascript public api](https://github.com/eatkins/swoval/blob/js-api/files/js/src/main/scala/com/swoval/files/PublicApi.scala).
+are javascript native types, i.e. String instead of java.nio.file.Path. The api documentation
+can be found here: 
+[javascript public api](https://swoval.github.io/files/js/com/swoval/files/node/index.html).
 
 To use, add `"swoval_file_tree_views": "2.0.0-RC2"` to your package.json file.
 

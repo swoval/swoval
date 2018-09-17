@@ -19,8 +19,8 @@ public interface FileTreeDataView<T> extends FileTreeView, AutoCloseable {
    *     file or an empty list if the file is not monitored by the path.
    * @param maxDepth the maximum depth of subdirectories to return
    * @param filter include only paths accepted by this
-   * @return a List of Entry instances accepted by the filter. The list will be empty if the path is
-   *     not a subdirectory of this CachedDirectory or if it is a subdirectory, but the
+   * @return a List of {@link Entry} instances accepted by the filter. The list will be empty if the
+   *     path is not a subdirectory of this CachedDirectory or if it is a subdirectory, but the
    *     CachedDirectory was created without the recursive flag.
    * @throws IOException if the path cannot be listed.
    */
@@ -35,7 +35,7 @@ public interface FileTreeDataView<T> extends FileTreeView, AutoCloseable {
    * @param path the root path to list
    * @param maxDepth the maximum depth of subdirectories to query
    * @param filter include only paths accepted by the filter
-   * @return a List of {@link java.nio.file.Path} instances accepted by the filter.
+   * @return a List of {@link TypedPath} instances accepted by the filter.
    * @throws IOException if the path cannot be listed.
    */
   List<TypedPath> list(final Path path, final int maxDepth, final Filter<? super TypedPath> filter)
