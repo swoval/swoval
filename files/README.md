@@ -20,8 +20,8 @@ Setup
 ==
 The file tree views package is available on
 [maven](https://mvnrepository.com/artifact/com.swoval/file-tree-views) and the latest version is
-`2.0.0-RC1`. For sbt builds, it can be added with
-`libraryDependencies += "com.swoval" % "file-tree-views" % "2.0.0-RC1"`.
+`2.0.0-RC2`. For sbt builds, it can be added with
+`libraryDependencies += "com.swoval" % "file-tree-views" % "2.0.0-RC2"`.
 
 FileTreeRepository
 ==

@@ -43,7 +43,7 @@ object Build {
     .orElse(sys.props.get("SonatypeRelease"))
     .fold(false)(_ == "true")
 
-  def baseVersion: String = "1.3.2"
+  def baseVersion: String = "2.0.0-SNAPSHOT"
 
   def settings(args: Def.Setting[_]*): SettingsDefinition =
     Def.SettingsDefinition.wrapSettingsDefinition(args)
