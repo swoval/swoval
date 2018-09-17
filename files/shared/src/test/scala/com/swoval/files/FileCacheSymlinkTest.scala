@@ -271,11 +271,11 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
           Future.sequence(
             Seq(
-              using(FileTreeRepositories.get(false, identity)) { c =>
+              using(FileTreeRepositories.get(identity, false)) { c =>
                 c.register(dir, Integer.MAX_VALUE)
                 c.ls(dir, true, functional.Filters.AllPass) === Set(link)
               },
-              using(FileTreeRepositories.get(true, identity)) { c =>
+              using(FileTreeRepositories.get(identity, true)) { c =>
                 c.register(dir)
                 c.ls(dir, true, functional.Filters.AllPass) === Set(link, link.resolve("file"))
               }
@@ -290,7 +290,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           Files.write(file, "foo".getBytes)
           val latch = new CountDownLatch(1)
           val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
-          usingAsync(FileTreeRepositories.get[Path](false, identity)) { c =>
+          usingAsync(FileTreeRepositories.get[Path](identity, false)) { c =>
             c.register(dir, Integer.MAX_VALUE)
             c.addCacheObserver(new CacheObserver[Path] {
               override def onCreate(newEntry: Entry[Path]): Unit =
@@ -307,7 +307,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
               c.ls(dir, true, functional.Filters.AllPass) === Set(link)
             }
           }.flatMap { _ =>
-            using(FileTreeRepositories.get(true, identity)) { c =>
+            using(FileTreeRepositories.get(identity, true)) { c =>
               c.register(dir)
               c.ls(dir, true, functional.Filters.AllPass) === Set(link, link.resolve("file"))
             }
