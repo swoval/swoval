@@ -48,8 +48,7 @@ object FileTreeViews {
    * @return a directory whose entries just contain the path itself.
    */
   def cached(path: Path, depth: Int, followLinks: Boolean): DirectoryView =
-    new CachedDirectoryImpl(path,
-                            path,
+    new CachedDirectoryImpl(TypedPaths.get(path),
                             PATH_CONVERTER,
                             depth,
                             Filters.AllPass,

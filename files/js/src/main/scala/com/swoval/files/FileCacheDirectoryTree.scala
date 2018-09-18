@@ -332,7 +332,6 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         }
         var dir: CachedDirectory[T] = null
         if (existing == null) {
-          val view: FileTreeView = FileTreeViews.getDefault(followLinks)
           try {
             try dir =
               newCachedDirectory(path, if (maxDepth == -1) -1 else java.lang.Integer.MAX_VALUE)
@@ -473,7 +472,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         } else {
           if (dir.getPath == path && dir.getMaxDepth == -1) {
             val result: List[TypedPath] = new ArrayList[TypedPath]()
-            result.add(TypedPaths.getDelegate(dir.getPath, dir.getEntry.getTypedPath))
+            result.add(TypedPaths.getDelegate(dir.getPath, dir.getTypedPath))
             result
           } else {
             dir.list(path, maxDepth, filter)
@@ -485,8 +484,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     }
 
   private def newCachedDirectory(path: Path, depth: Int): CachedDirectory[T] =
-    new CachedDirectoryImpl[T](path,
-                               path,
+    new CachedDirectoryImpl[T](TypedPaths.get(path),
                                converter,
                                depth,
                                filter,

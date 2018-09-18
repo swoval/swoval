@@ -24,8 +24,7 @@ object CachedFileTreeViewTest extends TestSuite {
   def newCachedView(path: Path, maxDepth: Int): CachedDirectory[Path] =
     newCachedView(path, maxDepth, followLinks = true)
   def newCachedView(path: Path, maxDepth: Int, followLinks: Boolean): CachedDirectory[Path] =
-    new CachedDirectoryImpl(path,
-                            path,
+    new CachedDirectoryImpl(TypedPaths.get(path),
                             (_: TypedPath).getPath,
                             maxDepth,
                             AllPass,
@@ -218,8 +217,7 @@ object CachedFileTreeViewTest extends TestSuite {
   }
   object subTypes {
     private def newDirectory[T <: AnyRef](path: Path, converter: TypedPath => T) =
-      new CachedDirectoryImpl(path,
-                              path,
+      new CachedDirectoryImpl(TypedPaths.get(path),
                               converter,
                               Integer.MAX_VALUE,
                               (_: TypedPath) => true,

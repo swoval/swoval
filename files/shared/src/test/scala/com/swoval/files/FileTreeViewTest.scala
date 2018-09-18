@@ -214,8 +214,7 @@ object DirectoryFileTreeViewTest extends FileTreeViewTest(FileTreeViews.cached)
 object NioFileTreeViewTest
     extends FileTreeViewTest(
       (path: Path, depth: Int, followLinks: Boolean) =>
-        new CachedDirectoryImpl[Path](path,
-                                      path,
+        new CachedDirectoryImpl[Path](TypedPaths.get(path),
                                       (tp: TypedPath) => tp.getPath,
                                       depth,
                                       AllPass,

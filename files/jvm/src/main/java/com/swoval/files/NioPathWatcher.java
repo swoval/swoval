@@ -203,8 +203,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         try {
           result =
               new CachedDirectoryImpl<>(
-                      toAdd,
-                      toAdd,
+                      TypedPaths.get(toAdd),
                       converter,
                       Integer.MAX_VALUE,
                       new Filter<TypedPath>() {

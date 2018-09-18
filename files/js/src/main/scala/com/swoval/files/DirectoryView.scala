@@ -9,7 +9,7 @@ import java.util.List
 
 /**
  * A repository for a directory. The [[FileTreeView.list]] method will only
- * return non-empty results for paths that are children of the root directory, specified by [[DirectoryView.getPath]].
+ * return non-empty results for paths that are children of the root directory, specified by [[DirectoryView.getTypedPath]].
  */
 trait DirectoryView extends FileTreeView {
 
@@ -19,6 +19,13 @@ trait DirectoryView extends FileTreeView {
    * @return the path of the root directory.
    */
   def getPath(): Path
+
+  /**
+   * Return the typed path of the root directory.
+   *
+   * @return the typed path of the root directory.
+   */
+  def getTypedPath(): TypedPath
 
   /**
    * List all of the files in the root directory, returning only those files that are accepted by
@@ -32,7 +39,7 @@ trait DirectoryView extends FileTreeView {
 
   /**
    * Returns the maximum depth of children of subdirectories to include below the path specified by
-   * [[DirectoryView.getPath]]. For example, when the value is <code>-1</code>, then the
+   * [[DirectoryView.getTypedPath]]. For example, when the value is <code>-1</code>, then the
    * DirectoryView should include only itself. When the value is <code>0</code>, it should include
    * all of the subdirectories and files in the path. When the value is <code>1</code>, it should
    * include all of the subdirectories and files in the path and all of the subdirectories and files

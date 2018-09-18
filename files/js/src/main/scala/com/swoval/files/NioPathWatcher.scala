@@ -187,8 +187,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
       var init: Boolean = false
       while (!init && toAdd != null) try {
         result = new CachedDirectoryImpl(
-          toAdd,
-          toAdd,
+          TypedPaths.get(toAdd),
           converter,
           java.lang.Integer.MAX_VALUE,
           new Filter[TypedPath]() {
