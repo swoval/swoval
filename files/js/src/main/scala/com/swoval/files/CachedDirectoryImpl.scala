@@ -204,7 +204,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
                            updates: Updates[T]): Unit = {
     val path: Path = typedPath.getPath
     val dir: CachedDirectoryImpl[T] = new CachedDirectoryImpl[T](path,
-                                                                 typedPath.toRealPath(),
+                                                                 typedPath.expanded(),
                                                                  converter,
                                                                  currentDir.subdirectoryDepth(),
                                                                  pathFilter,
@@ -434,7 +434,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val path: Path,
             val file: TypedPath = it.next()
             if (pathFilter.accept(file)) {
               val path: Path = file.getPath
-              val realPath: Path = file.toRealPath()
+              val realPath: Path = file.expanded()
               val key: Path = this.path.relativize(path).getFileName
               if (file.isDirectory) {
                 if (depth > 0) {

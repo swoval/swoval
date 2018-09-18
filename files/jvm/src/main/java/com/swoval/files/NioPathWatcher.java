@@ -140,7 +140,12 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
     final int existingMaxDepth = directoryRegistry.maxDepthFor(path);
     boolean result = existingMaxDepth < maxDepth;
     final TypedPath typedPath = TypedPaths.get(path);
-    final Path realPath = typedPath.toRealPath();
+    Path realPath;
+    try {
+      realPath = path.toRealPath();
+    } catch (final IOException e) {
+      realPath = path;
+    }
     if (result) {
       directoryRegistry.addDirectory(typedPath.getPath(), maxDepth);
     }

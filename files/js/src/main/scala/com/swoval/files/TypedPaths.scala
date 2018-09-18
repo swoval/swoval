@@ -10,15 +10,24 @@ object TypedPaths {
 
   private abstract class TypedPathImpl(@BeanProperty val path: Path) extends TypedPath {
 
-    override def toRealPath(): Path =
-      try if (isSymbolicLink) path.toRealPath() else path
-      catch {
-        case e: IOException => path
+    private var realPath: Path = _
 
+    override def expanded(): Path = path.synchronized {
+      if (realPath == null) {
+        try {
+          realPath = path.toRealPath()
+          realPath
+        } catch {
+          case e: IOException => path
+
+        }
+      } else {
+        realPath
       }
+    }
 
     override def toString(): String =
-      "TypedPath(" + path + ", " + isSymbolicLink + ", " + toRealPath() +
+      "TypedPath(" + path + ", " + isSymbolicLink + ", " + expanded() +
         ")"
 
     override def equals(other: Any): Boolean = other match {

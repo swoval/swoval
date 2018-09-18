@@ -252,7 +252,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
     final CachedDirectoryImpl<T> dir =
         new CachedDirectoryImpl<>(
             path,
-            typedPath.toRealPath(),
+            typedPath.expanded(),
             converter,
             currentDir.subdirectoryDepth(),
             pathFilter,
@@ -488,7 +488,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
             final TypedPath file = it.next();
             if (pathFilter.accept(file)) {
               final Path path = file.getPath();
-              final Path realPath = file.toRealPath();
+              final Path realPath = file.expanded();
               final Path key = this.path.relativize(path).getFileName();
               if (file.isDirectory()) {
                 if (depth > 0) {
