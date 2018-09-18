@@ -125,7 +125,12 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     val existingMaxDepth: Int = directoryRegistry.maxDepthFor(path)
     val result: Boolean = existingMaxDepth < maxDepth
     val typedPath: TypedPath = TypedPaths.get(path)
-    val realPath: Path = typedPath.toRealPath()
+    var realPath: Path = null
+    try realPath = path.toRealPath()
+    catch {
+      case e: IOException => realPath = path
+
+    }
     if (result) {
       directoryRegistry.addDirectory(typedPath.getPath, maxDepth)
     }
@@ -182,8 +187,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
       var init: Boolean = false
       while (!init && toAdd != null) try {
         result = new CachedDirectoryImpl(
-          toAdd,
-          toAdd,
+          TypedPaths.get(toAdd),
           converter,
           java.lang.Integer.MAX_VALUE,
           new Filter[TypedPath]() {

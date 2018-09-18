@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 class NioDirectoryLister implements DirectoryLister {
-  public NioDirectoryLister() {}
+  NioDirectoryLister() {}
 
   @Override
   public SimpleFileTreeView.ListResults apply(final String dir, final boolean followLinks)

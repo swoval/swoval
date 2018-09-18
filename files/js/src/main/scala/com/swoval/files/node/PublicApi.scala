@@ -504,7 +504,15 @@ class TypedPath(private[this] val typedPath: STypedPath) {
    * @return true if this [[TypedPath]] represents a symbolic link.
    */
   def isSymbolicLink: Boolean = typedPath.isSymbolicLink
-  def toRealPath = typedPath.toRealPath.toString
+
+  /**
+   * Returns the real path when this typed path is a symbolic link. Otherwise returns the path
+   * itself. Unlike [[java.nio.file.Path.toRealPath]], if a parent of the path is
+   * a symbolic link, but the path itself is not, the path is not expanded.
+   *
+   * @return the expanded path.
+   */
+  def expanded: String = typedPath.expanded.toString
 
   /**
    * Return the right value if this [[JSEither]] represents a right value. Otherwise throw a

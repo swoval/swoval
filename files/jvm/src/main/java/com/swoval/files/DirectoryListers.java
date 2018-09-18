@@ -1,5 +1,6 @@
 package com.swoval.files;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 
 class DirectoryListers {
@@ -11,8 +12,10 @@ class DirectoryListers {
     DirectoryLister directoryLister = null;
     if (className != null) {
       try {
-        directoryLister =
-            ((Class<DirectoryLister>) Class.forName(className)).getConstructor().newInstance();
+        Constructor<DirectoryLister> cons =
+            ((Class<DirectoryLister>) Class.forName(className)).getDeclaredConstructor();
+        cons.setAccessible(true);
+        directoryLister = cons.newInstance();
       } catch (ClassNotFoundException
           | NoSuchMethodException
           | ClassCastException

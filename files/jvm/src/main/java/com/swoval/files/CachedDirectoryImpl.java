@@ -41,8 +41,7 @@ import java.util.concurrent.atomic.AtomicReference;
 class CachedDirectoryImpl<T> implements CachedDirectory<T> {
   private final AtomicReference<Entry<T>> _cacheEntry;
   private final int depth;
-  private final Path path;
-  private final Path realPath;
+  private final TypedPath typedPath;
   private final FileTreeView fileTreeView;
   private final Converter<T> converter;
   private final Filter<? super TypedPath> pathFilter;
@@ -55,21 +54,17 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
 
   @SuppressWarnings("unchecked")
   CachedDirectoryImpl(
-      final Path path,
-      final Path realPath,
+      final TypedPath typedPath,
       final Converter<T> converter,
       final int depth,
       final Filter<? super TypedPath> filter,
       final FileTreeView fileTreeView) {
-    this.path = path;
-    this.realPath = realPath;
+    this.typedPath = typedPath;
     this.converter = converter;
     this.depth = depth;
     this._cacheEntry = new AtomicReference<>(null);
     this.pathFilter = filter;
-    final TypedPath typedPath = TypedPaths.get(path);
-    this._cacheEntry.set(
-        Entries.get(TypedPaths.getDelegate(path, typedPath), converter, typedPath));
+    this._cacheEntry.set(Entries.get(this.typedPath, converter, this.typedPath));
     this.fileTreeView = fileTreeView;
   }
 
@@ -77,7 +72,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
    * Returns the name components of a path in an array.
    *
    * @param path The path from which we extract the parts.
-   * @return Empty array if path is an empty relative path, otherwise return the name parts.
+   * @return Empty array if the path is an empty relative path, otherwise return the name parts.
    */
   private static List<Path> parts(final Path path) {
     final Iterator<Path> it = path.iterator();
@@ -92,7 +87,12 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
 
   @Override
   public Path getPath() {
-    return path;
+    return typedPath.getPath();
+  }
+
+  @Override
+  public TypedPath getTypedPath() {
+    return typedPath;
   }
 
   @Override
@@ -198,13 +198,13 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
   }
 
   /**
-   * Updates the CachedDirectory entry for a particular typed path.
+   * Updates the CachedDirectory entry for a particular typed typedPath.
    *
-   * @param typedPath the path to update
-   * @return a list of updates for the path. When the path is new, the updates have the
-   *     oldCachedPath field set to null and will contain all of the children of the new path when
-   *     it is a directory. For an existing path, the List contains a single Updates that contains
-   *     the previous and new {@link Entry}.
+   * @param typedPath the typedPath to update
+   * @return a list of updates for the typedPath. When the typedPath is new, the updates have the
+   *     oldCachedPath field set to null and will contain all of the children of the new typedPath
+   *     when it is a directory. For an existing typedPath, the List contains a single Updates that
+   *     contains the previous and new {@link Entry}.
    * @throws IOException when the updated Path is a directory and an IOException is encountered
    *     traversing the directory.
    */
@@ -212,9 +212,9 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
   public Updates<T> update(final TypedPath typedPath) throws IOException {
     return pathFilter.accept(typedPath)
         ? updateImpl(
-            typedPath.getPath().equals(this.path)
+            typedPath.getPath().equals(this.getPath())
                 ? new ArrayList<Path>()
-                : parts(this.path.relativize(typedPath.getPath())),
+                : parts(this.getPath().relativize(typedPath.getPath())),
             typedPath)
         : new Updates<T>();
   }
@@ -227,8 +227,8 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
    *     the cache entries for any children of the path when the path is a non-empty directory.
    */
   public List<Entry<T>> remove(final Path path) {
-    if (path.isAbsolute() && path.startsWith(this.path)) {
-      return removeImpl(parts(this.path.relativize(path)));
+    if (path.isAbsolute() && path.startsWith(this.getPath())) {
+      return removeImpl(parts(this.getPath().relativize(path)));
     } else {
       return Collections.emptyList();
     }
@@ -236,7 +236,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
 
   @Override
   public String toString() {
-    return "CachedDirectory(" + path + ", maxDepth = " + depth + ")";
+    return "CachedDirectory(" + getPath() + ", maxDepth = " + depth + ")";
   }
 
   private int subdirectoryDepth() {
@@ -251,12 +251,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
     final Path path = typedPath.getPath();
     final CachedDirectoryImpl<T> dir =
         new CachedDirectoryImpl<>(
-            path,
-            typedPath.toRealPath(),
-            converter,
-            currentDir.subdirectoryDepth(),
-            pathFilter,
-            fileTreeView);
+            typedPath, converter, currentDir.subdirectoryDepth(), pathFilter, fileTreeView);
     boolean exists = true;
     try {
       dir.init();
@@ -270,7 +265,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
       final CachedDirectoryImpl<T> previous =
           currentDir.subdirectories.put(path.getFileName(), dir);
       if (previous != null) {
-        oldEntries.put(previous.realPath, previous.getEntry());
+        oldEntries.put(previous.getPath(), previous.getEntry());
         final Iterator<Entry<T>> entryIterator =
             previous.listEntries(Integer.MAX_VALUE, AllPass).iterator();
         while (entryIterator.hasNext()) {
@@ -279,7 +274,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
         }
         previous.close();
       }
-      newEntries.put(dir.realPath, dir.getEntry());
+      newEntries.put(dir.getPath(), dir.getEntry());
       final Iterator<Entry<T>> it = dir.listEntries(Integer.MAX_VALUE, AllPass).iterator();
       while (it.hasNext()) {
         final Entry<T> entry = it.next();
@@ -309,8 +304,8 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
           while (it.hasNext() && currentDir != null && currentDir.depth >= 0) {
             final Path p = it.next();
             if (p.toString().isEmpty()) return result;
-            final Path resolved = currentDir.path.resolve(p);
-            final Path realPath = typedPath.getPath();
+            final Path resolved = currentDir.getPath().resolve(p);
+            final Path realPath = typedPath.expanded();
             if (!it.hasNext()) {
               // We will always return from this block
               final boolean isDirectory = typedPath.isDirectory();
@@ -331,17 +326,22 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
                       currentDir.subdirectories.put(
                           p,
                           new CachedDirectoryImpl<>(
-                              resolved, realPath, converter, -1, pathFilter, fileTreeView));
+                              TypedPaths.getDelegate(resolved, typedPath),
+                              converter,
+                              -1,
+                              pathFilter,
+                              fileTreeView));
                   if (previous != null) previous.close();
                 } else {
                   currentDir.files.put(p, newEntry);
                 }
                 final Entry<T> oldResolvedEntry =
-                    oldEntry == null ? null : Entries.resolve(currentDir.path, oldEntry);
+                    oldEntry == null ? null : Entries.resolve(currentDir.getPath(), oldEntry);
                 if (oldResolvedEntry == null) {
-                  result.onCreate(Entries.resolve(currentDir.path, newEntry));
+                  result.onCreate(Entries.resolve(currentDir.getPath(), newEntry));
                 } else {
-                  result.onUpdate(oldResolvedEntry, Entries.resolve(currentDir.path, newEntry));
+                  result.onUpdate(
+                      oldResolvedEntry, Entries.resolve(currentDir.getPath(), newEntry));
                 }
                 return result;
               } else {
@@ -353,7 +353,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
               if (dir == null && currentDir.depth > 0) {
                 addDirectory(
                     currentDir,
-                    TypedPaths.getDelegate(currentDir.path.resolve(p), typedPath),
+                    TypedPaths.getDelegate(currentDir.getPath().resolve(p), typedPath),
                     result);
               }
               currentDir = dir;
@@ -366,7 +366,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
           MapOps.diffDirectoryEntries(oldEntries, newEntries, result);
         } else {
           final Entry<T> oldEntry = getEntry();
-          final TypedPath tp = TypedPaths.getDelegate(realPath, typedPath);
+          final TypedPath tp = TypedPaths.getDelegate(getTypedPath().expanded(), typedPath);
           final Entry<T> newEntry = Entries.get(tp, converter, tp);
           _cacheEntry.set(newEntry);
           result.onUpdate(oldEntry, getEntry());
@@ -390,7 +390,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
           result = Either.right(subdir);
         } else {
           final Entry<T> entry = currentDir.files.get(p);
-          if (entry != null) result = Either.left(Entries.resolve(currentDir.path, entry));
+          if (entry != null) result = Either.left(Entries.resolve(currentDir.getPath(), entry));
         }
       } else {
         currentDir = currentDir.subdirectories.get(p);
@@ -400,12 +400,12 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
   }
 
   private Either<Entry<T>, CachedDirectoryImpl<T>> find(final Path path) {
-    if (path.equals(this.path)) {
+    if (path.equals(this.getPath())) {
       return Either.right(this);
     } else if (!path.isAbsolute()) {
       return findImpl(parts(path));
-    } else if (path.startsWith(this.path)) {
-      return findImpl(parts(this.path.relativize(path)));
+    } else if (path.startsWith(this.getPath())) {
+      return findImpl(parts(this.getPath().relativize(path)));
     } else {
       return null;
     }
@@ -457,7 +457,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
           if (!it.hasNext()) {
             final Entry<T> entry = currentDir.files.remove(p);
             if (entry != null) {
-              result.add(Entries.resolve(currentDir.path, entry));
+              result.add(Entries.resolve(currentDir.getPath(), entry));
             } else {
               final CachedDirectoryImpl<T> dir = currentDir.subdirectories.remove(p);
               if (dir != null) {
@@ -477,30 +477,30 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
   }
 
   CachedDirectoryImpl<T> init() throws IOException {
+    return init(typedPath.getPath());
+  }
+
+  private CachedDirectoryImpl<T> init(final Path realPath) throws IOException {
     if (subdirectories.lock()) {
       try {
         subdirectories.clear();
         files.clear();
         if (depth >= 0
-            && (!this.path.startsWith(this.realPath) || this.path.equals(this.realPath))) {
-          final Iterator<TypedPath> it = fileTreeView.list(this.path, 0, pathFilter).iterator();
+            && (!this.getPath().startsWith(realPath) || this.getPath().equals(realPath))) {
+          final Iterator<TypedPath> it =
+              fileTreeView.list(this.getPath(), 0, pathFilter).iterator();
           while (it.hasNext()) {
             final TypedPath file = it.next();
             if (pathFilter.accept(file)) {
               final Path path = file.getPath();
-              final Path realPath = file.toRealPath();
-              final Path key = this.path.relativize(path).getFileName();
+              final Path expandedPath = file.expanded();
+              final Path key = this.typedPath.getPath().relativize(path).getFileName();
               if (file.isDirectory()) {
                 if (depth > 0) {
-                  if (!file.isSymbolicLink() || !isLoop(path, realPath)) {
+                  if (!file.isSymbolicLink() || !isLoop(path, expandedPath)) {
                     final CachedDirectoryImpl<T> dir =
                         new CachedDirectoryImpl<>(
-                            path,
-                            realPath,
-                            converter,
-                            subdirectoryDepth(),
-                            pathFilter,
-                            fileTreeView);
+                            file, converter, subdirectoryDepth(), pathFilter, fileTreeView);
                     try {
                       dir.init();
                       subdirectories.put(key, dir);
@@ -512,8 +512,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
                   } else {
                     subdirectories.put(
                         key,
-                        new CachedDirectoryImpl<>(
-                            path, realPath, converter, -1, pathFilter, fileTreeView));
+                        new CachedDirectoryImpl<>(file, converter, -1, pathFilter, fileTreeView));
                   }
                 } else {
                   files.put(key, Entries.get(TypedPaths.getDelegate(key, file), converter, file));

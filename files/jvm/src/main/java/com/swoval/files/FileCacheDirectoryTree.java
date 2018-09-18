@@ -371,7 +371,6 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         }
         CachedDirectory<T> dir;
         if (existing == null) {
-          final FileTreeView view = FileTreeViews.getDefault(followLinks);
           try {
             try {
               dir = newCachedDirectory(path, maxDepth == -1 ? -1 : Integer.MAX_VALUE);
@@ -530,7 +529,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         } else {
           if (dir.getPath().equals(path) && dir.getMaxDepth() == -1) {
             List<TypedPath> result = new ArrayList<>();
-            result.add(TypedPaths.getDelegate(dir.getPath(), dir.getEntry().getTypedPath()));
+            result.add(TypedPaths.getDelegate(dir.getPath(), dir.getTypedPath()));
             return result;
           } else {
             return dir.list(path, maxDepth, filter);
@@ -547,7 +546,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   private CachedDirectory<T> newCachedDirectory(final Path path, final int depth)
       throws IOException {
     return new CachedDirectoryImpl<T>(
-            path, path, converter, depth, filter, FileTreeViews.getDefault(followLinks))
+            TypedPaths.get(path), converter, depth, filter, FileTreeViews.getDefault(followLinks))
         .init();
   }
 }

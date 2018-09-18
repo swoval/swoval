@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * A repository for a directory. The {@link FileTreeView#list(Path, int, Filter)} method will only
  * return non-empty results for paths that are children of the root directory, specified by {@link
- * DirectoryView#getPath}.
+ * DirectoryView#getTypedPath}.
  */
 public interface DirectoryView extends FileTreeView {
   /**
@@ -17,6 +17,14 @@ public interface DirectoryView extends FileTreeView {
    * @return the path of the root directory.
    */
   Path getPath();
+
+  /**
+   * Return the typed path of the root directory.
+   *
+   * @return the typed path of the root directory.
+   */
+  TypedPath getTypedPath();
+
   /**
    * List all of the files in the root directory, returning only those files that are accepted by
    * the provided filter.
@@ -31,7 +39,7 @@ public interface DirectoryView extends FileTreeView {
 
   /**
    * Returns the maximum depth of children of subdirectories to include below the path specified by
-   * {@link DirectoryView#getPath()}. For example, when the value is <code>-1</code>, then the
+   * {@link DirectoryView#getTypedPath()}. For example, when the value is <code>-1</code>, then the
    * DirectoryView should include only itself. When the value is <code>0</code>, it should include
    * all of the subdirectories and files in the path. When the value is <code>1</code>, it should
    * include all of the subdirectories and files in the path and all of the subdirectories and files

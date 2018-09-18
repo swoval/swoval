@@ -22,8 +22,8 @@ trait FileTreeDataView[T <: AnyRef] extends FileTreeView with AutoCloseable {
    *     file or an empty list if the file is not monitored by the path.
    * @param maxDepth the maximum depth of subdirectories to return
    * @param filter include only paths accepted by this
-   * @return a List of Entry instances accepted by the filter. The list will be empty if the path is
-   *     not a subdirectory of this CachedDirectory or if it is a subdirectory, but the
+   * @return a List of [[Entry]] instances accepted by the filter. The list will be empty if the
+   *     path is not a subdirectory of this CachedDirectory or if it is a subdirectory, but the
    *     CachedDirectory was created without the recursive flag.
    */
   def listEntries(path: Path, maxDepth: Int, filter: Filter[_ >: Entry[T]]): List[Entry[T]]
@@ -35,7 +35,7 @@ trait FileTreeDataView[T <: AnyRef] extends FileTreeView with AutoCloseable {
    * @param path the root path to list
    * @param maxDepth the maximum depth of subdirectories to query
    * @param filter include only paths accepted by the filter
-   * @return a List of [[java.nio.file.Path]] instances accepted by the filter.
+   * @return a List of [[TypedPath]] instances accepted by the filter.
    */
   def list(path: Path, maxDepth: Int, filter: Filter[_ >: TypedPath]): List[TypedPath]
 

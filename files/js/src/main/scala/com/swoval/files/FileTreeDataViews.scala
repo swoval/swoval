@@ -26,8 +26,7 @@ object FileTreeDataViews {
                           converter: Converter[T],
                           depth: Int,
                           followLinks: Boolean): DirectoryDataView[T] =
-    new CachedDirectoryImpl(path,
-                            path,
+    new CachedDirectoryImpl(TypedPaths.get(path),
                             converter,
                             depth,
                             Filters.AllPass,

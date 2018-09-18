@@ -11,7 +11,7 @@ import java.util.List
 trait DirectoryDataView[T <: AnyRef] extends FileTreeDataView[T] with DirectoryView {
 
   /**
-   * Returns the cache entry associated with the directory returned by [[DirectoryView.getPath]] }.
+   * Returns the cache entry associated with the directory returned by [[DirectoryView.getTypedPath]] }.
    *
    * @return the cache entry.
    */

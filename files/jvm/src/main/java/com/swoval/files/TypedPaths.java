@@ -9,6 +9,7 @@ public class TypedPaths {
 
   private abstract static class TypedPathImpl implements TypedPath {
     private final Path path;
+    private Path realPath;
 
     TypedPathImpl(final Path path) {
       this.path = path;
@@ -20,17 +21,24 @@ public class TypedPaths {
     }
 
     @Override
-    public Path toRealPath() {
-      try {
-        return isSymbolicLink() ? path.toRealPath() : path;
-      } catch (final IOException e) {
-        return path;
+    public Path expanded() {
+      synchronized (path) {
+        if (realPath == null) {
+          try {
+            realPath = path.toRealPath();
+            return realPath;
+          } catch (final IOException e) {
+            return path;
+          }
+        } else {
+          return realPath;
+        }
       }
     }
 
     @Override
     public String toString() {
-      return "TypedPath(" + path + ", " + isSymbolicLink() + ", " + toRealPath() + ")";
+      return "TypedPath(" + path + ", " + isSymbolicLink() + ", " + expanded() + ")";
     }
 
     @Override

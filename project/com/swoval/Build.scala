@@ -513,7 +513,7 @@ object Build {
                            branch = 73,
                            line = 84,
                            clazz = 100,
-                           complexity = 70,
+                           complexity = 68,
                            method = 84)),
       jacocoExcludes in Test := Seq(
         "com.swoval.runtime.*",

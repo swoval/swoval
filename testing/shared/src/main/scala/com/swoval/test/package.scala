@@ -71,9 +71,11 @@ package object test {
       }
       deleteImpl(path)
     }
+    def content: String = Try(new String(Files.readAllBytes(path))).getOrElse(null)
     def exists: Boolean = Files.exists(path)
     def isDirectory: Boolean = Files.isDirectory(path)
-    def lastModified: Long = Files.getLastModifiedTime(path).toMillis
+    def lastModified: Long =
+      Try(Files.getLastModifiedTime(path).toMillis).getOrElse(java.lang.Long.MIN_VALUE)
     def mkdir(): Path = Files.createDirectory(path)
     def mkdirs(): Path = Files.createDirectories(path)
     def name: String = path.getFileName.toString

@@ -10,7 +10,7 @@ public interface DirectoryDataView<T> extends FileTreeDataView<T>, DirectoryView
 
   /**
    * Returns the cache entry associated with the directory returned by {@link
-   * DirectoryView#getPath()} }.
+   * DirectoryView#getTypedPath()} }.
    *
    * @return the cache entry.
    */

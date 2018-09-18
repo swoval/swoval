@@ -17,7 +17,7 @@ import java.util.Set
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
-class NioDirectoryLister extends DirectoryLister {
+class NioDirectoryLister() extends DirectoryLister {
 
   override def apply(dir: String, followLinks: Boolean): SimpleFileTreeView.ListResults = {
     val basePath: Path = Paths.get(dir)
