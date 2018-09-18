@@ -80,17 +80,20 @@ trait PathWatcherTest extends TestSuite {
       'onTouch - withTempFile { f =>
         val callback =
           (e: PathWatchers.Event) =>
-            if (e.getTypedPath.getPath == f && e.getKind != Create) events.add(e)
+            if (e.getTypedPath.getPath == f && e.getKind != Create && f.lastModified == 3000L)
+              events.add(e)
         usingAsync(defaultWatcher(callback)) { w =>
           w.register(f.getParent)
-          Defer(1.second)(f.setLastModifiedTime(0L))
+          f.lastModified
+          Defer(1.second)(f.setLastModifiedTime(3000L))
           events.poll(2.seconds)(_ ==> new Event(TypedPaths.get(f), Modify))
         }
       }
       'onModify - withTempFile { f =>
         val callback =
           (e: PathWatchers.Event) =>
-            if (e.getTypedPath.getPath == f && e.getKind != Create) events.add(e)
+            if (e.getTypedPath.getPath == f && e.getKind != Create && f.content == "hello")
+              events.add(e)
         usingAsync(defaultWatcher(callback)) { w =>
           w.register(f.getParent)
           Defer(1.second)(f.write("hello"))
