@@ -1,11 +1,8 @@
 {
   "name": "swoval_file_tree_views",
-  "version": "2.0.0-RC2.1",
+  "version": "2.0.1",
   "description": "Utilities for listing and monitoring directories.",
   "main": "files.js",
-  "dependencies": {
-    "publish": "^0.6.0"
-  },
   "scripts": {
     "install": "node install.js"
   },
