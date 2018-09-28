@@ -117,6 +117,7 @@ object Build {
   lazy val releaseSnapshot = taskKey[Unit]("Release a project snapshot.")
   lazy val releaseLocal = taskKey[Unit]("Release local project")
   lazy val releaseSigned = taskKey[Unit]("Release signed project")
+  lazy val releaseNpm = inputKey[Unit]("Release npm project")
   lazy val generateJSSource = inputKey[Unit]("Generate scala source from java")
   lazy val generateJSSources = taskKey[Unit]("Generate scala sources from java")
   lazy val clangfmt = taskKey[Unit]("Run clang format")
@@ -166,6 +167,39 @@ object Build {
     }
   }
 
+  private def releaseNpmTask(dryRun: Boolean) =
+    Def.task {
+      val log = streams.value.log
+      Def.sequential(
+        files.js / Compile / fullOptJS,
+        Def.task {
+          val npmDir = files.js.base.toPath.resolve("npm").toFile.getAbsoluteFile
+
+          {
+            import scala.sys.process._
+            val version = s"""const p = require("$npmDir/package.json"); console.log(p.version);"""
+            val packageJsonVersion = Seq("node", "-e", version).!!.split("\n").head
+            val tags = Seq("git", "tag").!!.split("\n").map(_.drop(1)).toSet
+            if (!tags.contains(packageJsonVersion))
+              throw new IllegalStateException(s"No tag for version v$packageJsonVersion")
+          }
+
+          val noLocalDiffs = checkFormat.toTask(" silent").value
+          if (noLocalDiffs) {
+            val args = Seq("npm", "publish") ++ (if (dryRun) Seq("--dry-run") else Nil)
+            val proc = new ProcessBuilder(args: _*).directory(npmDir).start()
+            proc.waitFor(30, TimeUnit.SECONDS)
+            log.info(scala.io.Source.fromInputStream(proc.getInputStream).mkString(""))
+            log.error(scala.io.Source.fromInputStream(proc.getErrorStream).mkString(""))
+            assert(proc.exitValue == 0)
+            ()
+          } else {
+            throw new IllegalStateException("There are local diffs.")
+          }
+        }
+      )
+    }
+
   lazy val javafmtProj = project
     .in(file("javafmt"))
     .settings(
@@ -198,6 +232,10 @@ object Build {
       releaseLocal := releaseTask(publishLocal).value,
       releaseSigned := releaseTask(publishSigned).value,
       releaseSnapshot := releaseTask(publish).value,
+      releaseNpm := Def.inputTaskDyn {
+        val dryRun = Def.spaceDelimited("<arg>").parsed.isEmpty
+        Def.taskDyn(releaseNpmTask(dryRun).value)
+      }.evaluated,
       javafmt := (run in (javafmtProj, Compile)).toTask(" .").value,
       clangfmt := {
         val npm = files.js.base.toPath.toAbsolutePath.resolve("npm/src")
