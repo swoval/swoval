@@ -166,10 +166,12 @@ some of the information available in the system apis for reading the contents of
 each of Mac OS, Linux and Windows there are system calls (readdir on Mac OS/Linux, findFirstFile on
 Windows) that specify the type of file that is found in the directory. This is important because
 without this information, it is necessary to stat the file, which is very expensive. For example,
-using QuickList, on a 2017 macbook pro with an SSD, it takes roughly 25 milliseconds to list a directory
-with 5000 subdirectories, each containing a single file. It takes an additional 75 milliseconds
-to stat all of those files. By contrast, it takes roughly 110 milliseconds to list the directory
-using Files.walk or Files.walkFileTree. The usage is simple. Suppose that there is a path
+using the native FileTreeView implementation, on a 2017 macbook pro with an SSD, it takes roughly
+25 milliseconds to list a directory with 5000 subdirectories, each containing a single file. It
+takes an additional 75 milliseconds to stat all of those files. By contrast, it takes roughly
+110 milliseconds to list the directory using Files.walk or Files.walkFileTree.
+
+The usage is simple. Suppose that there is a path
 `/tmp/foo` containing a directory `buzz` and a regular file `baz`
 
 ```java
@@ -195,13 +197,13 @@ Found file: /foo/baz
 ```
 
 The implementation uses the jni to directly make system calls. In the event that the native library
-cannot be loaded, the implementation of QuickList can be overridden using the system parameter
+cannot be loaded, the implementation of FileTreeView can be overridden using the system parameter
 `swoval.directory.lister`. To use a nio based implementation with no jni calls, start the jvm
-with `-Dswoval.directory.lister=com.swoval.files.NioDirectoryLister`. 
+with `-Dswoval.directory.lister=com.swoval.files.NioDirectoryLister`.
 
 Note that this library is tested on Mac, Linux and Windows. That is also the order in which most
 of the development work is done. This makes Windows the platform likely to have the most bugs.
-Please report any that you find. 
+Please report any that you find.
 
 Javascript
 ==
