@@ -55,6 +55,7 @@ JNIEXPORT jstring JNICALL Java_com_swoval_files_NativeDirectoryLister_strerror(J
 JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeDirectoryLister_openDir(JNIEnv *env, jobject,
                                                                         jstring dir) {
     Handle *handle = (Handle *)HeapAlloc(GetProcessHeap(), 0, sizeof(Handle));
+    handle->first = true;
     handle->handle = FindFirstFileEx(env->GetStringUTFChars(dir, 0), FindExInfoBasic, &handle->ffd,
                                      FindExSearchNameMatch, NULL, FIND_FIRST_EX_LARGE_FETCH);
     handle->err = GetLastError();
