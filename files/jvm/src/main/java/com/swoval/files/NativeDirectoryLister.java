@@ -10,6 +10,9 @@ import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 class NativeDirectoryLister implements DirectoryLister {
   public NativeDirectoryLister() {}
@@ -52,10 +55,16 @@ class NativeDirectoryLister implements DirectoryLister {
 
   private native String getName(long fileHandle);
 
+  private void close(final long handle, final IOException e, final boolean log) throws IOException {
+    if (Platform.isWin()) closeDir(handle);
+    throw e;
+  }
+
   @SuppressWarnings("EmptyCatchBlock")
   private SimpleFileTreeView.ListResults fillResults(
       final String dir, final boolean followLinks, final int attempt) throws IOException {
     final SimpleFileTreeView.ListResults results = new SimpleFileTreeView.ListResults();
+    final List<String> unresolved = new ArrayList<>();
     final long handle = Platform.isWin() ? openDir(dir + "\\*") : openDir(dir);
     final int err = errno(handle);
     switch (err) {
@@ -63,22 +72,24 @@ class NativeDirectoryLister implements DirectoryLister {
       case EOF:
         break;
       case ENOENT:
-        throw new NoSuchFileException(dir);
+        close(handle, new NoSuchFileException(dir), false);
       case EACCES:
-        throw new AccessDeniedException(dir);
+        close(handle, new AccessDeniedException(dir), true);
       case ENOTDIR:
-        throw new NotDirectoryException(dir);
+        close(handle, new NotDirectoryException(dir), true);
       case 0:
         break;
       default:
         if (Platform.isWin() && attempt < 10) {
           try {
             Thread.sleep(2);
+            closeDir(handle);
             return fillResults(dir, followLinks, attempt + 1);
           } catch (final InterruptedException e) {
           }
+        } else {
+          close(handle, new UnixException(err), true);
         }
-        throw new UnixException(err);
     }
     try {
       long fileHandle = nextFile(handle);
@@ -95,23 +106,31 @@ class NativeDirectoryLister implements DirectoryLister {
             results.addSymlink(getName(fileHandle));
             break;
           default:
-            {
-              final Path path = Paths.get(dir);
-              final String name = getName(fileHandle);
-              final Path file = path.resolve(name);
-              final BasicFileAttributes attrs =
-                  Files.readAttributes(
-                      file, BasicFileAttributes.class, java.nio.file.LinkOption.NOFOLLOW_LINKS);
-              if (attrs.isDirectory()) results.addDir(name);
-              else if (attrs.isSymbolicLink()) results.addSymlink(name);
-              else results.addFile(name);
-            }
+            unresolved.add(getName(fileHandle));
             break;
         }
         fileHandle = nextFile(handle);
       }
     } finally {
       closeDir(handle);
+    }
+
+    if (!unresolved.isEmpty()) {
+      final Path path = Paths.get(dir);
+      final Iterator<String> it = unresolved.iterator();
+      while (it.hasNext()) {
+        final String name = it.next();
+        final Path file = path.resolve(name);
+        try {
+          final BasicFileAttributes attrs =
+              Files.readAttributes(
+                  file, BasicFileAttributes.class, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+          if (attrs.isDirectory()) results.addDir(name);
+          else if (attrs.isSymbolicLink()) results.addSymlink(name);
+          else results.addFile(name);
+        } catch (final IOException e) {
+        }
+      }
     }
     return results;
   }
