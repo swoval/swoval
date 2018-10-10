@@ -25,6 +25,8 @@ extern "C" {
 #define com_swoval_files_NativeDirectoryLister_ENOTDIR -3L
 #undef com_swoval_files_NativeDirectoryLister_ESUCCESS
 #define com_swoval_files_NativeDirectoryLister_ESUCCESS -4L
+#undef com_swoval_files_NativeDirectoryLister_MAX_ATTEMPTS
+#define com_swoval_files_NativeDirectoryLister_MAX_ATTEMPTS 100L
 /*
  * Class:     com_swoval_files_NativeDirectoryLister
  * Method:    errno
