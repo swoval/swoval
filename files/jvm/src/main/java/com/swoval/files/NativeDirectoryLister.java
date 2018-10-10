@@ -35,10 +35,27 @@ class NativeDirectoryLister implements DirectoryLister {
     }
   }
 
+  private static class Retry extends IOException {}
+
+  private static final int MAX_ATTEMPTS = 100;
+
   @Override
   public SimpleFileTreeView.ListResults apply(final String dir, final boolean followLinks)
       throws IOException {
-    return fillResults(dir, followLinks, 0);
+    int attempt = 0;
+    while (attempt < MAX_ATTEMPTS) {
+      try {
+        return fillResults(dir);
+      } catch (final Retry retry) {
+        try {
+          Thread.sleep(0, 200);
+        } catch (final InterruptedException e) {
+          attempt = MAX_ATTEMPTS;
+        }
+        attempt += 1;
+      }
+    }
+    throw new NoSuchFileException(dir);
   }
 
   private native int errno(long handle);
@@ -55,14 +72,13 @@ class NativeDirectoryLister implements DirectoryLister {
 
   private native String getName(long fileHandle);
 
-  private void close(final long handle, final IOException e, final boolean log) throws IOException {
+  private void close(final long handle, final IOException e) throws IOException {
     if (Platform.isWin()) closeDir(handle);
     throw e;
   }
 
   @SuppressWarnings("EmptyCatchBlock")
-  private SimpleFileTreeView.ListResults fillResults(
-      final String dir, final boolean followLinks, final int attempt) throws IOException {
+  private SimpleFileTreeView.ListResults fillResults(final String dir) throws IOException {
     final SimpleFileTreeView.ListResults results = new SimpleFileTreeView.ListResults();
     final List<String> unresolved = new ArrayList<>();
     final long handle = Platform.isWin() ? openDir(dir + "\\*") : openDir(dir);
@@ -72,23 +88,22 @@ class NativeDirectoryLister implements DirectoryLister {
       case EOF:
         break;
       case ENOENT:
-        close(handle, new NoSuchFileException(dir), false);
+        {
+          final boolean retry = Platform.isWin() && Files.isDirectory(Paths.get(dir));
+          final IOException e = retry ? new Retry() : new NoSuchFileException(dir);
+          close(handle, e);
+        }
       case EACCES:
-        close(handle, new AccessDeniedException(dir), true);
+        close(handle, new AccessDeniedException(dir));
       case ENOTDIR:
-        close(handle, new NotDirectoryException(dir), true);
+        close(handle, new NotDirectoryException(dir));
       case 0:
         break;
       default:
-        if (Platform.isWin() && attempt < 10) {
-          try {
-            Thread.sleep(2);
-            closeDir(handle);
-            return fillResults(dir, followLinks, attempt + 1);
-          } catch (final InterruptedException e) {
-          }
-        } else {
-          close(handle, new UnixException(err), true);
+        {
+          final boolean retry = Platform.isWin() && Files.isDirectory(Paths.get(dir));
+          final IOException e = retry ? new Retry() : new UnixException(err);
+          close(handle, e);
         }
     }
     try {
