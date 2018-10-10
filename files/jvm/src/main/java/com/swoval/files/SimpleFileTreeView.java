@@ -110,7 +110,7 @@ final class SimpleFileTreeView implements FileTreeView {
       throws IOException {
     if (visited != null) visited.add(dir);
     final SimpleFileTreeView.ListResults listResults =
-        directoryLister.apply(dir.toString(), followLinks);
+        directoryLister.apply(dir.toAbsolutePath().toString(), followLinks);
     final Iterator<String> it = listResults.getDirectories().iterator();
     while (it.hasNext()) {
       final String part = it.next();
