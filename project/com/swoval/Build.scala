@@ -11,6 +11,8 @@ import bintray.BintrayKeys._
 import com.github.sbt.jacoco.JacocoKeys.{ jacocoExcludes, jacocoReportSettings }
 import com.github.sbt.jacoco.report.{ JacocoReportSettings, JacocoThresholds }
 import com.swoval.Dependencies.{ logback => SLogback, _ }
+import com.swoval.format.ExtensionFilter
+import com.swoval.format.SourceFormatPlugin.autoImport.{ clangfmt, clangfmtSources, javafmt }
 import com.typesafe.sbt.GitVersioning
 import com.typesafe.sbt.SbtGit.git
 import com.typesafe.sbt.pgp.PgpKeys.publishSigned
@@ -120,8 +122,6 @@ object Build {
   lazy val releaseNpm = inputKey[Unit]("Release npm project")
   lazy val generateJSSource = inputKey[Unit]("Generate scala source from java")
   lazy val generateJSSources = taskKey[Unit]("Generate scala sources from java")
-  lazy val clangfmt = taskKey[Unit]("Run clang format")
-  lazy val javafmt = taskKey[Unit]("Run java format")
   lazy val travisQuickListReflectionTest =
     taskKey[Unit]("Check that reflection works for quick list")
   lazy val quickListReflectionTest = inputKey[Unit]("Check that reflection works for quick list")
@@ -200,12 +200,6 @@ object Build {
       )
     }
 
-  lazy val javafmtProj = project
-    .in(file("javafmt"))
-    .settings(
-      libraryDependencies += "com.google.googlejavaformat" % "google-java-format" % "1.6"
-    )
-
   lazy val swoval = project
     .in(file("."))
     .enablePlugins(CrossPerProjectPlugin)
@@ -219,8 +213,8 @@ object Build {
       publishLocal := {},
       checkFormat := {
         import sys.process._
-        javafmt.value
-        clangfmt.value
+        javafmt.toTask(" --check").value
+        clangfmt.toTask(" --check").value
         (scalafmt in Compile).value
         val output = Seq("git", "status").!!
         println(output)
@@ -236,26 +230,10 @@ object Build {
         val dryRun = Def.spaceDelimited("<arg>").parsed.isEmpty
         Def.taskDyn(releaseNpmTask(dryRun).value)
       }.evaluated,
-      javafmt := (run in (javafmtProj, Compile)).toTask(" .").value,
-      clangfmt := {
-        val npm = files.js.base.toPath.toAbsolutePath.resolve("npm/src")
-        val jvm = files.jvm.base.toPath.toAbsolutePath.resolve("src/main/native")
-        val args = Seq(npm, jvm).flatMap { p =>
-          val allFiles = Files.list(p).iterator.asScala.toSeq
-          allFiles.flatMap { f =>
-            f.toString.split("\\.").lastOption.flatMap {
-              case "cc" | "hpp" => Some(f.toString)
-              case _            => None
-            }
-          }
-        }
-        val proc = new ProcessBuilder((Seq("clang-format", "-i") ++ args): _*).start()
-        val log = state.value.log
-        if (!proc.waitFor(20, TimeUnit.SECONDS) || proc.exitValue != 0) {
-          log.error(Source.fromInputStream(proc.getInputStream).mkString)
-          log.error(Source.fromInputStream(proc.getErrorStream).mkString)
-        }
-      }
+      clangfmtSources ++= Seq(
+        (files.js.base / "npm" / "src", ExtensionFilter("cc", "h", "hh"), true),
+        (files.jvm.base / "src" / "main" / "native", ExtensionFilter("cc", "h", "hh"), true)
+      )
     )
 
   private var swovalNodeMD5Sum = ""
