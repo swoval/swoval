@@ -12,48 +12,48 @@ extern "C" {
  * Method:    loop
  * Signature: (J)V
  */
-JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventMonitorImpl_loop
-  (JNIEnv *, jclass, jlong);
+JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventMonitorImpl_loop(JNIEnv *, jclass,
+                                                                             jlong);
 
 /*
  * Class:     com_swoval_files_apple_FileEventMonitorImpl
  * Method:    close
  * Signature: (J)V
  */
-JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventMonitorImpl_close
-  (JNIEnv *, jclass, jlong);
+JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventMonitorImpl_close(JNIEnv *, jclass,
+                                                                              jlong);
 
 /*
  * Class:     com_swoval_files_apple_FileEventMonitorImpl
  * Method:    init
  * Signature: (Lcom/swoval/functional/Consumer;Lcom/swoval/functional/Consumer;)J
  */
-JNIEXPORT jlong JNICALL Java_com_swoval_files_apple_FileEventMonitorImpl_init
-  (JNIEnv *, jclass, jobject, jobject);
+JNIEXPORT jlong JNICALL Java_com_swoval_files_apple_FileEventMonitorImpl_init(JNIEnv *, jclass,
+                                                                              jobject, jobject);
 
 /*
  * Class:     com_swoval_files_apple_FileEventMonitorImpl
  * Method:    createStream
  * Signature: (Ljava/lang/String;DIJ)I
  */
-JNIEXPORT jint JNICALL Java_com_swoval_files_apple_FileEventMonitorImpl_createStream
-  (JNIEnv *, jclass, jstring, jdouble, jint, jlong);
+JNIEXPORT jint JNICALL Java_com_swoval_files_apple_FileEventMonitorImpl_createStream(
+    JNIEnv *, jclass, jstring, jdouble, jint, jlong);
 
 /*
  * Class:     com_swoval_files_apple_FileEventMonitorImpl
  * Method:    stopLoop
  * Signature: (J)V
  */
-JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventMonitorImpl_stopLoop
-  (JNIEnv *, jclass, jlong);
+JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventMonitorImpl_stopLoop(JNIEnv *, jclass,
+                                                                                 jlong);
 
 /*
  * Class:     com_swoval_files_apple_FileEventMonitorImpl
  * Method:    stopStream
  * Signature: (JI)V
  */
-JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventMonitorImpl_stopStream
-  (JNIEnv *, jclass, jlong, jint);
+JNIEXPORT void JNICALL Java_com_swoval_files_apple_FileEventMonitorImpl_stopStream(JNIEnv *, jclass,
+                                                                                   jlong, jint);
 
 #ifdef __cplusplus
 }
