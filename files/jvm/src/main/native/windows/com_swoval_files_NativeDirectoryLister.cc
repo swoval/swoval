@@ -7,7 +7,7 @@ typedef struct Handle {
     WIN32_FIND_DATA ffd;
     HANDLE handle;
     bool first = true;
-    int err = ERROR_SUCCESS;
+    int err    = ERROR_SUCCESS;
 } Handle;
 
 extern "C" {
@@ -19,17 +19,25 @@ BOOL WINAPI DllMainCRTStartup(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvRes
  * Method:    errno
  * Signature: ()I
  */
-JNIEXPORT jint JNICALL Java_com_swoval_files_NativeDirectoryLister_errno(JNIEnv *, jobject, jlong handlep) {
+JNIEXPORT jint JNICALL Java_com_swoval_files_NativeDirectoryLister_errno(JNIEnv *, jobject,
+                                                                         jlong handlep) {
     Handle *handle = (Handle *)handlep;
-    int err = handle->err;
+    int err        = handle->err;
     switch (err) {
-        case ERROR_NO_MORE_FILES: return com_swoval_files_NativeDirectoryLister_EOF;
-        case ERROR_SUCCESS: return com_swoval_files_NativeDirectoryLister_ESUCCESS;
-        case ERROR_FILE_NOT_FOUND: return com_swoval_files_NativeDirectoryLister_ENOENT;
-        case ERROR_ACCESS_DENIED: return com_swoval_files_NativeDirectoryLister_EACCES;
-        case ERROR_PATH_NOT_FOUND: return com_swoval_files_NativeDirectoryLister_ENOENT;
-        case ERROR_DIRECTORY: return com_swoval_files_NativeDirectoryLister_ENOTDIR;
-        default: return err;
+    case ERROR_NO_MORE_FILES:
+        return com_swoval_files_NativeDirectoryLister_EOF;
+    case ERROR_SUCCESS:
+        return com_swoval_files_NativeDirectoryLister_ESUCCESS;
+    case ERROR_FILE_NOT_FOUND:
+        return com_swoval_files_NativeDirectoryLister_ENOENT;
+    case ERROR_ACCESS_DENIED:
+        return com_swoval_files_NativeDirectoryLister_EACCES;
+    case ERROR_PATH_NOT_FOUND:
+        return com_swoval_files_NativeDirectoryLister_ENOENT;
+    case ERROR_DIRECTORY:
+        return com_swoval_files_NativeDirectoryLister_ENOTDIR;
+    default:
+        return err;
     }
 }
 
@@ -39,7 +47,7 @@ JNIEXPORT jint JNICALL Java_com_swoval_files_NativeDirectoryLister_errno(JNIEnv 
  * Signature: (I)Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_com_swoval_files_NativeDirectoryLister_strerror(JNIEnv *env, jobject,
-                                                                           jint err) {
+                                                                               jint err) {
     char buf[256];
     FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err,
                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, (sizeof(buf) / sizeof(char)),
@@ -53,12 +61,12 @@ JNIEXPORT jstring JNICALL Java_com_swoval_files_NativeDirectoryLister_strerror(J
  * Signature: (Ljava/lang/String;)J
  */
 JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeDirectoryLister_openDir(JNIEnv *env, jobject,
-                                                                        jstring dir) {
+                                                                            jstring dir) {
     Handle *handle = (Handle *)HeapAlloc(GetProcessHeap(), 0, sizeof(Handle));
-    handle->first = true;
+    handle->first  = true;
     handle->handle = FindFirstFileEx(env->GetStringUTFChars(dir, 0), FindExInfoBasic, &handle->ffd,
                                      FindExSearchNameMatch, NULL, FIND_FIRST_EX_LARGE_FETCH);
-    handle->err = GetLastError();
+    handle->err    = GetLastError();
     return (jlong)handle;
 }
 
@@ -68,7 +76,7 @@ JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeDirectoryLister_openDir(JNIE
  * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_com_swoval_files_NativeDirectoryLister_closeDir(JNIEnv *, jobject,
-                                                                        jlong handle) {
+                                                                            jlong handle) {
     FindClose(((Handle *)handle)->handle);
     HeapFree(GetProcessHeap(), 0, (LPVOID)handle);
 }
@@ -79,7 +87,7 @@ JNIEXPORT void JNICALL Java_com_swoval_files_NativeDirectoryLister_closeDir(JNIE
  * Signature: (J)J
  */
 JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeDirectoryLister_nextFile(JNIEnv *, jobject,
-                                                                         jlong h) {
+                                                                             jlong h) {
     Handle *handle = (Handle *)h;
     if (handle->first) {
         handle->first = false;
@@ -98,7 +106,7 @@ JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeDirectoryLister_nextFile(JNI
  * Signature: (J)I
  */
 JNIEXPORT jint JNICALL Java_com_swoval_files_NativeDirectoryLister_getType(JNIEnv *, jobject,
-                                                                       jlong handle) {
+                                                                           jlong handle) {
     DWORD attrs = ((WIN32_FIND_DATA *)handle)->dwFileAttributes;
     if (attrs & FILE_ATTRIBUTE_REPARSE_POINT) {
         return com_swoval_files_NativeDirectoryLister_UNKNOWN;
@@ -115,7 +123,7 @@ JNIEXPORT jint JNICALL Java_com_swoval_files_NativeDirectoryLister_getType(JNIEn
  * Signature: (J)Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_com_swoval_files_NativeDirectoryLister_getName(JNIEnv *env, jobject,
-                                                                          jlong handle) {
+                                                                              jlong handle) {
     return env->NewStringUTF(((WIN32_FIND_DATA *)handle)->cFileName);
 }
 }

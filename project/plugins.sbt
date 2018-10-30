@@ -24,6 +24,8 @@ addSbtPlugin("com.jsuereth" % "sbt-pgp" % "1.1.0")
 
 addSbtPlugin("io.get-coursier" % "sbt-coursier" % "1.0.3")
 
+addSbtPlugin("com.swoval" % "sbt-source-format" % "0.1.2")
+
 libraryDependencies ++= {
   val sbtV = (sbtBinaryVersion in update).value
   val scalaV = (scalaBinaryVersion in update).value
