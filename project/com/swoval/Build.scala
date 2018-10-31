@@ -134,10 +134,8 @@ object Build {
     files.jvm,
     nio.js,
     plugin,
-    reflect,
     testing.js,
-    testing.jvm,
-    util
+    testing.jvm
   )
 
   def releaseTask(key: TaskKey[Unit]) = Def.taskDyn {
@@ -145,12 +143,10 @@ object Build {
     if (valid) {
       Def.taskDyn {
         (key in testing.jvm).value
-        (key in util).value
         (scalaVersion in crossVersion).value match {
           case `scala210` => Def.task((key in plugin).value)
           case v =>
             Def.taskDyn {
-              (key in reflect).value
               (key in nio.js).value
               (key in files.js).value
               (key in testing.js).value
@@ -637,92 +633,6 @@ object Build {
     )
     .dependsOn(files.jvm % "compile->compile;test->test", testing.jvm % "test->test")
 
-  lazy val reflect = project
-    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
-    .settings(
-      commonSettings,
-      (scalacOptions in Compile) ++= {
-        if (scalaVersion.value == scala211) Seq("-Xexperimental") else Nil
-      },
-      crossScalaVersions := scalaCrossVersions.drop(1),
-      testFrameworks += new TestFramework("utest.runner.Framework"),
-      scalacOptions := Seq("-unchecked", "-deprecation", "-feature"),
-      updateOptions in Global := updateOptions
-        .in(Global)
-        .value
-        .withCachedResolution(true),
-      fork in Test := true,
-      javacOptions ++= Seq("-source", "1.8", "-target", "1.8") ++
-        BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty),
-      javaOptions in Test ++= Def.taskDyn {
-        val forked = (fork in Test).value
-        lazy val agent = (packageConfiguration in (Compile, packageBin)).value.jar
-        Def.task {
-          val loader = "-Djava.system.class.loader=com.swoval.reflect.ChildFirstClassLoader"
-          if (forked) Seq(loader, s"-javaagent:$agent") else Seq.empty
-        }
-      }.value,
-      packageOptions in (Compile, packageBin) +=
-        Package.ManifestAttributes("Premain-Class" -> "com.swoval.reflect.Agent"),
-      BuildKeys.genTestResourceClasses := {
-        val dir = Files.createTempDirectory("util-resources")
-        try {
-          val resourceDir = (resourceDirectory in Test).value.toPath
-          val cp = (fullClasspath in Compile).value
-            .map(_.data)
-            .mkString(File.pathSeparator)
-          val settings = new nsc.Settings()
-          settings.bootclasspath.value = cp
-          settings.classpath.value = cp
-          settings.usejavacp.value = true
-          settings.outputDirs.add(dir.toString, dir.toString)
-          val g = nsc.Global(settings, new StoreReporter)
-          (resources in Test).value collect {
-            case f if f.getName == "Bar.scala.template"  => ("Bar", IO.read(f))
-            case f if f.getName == "Buzz.scala.template" => ("Buzz", IO.read(f))
-          } foreach {
-            case ("Bar", f) =>
-              Seq(6, 7) foreach { i =>
-                IO.write(dir.resolve("Bar.scala").toFile, f.replaceAll("\\$\\$impl", s"$i"))
-                new g.Run().compile(List(dir.resolve("Bar.scala").toString))
-                Files.copy(dir.resolve("com/swoval/reflect/Bar$.class"),
-                           resourceDir.resolve(s"Bar$$.class.$i"),
-                           StandardCopyOption.REPLACE_EXISTING)
-              }
-            case ("Buzz", f) =>
-              IO.write(dir.resolve("Buzz.scala").toFile, f)
-              new g.Run().compile(List(dir.resolve("Buzz.scala").toString))
-              Files.copy(dir.resolve("com/swoval/reflect/Buzz.class"),
-                         resourceDir.resolve(s"Buzz.class"),
-                         StandardCopyOption.REPLACE_EXISTING)
-            case (_, _) =>
-          }
-        } finally {
-          val files = Files
-            .walk(dir)
-            .iterator
-            .asScala
-            .toIndexedSeq
-            .sortBy(_.toString)
-            .reverse
-          files foreach (Files.deleteIfExists(_))
-        }
-      },
-      testOnly in Test := {
-        (packageBin in Compile).value
-        (testOnly in Test).evaluated
-      },
-      // Qualify test with Keys to remove intellij warning
-      Keys.test in Test := {
-        (packageBin in Compile).value
-        (Keys.test in Test).value
-      },
-      libraryDependencies ++= Seq(
-        scalaMacros % scalaVersion.value,
-        utest
-      )
-    )
-
   lazy val scalagen: Project = project
     .in(file("scalagen"))
     .settings(
@@ -759,16 +669,4 @@ object Build {
       utestFramework
     )
     .jvmSettings(crossScalaVersions := scalaCrossVersions)
-
-  lazy val util = project
-    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
-    .settings(
-      commonSettings,
-      crossScalaVersions := scalaCrossVersions,
-      bintrayPackage := "util",
-      libraryDependencies ++= Seq(
-        SLogback,
-        slf4j
-      )
-    )
 }
