@@ -67,13 +67,13 @@ public class FileTreeDataViews {
   public interface Converter<R> {
 
     /**
-     * Convert the path to a value.
+     * Convert the typedPath to a value.
      *
-     * @param path the path to convert
+     * @param typedPath the typedPath to convert
      * @return the converted value
      * @throws IOException when the value can't be computed
      */
-    R apply(TypedPath path) throws IOException;
+    R apply(final TypedPath typedPath) throws IOException;
   }
 
   /**

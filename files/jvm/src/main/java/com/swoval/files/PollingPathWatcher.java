@@ -48,9 +48,9 @@ class PollingPathWatcher implements PathWatcher<PathWatchers.Event> {
     this(
         new Converter<Long>() {
           @Override
-          public Long apply(final TypedPath path) {
+          public Long apply(final TypedPath typedPath) {
             try {
-              return Files.getLastModifiedTime(path.getPath()).toMillis();
+              return Files.getLastModifiedTime(typedPath.getPath()).toMillis();
             } catch (final Exception e) {
               return 0L;
             }
