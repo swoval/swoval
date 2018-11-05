@@ -6,10 +6,6 @@ val scalaJSVersion = Option(System.getProperty("scala.js.version")).getOrElse("0
 
 addSbtPlugin("com.github.sbt" % "sbt-jacoco" % "3.1.0")
 
-addSbtPlugin("org.foundweekends" % "sbt-bintray" % "0.5.3")
-
-addSbtPlugin("com.typesafe.sbt" % "sbt-git" % "0.9.3")
-
 addSbtPlugin("org.scala-js" % "sbt-scalajs" % scalaJSVersion)
 
 addSbtPlugin("org.portable-scala" % "sbt-crossproject" % crossprojectVersion)
