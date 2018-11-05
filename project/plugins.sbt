@@ -4,6 +4,8 @@ val bundlerVersion = Option(System.getProperty("bundler.version")).getOrElse("0.
 val crossprojectVersion = "0.4.0"
 val scalaJSVersion = Option(System.getProperty("scala.js.version")).getOrElse("0.6.23")
 
+addSbtPlugin("com.swoval" % "sbt-source-format" % "0.1.4")
+
 addSbtPlugin("com.github.sbt" % "sbt-jacoco" % "3.1.0")
 
 addSbtPlugin("org.scala-js" % "sbt-scalajs" % scalaJSVersion)
@@ -19,8 +21,6 @@ addSbtPlugin("org.xerial.sbt" % "sbt-sonatype" % "2.0")
 addSbtPlugin("com.jsuereth" % "sbt-pgp" % "1.1.0")
 
 addSbtPlugin("io.get-coursier" % "sbt-coursier" % "1.0.3")
-
-addSbtPlugin("com.swoval" % "sbt-source-format" % "0.1.2")
 
 libraryDependencies ++= {
   val sbtV = (sbtBinaryVersion in update).value
