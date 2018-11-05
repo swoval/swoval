@@ -9,7 +9,7 @@ import com.swoval.concurrent.ThreadFactory
 import com.swoval.files.FileTreeDataViews.Entry
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files._
-import com.swoval.watchservice.CloseWatchPlugin.PathWatcherOps
+import com.swoval.watchservice.CloseWatchPlugin.{ closeWatchGlobalFileRepository, PathWatcherOps }
 import com.swoval.watchservice.CloseWatchPlugin.autoImport._
 import sbt.BasicCommandStrings._
 import sbt.BasicCommands._
@@ -170,7 +170,11 @@ object Continuously {
         .distinct
       val log = Project.structure(s).streams(s)(Keys.streams in Global).log
       val antiEntropy = extracted.get(closeWatchAntiEntropy)
-      val cache = CloseWatchPlugin._internalFileCache
+      val cache = s
+        .get(closeWatchGlobalFileRepository)
+        .getOrElse(
+          throw new IllegalStateException(
+            "No global FileTreeRepository has been added to the state"))
       val onTrigger: State => Unit = printTriggeredMessage(_, w)
       log.debug(s"Found watch sources:\n${sources.sortBy(_.base).mkString("\n")}")
       State(arg, sources, cache, log, antiEntropy, onTrigger).waitForEvents(s)
