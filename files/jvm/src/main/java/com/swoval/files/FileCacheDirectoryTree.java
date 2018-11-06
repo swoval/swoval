@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -366,14 +367,17 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         while (it.hasNext() && existing == null) {
           final CachedDirectory<T> dir = it.next();
           if (path.startsWith(dir.getPath())) {
-            existing = dir;
+            final int depth = dir.getPath().relativize(path).getNameCount() - 1;
+            if (dir.getMaxDepth() == Integer.MAX_VALUE || dir.getMaxDepth() - depth > maxDepth) {
+              existing = dir;
+            }
           }
         }
         CachedDirectory<T> dir;
         if (existing == null) {
           try {
             try {
-              dir = newCachedDirectory(path, maxDepth == -1 ? -1 : Integer.MAX_VALUE);
+              dir = newCachedDirectory(path, maxDepth);
             } catch (final NotDirectoryException e) {
               dir = newCachedDirectory(path, -1);
             }
@@ -427,12 +431,12 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
       final FileTreeDataViews.Entry<T> newEntry,
       final Kind kind,
       final IOException ioException) {
-    final TypedPath typedPath = entry.getTypedPath();
-    if (typedPath.isSymbolicLink()) {
+    final TypedPath typedPath = entry == null ? null : entry.getTypedPath();
+    if (typedPath != null && typedPath.isSymbolicLink()) {
       symlinks.add(typedPath);
     }
     callbacks.add(
-        new Callback(typedPath.getPath()) {
+        new Callback(typedPath == null ? Paths.get("") : typedPath.getPath()) {
           @Override
           public void run() {
             try {
@@ -545,7 +549,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
 
   private CachedDirectory<T> newCachedDirectory(final Path path, final int depth)
       throws IOException {
-    return new CachedDirectoryImpl<T>(
+    return new CachedDirectoryImpl<>(
             TypedPaths.get(path), converter, depth, filter, FileTreeViews.getDefault(followLinks))
         .init();
   }

@@ -5,11 +5,11 @@ package com.swoval.files
 import java.util.Map.Entry
 import com.swoval.functional.Filter
 import java.nio.file.Path
-import java.util.ArrayList
+import java.util.Collections
 import java.util.HashMap
 import java.util.Iterator
-import java.util.List
 import java.util.Map
+import java.util.concurrent.ConcurrentHashMap
 import DirectoryRegistryImpl._
 
 trait DirectoryRegistry extends Filter[Path] with AutoCloseable {
@@ -61,74 +61,92 @@ object DirectoryRegistryImpl {
 
 class DirectoryRegistryImpl extends DirectoryRegistry {
 
-  private val registeredDirectoriesByPath: Map[Path, RegisteredDirectory] =
-    new HashMap()
-
-  private val lock: AnyRef = new AnyRef()
+  private val registeredDirectoriesByPath: LockableMap[Path, RegisteredDirectory] =
+    new LockableMap(new ConcurrentHashMap[Path, RegisteredDirectory]())
 
   override def addDirectory(path: Path, maxDepth: Int): Boolean =
-    lock.synchronized {
-      val registeredDirectory: RegisteredDirectory =
-        registeredDirectoriesByPath.get(path)
-      if (registeredDirectory == null || maxDepth > registeredDirectory.maxDepth) {
-        registeredDirectoriesByPath.put(path, new RegisteredDirectory(path, maxDepth))
-        true
-      } else {
-        false
-      }
-    }
-
-  override def maxDepthFor(path: Path): Int = lock.synchronized {
-    var maxDepth: Int = java.lang.Integer.MIN_VALUE
-    val it: Iterator[RegisteredDirectory] =
-      registeredDirectoriesByPath.values.iterator()
-    while (it.hasNext) {
-      val dir: RegisteredDirectory = it.next()
-      if (path.startsWith(dir.path)) {
-        val depth: Int =
-          if (dir.path == path) 0 else dir.path.relativize(path).getNameCount
-        val possibleMaxDepth: Int = dir.maxDepth - depth
-        if (possibleMaxDepth > maxDepth) {
-          maxDepth = possibleMaxDepth
+    if (registeredDirectoriesByPath.lock()) {
+      try {
+        val registeredDirectory: RegisteredDirectory =
+          registeredDirectoriesByPath.get(path)
+        if (registeredDirectory == null || maxDepth > registeredDirectory.maxDepth) {
+          registeredDirectoriesByPath.put(path, new RegisteredDirectory(path, maxDepth))
+          true
+        } else {
+          false
         }
-      }
+      } finally registeredDirectoriesByPath.unlock()
+    } else {
+      false
     }
-    maxDepth
-  }
 
-  override def registered(): Map[Path, Integer] = lock.synchronized {
-    val result: Map[Path, Integer] = new HashMap[Path, Integer]()
-    val it: Iterator[RegisteredDirectory] =
-      registeredDirectoriesByPath.values.iterator()
-    while (it.hasNext) {
-      val dir: RegisteredDirectory = it.next()
-      result.put(dir.path, dir.maxDepth)
+  override def maxDepthFor(path: Path): Int =
+    if (registeredDirectoriesByPath.lock()) {
+      try {
+        var maxDepth: Int = java.lang.Integer.MIN_VALUE
+        val it: Iterator[RegisteredDirectory] =
+          registeredDirectoriesByPath.values.iterator()
+        while (it.hasNext) {
+          val dir: RegisteredDirectory = it.next()
+          if (path.startsWith(dir.path)) {
+            val depth: Int =
+              if (dir.path == path) 0
+              else dir.path.relativize(path).getNameCount
+            val possibleMaxDepth: Int = dir.maxDepth - depth
+            if (possibleMaxDepth > maxDepth) {
+              maxDepth = possibleMaxDepth
+            }
+          }
+        }
+        maxDepth
+      } finally registeredDirectoriesByPath.unlock()
+    } else {
+      -1
     }
-    result
-  }
+
+  override def registered(): Map[Path, Integer] =
+    if (registeredDirectoriesByPath.lock()) {
+      try {
+        val result: Map[Path, Integer] = new HashMap[Path, Integer]()
+        val it: Iterator[RegisteredDirectory] =
+          registeredDirectoriesByPath.values.iterator()
+        while (it.hasNext) {
+          val dir: RegisteredDirectory = it.next()
+          result.put(dir.path, dir.maxDepth)
+        }
+        result
+      } finally registeredDirectoriesByPath.unlock()
+    } else {
+      Collections.emptyMap()
+    }
 
   override def removeDirectory(path: Path): Unit = {
-    lock.synchronized {
-      registeredDirectoriesByPath.remove(path)
+    if (registeredDirectoriesByPath.lock()) {
+      try registeredDirectoriesByPath.remove(path)
+      finally registeredDirectoriesByPath.unlock()
     }
   }
 
   private def acceptImpl(path: Path, acceptPrefix: Boolean): Boolean =
-    lock.synchronized {
-      var result: Boolean = false
-      val it: Iterator[Entry[Path, RegisteredDirectory]] =
-        new ArrayList(registeredDirectoriesByPath.entrySet()).iterator()
-      while (!result && it.hasNext) {
-        val entry: Entry[Path, RegisteredDirectory] = it.next()
-        val registeredDirectory: RegisteredDirectory = entry.getValue
-        val watchPath: Path = entry.getKey
-        if (acceptPrefix && watchPath.startsWith(path)) {
-          result = true
-        } else if (path.startsWith(watchPath)) {
-          result = registeredDirectory.accept(path)
+    if (registeredDirectoriesByPath.lock()) {
+      try {
+        var result: Boolean = false
+        val it: Iterator[Entry[Path, RegisteredDirectory]] =
+          registeredDirectoriesByPath.iterator()
+        while (!result && it.hasNext) {
+          val entry: Entry[Path, RegisteredDirectory] = it.next()
+          val registeredDirectory: RegisteredDirectory = entry.getValue
+          val watchPath: Path = entry.getKey
+          if (acceptPrefix && watchPath.startsWith(path)) {
+            result = true
+          } else if (path.startsWith(watchPath)) {
+            result = registeredDirectory.accept(path)
+          }
         }
-      }
-      result
+        result
+      } finally registeredDirectoriesByPath.unlock()
+    } else {
+      false
     }
 
   override def accept(path: Path): Boolean = acceptImpl(path, false)
@@ -138,5 +156,23 @@ class DirectoryRegistryImpl extends DirectoryRegistry {
   override def close(): Unit = {
     registeredDirectoriesByPath.clear()
   }
+
+  override def toString(): String =
+    if (registeredDirectoriesByPath.lock()) {
+      try {
+        val result: StringBuilder = new StringBuilder()
+        result.append("DirectoryRegistry:\n")
+        val it: Iterator[RegisteredDirectory] =
+          registeredDirectoriesByPath.values.iterator()
+        while (it.hasNext) {
+          result.append("  ")
+          result.append(it.next())
+          result.append('\n')
+        }
+        result.toString
+      } finally registeredDirectoriesByPath.unlock()
+    } else {
+      ""
+    }
 
 }

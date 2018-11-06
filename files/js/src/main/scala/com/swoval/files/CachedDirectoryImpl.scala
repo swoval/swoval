@@ -33,11 +33,10 @@ object CachedDirectoryImpl {
   }
 
   /**
-   * Returns the name components of a  path in an array.
+   * Returns the name components of a path in an array.
    *
    * @param path The path from which we extract the parts.
-   * @return Empty array if the path is an empty relative path, otherwise return the name
-   *     parts.
+   * @return Empty array if the path is an empty relative path, otherwise return the name parts.
    */
   private def parts(path: Path): List[Path] = {
     val it: Iterator[Path] = path.iterator()
@@ -434,41 +433,37 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
             fileTreeView.list(this.getPath, 0, pathFilter).iterator()
           while (it.hasNext) {
             val file: TypedPath = it.next()
-            if (pathFilter.accept(file)) {
-              val path: Path = file.getPath
-              val expandedPath: Path = file.expanded()
-              val key: Path =
-                this.typedPath.getPath.relativize(path).getFileName
-              if (file.isDirectory) {
-                if (depth > 0) {
-                  if (!file.isSymbolicLink || !isLoop(path, expandedPath)) {
-                    val dir: CachedDirectoryImpl[T] =
-                      new CachedDirectoryImpl[T](file,
-                                                 converter,
-                                                 subdirectoryDepth(),
-                                                 pathFilter,
-                                                 fileTreeView)
-                    try {
-                      dir.init()
-                      subdirectories.put(key, dir)
-                    } catch {
-                      case e: IOException =>
-                        if (Files.exists(dir.getPath)) {
-                          subdirectories.put(key, dir)
-                        }
+            val path: Path = file.getPath
+            val expandedPath: Path = file.expanded()
+            val key: Path = this.typedPath.getPath.relativize(path).getFileName
+            if (file.isDirectory) {
+              if (depth > 0) {
+                if (!file.isSymbolicLink || !isLoop(path, expandedPath)) {
+                  val dir: CachedDirectoryImpl[T] = new CachedDirectoryImpl[T](file,
+                                                                               converter,
+                                                                               subdirectoryDepth(),
+                                                                               pathFilter,
+                                                                               fileTreeView)
+                  try {
+                    dir.init()
+                    subdirectories.put(key, dir)
+                  } catch {
+                    case e: IOException =>
+                      if (Files.exists(dir.getPath)) {
+                        subdirectories.put(key, dir)
+                      }
 
-                    }
-                  } else {
-                    subdirectories.put(
-                      key,
-                      new CachedDirectoryImpl(file, converter, -1, pathFilter, fileTreeView))
                   }
                 } else {
-                  files.put(key, Entries.get(TypedPaths.getDelegate(key, file), converter, file))
+                  subdirectories.put(
+                    key,
+                    new CachedDirectoryImpl(file, converter, -1, pathFilter, fileTreeView))
                 }
               } else {
                 files.put(key, Entries.get(TypedPaths.getDelegate(key, file), converter, file))
               }
+            } else {
+              files.put(key, Entries.get(TypedPaths.getDelegate(key, file), converter, file))
             }
           }
         }

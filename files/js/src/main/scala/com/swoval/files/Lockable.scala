@@ -27,8 +27,10 @@ class Lockable(private val reentrantLock: ReentrantLock) {
 
 }
 
-class LockableMap[K, V <: AutoCloseable](private val map: Map[K, V], reentrantLock: ReentrantLock)
+class LockableMap[K, V](private val map: Map[K, V], reentrantLock: ReentrantLock)
     extends Lockable(reentrantLock) {
+
+  def this(map: Map[K, V]) = this(map, new ReentrantLock())
 
   def this() = this(new HashMap[K, V](), new ReentrantLock())
 
@@ -38,7 +40,8 @@ class LockableMap[K, V <: AutoCloseable](private val map: Map[K, V], reentrantLo
         val values: Iterator[V] = new ArrayList(map.values).iterator()
         while (values.hasNext) try {
           val v: V = values.next()
-          v.close()
+          if (v.isInstanceOf[AutoCloseable])
+            v.asInstanceOf[AutoCloseable].close()
         } catch {
           case e: Exception => {}
 

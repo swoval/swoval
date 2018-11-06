@@ -107,7 +107,7 @@ class SimpleFileTreeView(private val directoryLister: DirectoryLister,
                           visited: Set[Path]): Unit = {
     if (visited != null) visited.add(dir)
     val listResults: SimpleFileTreeView.ListResults =
-      directoryLister.apply(dir.toString, followLinks)
+      directoryLister.apply(dir.toAbsolutePath().toString, followLinks)
     val it: Iterator[String] = listResults.getDirectories.iterator()
     while (it.hasNext) {
       val part: String = it.next()

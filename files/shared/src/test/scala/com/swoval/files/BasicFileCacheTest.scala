@@ -192,6 +192,21 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
               }
             }
           }
+          'deeplyNested - withTempDirectory { dir =>
+            withTempDirectory(dir) { subdir =>
+              val nestedSubdir = Files.createDirectories(subdir.resolve("nested"))
+              val deeplyNestedSubdir =
+                Files.createDirectories(subdir.resolve("very").resolve("deeply").resolve("nested"))
+              val file = deeplyNestedSubdir.resolve("file").createFile()
+              using(simpleCache((e: Entry[Path]) => {})) { c =>
+                c.register(dir, 0)
+                c.register(nestedSubdir, Integer.MAX_VALUE)
+                c.ls(deeplyNestedSubdir) ==> Nil
+                c.register(deeplyNestedSubdir, Integer.MAX_VALUE)
+                c.ls(deeplyNestedSubdir).sorted === Seq(file)
+              }
+            }
+          }
         }
         'holes - {
           'limit - withTempDirectory { dir =>
