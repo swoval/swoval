@@ -4,10 +4,9 @@ import static java.util.Map.Entry;
 
 import com.swoval.functional.Filter;
 import java.nio.file.Path;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -40,78 +39,105 @@ class DirectoryRegistries {
 }
 
 class DirectoryRegistryImpl implements DirectoryRegistry {
-  private final Map<Path, RegisteredDirectory> registeredDirectoriesByPath =
-      new ConcurrentHashMap<>();
-  private final Object lock = new Object();
+  private final LockableMap<Path, RegisteredDirectory> registeredDirectoriesByPath =
+      new LockableMap<>(new ConcurrentHashMap<Path, RegisteredDirectory>());
 
   @Override
   public boolean addDirectory(final Path path, final int maxDepth) {
-    synchronized (lock) {
-      final RegisteredDirectory registeredDirectory = registeredDirectoriesByPath.get(path);
-      if (registeredDirectory == null || maxDepth > registeredDirectory.maxDepth) {
-        registeredDirectoriesByPath.put(path, new RegisteredDirectory(path, maxDepth));
-        return true;
-      } else {
-        return false;
+    if (registeredDirectoriesByPath.lock()) {
+      try {
+        final RegisteredDirectory registeredDirectory = registeredDirectoriesByPath.get(path);
+        if (registeredDirectory == null || maxDepth > registeredDirectory.maxDepth) {
+          registeredDirectoriesByPath.put(path, new RegisteredDirectory(path, maxDepth));
+          return true;
+        } else {
+          return false;
+        }
+      } finally {
+        registeredDirectoriesByPath.unlock();
       }
+    } else {
+      return false;
     }
   }
 
   @Override
   public int maxDepthFor(final Path path) {
-    synchronized (lock) {
-      int maxDepth = Integer.MIN_VALUE;
-      final Iterator<RegisteredDirectory> it = registeredDirectoriesByPath.values().iterator();
-      while (it.hasNext()) {
-        final RegisteredDirectory dir = it.next();
-        if (path.startsWith(dir.path)) {
-          final int depth = dir.path.equals(path) ? 0 : dir.path.relativize(path).getNameCount();
-          final int possibleMaxDepth = dir.maxDepth - depth;
-          if (possibleMaxDepth > maxDepth) {
-            maxDepth = possibleMaxDepth;
+    if (registeredDirectoriesByPath.lock()) {
+      try {
+        int maxDepth = Integer.MIN_VALUE;
+        final Iterator<RegisteredDirectory> it = registeredDirectoriesByPath.values().iterator();
+        while (it.hasNext()) {
+          final RegisteredDirectory dir = it.next();
+          if (path.startsWith(dir.path)) {
+            final int depth = dir.path.equals(path) ? 0 : dir.path.relativize(path).getNameCount();
+            final int possibleMaxDepth = dir.maxDepth - depth;
+            if (possibleMaxDepth > maxDepth) {
+              maxDepth = possibleMaxDepth;
+            }
           }
         }
+        return maxDepth;
+      } finally {
+        registeredDirectoriesByPath.unlock();
       }
-      return maxDepth;
+    } else {
+      return -1;
     }
   }
 
   @Override
   public Map<Path, Integer> registered() {
-    synchronized (lock) {
-      final Map<Path, Integer> result = new HashMap<>();
-      final Iterator<RegisteredDirectory> it = registeredDirectoriesByPath.values().iterator();
-      while (it.hasNext()) {
-        final RegisteredDirectory dir = it.next();
-        result.put(dir.path, dir.maxDepth);
+    if (registeredDirectoriesByPath.lock()) {
+      try {
+        final Map<Path, Integer> result = new HashMap<>();
+        final Iterator<RegisteredDirectory> it = registeredDirectoriesByPath.values().iterator();
+        while (it.hasNext()) {
+          final RegisteredDirectory dir = it.next();
+          result.put(dir.path, dir.maxDepth);
+        }
+        return result;
+      } finally {
+        registeredDirectoriesByPath.unlock();
       }
-      return result;
+    } else {
+      return Collections.emptyMap();
     }
   }
 
   @Override
   public void removeDirectory(final Path path) {
-    synchronized (lock) {
-      registeredDirectoriesByPath.remove(path);
+    if (registeredDirectoriesByPath.lock()) {
+      try {
+        registeredDirectoriesByPath.remove(path);
+      } finally {
+        registeredDirectoriesByPath.unlock();
+      }
     }
   }
 
   private boolean acceptImpl(final Path path, final boolean acceptPrefix) {
-    synchronized (lock) {
-      boolean result = false;
-      final Iterator<Entry<Path, RegisteredDirectory>> it =
-          new ArrayList<>(registeredDirectoriesByPath.entrySet()).iterator();
-      while (!result && it.hasNext()) {
-        final Entry<Path, RegisteredDirectory> entry = it.next();
-        final RegisteredDirectory registeredDirectory = entry.getValue();
-        final Path watchPath = entry.getKey();
-        if (acceptPrefix && watchPath.startsWith(path)) {
-          result = true;
-        } else if (path.startsWith(watchPath)) {
-          result = registeredDirectory.accept(path);
+    if (registeredDirectoriesByPath.lock()) {
+      try {
+        boolean result = false;
+        final Iterator<Entry<Path, RegisteredDirectory>> it =
+            registeredDirectoriesByPath.iterator();
+        while (!result && it.hasNext()) {
+          final Entry<Path, RegisteredDirectory> entry = it.next();
+          final RegisteredDirectory registeredDirectory = entry.getValue();
+          final Path watchPath = entry.getKey();
+          if (acceptPrefix && watchPath.startsWith(path)) {
+            result = true;
+          } else if (path.startsWith(watchPath)) {
+            result = registeredDirectory.accept(path);
+          }
         }
+        return result;
+      } finally {
+        registeredDirectoriesByPath.unlock();
       }
-      return result;
+    } else {
+      return false;
     }
   }
 
