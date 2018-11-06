@@ -491,35 +491,33 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
               fileTreeView.list(this.getPath(), 0, pathFilter).iterator();
           while (it.hasNext()) {
             final TypedPath file = it.next();
-            if (pathFilter.accept(file)) {
-              final Path path = file.getPath();
-              final Path expandedPath = file.expanded();
-              final Path key = this.typedPath.getPath().relativize(path).getFileName();
-              if (file.isDirectory()) {
-                if (depth > 0) {
-                  if (!file.isSymbolicLink() || !isLoop(path, expandedPath)) {
-                    final CachedDirectoryImpl<T> dir =
-                        new CachedDirectoryImpl<>(
-                            file, converter, subdirectoryDepth(), pathFilter, fileTreeView);
-                    try {
-                      dir.init();
+            final Path path = file.getPath();
+            final Path expandedPath = file.expanded();
+            final Path key = this.typedPath.getPath().relativize(path).getFileName();
+            if (file.isDirectory()) {
+              if (depth > 0) {
+                if (!file.isSymbolicLink() || !isLoop(path, expandedPath)) {
+                  final CachedDirectoryImpl<T> dir =
+                      new CachedDirectoryImpl<>(
+                          file, converter, subdirectoryDepth(), pathFilter, fileTreeView);
+                  try {
+                    dir.init();
+                    subdirectories.put(key, dir);
+                  } catch (final IOException e) {
+                    if (Files.exists(dir.getPath())) {
                       subdirectories.put(key, dir);
-                    } catch (final IOException e) {
-                      if (Files.exists(dir.getPath())) {
-                        subdirectories.put(key, dir);
-                      }
                     }
-                  } else {
-                    subdirectories.put(
-                        key,
-                        new CachedDirectoryImpl<>(file, converter, -1, pathFilter, fileTreeView));
                   }
                 } else {
-                  files.put(key, Entries.get(TypedPaths.getDelegate(key, file), converter, file));
+                  subdirectories.put(
+                      key,
+                      new CachedDirectoryImpl<>(file, converter, -1, pathFilter, fileTreeView));
                 }
               } else {
                 files.put(key, Entries.get(TypedPaths.getDelegate(key, file), converter, file));
               }
+            } else {
+              files.put(key, Entries.get(TypedPaths.getDelegate(key, file), converter, file));
             }
           }
         }
