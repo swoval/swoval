@@ -157,4 +157,22 @@ class DirectoryRegistryImpl extends DirectoryRegistry {
     registeredDirectoriesByPath.clear()
   }
 
+  override def toString(): String =
+    if (registeredDirectoriesByPath.lock()) {
+      try {
+        val result: StringBuilder = new StringBuilder()
+        result.append("DirectoryRegistry:\n")
+        val it: Iterator[RegisteredDirectory] =
+          registeredDirectoriesByPath.values.iterator()
+        while (it.hasNext) {
+          result.append("  ")
+          result.append(it.next())
+          result.append('\n')
+        }
+        result.toString
+      } finally registeredDirectoriesByPath.unlock()
+    } else {
+      ""
+    }
+
 }

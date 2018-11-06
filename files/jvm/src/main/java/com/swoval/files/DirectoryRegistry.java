@@ -156,6 +156,27 @@ class DirectoryRegistryImpl implements DirectoryRegistry {
     registeredDirectoriesByPath.clear();
   }
 
+  @Override
+  public String toString() {
+    if (registeredDirectoriesByPath.lock()) {
+      try {
+        final StringBuilder result = new StringBuilder();
+        result.append("DirectoryRegistry:\n");
+        final Iterator<RegisteredDirectory> it = registeredDirectoriesByPath.values().iterator();
+        while (it.hasNext()) {
+          result.append("  ");
+          result.append(it.next());
+          result.append('\n');
+        }
+        return result.toString();
+      } finally {
+        registeredDirectoriesByPath.unlock();
+      }
+    } else {
+      return "";
+    }
+  }
+
   private static class RegisteredDirectory {
     final Path path;
     final int maxDepth;
