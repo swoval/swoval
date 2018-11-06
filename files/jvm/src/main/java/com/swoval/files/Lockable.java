@@ -30,12 +30,16 @@ class Lockable {
   }
 }
 
-class LockableMap<K, V extends AutoCloseable> extends Lockable {
+class LockableMap<K, V> extends Lockable {
   private final Map<K, V> map;
 
   LockableMap(final Map<K, V> map, final ReentrantLock reentrantLock) {
     super(reentrantLock);
     this.map = map;
+  }
+
+  LockableMap(final Map<K, V> map) {
+    this(map, new ReentrantLock());
   }
 
   LockableMap() {
@@ -50,7 +54,7 @@ class LockableMap<K, V extends AutoCloseable> extends Lockable {
         while (values.hasNext()) {
           try {
             final V v = values.next();
-            v.close();
+            if (v instanceof AutoCloseable) ((AutoCloseable) v).close();
           } catch (final Exception e) {
           }
         }
