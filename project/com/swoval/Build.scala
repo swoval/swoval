@@ -213,11 +213,7 @@ object Build {
       releaseNpm := Def.inputTaskDyn {
         val dryRun = Def.spaceDelimited("<arg>").parsed.isEmpty
         Def.taskDyn(releaseNpmTask(dryRun).value)
-      }.evaluated,
-      clangfmtSources ++= Seq(
-        (files.js.base / "npm" / "src", ExtensionFilter("cc", "h", "hh"), true),
-        (files.jvm.base / "src" / "main" / "native", ExtensionFilter("cc", "h", "hh"), true)
-      )
+      }.evaluated
     )
 
   private var swovalNodeMD5Sum = ""
@@ -349,6 +345,7 @@ object Build {
       scalaJSModuleKind := ModuleKind.CommonJSModule,
       webpackBundlingMode := BundlingMode.LibraryOnly(),
       useYarn := false,
+      clangfmtSources += (files.js.base / "npm" / "src", ExtensionFilter("cc", "h", "hh"), true),
       createCrossLinks("FILESJS"),
       cleanAllGlobals,
       nodeNativeLibs,
@@ -495,6 +492,8 @@ object Build {
     )
     .jvmSettings(
       createCrossLinks("FILESJVM"),
+      clangfmtSources +=
+        (files.jvm.base / "src" / "main" / "native", ExtensionFilter("cc", "h", "hh"), true),
       javacOptions ++= Seq("-source",
                            "1.7",
                            "-target",
@@ -545,6 +544,15 @@ object Build {
         }
         (unmanagedResources in Compile).value
       },
+      Compile / compile := Def.taskDyn {
+        val res = (Compile / compile).value
+        if (System.getProperty("swoval.format", "true") == "true")
+          Def.task {
+            javafmt.toTask("").value
+            clangfmt.toTask("").value
+            res
+          } else Def.task(res)
+      }.value,
       fork in Test := System.getProperty("swoval.fork.tests", "false") == "true",
       travisQuickListReflectionTest := {
         quickListReflectionTest
