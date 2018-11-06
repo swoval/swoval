@@ -20,6 +20,7 @@ import java.io.IOException
 import java.nio.file.NoSuchFileException
 import java.nio.file.NotDirectoryException
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.util.ArrayList
 import java.util.Collections
 import java.util.Comparator
@@ -389,11 +390,11 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                           newEntry: FileTreeDataViews.Entry[T],
                           kind: Kind,
                           ioException: IOException): Unit = {
-    val typedPath: TypedPath = entry.getTypedPath
-    if (typedPath.isSymbolicLink) {
+    val typedPath: TypedPath = if (entry == null) null else entry.getTypedPath
+    if (typedPath != null && typedPath.isSymbolicLink) {
       symlinks.add(typedPath)
     }
-    callbacks.add(new Callback(typedPath.getPath) {
+    callbacks.add(new Callback(if (typedPath == null) Paths.get("") else typedPath.getPath) {
       override def run(): Unit = {
         try if (ioException != null) {
           observers.onError(ioException)
@@ -487,10 +488,10 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     }
 
   private def newCachedDirectory(path: Path, depth: Int): CachedDirectory[T] =
-    new CachedDirectoryImpl[T](TypedPaths.get(path),
-                               converter,
-                               depth,
-                               filter,
-                               FileTreeViews.getDefault(followLinks)).init()
+    new CachedDirectoryImpl(TypedPaths.get(path),
+                            converter,
+                            depth,
+                            filter,
+                            FileTreeViews.getDefault(followLinks)).init()
 
 }
