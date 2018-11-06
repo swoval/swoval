@@ -377,7 +377,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         if (existing == null) {
           try {
             try {
-              dir = newCachedDirectory(path, maxDepth == -1 ? -1 : Integer.MAX_VALUE);
+              dir = newCachedDirectory(path, maxDepth);
             } catch (final NotDirectoryException e) {
               dir = newCachedDirectory(path, -1);
             }

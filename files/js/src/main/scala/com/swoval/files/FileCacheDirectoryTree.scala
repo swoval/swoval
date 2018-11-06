@@ -337,8 +337,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         var dir: CachedDirectory[T] = null
         if (existing == null) {
           try {
-            try dir =
-              newCachedDirectory(path, if (maxDepth == -1) -1 else java.lang.Integer.MAX_VALUE)
+            try dir = newCachedDirectory(path, maxDepth)
             catch {
               case e: NotDirectoryException =>
                 dir = newCachedDirectory(path, -1)
