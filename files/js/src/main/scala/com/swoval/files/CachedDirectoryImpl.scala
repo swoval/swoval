@@ -33,11 +33,10 @@ object CachedDirectoryImpl {
   }
 
   /**
-   * Returns the name components of a  path in an array.
+   * Returns the name components of a path in an array.
    *
    * @param path The path from which we extract the parts.
-   * @return Empty array if the path is an empty relative path, otherwise return the name
-   *     parts.
+   * @return Empty array if the path is an empty relative path, otherwise return the name parts.
    */
   private def parts(path: Path): List[Path] = {
     val it: Iterator[Path] = path.iterator()

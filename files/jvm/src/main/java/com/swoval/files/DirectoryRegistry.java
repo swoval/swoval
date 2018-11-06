@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 interface DirectoryRegistry extends Filter<Path>, AutoCloseable {
   boolean addDirectory(final Path path, final int maxDepth);
@@ -39,7 +40,8 @@ class DirectoryRegistries {
 }
 
 class DirectoryRegistryImpl implements DirectoryRegistry {
-  private final Map<Path, RegisteredDirectory> registeredDirectoriesByPath = new HashMap<>();
+  private final Map<Path, RegisteredDirectory> registeredDirectoriesByPath =
+      new ConcurrentHashMap<>();
   private final Object lock = new Object();
 
   @Override

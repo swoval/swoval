@@ -10,6 +10,7 @@ import java.util.HashMap
 import java.util.Iterator
 import java.util.List
 import java.util.Map
+import java.util.concurrent.ConcurrentHashMap
 import DirectoryRegistryImpl._
 
 trait DirectoryRegistry extends Filter[Path] with AutoCloseable {
@@ -62,7 +63,7 @@ object DirectoryRegistryImpl {
 class DirectoryRegistryImpl extends DirectoryRegistry {
 
   private val registeredDirectoriesByPath: Map[Path, RegisteredDirectory] =
-    new HashMap()
+    new ConcurrentHashMap()
 
   private val lock: AnyRef = new AnyRef()
 
