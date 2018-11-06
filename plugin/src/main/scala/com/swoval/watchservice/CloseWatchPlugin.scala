@@ -6,7 +6,6 @@ import java.nio.file.Path
 
 import com.swoval.files.FileTreeDataViews.{ Converter, Entry }
 import com.swoval.files._
-import com.swoval.runtime.ShutdownHooks
 import sbt.Keys._
 import sbt._
 import sbt.complete.{ DefaultParsers, Parser }
@@ -14,7 +13,6 @@ import sbt.complete.{ DefaultParsers, Parser }
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.duration._
-import scala.util.Try
 
 object CloseWatchPlugin extends AutoPlugin {
   override def trigger = allRequirements
@@ -27,7 +25,6 @@ object CloseWatchPlugin extends AutoPlugin {
       extends functional.Filter[TypedPath] {
     override def accept(t: TypedPath): Boolean = fileFilter.accept(t.getPath.toFile)
   }
-  private[watchservice] var _internalFileCache: FileTreeRepository[Path] = _
   object autoImport {
     lazy val closeWatchAntiEntropy = settingKey[Duration](
       "Set watch anti-entropy period for source files. For a given file that has triggered a" +
@@ -49,6 +46,10 @@ object CloseWatchPlugin extends AutoPlugin {
   }
   import autoImport._
 
+  private[watchservice] lazy val closeWatchGlobalFileRepository =
+    AttributeKey[FileTreeRepository[Path]]("closeWatchGlobalFileRepository",
+                                           "A global cache of the file system",
+                                           10)
   import scala.language.implicitConversions
   private def defaultSourcesFor(conf: Configuration) = Def.task[Seq[File]] {
     val cache = closeWatchFileCache.value
@@ -61,11 +62,12 @@ object CloseWatchPlugin extends AutoPlugin {
       override def accept(f: File) = in.accept(f) && !ex.accept(f)
       override def toString = s"${Filter.show(in)} && !${Filter.show(ex)}"
     }
+    val cache = closeWatchFileCache.value
     def list(recursive: Boolean, filter: FileFilter): File => Seq[File] =
       (f: File) => {
-        val path = f.toPath()
-        _internalFileCache.register(path, recursive)
-        _internalFileCache
+        val path = f.toPath
+        cache.register(path, recursive)
+        cache
           .list(path, if (recursive) Integer.MAX_VALUE else 0, new functional.Filter[TypedPath] {
             override def accept(t: TypedPath): Boolean = filter.accept(t.getPath.toFile)
           })
@@ -238,10 +240,14 @@ object CloseWatchPlugin extends AutoPlugin {
                                taskDef.headOption.getOrElse("compile"))
     parsed.fold(_ => commands(taskDef.mkString(" ").trim), paths)
   }
+  private def clearGlobalFileRepository(s: State): Unit = {
+    s.get(closeWatchGlobalFileRepository).foreach(_.close())
+  }
   override lazy val globalSettings: Seq[Def.Setting[_]] = super.globalSettings ++ Seq(
-    closeWatchFileCache := FileTreeRepositories.get(new Converter[Path] {
-      override def apply(path: TypedPath): Path = path.getPath
-    }, true),
+    closeWatchFileCache := state.value
+      .get(closeWatchGlobalFileRepository)
+      .getOrElse(
+        throw new IllegalStateException("Global file repository was not previously registered")),
     closeWatchUseDefaultWatchService := false,
     closeWatchTransitiveSources := Def
       .inputTaskDyn {
@@ -259,13 +265,10 @@ object CloseWatchPlugin extends AutoPlugin {
     closeWatchAntiEntropy := 35.milliseconds,
     onLoad := { state =>
       val extracted = Project.extract(state)
-      _internalFileCache = extracted.runTask(closeWatchFileCache, state)._2
-      ShutdownHooks.addHook(1, {
-        val cache = Option(_internalFileCache)
-        new Runnable() {
-          override def run(): Unit = cache.foreach(_.close())
-        }
-      })
+      clearGlobalFileRepository(state)
+      val fileCache = FileTreeRepositories.get(new Converter[Path] {
+        override def apply(typedPath: TypedPath): Path = typedPath.getPath
+      }, true)
       val session = extracted.session
       val useDefault = extracted.structure.data.data.exists(_._2.entries.exists(e =>
         e.key.label == "closeWatchUseDefaultWatchService" && e.value == true))
@@ -285,12 +288,15 @@ object CloseWatchPlugin extends AutoPlugin {
             .put(stateBuildStructure, newStructure)
             .put(sessionSettings, session.copy(original = newSettings))
         } else state
-        newState.copy(definedCommands = filtered :+ Continuously.continuous)
+        newState
+          .put(closeWatchGlobalFileRepository, fileCache)
+          .copy(definedCommands = filtered :+ Continuously.continuous)
+          .addExitHook(clearGlobalFileRepository(state))
       }
     },
     onUnload := { state =>
       state.log.debug(s"Closing internal file cache")
-      Try(_internalFileCache.close())
+      clearGlobalFileRepository(state)
       state
     }
   )
