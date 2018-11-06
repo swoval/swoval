@@ -327,7 +327,10 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         while (it.hasNext && existing == null) {
           val dir: CachedDirectory[T] = it.next()
           if (path.startsWith(dir.getPath)) {
-            existing = dir
+            val depth: Int = dir.getPath.relativize(path).getNameCount - 1
+            if (dir.getMaxDepth == java.lang.Integer.MAX_VALUE || dir.getMaxDepth - depth > maxDepth) {
+              existing = dir
+            }
           }
         }
         var dir: CachedDirectory[T] = null

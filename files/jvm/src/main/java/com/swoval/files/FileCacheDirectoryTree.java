@@ -366,7 +366,10 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         while (it.hasNext() && existing == null) {
           final CachedDirectory<T> dir = it.next();
           if (path.startsWith(dir.getPath())) {
-            existing = dir;
+            final int depth = dir.getPath().relativize(path).getNameCount() - 1;
+            if (dir.getMaxDepth() == Integer.MAX_VALUE || dir.getMaxDepth() - depth > maxDepth) {
+              existing = dir;
+            }
           }
         }
         CachedDirectory<T> dir;
