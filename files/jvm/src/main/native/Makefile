@@ -12,7 +12,8 @@ CC := clang
 UNAME_S := $(shell uname -s)
 
 ifeq ($(UNAME_S),Darwin)
-	JNI_INCLUDE := -I/System/Library/Frameworks/JavaVM.framework/Versions/Current/Headers/
+	JNI_INCLUDE := -I$(shell mdfind -name jni.h | grep jdk1.8 | tail -n 1 | xargs dirname)\
+		-I$(shell mdfind -name jni_md.h | grep jdk1.8 | tail -n 1 | xargs dirname)
 	LD := /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++
 	OBJS := $(BUILD_DIR)/x86_64/darwin/$(QUICKLIST_SOURCE).o \
 		$(BUILD_DIR)/x86_64/darwin/com_swoval_files_FileEventMonitorImpl.o \

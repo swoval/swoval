@@ -6,15 +6,11 @@ import java.nio.file.{ Files, Paths, StandardCopyOption, Path => JPath }
 import java.util.concurrent.TimeUnit
 import java.util.jar.JarFile
 
-import _root_.bintray.BintrayPlugin
-import bintray.BintrayKeys._
 import com.github.sbt.jacoco.JacocoKeys.{ jacocoExcludes, jacocoReportSettings }
 import com.github.sbt.jacoco.report.{ JacocoReportSettings, JacocoThresholds }
 import com.swoval.Dependencies.{ logback => SLogback, _ }
 import com.swoval.format.ExtensionFilter
 import com.swoval.format.SourceFormatPlugin.autoImport.{ clangfmt, clangfmtSources, javafmt }
-import com.typesafe.sbt.GitVersioning
-import com.typesafe.sbt.SbtGit.git
 import com.typesafe.sbt.pgp.PgpKeys.publishSigned
 import org.apache.commons.codec.digest.DigestUtils
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport.scalafmt
@@ -40,10 +36,6 @@ import scala.util.{ Properties, Try }
 
 object Build {
   val scalaCrossVersions @ Seq(scala210, scala211, scala212) = Seq("2.10.7", "2.11.12", "2.12.6")
-  val disableBintray = sys.props
-    .get("SonatypeSnapshot")
-    .orElse(sys.props.get("SonatypeRelease"))
-    .fold(false)(_ == "true")
 
   def baseVersion: String = "2.0.3-SNAPSHOT"
 
@@ -53,10 +45,7 @@ object Build {
   def commonSettings: SettingsDefinition =
     settings(
       scalaVersion in ThisBuild := scala212,
-      git.baseVersion := baseVersion,
       organization := "com.swoval",
-      bintrayOrganization := Some("eatkins"),
-      bintrayRepository := "swoval",
       homepage := Some(url("https://github.com/swoval/swoval")),
       scmInfo := Some(
         ScmInfo(url("https://github.com/swoval/swoval"), "git@github.com:swoval/swoval.git")),
@@ -85,7 +74,7 @@ object Build {
         else p
       },
       version := {
-        val v = version.value
+        val v = baseVersion
         if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true")) {
           if (v.endsWith("-SNAPSHOT")) v else s"$v-SNAPSHOT"
         } else {
@@ -199,11 +188,10 @@ object Build {
   lazy val swoval = project
     .in(file("."))
     .enablePlugins(CrossPerProjectPlugin)
-    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .aggregate(projects: _*)
     .settings(
       crossScalaVersions := scalaCrossVersions,
-      bintrayUnpublish := {},
+      version := baseVersion,
       publishSigned := {},
       publish := {},
       publishLocal := {},
@@ -225,11 +213,7 @@ object Build {
       releaseNpm := Def.inputTaskDyn {
         val dryRun = Def.spaceDelimited("<arg>").parsed.isEmpty
         Def.taskDyn(releaseNpmTask(dryRun).value)
-      }.evaluated,
-      clangfmtSources ++= Seq(
-        (files.js.base / "npm" / "src", ExtensionFilter("cc", "h", "hh"), true),
-        (files.jvm.base / "src" / "main" / "native", ExtensionFilter("cc", "h", "hh"), true)
-      )
+      }.evaluated
     )
 
   private var swovalNodeMD5Sum = ""
@@ -322,7 +306,6 @@ object Build {
 
   lazy val nio: CrossProject = crossProject(JSPlatform)
     .crossType(CrossType.Pure)
-    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .in(file("nio-js"))
     .settings(
       commonSettings,
@@ -336,13 +319,10 @@ object Build {
 
   lazy val files: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("files"))
-    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
-    .enablePlugins(GitVersioning)
     .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin).dependsOn(nio.js))
     .settings(
       commonSettings,
       name := "file-tree-views",
-      bintrayPackage := "file-tree-views",
       description := "File system apis.",
       watchSources in Compile ++= {
         Files
@@ -365,6 +345,7 @@ object Build {
       scalaJSModuleKind := ModuleKind.CommonJSModule,
       webpackBundlingMode := BundlingMode.LibraryOnly(),
       useYarn := false,
+      clangfmtSources += (files.js.base / "npm" / "src", ExtensionFilter("cc", "h", "hh"), true),
       createCrossLinks("FILESJS"),
       cleanAllGlobals,
       nodeNativeLibs,
@@ -511,6 +492,8 @@ object Build {
     )
     .jvmSettings(
       createCrossLinks("FILESJVM"),
+      clangfmtSources +=
+        (files.jvm.base / "src" / "main" / "native", ExtensionFilter("cc", "h", "hh"), true),
       javacOptions ++= Seq("-source",
                            "1.7",
                            "-target",
@@ -561,6 +544,15 @@ object Build {
         }
         (unmanagedResources in Compile).value
       },
+      Compile / compile := Def.taskDyn {
+        val res = (Compile / compile).value
+        if (System.getProperty("swoval.format", "true") == "true")
+          Def.task {
+            javafmt.toTask("").value
+            clangfmt.toTask("").value
+            res
+          } else Def.task(res)
+      }.value,
       fork in Test := System.getProperty("swoval.fork.tests", "false") == "true",
       travisQuickListReflectionTest := {
         quickListReflectionTest
@@ -610,8 +602,6 @@ object Build {
 
   lazy val plugin: Project = project
     .in(file("plugin"))
-    .enablePlugins(GitVersioning)
-    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .settings(
       commonSettings,
       sbtVersion in pluginCrossBuild := {
@@ -620,7 +610,6 @@ object Build {
       crossSbtVersions := Seq("1.1.1", "0.13.17"),
       crossScalaVersions := Seq(scala210, scala212),
       name := "sbt-close-watch",
-      bintrayPackage := "sbt-close-watch",
       description := "CloseWatch reduces the latency between file system events and sbt task " +
         "and command processing, especially on OSX.",
       sbtPlugin := true,
@@ -637,6 +626,7 @@ object Build {
     .in(file("scalagen"))
     .settings(
       publish := {},
+      version := baseVersion,
       resolvers += Resolver.bintrayRepo("nightscape", "maven"),
       scalaVersion := scala211,
       crossScalaVersions := Seq(scala211),
@@ -653,7 +643,6 @@ object Build {
 
   lazy val testing: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("testing"))
-    .disablePlugins((if (disableBintray) Seq(BintrayPlugin) else Nil): _*)
     .jsConfigure(_.dependsOn(nio.js))
     .jsSettings(
       scalaJSModuleKind := ModuleKind.CommonJSModule,
@@ -662,7 +651,6 @@ object Build {
     )
     .settings(
       commonSettings,
-      bintrayPackage := "testing",
       libraryDependencies += scalaMacros % scalaVersion.value,
       addParadise,
       utestCrossMain,

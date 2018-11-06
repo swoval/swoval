@@ -17,7 +17,7 @@ install:
         [System.IO.Compression.ZipFile]::ExtractToDirectory("C:\sbt-bin.zip", "C:\sbt")
       }
   - SET PATH=C:\sbt\sbt\bin;%PATH%
-  - SET SBT_OPTS=-XX:MaxPermSize=2g -Xmx4g -Dfile.encoding=UTF8 -Dswoval.skip.native=true -Dswoval.fork.tests=true
+  - SET SBT_OPTS=-XX:MaxPermSize=2g -Xmx4g -Dswoval.format=false -Dfile.encoding=UTF8 -Dswoval.skip.native=true -Dswoval.fork.tests=true
 test_script:
   - sbt "filesJVM/jacoco" "filesJS/test"
 
