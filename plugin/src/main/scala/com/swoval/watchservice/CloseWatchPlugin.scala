@@ -6,7 +6,6 @@ import java.nio.file.Path
 
 import com.swoval.files.FileTreeDataViews.{ Converter, Entry }
 import com.swoval.files._
-import com.swoval.runtime.ShutdownHooks
 import sbt.Keys._
 import sbt._
 import sbt.complete.{ DefaultParsers, Parser }
@@ -14,7 +13,6 @@ import sbt.complete.{ DefaultParsers, Parser }
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.duration._
-import scala.util.Try
 
 object CloseWatchPlugin extends AutoPlugin {
   override def trigger = allRequirements
@@ -63,7 +61,7 @@ object CloseWatchPlugin extends AutoPlugin {
     }
     def list(recursive: Boolean, filter: FileFilter): File => Seq[File] =
       (f: File) => {
-        val path = f.toPath()
+        val path = f.toPath
         _internalFileCache.register(path, recursive)
         _internalFileCache
           .list(path, if (recursive) Integer.MAX_VALUE else 0, new functional.Filter[TypedPath] {
