@@ -20,8 +20,8 @@ Setup
 ==
 The file tree views package is available on
 [maven](https://mvnrepository.com/artifact/com.swoval/file-tree-views) and the latest version is
-`2.0.3`. For sbt builds, it can be added with
-`libraryDependencies += "com.swoval" % "file-tree-views" % "2.0.3"`.
+`2.0.4`. For sbt builds, it can be added with
+`libraryDependencies += "com.swoval" % "file-tree-views" % "2.0.4"`.
 
 FileTreeRepository
 ==
@@ -214,7 +214,7 @@ are javascript native types, i.e. String instead of java.nio.file.Path. The api 
 can be found here: 
 [javascript public api](https://swoval.github.io/files/js/com/swoval/files/node/index.html).
 
-To use, add `"swoval_file_tree_views": "2.0.3"` to your package.json file.
+To use, add `"swoval_file_tree_views": "2.0.4"` to your package.json file.
 
 A simple example:
 ```javascript

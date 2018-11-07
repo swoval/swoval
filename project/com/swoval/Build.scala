@@ -37,7 +37,7 @@ import scala.util.{ Properties, Try }
 object Build {
   val scalaCrossVersions @ Seq(scala210, scala211, scala212) = Seq("2.10.7", "2.11.12", "2.12.6")
 
-  def baseVersion: String = "2.0.3-SNAPSHOT"
+  def baseVersion: String = "2.0.4-SNAPSHOT"
 
   def settings(args: Def.Setting[_]*): SettingsDefinition =
     Def.SettingsDefinition.wrapSettingsDefinition(args)
