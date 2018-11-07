@@ -391,7 +391,7 @@ object Build {
         if (digest != swovalNodeMD5Sum) {
           val proc =
             new java.lang.ProcessBuilder("node", "install.js").directory(npm.toFile).start()
-          proc.waitFor(30, TimeUnit.SECONDS)
+          proc.waitFor(1, TimeUnit.MINUTES)
           if (proc.exitValue() != 0) {
             log.error(Source.fromInputStream(proc.getInputStream).mkString(""))
             log.error(Source.fromInputStream(proc.getErrorStream).mkString(""))
