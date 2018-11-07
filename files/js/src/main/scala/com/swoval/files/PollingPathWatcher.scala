@@ -15,11 +15,11 @@ import java.nio.file.NotDirectoryException
 import java.nio.file.Path
 import java.util.ArrayList
 import java.util.Collections
-import java.util.HashMap
 import java.util.Iterator
 import java.util.List
 import java.util.Map
 import java.util.Map.Entry
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -43,8 +43,8 @@ class PollingPathWatcher(private val converter: Converter[java.lang.Long],
   def this(followLinks: Boolean, pollInterval: java.lang.Long, timeUnit: TimeUnit) =
     this(
       new Converter[java.lang.Long]() {
-        override def apply(path: TypedPath): java.lang.Long =
-          try Files.getLastModifiedTime(path.getPath).toMillis()
+        override def apply(typedPath: TypedPath): java.lang.Long =
+          try Files.getLastModifiedTime(typedPath.getPath).toMillis()
           catch {
             case e: Exception => 0L
 
@@ -120,13 +120,13 @@ class PollingPathWatcher(private val converter: Converter[java.lang.Long],
 
   private def getEntries(): Map[Path, FileTreeDataViews.Entry[java.lang.Long]] = {
 // I have to use putAll because scala.js doesn't handle new HashMap(registry.registered()).
-    val map: HashMap[Path, Integer] = new HashMap[Path, Integer]()
+    val map: Map[Path, Integer] = new ConcurrentHashMap[Path, Integer]()
     this.synchronized {
       map.putAll(registry.registered())
     }
     val it: Iterator[Entry[Path, Integer]] = map.entrySet().iterator()
     val result: Map[Path, FileTreeDataViews.Entry[java.lang.Long]] =
-      new HashMap[Path, FileTreeDataViews.Entry[java.lang.Long]]()
+      new ConcurrentHashMap[Path, FileTreeDataViews.Entry[java.lang.Long]]()
     while (it.hasNext) {
       val entry: Entry[Path, Integer] = it.next()
       val entries: List[FileTreeDataViews.Entry[java.lang.Long]] =

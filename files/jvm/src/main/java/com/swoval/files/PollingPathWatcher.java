@@ -14,11 +14,11 @@ import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -128,12 +128,12 @@ class PollingPathWatcher implements PathWatcher<PathWatchers.Event> {
 
   private Map<Path, FileTreeDataViews.Entry<Long>> getEntries() {
     // I have to use putAll because scala.js doesn't handle new HashMap(registry.registered()).
-    final HashMap<Path, Integer> map = new HashMap<>();
+    final Map<Path, Integer> map = new ConcurrentHashMap<>();
     synchronized (this) {
       map.putAll(registry.registered());
     }
     final Iterator<Entry<Path, Integer>> it = map.entrySet().iterator();
-    final Map<Path, FileTreeDataViews.Entry<Long>> result = new HashMap<>();
+    final Map<Path, FileTreeDataViews.Entry<Long>> result = new ConcurrentHashMap<>();
     while (it.hasNext()) {
       final Entry<Path, Integer> entry = it.next();
       final List<FileTreeDataViews.Entry<Long>> entries =
