@@ -266,9 +266,6 @@ object CloseWatchPlugin extends AutoPlugin {
     onLoad := { state =>
       val extracted = Project.extract(state)
       clearGlobalFileRepository(state)
-      val fileCache = FileTreeRepositories.get(new Converter[Path] {
-        override def apply(typedPath: TypedPath): Path = typedPath.getPath
-      }, true)
       val session = extracted.session
       val useDefault = extracted.structure.data.data.exists(_._2.entries.exists(e =>
         e.key.label == "closeWatchUseDefaultWatchService" && e.value == true))
@@ -288,6 +285,9 @@ object CloseWatchPlugin extends AutoPlugin {
             .put(stateBuildStructure, newStructure)
             .put(sessionSettings, session.copy(original = newSettings))
         } else state
+        val fileCache = FileTreeRepositories.get(new Converter[Path] {
+          override def apply(typedPath: TypedPath): Path = typedPath.getPath
+        }, true)
         newState
           .put(closeWatchGlobalFileRepository, fileCache)
           .copy(definedCommands = filtered :+ Continuously.continuous)
