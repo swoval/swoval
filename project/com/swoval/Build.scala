@@ -2,13 +2,13 @@ package com.swoval
 
 import java.io._
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
-import java.nio.file.{ Files, Paths, StandardCopyOption, Path => JPath }
+import java.nio.file.{ Files, Paths, Path => JPath }
 import java.util.concurrent.TimeUnit
 import java.util.jar.JarFile
 
 import com.github.sbt.jacoco.JacocoKeys.{ jacocoExcludes, jacocoReportSettings }
 import com.github.sbt.jacoco.report.{ JacocoReportSettings, JacocoThresholds }
-import com.swoval.Dependencies.{ logback => SLogback, _ }
+import com.swoval.Dependencies._
 import com.swoval.format.ExtensionFilter
 import com.swoval.format.SourceFormatPlugin.autoImport.{ clangfmt, clangfmtSources, javafmt }
 import com.typesafe.sbt.pgp.PgpKeys.publishSigned
@@ -30,8 +30,6 @@ import scalajscrossproject.ScalaJSCrossPlugin.autoImport.JSCrossProjectOps
 
 import scala.collection.JavaConverters._
 import scala.io.Source
-import scala.tools.nsc
-import scala.tools.nsc.reporters.StoreReporter
 import scala.util.{ Properties, Try }
 
 object Build {
@@ -73,7 +71,7 @@ object Build {
           Some(Opts.resolver.sonatypeReleases): Option[Resolver]
         else p
       },
-      version := {
+      version in ThisBuild := {
         val v = baseVersion
         if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true")) {
           if (v.endsWith("-SNAPSHOT")) v else s"$v-SNAPSHOT"
