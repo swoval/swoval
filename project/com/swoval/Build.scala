@@ -532,7 +532,8 @@ object Build {
         val log = state.value.log
         if (System.getProperty("swoval.skip.native", "false") == "false") {
           val nativeDir = sourceDirectory.value.toPath.resolve("main/native").toFile
-          val proc = new ProcessBuilder("make", "-j", "8").directory(nativeDir).start()
+          val makeCmd = System.getProperty("swoval.make.cmd", "make")
+          val proc = new ProcessBuilder(makeCmd, "-j", "8").directory(nativeDir).start()
           proc.waitFor(1, TimeUnit.MINUTES)
           log.info(Source.fromInputStream(proc.getInputStream).mkString)
           if (proc.exitValue() != 0) {

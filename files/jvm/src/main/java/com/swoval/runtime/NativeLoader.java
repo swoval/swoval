@@ -106,7 +106,8 @@ public class NativeLoader {
                     System.getProperty(
                         "swoval.tmpdir", System.getProperty("java.io.tmpdir", "/tmp")))
                 .resolve("swoval-jni"));
-    final String resourcePath = "/native/" + arch + "/" + lib;
+    final String osSubDir = System.getProperty("os.name").startsWith("FreeBSD") ? "/freebsd/" : "/";
+    final String resourcePath = "/native/" + arch + osSubDir + lib;
     final InputStream resourceStream = NativeLoader.class.getResourceAsStream(resourcePath);
     if (resourceStream == null) {
       String msg = "Native library " + lib + " (" + resourcePath + ") can't be loaded.";
