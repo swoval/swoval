@@ -40,8 +40,7 @@ endif
 
 
 ifeq ($(UNAME_S), FreeBSD)
-	BASE_INCLUDE := $(shell locate jni.h | tail -n 1 | xargs dirname)
-	JNI_INCLUDE := -I$(BASE_INCLUDE) -I$(BASE_INCLUDE)/freebsd
+	JNI_INCLUDE := -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/freebsd
 	OBJS := $(BUILD_DIR)/x86_64/freebsd/$(QUICKLIST_SOURCE).o \
 	OBJS := $(BUILD_DIR)/i686/freebsd/$(QUICKLIST_SOURCE).o \
 
@@ -71,12 +70,10 @@ $(BUILD_DIR)/i686/linux/$(QUICKLIST_SOURCE).o: posix/$(QUICKLIST_SOURCE).cc
 	$(CC) -c -m32 $< $(CCFLAGS) $(JNI_INCLUDE) -fPIC -o $@
 
 $(BUILD_DIR)/x86_64/freebsd/$(QUICKLIST_SOURCE).o: posix/$(QUICKLIST_SOURCE).cc
-	echo $(JNI_INCLUDE)
 	mkdir -p $(BUILD_DIR)/x86_64/freebsd; \
 	$(CC) -c $< $(CCFLAGS) $(JNI_INCLUDE) -fPIC -o $@
 
 $(BUILD_DIR)/i686/freebsd/$(QUICKLIST_SOURCE).o: posix/$(QUICKLIST_SOURCE).cc
-	echo $(JNI_INCLUDE)
 	mkdir -p $(BUILD_DIR)/i686/freebsd; \
 	$(CC) -c -m32 $< $(CCFLAGS) $(JNI_INCLUDE) -fPIC -o $@
 
