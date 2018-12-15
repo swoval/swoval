@@ -8,8 +8,8 @@ This is a scala.js and jvm cross platform package that provides three important 
   notifies the user when files are created/modified/deleted. It implements both the PathWatcher
   and the FileTreeView interfaces.
 
-Javadocs may be found at [files-jvm](https://swoval.github.io/files/jvm).
-Scaladocs for scala.js may be found at [files-js](https://swoval.github.io/files/js).
+Javadocs may be found at [files-jvm](https://swoval.github.io/docs/swoval/2.0.5/jvm/api).
+Scaladocs for scala.js may be found at [files-js](https://swoval.github.io/docs/swoval/2.0.5/js/api).
 Not that most of the scala.js code is automatically generated from the java code so the javadocs
 should be considered canonical.
 
@@ -208,11 +208,11 @@ Please report any that you find.
 Javascript
 ==
 There is also an npm module available [swoval-file-tree-views](https://www.npmjs.com/package/swoval_file_tree_views),
-that exports a subset of the public api as documented in [files-jvm](https://swoval.github.io/files/jvm).
+that exports a subset of the public api as documented in [files-jvm](https://swoval.github.io/docs/swoval/2.0.5/jvm/api).
 In general, it should have very similar semantics except that all of the types in the public api
 are javascript native types, i.e. String instead of java.nio.file.Path. The api documentation
-can be found here: 
-[javascript public api](https://swoval.github.io/files/js/com/swoval/files/node/index.html).
+can be found here:
+[javascript public api](https://swoval.github.io/docs/swoval/2.0.5/js/api/com/swoval/files/node/index.html).
 
 To use, add `"swoval_file_tree_views": "2.0.5"` to your package.json file.
 
