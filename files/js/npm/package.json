@@ -1,6 +1,6 @@
 {
   "name": "swoval_file_tree_views",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "Utilities for listing and monitoring directories.",
   "main": "files.js",
   "scripts": {
