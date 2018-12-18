@@ -6,13 +6,15 @@ import java.io.IOException
 import java.nio.file.{ FileSystemLoopException, Files, Path, Paths }
 import java.util.concurrent.atomic.AtomicBoolean
 
-import com.swoval.files.PathWatchers.{ Event, Overflow }
 import com.swoval.files.PathWatchers.Event.Kind.{ Delete, Error, Modify }
+import com.swoval.files.PathWatchers.{ Event, Overflow }
 import com.swoval.functional.Consumer
 import io.scalajs.nodejs
 import io.scalajs.nodejs.fs.{ FSWatcherOptions, Fs }
 
+import scala.concurrent.duration._
 import scala.scalajs.js
+import scala.scalajs.js.timers._
 import scala.util.Try
 
 /**
@@ -50,7 +52,7 @@ private[files] class NioPathWatcherService(
         case _ if isValid(path) =>
           val cb: js.Function2[nodejs.EventType, String, Unit] =
             (tpe: nodejs.EventType, name: String) => {
-              val watchPath = path.resolve(Paths.get(name))
+              val watchPath = path.resolve(Paths.get(if (name != null) name else ""))
               val exists = Files.exists(watchPath)
               val kind: Event.Kind = tpe match {
                 case "rename" if !exists => Delete
@@ -62,12 +64,17 @@ private[files] class NioPathWatcherService(
 
           val closed = new AtomicBoolean(false)
           val watcher = Fs.watch(path.toString, options, cb)
-          watcher.onError { e =>
-            closed.set(true)
-            watcher.close()
-            watchedDirectoriesByPath += path -> WatchedDirectories.INVALID
-            eventConsumer.accept(functional.Either.right(new Event(TypedPaths.get(path), Error)))
+          def setOnError(): Unit = {
+            watcher.onError { _ =>
+              closed.set(true)
+              watcher.close()
+              watchedDirectoriesByPath += path -> WatchedDirectories.INVALID
+              eventConsumer.accept(functional.Either.right(new Event(TypedPaths.get(path), Error)))
+            }
+            ()
           }
+          try setOnError()
+          catch { case _: Exception => setTimeout(1.millis)(setOnError()) }
           val watchedDirectory: WatchedDirectory = new WatchedDirectory {
             override def close(): Unit = if (closed.compareAndSet(false, true)) {
               watchedDirectoriesByPath -= path
