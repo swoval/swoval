@@ -126,7 +126,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
           } else {
             final Entry<T> entry = leftProjection(findResult).getValue();
             final List<TypedPath> result = new ArrayList<>();
-            if (entry != null && filter.accept(entry.getTypedPath()))
+            if (entry != null && filter.accept(entry.getTypedPath()) && maxDepth == -1)
               result.add(
                   TypedPaths.getDelegate(entry.getTypedPath().getPath(), entry.getTypedPath()));
             return result;

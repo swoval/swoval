@@ -30,7 +30,7 @@ object FileTreeDataViews {
                             converter,
                             depth,
                             Filters.AllPass,
-                            FileTreeViews.getDefault(followLinks)).init()
+                            FileTreeViews.getDefault(followLinks, false)).init()
 
   /**
    * Container class for [[CachedDirectoryImpl]] entries. Contains both the path to which the
@@ -64,12 +64,12 @@ object FileTreeDataViews {
   trait Converter[R] {
 
     /**
-     * Convert the path to a value.
+     * Convert the typedPath to a value.
      *
-     * @param path the path to convert
+     * @param typedPath the typedPath to convert
      * @return the converted value
      */
-    def apply(path: TypedPath): R
+    def apply(typedPath: TypedPath): R
 
   }
 

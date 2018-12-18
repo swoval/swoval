@@ -33,7 +33,7 @@ public class FileTreeDataViews {
             converter,
             depth,
             Filters.AllPass,
-            FileTreeViews.getDefault(followLinks))
+            FileTreeViews.getDefault(followLinks, false))
         .init();
   }
 

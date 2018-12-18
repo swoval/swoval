@@ -3,7 +3,6 @@ package com.swoval.files;
 import com.swoval.functional.Filter;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.FileSystemLoopException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -23,12 +22,23 @@ final class SimpleFileTreeView implements FileTreeView {
   static final int FILE = Entries.FILE;
   static final int LINK = Entries.LINK;
   static final int NONEXISTENT = Entries.NONEXISTENT;
+  private static final boolean VERBOSE =
+      System.getProperty("swoval.verbose", "false").equals("true");
   private final DirectoryLister directoryLister;
   private final boolean followLinks;
+  private final boolean ignoreExceptions;
 
-  SimpleFileTreeView(final DirectoryLister directoryLister, final boolean followLinks) {
+  SimpleFileTreeView(
+      final DirectoryLister directoryLister,
+      final boolean followLinks,
+      final boolean ignoreExceptions) {
     this.directoryLister = directoryLister;
     this.followLinks = followLinks;
+    this.ignoreExceptions = ignoreExceptions;
+  }
+
+  SimpleFileTreeView(final DirectoryLister directoryLister, final boolean followLinks) {
+    this(directoryLister, followLinks, true);
   }
 
   @Override
@@ -36,9 +46,12 @@ final class SimpleFileTreeView implements FileTreeView {
       final Path path, final int maxDepth, final Filter<? super TypedPath> filter)
       throws IOException {
     final List<TypedPath> result = new ArrayList<>();
-    final Set<Path> visited = (followLinks && maxDepth > 0) ? new HashSet<Path>() : null;
-    listDirImpl(path, 1, maxDepth, result, filter, visited);
-    if (visited != null) visited.clear();
+    if (maxDepth >= 0) {
+      new Lister(filter, result, followLinks, ignoreExceptions).fillResults(path, maxDepth);
+    } else {
+      final TypedPath typedPath = TypedPaths.get(path);
+      if (filter.accept(typedPath)) result.add(typedPath);
+    }
     return result;
   }
 
@@ -86,7 +99,7 @@ final class SimpleFileTreeView implements FileTreeView {
     }
   }
 
-  private int getSymbolicLinkTargetKind(final Path path, final boolean followLinks)
+  private static int getSymbolicLinkTargetKind(final Path path, final boolean followLinks)
       throws IOException {
     if (followLinks) {
       try {
@@ -100,53 +113,82 @@ final class SimpleFileTreeView implements FileTreeView {
     }
   }
 
-  private void listDirImpl(
-      final Path dir,
-      final int depth,
-      final int maxDepth,
-      final List<TypedPath> result,
-      final Filter<? super TypedPath> filter,
-      final Set<Path> visited)
-      throws IOException {
-    if (visited != null) visited.add(dir);
-    final SimpleFileTreeView.ListResults listResults =
-        directoryLister.apply(dir.toAbsolutePath().toString(), followLinks);
-    final Iterator<String> it = listResults.getDirectories().iterator();
-    while (it.hasNext()) {
-      final String part = it.next();
-      if (!part.equals(".") && !part.equals("..")) {
-        final Path path = Paths.get(dir + File.separator + part);
-        final TypedPath file = TypedPaths.get(path, DIRECTORY);
-        if (filter.accept(file)) {
-          result.add(file);
-          if (depth < maxDepth) {
-            listDirImpl(path, depth + 1, maxDepth, result, filter, visited);
-          }
-        }
+  private static int decrement(final int maxDepth) {
+    return maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - 1;
+  }
+
+  private class Lister {
+    final List<TypedPath> result;
+    final Set<Path> visited = new HashSet<>();
+    final Filter<? super TypedPath> filter;
+    final boolean followLinks;
+    final boolean ignoreExceptions;
+
+    Lister(
+        final Filter<? super TypedPath> filter,
+        final List<TypedPath> result,
+        final boolean followLinks,
+        final boolean ignoreExceptions) {
+      this.filter = filter;
+      this.followLinks = followLinks;
+      this.result = result;
+      this.ignoreExceptions = ignoreExceptions;
+    }
+
+    void fillResults(final Path dir, final int maxDepth) throws IOException {
+      try {
+        impl(dir, maxDepth);
+      } finally {
+        visited.clear();
       }
     }
-    final Iterator<String> fileIt = listResults.getFiles().iterator();
-    while (fileIt.hasNext()) {
-      final TypedPath typedPath =
-          TypedPaths.get(Paths.get(dir + File.separator + fileIt.next()), FILE);
-      if (filter.accept(typedPath)) {
-        result.add(typedPath);
-      }
-    }
-    final Iterator<String> symlinkIt = listResults.getSymlinks().iterator();
-    while (symlinkIt.hasNext()) {
-      final Path fileName = Paths.get(dir + File.separator + symlinkIt.next());
-      final TypedPath typedPath =
-          TypedPaths.get(fileName, getSymbolicLinkTargetKind(fileName, followLinks));
-      if (filter.accept(typedPath)) {
-        result.add(typedPath);
-        if (typedPath.isDirectory() && depth < maxDepth && visited != null) {
-          if (visited.add(typedPath.getPath().toRealPath())) {
-            listDirImpl(fileName, depth + 1, maxDepth, result, filter, visited);
-          } else {
-            throw new FileSystemLoopException(fileName.toString());
+
+    private void impl(final Path dir, final int maxDepth) throws IOException {
+      try {
+        final SimpleFileTreeView.ListResults listResults =
+            directoryLister.apply(dir.toAbsolutePath().toString(), followLinks);
+        visited.add(dir);
+        final Iterator<String> it = listResults.getDirectories().iterator();
+        while (it.hasNext()) {
+          final String part = it.next();
+          if (!part.equals(".") && !part.equals("..")) {
+            final Path path = Paths.get(dir + File.separator + part);
+            final TypedPath file = TypedPaths.get(path, DIRECTORY);
+            if (filter.accept(file)) {
+              result.add(file);
+            }
+            if (maxDepth > 0) {
+              fillResults(path, decrement(maxDepth));
+            }
           }
         }
+        final Iterator<String> fileIt = listResults.getFiles().iterator();
+        while (fileIt.hasNext()) {
+          final TypedPath typedPath =
+              TypedPaths.get(Paths.get(dir + File.separator + fileIt.next()), FILE);
+          if (filter.accept(typedPath)) {
+            result.add(typedPath);
+          }
+        }
+        final Iterator<String> symlinkIt = listResults.getSymlinks().iterator();
+        while (symlinkIt.hasNext()) {
+          final Path fileName = Paths.get(dir + File.separator + symlinkIt.next());
+          final TypedPath typedPath =
+              TypedPaths.get(fileName, getSymbolicLinkTargetKind(fileName, followLinks));
+          if (filter.accept(typedPath)) {
+            result.add(typedPath);
+          }
+          if (typedPath.isDirectory() && maxDepth > 0) {
+            if (visited.add(typedPath.getPath().toRealPath())) {
+              fillResults(fileName, decrement(maxDepth));
+            } else {
+              if (VERBOSE)
+                System.err.println("Detected symlink loop for path " + typedPath.getPath());
+            }
+          }
+        }
+      } catch (final IOException e) {
+        if (!ignoreExceptions) throw e;
       }
     }
   }

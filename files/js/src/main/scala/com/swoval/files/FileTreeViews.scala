@@ -52,7 +52,7 @@ object FileTreeViews {
                             PATH_CONVERTER,
                             depth,
                             Filters.AllPass,
-                            getDefault(followLinks)).init()
+                            getDefault(followLinks, false)).init()
 
   /**
    * Returns an instance of [[FileTreeView]] that uses only apis available in java.nio.file.
@@ -86,7 +86,22 @@ object FileTreeViews {
    * @return an instance of [[FileTreeView]].
    */
   def getDefault(followLinks: Boolean): FileTreeView =
-    new SimpleFileTreeView(defaultDirectoryLister, followLinks)
+    getDefault(followLinks, true)
+
+  /**
+   * Returns the default [[FileTreeView]] for the runtime platform. If a native implementation
+   * is present, it will be used. Otherwise, it will fall back to the java.nio.file based
+   * implementation.
+   *
+   * @param followLinks toggles whether or not to follow the targets of symbolic links to
+   *     directories.
+   * @param ignoreExceptions toggles whether or not to ignore IOExceptions thrown while listing the
+   *     directory. If true, some files that are found may be silently dropped if accessing them
+   *     caused an exception.
+   * @return an instance of [[FileTreeView]].
+   */
+  def getDefault(followLinks: Boolean, ignoreExceptions: Boolean): FileTreeView =
+    new SimpleFileTreeView(defaultDirectoryLister, followLinks, ignoreExceptions)
 
   /**
    * List the contents of a path.
@@ -96,7 +111,7 @@ object FileTreeViews {
    *     path itself is returned. Otherwise an empty list is returned.
    * @param maxDepth the maximum depth of children to include in the results
    * @param filter only include paths accepted by this filter
-   * @return a [[java.util.List]] of [[TypedPath]]
+   * @return a [[java.util.List]] of [[com.swoval.files.TypedPath]]
    */
   def list(path: Path, maxDepth: Int, filter: Filter[_ >: TypedPath]): List[TypedPath] =
     defaultFileTreeView.list(path, maxDepth, filter)
