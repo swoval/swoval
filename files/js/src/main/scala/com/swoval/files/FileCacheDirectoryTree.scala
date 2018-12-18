@@ -491,6 +491,6 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                             converter,
                             depth,
                             filter,
-                            FileTreeViews.getDefault(followLinks)).init()
+                            FileTreeViews.getDefault(followLinks, false)).init()
 
 }

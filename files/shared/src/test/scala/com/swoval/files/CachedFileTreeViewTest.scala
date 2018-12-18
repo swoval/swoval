@@ -2,13 +2,14 @@ package com.swoval.files
 
 import java.io.IOException
 import java.nio.file.{ Files, Path }
-import java.util
 
-import FileTreeDataViews.{ CacheObserver, Entry }
+import com.swoval.files.FileTreeDataViews.{ CacheObserver, Entry }
 import com.swoval.files.FileTreeViewTest.RepositoryOps
 import com.swoval.files.FileTreeViews.Observer
+import com.swoval.files.TestHelpers.EntryOps._
+import com.swoval.files.TestHelpers._
 import com.swoval.files.test._
-import com.swoval.functional.{ Consumer, Filter }
+import com.swoval.functional.Filter
 import com.swoval.functional.Filters.AllPass
 import com.swoval.test._
 import utest._
@@ -16,8 +17,6 @@ import utest._
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.Future
-import TestHelpers._
-import EntryOps._
 
 object CachedFileTreeViewTest extends TestSuite {
   def newCachedView(path: Path): CachedDirectory[Path] = newCachedView(path, Integer.MAX_VALUE)
@@ -28,7 +27,7 @@ object CachedFileTreeViewTest extends TestSuite {
                             (_: TypedPath).getPath,
                             maxDepth,
                             AllPass,
-                            FileTreeViews.getDefault(followLinks))
+                            FileTreeViews.getDefault(followLinks, false))
       .init()
   class Updates[T <: AnyRef](u: FileTreeViews.Updates[T]) {
     private[this] var _creations: Seq[Entry[T]] = Nil
@@ -55,7 +54,7 @@ object CachedFileTreeViewTest extends TestSuite {
       withTempFileSync(dir) { f =>
         directory.ls(f, recursive = false, AllPass) === Seq.empty
         assert(directory.update(TypedPaths.get(f, Entries.FILE)).toUpdates.creations.nonEmpty)
-        directory.ls(f, recursive = false, AllPass) === Seq(f)
+        directory.ls(f, -1, AllPass) === Seq(f)
       }
     }
     def directory: Future[Unit] = withTempDirectory { dir =>
@@ -221,7 +220,7 @@ object CachedFileTreeViewTest extends TestSuite {
                               converter,
                               Integer.MAX_VALUE,
                               (_: TypedPath) => true,
-                              FileTreeViews.getDefault(true)).init()
+                              FileTreeViews.getDefault(true, false)).init()
     def overrides: Future[Unit] = withTempFileSync { f =>
       val dir = newDirectory(f.getParent, LastModified(_: TypedPath))
       val lastModified = f.lastModified

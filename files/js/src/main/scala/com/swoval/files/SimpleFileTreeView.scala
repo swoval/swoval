@@ -5,7 +5,6 @@ package com.swoval.files
 import com.swoval.functional.Filter
 import java.io.File
 import java.io.IOException
-import java.nio.file.FileSystemLoopException
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -33,6 +32,9 @@ object SimpleFileTreeView {
   val LINK: Int = Entries.LINK
 
   val NONEXISTENT: Int = Entries.NONEXISTENT
+
+  private val VERBOSE: Boolean =
+    System.getProperty("swoval.verbose", "false").==("true")
 
   class ListResults {
 
@@ -66,23 +68,6 @@ object SimpleFileTreeView {
 
   }
 
-}
-
-class SimpleFileTreeView(private val directoryLister: DirectoryLister,
-                         private val followLinks: Boolean)
-    extends FileTreeView {
-
-  override def list(path: Path, maxDepth: Int, filter: Filter[_ >: TypedPath]): List[TypedPath] = {
-    val result: List[TypedPath] = new ArrayList[TypedPath]()
-    val visited: Set[Path] =
-      if ((followLinks && maxDepth > 0)) new HashSet[Path]() else null
-    listDirImpl(path, 1, maxDepth, result, filter, visited)
-    if (visited != null) visited.clear()
-    result
-  }
-
-  override def close(): Unit = {}
-
   private def getSymbolicLinkTargetKind(path: Path, followLinks: Boolean): Int =
     if (followLinks) {
       try {
@@ -99,53 +84,96 @@ class SimpleFileTreeView(private val directoryLister: DirectoryLister,
       LINK
     }
 
-  private def listDirImpl(dir: Path,
-                          depth: Int,
-                          maxDepth: Int,
-                          result: List[TypedPath],
-                          filter: Filter[_ >: TypedPath],
-                          visited: Set[Path]): Unit = {
-    if (visited != null) visited.add(dir)
-    val listResults: SimpleFileTreeView.ListResults =
-      directoryLister.apply(dir.toAbsolutePath().toString, followLinks)
-    val it: Iterator[String] = listResults.getDirectories.iterator()
-    while (it.hasNext) {
-      val part: String = it.next()
-      if (part.!=(".") && part.!=("..")) {
-        val path: Path = Paths.get(dir + File.separator + part)
-        val file: TypedPath = TypedPaths.get(path, DIRECTORY)
-        if (filter.accept(file)) {
-          result.add(file)
-          if (depth < maxDepth) {
-            listDirImpl(path, depth + 1, maxDepth, result, filter, visited)
+  private def decrement(maxDepth: Int): Int =
+    if (maxDepth == java.lang.Integer.MAX_VALUE) maxDepth else maxDepth - 1
+
+}
+
+class SimpleFileTreeView(private val directoryLister: DirectoryLister,
+                         private val followLinks: Boolean,
+                         private val ignoreExceptions: Boolean)
+    extends FileTreeView {
+
+  def this(directoryLister: DirectoryLister, followLinks: Boolean) =
+    this(directoryLister, followLinks, true)
+
+  override def list(path: Path, maxDepth: Int, filter: Filter[_ >: TypedPath]): List[TypedPath] = {
+    val result: List[TypedPath] = new ArrayList[TypedPath]()
+    if (maxDepth >= 0) {
+      new Lister(filter, result, followLinks, ignoreExceptions)
+        .fillResults(path, maxDepth)
+    } else {
+      val typedPath: TypedPath = TypedPaths.get(path)
+      if (filter.accept(typedPath)) result.add(typedPath)
+    }
+    result
+  }
+
+  override def close(): Unit = {}
+
+  private class Lister(val filter: Filter[_ >: TypedPath],
+                       val result: List[TypedPath],
+                       val followLinks: Boolean,
+                       val ignoreExceptions: Boolean) {
+
+    val visited: Set[Path] = new HashSet()
+
+    def fillResults(dir: Path, maxDepth: Int): Unit = {
+      try impl(dir, maxDepth)
+      finally visited.clear()
+    }
+
+    private def impl(dir: Path, maxDepth: Int): Unit = {
+      try {
+        val listResults: SimpleFileTreeView.ListResults =
+          directoryLister.apply(dir.toAbsolutePath().toString, followLinks)
+        visited.add(dir)
+        val it: Iterator[String] = listResults.getDirectories.iterator()
+        while (it.hasNext) {
+          val part: String = it.next()
+          if (part.!=(".") && part.!=("..")) {
+            val path: Path = Paths.get(dir + File.separator + part)
+            val file: TypedPath = TypedPaths.get(path, DIRECTORY)
+            if (filter.accept(file)) {
+              result.add(file)
+            }
+            if (maxDepth > 0) {
+              fillResults(path, decrement(maxDepth))
+            }
           }
         }
-      }
-    }
-    val fileIt: Iterator[String] = listResults.getFiles.iterator()
-    while (fileIt.hasNext) {
-      val typedPath: TypedPath =
-        TypedPaths.get(Paths.get(dir + File.separator + fileIt.next()), FILE)
-      if (filter.accept(typedPath)) {
-        result.add(typedPath)
-      }
-    }
-    val symlinkIt: Iterator[String] = listResults.getSymlinks.iterator()
-    while (symlinkIt.hasNext) {
-      val fileName: Path = Paths.get(dir + File.separator + symlinkIt.next())
-      val typedPath: TypedPath =
-        TypedPaths.get(fileName, getSymbolicLinkTargetKind(fileName, followLinks))
-      if (filter.accept(typedPath)) {
-        result.add(typedPath)
-        if (typedPath.isDirectory && depth < maxDepth && visited != null) {
-          if (visited.add(typedPath.getPath.toRealPath())) {
-            listDirImpl(fileName, depth + 1, maxDepth, result, filter, visited)
-          } else {
-            throw new FileSystemLoopException(fileName.toString)
+        val fileIt: Iterator[String] = listResults.getFiles.iterator()
+        while (fileIt.hasNext) {
+          val typedPath: TypedPath =
+            TypedPaths.get(Paths.get(dir + File.separator + fileIt.next()), FILE)
+          if (filter.accept(typedPath)) {
+            result.add(typedPath)
           }
         }
+        val symlinkIt: Iterator[String] = listResults.getSymlinks.iterator()
+        while (symlinkIt.hasNext) {
+          val fileName: Path =
+            Paths.get(dir + File.separator + symlinkIt.next())
+          val typedPath: TypedPath =
+            TypedPaths.get(fileName, getSymbolicLinkTargetKind(fileName, followLinks))
+          if (filter.accept(typedPath)) {
+            result.add(typedPath)
+          }
+          if (typedPath.isDirectory && maxDepth > 0) {
+            if (visited.add(typedPath.getPath.toRealPath())) {
+              fillResults(fileName, decrement(maxDepth))
+            } else {
+              if (VERBOSE)
+                System.err.println("Detected symlink loop for path " + typedPath.getPath)
+            }
+          }
+        }
+      } catch {
+        case e: IOException => if (!ignoreExceptions) throw e
+
       }
     }
+
   }
 
 }

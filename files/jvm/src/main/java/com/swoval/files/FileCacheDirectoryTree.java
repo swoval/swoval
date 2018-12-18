@@ -550,7 +550,11 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   private CachedDirectory<T> newCachedDirectory(final Path path, final int depth)
       throws IOException {
     return new CachedDirectoryImpl<>(
-            TypedPaths.get(path), converter, depth, filter, FileTreeViews.getDefault(followLinks))
+            TypedPaths.get(path),
+            converter,
+            depth,
+            filter,
+            FileTreeViews.getDefault(followLinks, false))
         .init();
   }
 }

@@ -108,7 +108,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
           } else {
             val entry: Entry[T] = leftProjection(findResult).getValue
             val result: List[TypedPath] = new ArrayList[TypedPath]()
-            if (entry != null && filter.accept(entry.getTypedPath))
+            if (entry != null && filter.accept(entry.getTypedPath) && maxDepth == -1)
               result.add(TypedPaths.getDelegate(entry.getTypedPath.getPath, entry.getTypedPath))
             result
           }

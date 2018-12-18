@@ -195,7 +195,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
               typedPath.isDirectory && !typedPath.isSymbolicLink && directoryRegistry
                 .acceptPrefix(typedPath.getPath)
           },
-          FileTreeViews.getDefault(false)
+          FileTreeViews.getDefault(false, false)
         ).init()
         init = true
         rootDirectories.put(toAdd, result)

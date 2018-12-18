@@ -56,7 +56,11 @@ public class FileTreeViews {
   public static DirectoryView cached(final Path path, final int depth, final boolean followLinks)
       throws IOException {
     return new CachedDirectoryImpl<>(
-            TypedPaths.get(path), PATH_CONVERTER, depth, Filters.AllPass, getDefault(followLinks))
+            TypedPaths.get(path),
+            PATH_CONVERTER,
+            depth,
+            Filters.AllPass,
+            getDefault(followLinks, false))
         .init();
   }
 
@@ -98,7 +102,23 @@ public class FileTreeViews {
    * @return an instance of {@link FileTreeView}.
    */
   public static FileTreeView getDefault(final boolean followLinks) {
-    return new SimpleFileTreeView(defaultDirectoryLister, followLinks);
+    return getDefault(followLinks, true);
+  }
+
+  /**
+   * Returns the default {@link FileTreeView} for the runtime platform. If a native implementation
+   * is present, it will be used. Otherwise, it will fall back to the java.nio.file based
+   * implementation.
+   *
+   * @param followLinks toggles whether or not to follow the targets of symbolic links to
+   *     directories.
+   * @param ignoreExceptions toggles whether or not to ignore IOExceptions thrown while listing the
+   *     directory. If true, some files that are found may be silently dropped if accessing them
+   *     caused an exception.
+   * @return an instance of {@link FileTreeView}.
+   */
+  public static FileTreeView getDefault(final boolean followLinks, final boolean ignoreExceptions) {
+    return new SimpleFileTreeView(defaultDirectoryLister, followLinks, ignoreExceptions);
   }
 
   /**
@@ -109,7 +129,7 @@ public class FileTreeViews {
    *     path itself is returned. Otherwise an empty list is returned.
    * @param maxDepth the maximum depth of children to include in the results
    * @param filter only include paths accepted by this filter
-   * @return a {@link java.util.List} of {@link TypedPath}
+   * @return a {@link java.util.List} of {@link com.swoval.files.TypedPath}
    * @throws IOException if the Path doesn't exist
    */
   public static List<TypedPath> list(

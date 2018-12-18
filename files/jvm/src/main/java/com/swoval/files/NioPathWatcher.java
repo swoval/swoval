@@ -214,7 +214,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                               && directoryRegistry.acceptPrefix(typedPath.getPath());
                         }
                       },
-                      FileTreeViews.getDefault(false))
+                      FileTreeViews.getDefault(false, false))
                   .init();
           init = true;
           rootDirectories.put(toAdd, result);
