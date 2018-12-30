@@ -597,7 +597,7 @@ object Build {
         }
       }
     )
-    .dependsOn(testing % "test->test")
+    .dependsOn(testing % "test->compile")
 
   lazy val plugin: Project = project
     .in(file("plugin"))
@@ -619,7 +619,7 @@ object Build {
       watchSources ++= (watchSources in files.jvm).value,
       utestFramework
     )
-    .dependsOn(files.jvm % "compile->compile;test->test", testing.jvm % "test->test")
+    .dependsOn(files.jvm % "compile->compile", testing.jvm % "test->compile")
 
   lazy val scalagen: Project = project
     .in(file("scalagen"))
