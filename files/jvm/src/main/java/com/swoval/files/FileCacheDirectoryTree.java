@@ -409,7 +409,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         if (maxDepth == Integer.MAX_VALUE) {
           toRemove.add(dir.getPath());
         } else {
-          int depth = path.relativize(dir.getPath()).getNameCount() - 1;
+          int depth = path.relativize(dir.getPath()).getNameCount();
           if (maxDepth - depth >= dir.getMaxDepth()) {
             toRemove.add(dir.getPath());
           }

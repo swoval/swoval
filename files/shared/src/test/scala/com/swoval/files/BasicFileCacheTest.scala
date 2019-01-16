@@ -281,6 +281,24 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           }
         }
       }
+      'order - withTempDirectory { dir =>
+        withTempDirectory(dir) { subdir =>
+          val latch = new CountDownLatch(1)
+          val file = subdir.resolve("file")
+          usingAsync(simpleCache((e: Entry[Path]) =>
+            if (e.getTypedPath.getPath == file) latch.countDown())) { c =>
+            c.reg(subdir, false)
+            c.ls(subdir) === Set.empty[Path]
+            c.register(dir, false)
+            c.ls(dir) === Set(subdir)
+            Files.createFile(file)
+            latch.waitFor(DEFAULT_TIMEOUT) {
+              c.ls(dir) === Set(subdir)
+              c.ls(subdir) === Set(file)
+            }
+          }
+        }
+      }
     }
     'cache - {
       'update - withTempFile { file =>

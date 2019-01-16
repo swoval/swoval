@@ -371,7 +371,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         if (maxDepth == java.lang.Integer.MAX_VALUE) {
           toRemove.add(dir.getPath)
         } else {
-          val depth: Int = path.relativize(dir.getPath).getNameCount - 1
+          val depth: Int = path.relativize(dir.getPath).getNameCount
           if (maxDepth - depth >= dir.getMaxDepth) {
             toRemove.add(dir.getPath)
           }
