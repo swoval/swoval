@@ -8,7 +8,7 @@ Usage
 ---
 Add
 ```
-addSbtPlugin("com.swoval" %% "sbt-close-watch" % "2.0.6")
+addSbtPlugin("com.swoval" %% "sbt-close-watch" % "2.0.7")
 ```
 to your project/plugins.sbt. To apply the plugin globally, add those commands to
   `~/.sbt/1.0/plugins/watch.sbt` or `~/.sbt/0.13/plugins/watch.sbt` (creating the file if necessary).

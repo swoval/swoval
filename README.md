@@ -14,7 +14,7 @@ swoval
 
 A collection of small developer libraries.
 
-The latest version is `2.0.6`.
+The latest version is `2.0.7`.
 
 File tree views
 =
