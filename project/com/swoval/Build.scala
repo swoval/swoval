@@ -348,12 +348,6 @@ object Build {
       cleanAllGlobals,
       nodeNativeLibs,
       (fullOptJS in Compile) := {
-        val files = Seq(
-          "CMakeLists.txt",
-          "install.js",
-          "src/swoval_apple_file_system.hpp",
-          "src/swoval_apple_file_system_api_node.cc"
-        )
         val npm = baseDirectory.value.toPath.resolve("npm")
         Files.createDirectories(npm.resolve("src"))
 
