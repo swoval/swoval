@@ -63,18 +63,20 @@ class PollingPathWatcher implements PathWatcher<PathWatchers.Event> {
 
   @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
+    final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
     boolean result;
-    final List<FileTreeDataViews.Entry<Long>> entries = getEntries(path, maxDepth);
+    final List<FileTreeDataViews.Entry<Long>> entries = getEntries(absolutePath, maxDepth);
     synchronized (this) {
       addAll(oldEntries, entries);
-      result = registry.addDirectory(path, maxDepth);
+      result = registry.addDirectory(absolutePath, maxDepth);
     }
     return Either.right(result);
   }
 
   @Override
   public void unregister(final Path path) {
-    registry.removeDirectory(path);
+    final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
+    registry.removeDirectory(absolutePath);
   }
 
   @Override

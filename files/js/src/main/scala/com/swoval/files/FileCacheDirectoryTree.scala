@@ -125,16 +125,18 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     READ_ONLY_DIRECTORY_REGISTRY
 
   def unregister(path: Path): Unit = {
+    val absolutePath: Path =
+      if (path.isAbsolute) path else path.toAbsolutePath()
     if (directories.lock()) {
       try {
-        directoryRegistry.removeDirectory(path)
-        if (!directoryRegistry.accept(path)) {
-          val dir: CachedDirectory[T] = find(path)
+        directoryRegistry.removeDirectory(absolutePath)
+        if (!directoryRegistry.accept(absolutePath)) {
+          val dir: CachedDirectory[T] = find(absolutePath)
           if (dir != null) {
-            if (dir.getPath == path) {
-              directories.remove(path)
+            if (dir.getPath == absolutePath) {
+              directories.remove(absolutePath)
             } else {
-              dir.remove(path)
+              dir.remove(absolutePath)
             }
           }
         }
@@ -310,10 +312,13 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
 
   def register(path: Path,
                maxDepth: Int,
-               watcher: PathWatcher[PathWatchers.Event]): CachedDirectory[T] =
-    if (directoryRegistry.addDirectory(path, maxDepth) && directories.lock()) {
+               watcher: PathWatcher[PathWatchers.Event]): CachedDirectory[T] = {
+    val absolutePath: Path =
+      if (path.isAbsolute) path else path.toAbsolutePath()
+    if (directoryRegistry.addDirectory(absolutePath, maxDepth) &&
+        directories.lock()) {
       try {
-        watcher.register(path, maxDepth)
+        watcher.register(absolutePath, maxDepth)
         val dirs: List[CachedDirectory[T]] =
           new ArrayList[CachedDirectory[T]](directories.values)
         Collections.sort(
@@ -327,8 +332,10 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         var existing: CachedDirectory[T] = null
         while (it.hasNext && existing == null) {
           val dir: CachedDirectory[T] = it.next()
-          if (path.startsWith(dir.getPath)) {
-            val depth: Int = dir.getPath.relativize(path).getNameCount - 1
+          if (absolutePath.startsWith(dir.getPath)) {
+            val depth: Int = dir.getPath
+              .relativize(absolutePath)
+              .getNameCount - 1
             if (dir.getMaxDepth == java.lang.Integer.MAX_VALUE || dir.getMaxDepth - depth > maxDepth) {
               existing = dir
             }
@@ -337,30 +344,31 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         var dir: CachedDirectory[T] = null
         if (existing == null) {
           try {
-            try dir = newCachedDirectory(path, maxDepth)
+            try dir = newCachedDirectory(absolutePath, maxDepth)
             catch {
               case e: NotDirectoryException =>
-                dir = newCachedDirectory(path, -1)
+                dir = newCachedDirectory(absolutePath, -1)
 
             }
-            directories.put(path, dir)
+            directories.put(absolutePath, dir)
           } catch {
             case e: NoSuchFileException => {
-              pendingFiles.add(path)
-              dir = newCachedDirectory(path, -1)
+              pendingFiles.add(absolutePath)
+              dir = newCachedDirectory(absolutePath, -1)
             }
 
           }
         } else {
-          existing.update(TypedPaths.get(path))
+          existing.update(TypedPaths.get(absolutePath))
           dir = existing
         }
-        cleanupDirectories(path, maxDepth)
+        cleanupDirectories(absolutePath, maxDepth)
         dir
       } finally directories.unlock()
     } else {
       null
     }
+  }
 
   private def cleanupDirectories(path: Path, maxDepth: Int): Unit = {
     val it: Iterator[CachedDirectory[T]] = directories.values.iterator()

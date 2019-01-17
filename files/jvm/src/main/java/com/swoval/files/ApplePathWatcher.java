@@ -81,7 +81,8 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
    */
   @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
-    return register(path, flags, maxDepth);
+    final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
+    return register(absolutePath, flags, maxDepth);
   }
 
   /**
@@ -147,9 +148,10 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   @Override
   @SuppressWarnings("EmptyCatchBlock")
   public void unregister(final Path path) {
+    final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
     if (!closed.get()) {
-      directoryRegistry.removeDirectory(path);
-      final Stream stream = appleFileEventStreams.remove(path);
+      directoryRegistry.removeDirectory(absolutePath);
+      final Stream stream = appleFileEventStreams.remove(absolutePath);
       if (stream != null && stream.handle != Handles.INVALID) {
         try {
           stream.close();

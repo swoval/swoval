@@ -122,13 +122,15 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
   }
 
   override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] = {
-    val existingMaxDepth: Int = directoryRegistry.maxDepthFor(path)
+    val absolutePath: Path =
+      if (path.isAbsolute) path else path.toAbsolutePath()
+    val existingMaxDepth: Int = directoryRegistry.maxDepthFor(absolutePath)
     val result: Boolean = existingMaxDepth < maxDepth
-    val typedPath: TypedPath = TypedPaths.get(path)
+    val typedPath: TypedPath = TypedPaths.get(absolutePath)
     var realPath: Path = null
-    try realPath = path.toRealPath()
+    try realPath = absolutePath.toRealPath()
     catch {
-      case e: IOException => realPath = path
+      case e: IOException => realPath = absolutePath.toAbsolutePath()
 
     }
     if (result) {
@@ -220,13 +222,15 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
   }
 
   override def unregister(path: Path): Unit = {
-    directoryRegistry.removeDirectory(path)
+    val absolutePath: Path =
+      if (path.isAbsolute) path else path.toAbsolutePath()
+    directoryRegistry.removeDirectory(absolutePath)
     if (rootDirectories.lock()) {
       try {
         val dir: CachedDirectory[WatchedDirectory] =
-          find(path, new ArrayList[Path]())
+          find(absolutePath, new ArrayList[Path]())
         if (dir != null) {
-          val depth: Int = dir.getPath.relativize(path).getNameCount
+          val depth: Int = dir.getPath.relativize(absolutePath).getNameCount
           val toRemove: List[FileTreeDataViews.Entry[WatchedDirectory]] =
             dir.listEntries(
               depth,

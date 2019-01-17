@@ -56,18 +56,22 @@ class PollingPathWatcher(private val converter: Converter[java.lang.Long],
     )
 
   override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] = {
+    val absolutePath: Path =
+      if (path.isAbsolute) path else path.toAbsolutePath()
     var result: Boolean = false
     val entries: List[FileTreeDataViews.Entry[java.lang.Long]] =
-      getEntries(path, maxDepth)
+      getEntries(absolutePath, maxDepth)
     this.synchronized {
       addAll(oldEntries, entries)
-      result = registry.addDirectory(path, maxDepth)
+      result = registry.addDirectory(absolutePath, maxDepth)
     }
     Either.right(result)
   }
 
   override def unregister(path: Path): Unit = {
-    registry.removeDirectory(path)
+    val absolutePath: Path =
+      if (path.isAbsolute) path else path.toAbsolutePath()
+    registry.removeDirectory(absolutePath)
   }
 
   override def close(): Unit = {

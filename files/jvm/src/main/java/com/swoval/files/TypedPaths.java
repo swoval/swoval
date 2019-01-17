@@ -91,7 +91,7 @@ public class TypedPaths {
   }
 
   static TypedPath get(final Path path, final int kind) {
-    return new TypedPathImpl(path) {
+    return new TypedPathImpl(path.isAbsolute() ? path : path.toAbsolutePath()) {
       @Override
       public boolean exists() {
         return (kind & Entries.NONEXISTENT) == 0;

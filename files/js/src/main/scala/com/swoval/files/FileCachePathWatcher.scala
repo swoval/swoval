@@ -15,10 +15,13 @@ class FileCachePathWatcher[T <: AnyRef](private val tree: FileCacheDirectoryTree
   private val symlinkWatcher: SymlinkWatcher = tree.symlinkWatcher
 
   def register(path: Path, maxDepth: Int): Boolean = {
-    val dir: CachedDirectory[T] = tree.register(path, maxDepth, pathWatcher)
+    val absolutePath: Path =
+      if (path.isAbsolute) path else path.toAbsolutePath()
+    val dir: CachedDirectory[T] =
+      tree.register(absolutePath, maxDepth, pathWatcher)
     if (dir != null && symlinkWatcher != null) {
       if (dir.getEntry.getTypedPath.isSymbolicLink) {
-        symlinkWatcher.addSymlink(path, maxDepth)
+        symlinkWatcher.addSymlink(absolutePath, maxDepth)
       }
       val it: Iterator[Entry[T]] =
         dir.listEntries(dir.getMaxDepth, AllPass).iterator()
@@ -26,7 +29,7 @@ class FileCachePathWatcher[T <: AnyRef](private val tree: FileCacheDirectoryTree
         val entry: FileTreeDataViews.Entry[T] = it.next()
         if (entry.getTypedPath.isSymbolicLink) {
           val depth: Int =
-            path.relativize(entry.getTypedPath.getPath).getNameCount
+            absolutePath.relativize(entry.getTypedPath.getPath).getNameCount
           symlinkWatcher.addSymlink(entry.getTypedPath.getPath,
                                     if (maxDepth == java.lang.Integer.MAX_VALUE) maxDepth
                                     else maxDepth - depth)
@@ -37,8 +40,10 @@ class FileCachePathWatcher[T <: AnyRef](private val tree: FileCacheDirectoryTree
   }
 
   def unregister(path: Path): Unit = {
-    tree.unregister(path)
-    pathWatcher.unregister(path)
+    val absolutePath: Path =
+      if (path.isAbsolute) path else path.toAbsolutePath()
+    tree.unregister(absolutePath)
+    pathWatcher.unregister(absolutePath)
   }
 
   def close(): Unit = {

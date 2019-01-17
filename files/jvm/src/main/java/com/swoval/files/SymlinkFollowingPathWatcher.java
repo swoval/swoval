@@ -85,11 +85,13 @@ class SymlinkFollowingPathWatcher implements PathWatcher<PathWatchers.Event> {
 
   @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
-    final Either<IOException, Boolean> pathWatcherResult = pathWatcher.register(path, maxDepth);
+    final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
+    final Either<IOException, Boolean> pathWatcherResult =
+        pathWatcher.register(absolutePath, maxDepth);
     Either<IOException, Boolean> listResult = pathWatcherResult;
     if (pathWatcherResult.isRight()) {
       try {
-        handleNewDirectory(path, maxDepth, false);
+        handleNewDirectory(absolutePath, maxDepth, false);
         listResult = Either.right(true);
       } catch (final IOException e) {
         listResult = Either.left(e);
@@ -98,13 +100,15 @@ class SymlinkFollowingPathWatcher implements PathWatcher<PathWatchers.Event> {
     return listResult;
   }
 
+  @SuppressWarnings("EmptyCatchBlock")
   @Override
   public void unregister(final Path path) {
+    final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
     try {
       final Iterator<TypedPath> it =
           FileTreeViews.list(
-                  path,
-                  pathWatcherDirectoryRegistry.maxDepthFor(path),
+                  absolutePath,
+                  pathWatcherDirectoryRegistry.maxDepthFor(absolutePath),
                   new Filter<TypedPath>() {
                     @Override
                     public boolean accept(final TypedPath typedPath) {
@@ -117,7 +121,7 @@ class SymlinkFollowingPathWatcher implements PathWatcher<PathWatchers.Event> {
       }
     } catch (final IOException e) {
     }
-    pathWatcher.unregister(path);
+    pathWatcher.unregister(absolutePath);
   }
 
   @Override

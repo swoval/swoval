@@ -64,14 +64,15 @@ object TypedPaths {
 
     }
 
-  def get(path: Path, kind: Int): TypedPath = new TypedPathImpl(path) {
-    override def exists(): Boolean = (kind & Entries.NONEXISTENT) == 0
+  def get(path: Path, kind: Int): TypedPath =
+    new TypedPathImpl(if (path.isAbsolute) path else path.toAbsolutePath()) {
+      override def exists(): Boolean = (kind & Entries.NONEXISTENT) == 0
 
-    override def isDirectory(): Boolean = (kind & Entries.DIRECTORY) != 0
+      override def isDirectory(): Boolean = (kind & Entries.DIRECTORY) != 0
 
-    override def isFile(): Boolean = (kind & Entries.FILE) != 0
+      override def isFile(): Boolean = (kind & Entries.FILE) != 0
 
-    override def isSymbolicLink(): Boolean = (kind & Entries.LINK) != 0
-  }
+      override def isSymbolicLink(): Boolean = (kind & Entries.LINK) != 0
+    }
 
 }

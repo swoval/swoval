@@ -20,16 +20,17 @@ class FileCachePathWatcher<T> implements AutoCloseable {
   }
 
   boolean register(final Path path, final int maxDepth) throws IOException {
-    final CachedDirectory<T> dir = tree.register(path, maxDepth, pathWatcher);
+    final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
+    final CachedDirectory<T> dir = tree.register(absolutePath, maxDepth, pathWatcher);
     if (dir != null && symlinkWatcher != null) {
       if (dir.getEntry().getTypedPath().isSymbolicLink()) {
-        symlinkWatcher.addSymlink(path, maxDepth);
+        symlinkWatcher.addSymlink(absolutePath, maxDepth);
       }
       final Iterator<Entry<T>> it = dir.listEntries(dir.getMaxDepth(), AllPass).iterator();
       while (it.hasNext()) {
         final FileTreeDataViews.Entry<T> entry = it.next();
         if (entry.getTypedPath().isSymbolicLink()) {
-          final int depth = path.relativize(entry.getTypedPath().getPath()).getNameCount();
+          final int depth = absolutePath.relativize(entry.getTypedPath().getPath()).getNameCount();
           symlinkWatcher.addSymlink(
               entry.getTypedPath().getPath(),
               maxDepth == Integer.MAX_VALUE ? maxDepth : maxDepth - depth);
@@ -40,8 +41,9 @@ class FileCachePathWatcher<T> implements AutoCloseable {
   }
 
   void unregister(final Path path) {
-    tree.unregister(path);
-    pathWatcher.unregister(path);
+    final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
+    tree.unregister(absolutePath);
+    pathWatcher.unregister(absolutePath);
   }
 
   public void close() {

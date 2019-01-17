@@ -80,14 +80,19 @@ class FileTreeRepositoryImpl[T <: AnyRef](private val directoryTree: FileCacheDi
     directoryTree.listEntries(path, maxDepth, filter)
 
   override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] =
-    try Either.right(watcher.register(path, maxDepth))
-    catch {
+    try {
+      val absolutePath: Path =
+        if (path.isAbsolute) path else path.toAbsolutePath()
+      Either.right(watcher.register(absolutePath, maxDepth))
+    } catch {
       case e: IOException => Either.left(e)
 
     }
 
   override def unregister(path: Path): Unit = {
-    watcher.unregister(path)
+    val absolutePath: Path =
+      if (path.isAbsolute) path else path.toAbsolutePath()
+    watcher.unregister(absolutePath)
   }
 
   override def list(path: Path, maxDepth: Int, filter: Filter[_ >: TypedPath]): List[TypedPath] =

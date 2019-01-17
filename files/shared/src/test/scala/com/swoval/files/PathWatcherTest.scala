@@ -25,7 +25,6 @@ trait PathWatcherTest extends TestSuite {
   type Event = PathWatchers.Event
   val DEFAULT_LATENCY = 5.milliseconds
   val fileFlags = new Flags.Create().setNoDefer().setFileEvents()
-
   def defaultWatcher(callback: PathWatchers.Event => _,
                      followLinks: Boolean = false): PathWatcher[PathWatchers.Event]
   def unregisterTest(followLinks: Boolean): Future[Unit] = withTempDirectory { root =>
@@ -229,6 +228,19 @@ trait PathWatcherTest extends TestSuite {
           }
         }
       }
+      'relative - withTempDirectory(targetDir) { dir =>
+        val latch = new CountDownLatch(1)
+        val file = dir.resolve("file")
+        val callback = (e: PathWatchers.Event) =>
+          if (e.getTypedPath.getPath.getFileName.toString == "file") latch.countDown()
+        usingAsync(defaultWatcher(callback)) { w =>
+          w.register(baseDir.relativize(dir))
+          Files.createFile(file)
+          latch.waitFor(DEFAULT_TIMEOUT) {
+            assert(Files.exists(file))
+          }
+        }
+      }
     }
     'directory - {
       'delete - (if (Platform.isJVM || Platform.isMac) {
@@ -241,9 +253,9 @@ trait PathWatcherTest extends TestSuite {
                        var creationPending = false
                        val callback = (e: PathWatchers.Event) => {
                          if (e.getKind == Kind.Delete && deletions.add(e.getTypedPath.getPath)) {
-                           if (e.getTypedPath.getPath == dir) dirDeletionLatch.countDown();
+                           if (e.getTypedPath.getPath == dir) dirDeletionLatch.countDown()
                            else if (e.getTypedPath.getPath == subdir)
-                             subdirDeletionLatch.countDown();
+                             subdirDeletionLatch.countDown()
                          }
                          if (e.getTypedPath.getPath.equals(dir) && creationPending) {
                            creationPending = false

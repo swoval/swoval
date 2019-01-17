@@ -77,12 +77,14 @@ class SymlinkFollowingPathWatcher(private val pathWatcher: PathWatcher[PathWatch
   }
 
   override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] = {
+    val absolutePath: Path =
+      if (path.isAbsolute) path else path.toAbsolutePath()
     val pathWatcherResult: Either[IOException, Boolean] =
-      pathWatcher.register(path, maxDepth)
+      pathWatcher.register(absolutePath, maxDepth)
     var listResult: Either[IOException, Boolean] = pathWatcherResult
     if (pathWatcherResult.isRight) {
       try {
-        handleNewDirectory(path, maxDepth, false)
+        handleNewDirectory(absolutePath, maxDepth, false)
         listResult = Either.right(true)
       } catch {
         case e: IOException => listResult = Either.left(e)
@@ -93,19 +95,25 @@ class SymlinkFollowingPathWatcher(private val pathWatcher: PathWatcher[PathWatch
   }
 
   override def unregister(path: Path): Unit = {
+    val absolutePath: Path =
+      if (path.isAbsolute) path else path.toAbsolutePath()
     try {
       val it: Iterator[TypedPath] = FileTreeViews
-        .list(path, pathWatcherDirectoryRegistry.maxDepthFor(path), new Filter[TypedPath]() {
-          override def accept(typedPath: TypedPath): Boolean =
-            typedPath.isSymbolicLink
-        })
+        .list(
+          absolutePath,
+          pathWatcherDirectoryRegistry.maxDepthFor(absolutePath),
+          new Filter[TypedPath]() {
+            override def accept(typedPath: TypedPath): Boolean =
+              typedPath.isSymbolicLink
+          }
+        )
         .iterator()
       while (it.hasNext) symlinkWatcher.remove(it.next().getPath)
     } catch {
       case e: IOException => {}
 
     }
-    pathWatcher.unregister(path)
+    pathWatcher.unregister(absolutePath)
   }
 
   override def close(): Unit = {

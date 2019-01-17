@@ -129,8 +129,11 @@ class ApplePathWatcher(private val latency: java.lang.Long,
    *     first time the directory is registered or when the depth is changed. Otherwise it should
    *     return false.
    */
-  override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] =
-    register(path, flags, maxDepth)
+  override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] = {
+    val absolutePath: Path =
+      if (path.isAbsolute) path else path.toAbsolutePath()
+    register(absolutePath, flags, maxDepth)
+  }
 
   /**
    * Registers with additional flags
@@ -193,9 +196,11 @@ class ApplePathWatcher(private val latency: java.lang.Long,
    * @param path The directory to remove from monitoring
    */
   override def unregister(path: Path): Unit = {
+    val absolutePath: Path =
+      if (path.isAbsolute) path else path.toAbsolutePath()
     if (!closed.get) {
-      directoryRegistry.removeDirectory(path)
-      val stream: Stream = appleFileEventStreams.remove(path)
+      directoryRegistry.removeDirectory(absolutePath)
+      val stream: Stream = appleFileEventStreams.remove(absolutePath)
       if (stream != null && stream.handle != Handles.INVALID) {
         try stream.close()
         catch {

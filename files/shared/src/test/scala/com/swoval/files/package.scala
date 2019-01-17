@@ -2,12 +2,13 @@ package com.swoval
 package files
 
 import java.io.{ File, FileFilter, IOException }
-import java.nio.file.Path
+import java.nio.file.{ Path, Paths }
 
 import com.swoval.files.FileTreeDataViews.{ CacheObserver, Converter, Entry }
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.test.platform.Bool
 import com.swoval.functional.{ Consumer, Filter }
+import com.swoval.runtime.Platform
 import com.swoval.test._
 import utest._
 
@@ -19,6 +20,14 @@ import utest._
  *
  */
 object TestHelpers extends PlatformFiles {
+
+  val baseDir: Path = Paths.get("").toAbsolutePath
+  val targetDir: Path = baseDir.getFileName.toString match {
+    case "js" | "jvm" => baseDir.resolve("target")
+    case _ =>
+      baseDir.resolve("files").resolve(if (Platform.isJVM) "jvm" else "js").resolve("target")
+  }
+
   val Ignore: CacheObserver[_] = getObserver[Path]((_: Entry[Path]) => {})
 
   def getObserver[T <: AnyRef](
