@@ -137,14 +137,15 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
   @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
-    final int existingMaxDepth = directoryRegistry.maxDepthFor(path);
+    final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
+    final int existingMaxDepth = directoryRegistry.maxDepthFor(absolutePath);
     boolean result = existingMaxDepth < maxDepth;
-    final TypedPath typedPath = TypedPaths.get(path);
+    final TypedPath typedPath = TypedPaths.get(absolutePath);
     Path realPath;
     try {
-      realPath = path.toRealPath();
+      realPath = absolutePath.toRealPath();
     } catch (final IOException e) {
-      realPath = path;
+      realPath = absolutePath.toAbsolutePath();
     }
     if (result) {
       directoryRegistry.addDirectory(typedPath.getPath(), maxDepth);
@@ -247,12 +248,13 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   @Override
   @SuppressWarnings("EmptyCatchBlock")
   public void unregister(final Path path) {
-    directoryRegistry.removeDirectory(path);
+    final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
+    directoryRegistry.removeDirectory(absolutePath);
     if (rootDirectories.lock()) {
       try {
-        final CachedDirectory<WatchedDirectory> dir = find(path, new ArrayList<Path>());
+        final CachedDirectory<WatchedDirectory> dir = find(absolutePath, new ArrayList<Path>());
         if (dir != null) {
-          final int depth = dir.getPath().relativize(path).getNameCount();
+          final int depth = dir.getPath().relativize(absolutePath).getNameCount();
           List<FileTreeDataViews.Entry<WatchedDirectory>> toRemove =
               dir.listEntries(
                   depth,

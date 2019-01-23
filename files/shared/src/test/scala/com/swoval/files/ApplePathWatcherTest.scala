@@ -1,17 +1,20 @@
 package com.swoval.files
 
-import java.nio.file.Paths
-import java.util.concurrent.TimeUnit
+import java.io.IOException
+import java.nio.file.{ Path, Paths }
+import java.util.concurrent.{ ConcurrentHashMap, TimeUnit }
 
+import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.TestHelpers._
 import com.swoval.files.apple.Flags
 import com.swoval.files.test._
+import com.swoval.functional
 import com.swoval.test._
 import utest._
 
 import scala.concurrent.duration._
-
+import scala.collection.JavaConverters._
 object ApplePathWatcherTest extends TestSuite {
   val DEFAULT_LATENCY = 5.milliseconds
   val dirFlags = new Flags.Create().setNoDefer()

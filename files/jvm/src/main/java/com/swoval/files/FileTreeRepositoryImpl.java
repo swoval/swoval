@@ -84,7 +84,8 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
   @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
     try {
-      return Either.right(watcher.register(path, maxDepth));
+      final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
+      return Either.right(watcher.register(absolutePath, maxDepth));
     } catch (final IOException e) {
       return Either.left(e);
     }
@@ -93,7 +94,8 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
   @Override
   @SuppressWarnings("EmptyCatchBlock")
   public void unregister(final Path path) {
-    watcher.unregister(path);
+    final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
+    watcher.unregister(absolutePath);
   }
 
   @Override
