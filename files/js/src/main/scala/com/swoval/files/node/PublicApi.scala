@@ -218,15 +218,6 @@ class FileTreeRepository[T <: AnyRef] protected[node] (
    * @param path the path to unregister
    */
   def unregister(path: String): Unit = underlying.unregister(Paths.get(path))
-  /**
- * List all of the files for the {@code path}, returning only those files that are accepted by the
- * provided filter.
- *
- * @param path the root path to list
- * @param maxDepth the maximum depth of subdirectories to query
- * @param filter include only paths accepted by the filter
- * @return a List of [[java.nio.file.Path]] instances accepted by the filter.
- */
 }
 
 @JSExportTopLevel("PathWatchers")
