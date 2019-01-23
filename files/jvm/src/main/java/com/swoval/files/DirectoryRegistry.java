@@ -10,15 +10,55 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Tracks which directories the user wishes to monitor. This can be used to determine whether or not
+ * a path is part of the subtree specified by the set of paths registered by the user.
+ */
 interface DirectoryRegistry extends Filter<Path>, AutoCloseable {
+
+  /**
+   * Add the input directory to the list of registered directories.
+   *
+   * @param path the directory to register
+   * @param maxDepth controls how many levels of the children of the path should be monitored
+   * @return true if the directory has not been previously registered before or if the new maxDepth
+   *     value is greater than the previous value.
+   */
   boolean addDirectory(final Path path, final int maxDepth);
 
+  /**
+   * The maximum depth of children of the path to accept.
+   *
+   * @param path the registered path
+   * @return the maximum depth of children if the path has been registered. Otherwise it returns
+   *     Integer.MIN_VALUE.
+   */
   int maxDepthFor(final Path path);
 
+  /**
+   * Returns a map of Path -> maxDepth for each path.
+   *
+   * @return a map of Path -> maxDepth for each path.
+   */
   Map<Path, Integer> registered();
 
+  /**
+   * Remove the path from monitoring.
+   *
+   * @param path the path to stop monitoring.
+   */
   void removeDirectory(final Path path);
 
+  /**
+   * Returns true if this path is a prefix of a registered path. The intended use case is for the
+   * {@link NioPathWatcher} which always has the root directory as the base. This is so that we can
+   * ensure that if we register a directory that does not yet exist, that we will detect when the
+   * directory is created. For example, if we want to monitor '/foo/bar/baz', then we would accept
+   * '/foo/bar' as a valid prefix path, but we would not accept '/foo/buzz' as a valid prefix path.
+   *
+   * @param path the path to compare against the registered path
+   * @return true if the path is a prefix of a registered path.
+   */
   boolean acceptPrefix(final Path path);
 
   @Override
