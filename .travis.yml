@@ -6,11 +6,11 @@ env:
 
 matrix:
   include:
-   - scala: 2.12.6
+   - scala: 2.12.8
      os: osx
      env:
        CMD="checkFormat filesJVM/jacoco filesJS/test plugin/compile filesJVM/travisQuickListReflectionTest filesJVM/allTests"
-       TRAVIS_SCALA_VERSION=2.12.6
+       TRAVIS_SCALA_VERSION=2.12.8
      osx_image: xcode9.4
      before_install:
        - unset _JAVA_OPTIONS;
@@ -22,17 +22,17 @@ matrix:
        - brew update
        - brew install clang-format
 
-   - scala: 2.12.6
+   - scala: 2.12.8
      os: osx
      env:
        CMD="filesJVM/jacoco filesJS/test plugin/compile filesJVM/travisQuickListReflectionTest"
-       TRAVIS_SCALA_VERSION=2.12.6
+       TRAVIS_SCALA_VERSION=2.12.8
      osx_image: xcode6.4
 
-   - scala: 2.12.6
+   - scala: 2.12.8
      env:
        CMD="filesJVM/jacoco filesJS/test plugin/compile filesJVM/travisQuickListReflectionTest filesJVM/allTests"
-       TRAVIS_SCALA_VERSION=2.12.6
+       TRAVIS_SCALA_VERSION=2.12.8
 
    - scala: 2.11.12
      os: osx
