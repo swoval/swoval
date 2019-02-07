@@ -87,17 +87,20 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   private final CacheObservers<T> observers = new CacheObservers<>();
   private final Executor callbackExecutor;
   private final boolean followLinks;
+  private final boolean rescanOnDirectoryUpdate;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   final SymlinkWatcher symlinkWatcher;
 
   FileCacheDirectoryTree(
       final Converter<T> converter,
       final Executor callbackExecutor,
-      final SymlinkWatcher symlinkWatcher) {
+      final SymlinkWatcher symlinkWatcher,
+      final boolean rescanOnDirectoryUpdate) {
     this.converter = converter;
     this.callbackExecutor = callbackExecutor;
     this.symlinkWatcher = symlinkWatcher;
     this.followLinks = symlinkWatcher != null;
+    this.rescanOnDirectoryUpdate = rescanOnDirectoryUpdate;
     if (symlinkWatcher != null) {
       symlinkWatcher.addObserver(
           new Observer<Event>() {
@@ -239,7 +242,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
                   (followLinks || !typedPath.isSymbolicLink())
                       ? typedPath
                       : TypedPaths.get(typedPath.getPath(), Entries.LINK | Entries.FILE);
-              dir.update(updatePath).observe(callbackObserver(callbacks, symlinks));
+              dir.update(updatePath, rescanOnDirectoryUpdate || typedPath.isSymbolicLink())
+                  .observe(callbackObserver(callbacks, symlinks));
             } catch (final IOException e) {
               handleDelete(path, callbacks, symlinks);
             }

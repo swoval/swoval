@@ -28,6 +28,7 @@ public class FileTreeDataViews {
   public static <T> DirectoryDataView<T> cached(
       final Path path, final Converter<T> converter, final int depth, final boolean followLinks)
       throws IOException {
+
     return new CachedDirectoryImpl<>(
             TypedPaths.get(path),
             converter,

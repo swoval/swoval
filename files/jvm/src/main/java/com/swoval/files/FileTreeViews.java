@@ -129,7 +129,7 @@ public class FileTreeViews {
    *     path itself is returned. Otherwise an empty list is returned.
    * @param maxDepth the maximum depth of children to include in the results
    * @param filter only include paths accepted by this filter
-   * @return a {@link java.util.List} of {@link com.swoval.files.TypedPath}
+   * @return a {@link java.util.List} of {@link TypedPath}
    * @throws IOException if the Path doesn't exist
    */
   public static List<TypedPath> list(

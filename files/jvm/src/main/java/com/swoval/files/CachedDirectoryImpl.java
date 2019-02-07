@@ -209,13 +209,42 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
    */
   @Override
   public Updates<T> update(final TypedPath typedPath) throws IOException {
-    return pathFilter.accept(typedPath)
-        ? updateImpl(
+    return update(typedPath, true);
+  }
+
+  /**
+   * Updates the CachedDirectory entry for a particular typed typedPath.
+   *
+   * @param typedPath the typedPath to update
+   * @param rescanDirectoriesOnUpdate if true, rescan the entire subtree for this directory. This
+   *     can be very expensive.
+   * @return a list of updates for the typedPath. When the typedPath is new, the updates have the
+   *     oldCachedPath field set to null and will contain all of the children of the new typedPath
+   *     when it is a directory. For an existing typedPath, the List contains a single Updates that
+   *     contains the previous and new {@link Entry}.
+   * @throws IOException when the updated Path is a directory and an IOException is encountered
+   *     traversing the directory.
+   */
+  @Override
+  public Updates<T> update(final TypedPath typedPath, final boolean rescanDirectoriesOnUpdate)
+      throws IOException {
+    if (pathFilter.accept(typedPath)) {
+      if (typedPath.exists()) {
+        return updateImpl(
             typedPath.getPath().equals(this.getPath())
                 ? new ArrayList<Path>()
                 : parts(this.getPath().relativize(typedPath.getPath())),
-            typedPath)
-        : new Updates<T>();
+            typedPath,
+            rescanDirectoriesOnUpdate);
+      } else {
+        final Iterator<Entry<T>> it = remove(typedPath.getPath()).iterator();
+        final Updates<T> result = new Updates<>();
+        while (it.hasNext()) result.onDelete(it.next());
+        return result;
+      }
+    } else {
+      return new Updates<T>();
+    }
   }
 
   /**
@@ -292,7 +321,14 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
     return path.startsWith(realPath) && !path.equals(realPath);
   }
 
-  private Updates<T> updateImpl(final List<Path> parts, final TypedPath typedPath)
+  private void updateDirectory(
+      final CachedDirectoryImpl<T> dir, final Updates<T> result, final Entry<T> entry) {
+    result.onUpdate(dir.getEntry(), entry);
+    dir._cacheEntry.set(entry);
+  }
+
+  private Updates<T> updateImpl(
+      final List<Path> parts, final TypedPath typedPath, final boolean rescanOnDirectoryUpdate)
       throws IOException {
     final Updates<T> result = new Updates<>();
     if (this.subdirectories.lock()) {
@@ -321,16 +357,19 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
                         converter,
                         TypedPaths.getDelegate(resolved, typedPath));
                 if (isDirectory) {
-                  final CachedDirectoryImpl<T> previous =
-                      currentDir.subdirectories.put(
-                          p,
-                          new CachedDirectoryImpl<>(
-                              TypedPaths.getDelegate(resolved, typedPath),
-                              converter,
-                              -1,
-                              pathFilter,
-                              fileTreeView));
-                  if (previous != null) previous.close();
+                  final CachedDirectoryImpl<T> previous = currentDir.subdirectories.get(p);
+                  if (previous == null || rescanOnDirectoryUpdate) {
+                    currentDir.subdirectories.put(
+                        p,
+                        new CachedDirectoryImpl<>(
+                            TypedPaths.getDelegate(resolved, typedPath),
+                            converter,
+                            -1,
+                            pathFilter,
+                            fileTreeView));
+                  } else {
+                    updateDirectory(previous, result, newEntry);
+                  }
                 } else {
                   currentDir.files.put(p, newEntry);
                 }
@@ -344,7 +383,12 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
                 }
                 return result;
               } else {
-                addDirectory(currentDir, typedPath, result);
+                final CachedDirectoryImpl<T> previous = currentDir.subdirectories.get(p);
+                if (previous == null || rescanOnDirectoryUpdate) {
+                  addDirectory(currentDir, typedPath, result);
+                } else {
+                  updateDirectory(previous, result, Entries.get(typedPath, converter, typedPath));
+                }
                 return result;
               }
             } else {

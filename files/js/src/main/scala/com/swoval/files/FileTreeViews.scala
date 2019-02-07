@@ -111,7 +111,7 @@ object FileTreeViews {
    *     path itself is returned. Otherwise an empty list is returned.
    * @param maxDepth the maximum depth of children to include in the results
    * @param filter only include paths accepted by this filter
-   * @return a [[java.util.List]] of [[com.swoval.files.TypedPath]]
+   * @return a [[java.util.List]] of [[TypedPath]]
    */
   def list(path: Path, maxDepth: Int, filter: Filter[_ >: TypedPath]): List[TypedPath] =
     defaultFileTreeView.list(path, maxDepth, filter)
