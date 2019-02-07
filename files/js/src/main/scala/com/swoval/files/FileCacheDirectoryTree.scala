@@ -67,7 +67,8 @@ class FileCachePendingFiles(reentrantLock: ReentrantLock) extends Lockable(reent
 
 class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                                           private val callbackExecutor: Executor,
-                                          val symlinkWatcher: SymlinkWatcher)
+                                          val symlinkWatcher: SymlinkWatcher,
+                                          private val rescanOnDirectoryUpdate: Boolean)
     extends ObservableCache[T]
     with FileTreeDataView[T] {
 
@@ -198,7 +199,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                 else
                   TypedPaths.get(typedPath.getPath, Entries.LINK | Entries.FILE)
               dir
-                .update(updatePath)
+                .update(updatePath, rescanOnDirectoryUpdate || typedPath.isSymbolicLink)
                 .observe(callbackObserver(callbacks, symlinks))
             } catch {
               case e: IOException => handleDelete(path, callbacks, symlinks)

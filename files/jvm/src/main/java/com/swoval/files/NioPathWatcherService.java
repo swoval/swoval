@@ -69,11 +69,11 @@ class NioPathWatcherService implements AutoCloseable {
                 while (it.hasNext()) {
                   final WatchEvent<?> e = it.next();
                   final WatchEvent.Kind<?> k = e.kind();
-                  if (k.equals(OVERFLOW)) {
+                  if (OVERFLOW.equals(k)) {
                     final Either<Overflow, Event> result =
                         Either.left(new Overflow((Path) key.watchable()));
                     eventConsumer.accept(result);
-                  } else {
+                  } else if (k != null) {
                     final Event.Kind kind =
                         k.equals(ENTRY_DELETE) ? Delete : k.equals(ENTRY_CREATE) ? Create : Modify;
                     final Path watchKey = (Path) key.watchable();
@@ -84,7 +84,7 @@ class NioPathWatcherService implements AutoCloseable {
                     eventConsumer.accept(result);
                   }
                 }
-              } catch (ClosedWatchServiceException | InterruptedException e) {
+              } catch (final ClosedWatchServiceException | InterruptedException e) {
                 stop = true;
               }
             }
@@ -159,7 +159,7 @@ class NioPathWatcherService implements AutoCloseable {
         watchService.close();
         shutdownLatch.await(5, TimeUnit.SECONDS);
         loopThread.join(5000);
-      } catch (InterruptedException | IOException e) {
+      } catch (final InterruptedException | IOException e) {
         throw new RuntimeException(e);
       }
     }

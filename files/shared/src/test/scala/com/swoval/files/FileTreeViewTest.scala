@@ -3,6 +3,7 @@ package com.swoval.files
 import java.nio.file.{ Files, Path, Paths }
 import java.util
 
+import com.swoval.files.TestHelpers._
 import com.swoval.files.test._
 import com.swoval.functional.Filter
 import com.swoval.functional.Filters.AllPass
@@ -12,10 +13,6 @@ import utest._
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
-import TestHelpers._
-
-import scala.annotation.tailrec
-import scala.util.Try
 
 object FileTreeViewTest {
   implicit class RepositoryOps[T <: AnyRef](val d: DirectoryView) {

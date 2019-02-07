@@ -169,11 +169,36 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
    *     traversing the directory.
    */
   override def update(typedPath: TypedPath): Updates[T] =
-    if (pathFilter.accept(typedPath))
-      updateImpl(if (typedPath.getPath == this.getPath) new ArrayList[Path]()
-                 else parts(this.getPath.relativize(typedPath.getPath)),
-                 typedPath)
-    else new Updates[T]()
+    update(typedPath, true)
+
+  /**
+   * Updates the CachedDirectory entry for a particular typed typedPath.
+   *
+   * @param typedPath the typedPath to update
+   * @param rescanDirectoriesOnUpdate if true, rescan the entire subtree for this directory. This
+   *     can be very expensive.
+   * @return a list of updates for the typedPath. When the typedPath is new, the updates have the
+   *     oldCachedPath field set to null and will contain all of the children of the new typedPath
+   *     when it is a directory. For an existing typedPath, the List contains a single Updates that
+   *     contains the previous and new [[Entry]].
+   *     traversing the directory.
+   */
+  override def update(typedPath: TypedPath, rescanDirectoriesOnUpdate: Boolean): Updates[T] =
+    if (pathFilter.accept(typedPath)) {
+      if (typedPath.exists()) {
+        updateImpl(if (typedPath.getPath == this.getPath) new ArrayList[Path]()
+                   else parts(this.getPath.relativize(typedPath.getPath)),
+                   typedPath,
+                   rescanDirectoriesOnUpdate)
+      } else {
+        val it: Iterator[Entry[T]] = remove(typedPath.getPath).iterator()
+        val result: Updates[T] = new Updates[T]()
+        while (it.hasNext) result.onDelete(it.next())
+        result
+      }
+    } else {
+      new Updates[T]()
+    }
 
   /**
    * Remove a path from the directory.
@@ -247,7 +272,16 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
   private def isLoop(path: Path, realPath: Path): Boolean =
     path.startsWith(realPath) && path != realPath
 
-  private def updateImpl(parts: List[Path], typedPath: TypedPath): Updates[T] = {
+  private def updateDirectory(dir: CachedDirectoryImpl[T],
+                              result: Updates[T],
+                              entry: Entry[T]): Unit = {
+    result.onUpdate(dir.getEntry, entry)
+    dir._cacheEntry.set(entry)
+  }
+
+  private def updateImpl(parts: List[Path],
+                         typedPath: TypedPath,
+                         rescanOnDirectoryUpdate: Boolean): Updates[T] = {
     val result: Updates[T] = new Updates[T]()
     if (this.subdirectories.lock()) {
       try if (!parts.isEmpty) {
@@ -273,6 +307,8 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
                                                    TypedPaths.getDelegate(resolved, typedPath))
               if (isDirectory) {
                 val previous: CachedDirectoryImpl[T] =
+                  currentDir.subdirectories.get(p)
+                if (previous == null || rescanOnDirectoryUpdate) {
                   currentDir.subdirectories.put(
                     p,
                     new CachedDirectoryImpl(TypedPaths.getDelegate(resolved, typedPath),
@@ -280,7 +316,9 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
                                             -1,
                                             pathFilter,
                                             fileTreeView))
-                if (previous != null) previous.close()
+                } else {
+                  updateDirectory(previous, result, newEntry)
+                }
               } else {
                 currentDir.files.put(p, newEntry)
               }
@@ -294,7 +332,13 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
               }
               result
             } else {
-              addDirectory(currentDir, typedPath, result)
+              val previous: CachedDirectoryImpl[T] =
+                currentDir.subdirectories.get(p)
+              if (previous == null || rescanOnDirectoryUpdate) {
+                addDirectory(currentDir, typedPath, result)
+              } else {
+                updateDirectory(previous, result, Entries.get(typedPath, converter, typedPath))
+              }
               result
             }
           } else {

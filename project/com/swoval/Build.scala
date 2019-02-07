@@ -33,7 +33,7 @@ import scala.io.Source
 import scala.util.{ Properties, Try }
 
 object Build {
-  val scalaCrossVersions @ Seq(scala210, scala211, scala212) = Seq("2.10.7", "2.11.12", "2.12.6")
+  val scalaCrossVersions @ Seq(scala210, scala211, scala212) = Seq("2.10.7", "2.11.12", "2.12.8")
 
   def baseVersion: String = "2.1.0-SNAPSHOT"
 

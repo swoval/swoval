@@ -21,6 +21,21 @@ trait UpdatableFileTreeDataView[T <: AnyRef] {
   def update(typedPath: TypedPath): FileTreeViews.Updates[T]
 
   /**
+   * Updates the CachedDirectory entry for a particular typed path.
+   *
+   * @param typedPath the path to update
+   * @param rescanDirectories if true, the contents of a directory will be re-scanned whenever a
+   *     directory is updated. This can be very expensive since it must list the entire subtree of
+   *     the directory and perform io to compute the cache value. It does make it more likely,
+   *     however, that the cache gets out of sync with the file system tree.
+   * @return a list of updates for the path. When the path is new, the updates have the
+   *     oldCachedPath field set to null and will contain all of the children of the new path when
+   *     it is a directory. For an existing path, the List contains a single Updates that contains
+   *     the previous and new [[Entry]].
+   */
+  def update(typedPath: TypedPath, rescanDirectories: Boolean): FileTreeViews.Updates[T]
+
+  /**
    * Remove a path from the directory.
    *
    * @param path the path to remove
