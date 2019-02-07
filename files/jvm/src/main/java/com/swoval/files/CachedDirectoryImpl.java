@@ -52,7 +52,6 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
     R apply(final Entry<T> entry);
   }
 
-  @SuppressWarnings("unchecked")
   CachedDirectoryImpl(
       final TypedPath typedPath,
       final Converter<T> converter,
@@ -243,7 +242,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
     return depth == Integer.MAX_VALUE ? depth : depth > 0 ? depth - 1 : 0;
   }
 
-  @SuppressWarnings({"unchecked", "EmptyCatchBlock"})
+  @SuppressWarnings("EmptyCatchBlock")
   private void addDirectory(
       final CachedDirectoryImpl<T> currentDir,
       final TypedPath typedPath,
@@ -411,7 +410,6 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
     }
   }
 
-  @SuppressWarnings("unchecked")
   private <R> void listImpl(
       final int maxDepth,
       final Filter<? super R> filter,
