@@ -69,11 +69,11 @@ class NioPathWatcherService implements AutoCloseable {
                 while (it.hasNext()) {
                   final WatchEvent<?> e = it.next();
                   final WatchEvent.Kind<?> k = e.kind();
-                  if (k.equals(OVERFLOW)) {
+                  if (OVERFLOW.equals(k)) {
                     final Either<Overflow, Event> result =
                         Either.left(new Overflow((Path) key.watchable()));
                     eventConsumer.accept(result);
-                  } else {
+                  } else if (k != null) {
                     final Event.Kind kind =
                         k.equals(ENTRY_DELETE) ? Delete : k.equals(ENTRY_CREATE) ? Create : Modify;
                     final Path watchKey = (Path) key.watchable();
