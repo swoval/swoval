@@ -84,7 +84,7 @@ class NioPathWatcherService implements AutoCloseable {
                     eventConsumer.accept(result);
                   }
                 }
-              } catch (ClosedWatchServiceException | InterruptedException e) {
+              } catch (final ClosedWatchServiceException | InterruptedException e) {
                 stop = true;
               }
             }
@@ -159,7 +159,7 @@ class NioPathWatcherService implements AutoCloseable {
         watchService.close();
         shutdownLatch.await(5, TimeUnit.SECONDS);
         loopThread.join(5000);
-      } catch (InterruptedException | IOException e) {
+      } catch (final InterruptedException | IOException e) {
         throw new RuntimeException(e);
       }
     }
