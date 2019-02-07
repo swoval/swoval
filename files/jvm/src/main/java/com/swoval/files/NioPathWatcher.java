@@ -17,6 +17,7 @@ import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
 import com.swoval.runtime.Platform;
 import java.io.IOException;
+import java.nio.file.FileSystems;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -165,8 +166,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   }
 
   private CachedDirectory<WatchedDirectory> find(final Path rawPath, final List<Path> toRemove) {
-    final Path parent = Platform.isMac() ? rawPath : rawPath.getRoot();
-    final Path path = parent == null ? rawPath.getRoot() : parent;
+    final Path path = rawPath == null ? getRoot() : rawPath;
     assert (path != null);
     if (rootDirectories.lock()) {
       try {
@@ -191,20 +191,30 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
     }
   }
 
+  private Path getRoot() {
+    /* This may not make sense on windows which has multiple root directories, but at least it
+     * will return something.
+     */
+    final Iterator<Path> it = FileSystems.getDefault().getRootDirectories().iterator();
+    return it.next();
+  }
+
   private CachedDirectory<WatchedDirectory> findOrAddRoot(final Path rawPath) {
-    final Path parent = Platform.isMac() ? rawPath : rawPath.getRoot();
-    final Path path = parent == null ? rawPath.getRoot() : parent;
-    assert (path != null);
     final List<Path> toRemove = new ArrayList<>();
     CachedDirectory<WatchedDirectory> result = find(rawPath, toRemove);
     if (result == null) {
-      Path toAdd = path;
+      /*
+       * We want to monitor the parent in case the file is deleted.
+       */
+      final Path parent = rawPath.getParent();
+      Path path = parent == null ? getRoot() : parent;
+      assert (path != null);
       boolean init = false;
-      while (!init && toAdd != null) {
+      while (!init && path != null) {
         try {
           result =
               new CachedDirectoryImpl<>(
-                      TypedPaths.get(toAdd),
+                      TypedPaths.get(path),
                       converter,
                       Integer.MAX_VALUE,
                       new Filter<TypedPath>() {
@@ -218,9 +228,9 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                       FileTreeViews.getDefault(false, false))
                   .init();
           init = true;
-          rootDirectories.put(toAdd, result);
+          rootDirectories.put(path, result);
         } catch (final IOException e) {
-          toAdd = toAdd.getParent();
+          path = path.getParent();
         }
       }
     }

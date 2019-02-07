@@ -18,6 +18,7 @@ import com.swoval.functional.Either
 import com.swoval.functional.Filter
 import com.swoval.runtime.Platform
 import java.io.IOException
+import java.nio.file.FileSystems
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.util.ArrayList
@@ -154,8 +155,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
   }
 
   private def find(rawPath: Path, toRemove: List[Path]): CachedDirectory[WatchedDirectory] = {
-    val parent: Path = if (Platform.isMac) rawPath else rawPath.getRoot
-    val path: Path = if (parent == null) rawPath.getRoot else parent
+    val path: Path = if (rawPath == null) getRoot else rawPath
     assert((path != null))
     if (rootDirectories.lock()) {
       try {
@@ -178,18 +178,31 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     }
   }
 
+  private def getRoot(): Path = {
+    /* This may not make sense on windows which has multiple root directories, but at least it
+     * will return something.
+     */
+
+    val it: Iterator[Path] =
+      FileSystems.getDefault.getRootDirectories.iterator()
+    it.next()
+  }
+
   private def findOrAddRoot(rawPath: Path): CachedDirectory[WatchedDirectory] = {
-    val parent: Path = if (Platform.isMac) rawPath else rawPath.getRoot
-    val path: Path = if (parent == null) rawPath.getRoot else parent
-    assert((path != null))
     val toRemove: List[Path] = new ArrayList[Path]()
     var result: CachedDirectory[WatchedDirectory] = find(rawPath, toRemove)
     if (result == null) {
-      var toAdd: Path = path
+      /*
+       * We want to monitor the parent in case the file is deleted.
+       */
+
+      val parent: Path = rawPath.getParent
+      var path: Path = if (parent == null) getRoot else parent
+      assert((path != null))
       var init: Boolean = false
-      while (!init && toAdd != null) try {
+      while (!init && path != null) try {
         result = new CachedDirectoryImpl(
-          TypedPaths.get(toAdd),
+          TypedPaths.get(path),
           converter,
           java.lang.Integer.MAX_VALUE,
           new Filter[TypedPath]() {
@@ -200,9 +213,9 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           FileTreeViews.getDefault(false, false)
         ).init()
         init = true
-        rootDirectories.put(toAdd, result)
+        rootDirectories.put(path, result)
       } catch {
-        case e: IOException => toAdd = toAdd.getParent
+        case e: IOException => path = path.getParent
 
       }
     }
