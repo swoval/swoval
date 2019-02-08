@@ -32,24 +32,24 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
                          r)
       }
     )
-  val name = getClass.getSimpleName
+  private val name = getClass.getSimpleName
 
-  val boundedQueueSize = System.getProperty("swoval.test.queue.size") match {
+  private val boundedQueueSize = System.getProperty("swoval.test.queue.size") match {
     case null => 4
     case c    => Try(c.toInt).getOrElse(4)
   }
-  val subdirsToAdd = System.getProperty("swoval.test.subdir.count") match {
+  private val subdirsToAdd = System.getProperty("swoval.test.subdir.count") match {
     case null =>
       if (!Platform.isJVM) {
         if (Platform.isWin) 5 else 50
       } else 200
     case c => Try(c.toInt).getOrElse(200)
   }
-  val filesPerSubdir = System.getProperty("swoval.test.files.count") match {
+  private val filesPerSubdir = System.getProperty("swoval.test.files.count") match {
     case null => 5
     case c    => Try(c.toInt).getOrElse(5)
   }
-  val timeout = DEFAULT_TIMEOUT * (if (Platform.isWin) 5 else 1)
+  private val timeout = DEFAULT_TIMEOUT * (if (Platform.isWin) 5 else 1)
 
   val testsImpl = Tests {
     'overflow - withTempDirectory { root =>
