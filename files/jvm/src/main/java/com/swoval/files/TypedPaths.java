@@ -25,7 +25,7 @@ public class TypedPaths {
       synchronized (path) {
         if (realPath == null) {
           try {
-            realPath = path.toRealPath();
+            realPath = isSymbolicLink() ? path.toRealPath() : path;
             return realPath;
           } catch (final IOException e) {
             return path;

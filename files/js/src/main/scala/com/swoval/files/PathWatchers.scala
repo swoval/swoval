@@ -101,6 +101,11 @@ object PathWatchers {
        */
       val Modify: Kind = new Kind("Modify")
 
+      /**
+ The watching service overflowed so it may be necessary to poll.
+       */
+      val Overflow: Kind = new Kind("Overflow")
+
     }
 
     /**

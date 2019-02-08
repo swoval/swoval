@@ -169,6 +169,8 @@ public class PathWatchers {
       public static final Kind Error = new Kind("Error");
       /** An existing file was modified. */
       public static final Kind Modify = new Kind("Modify");
+      /** The watching service overflowed so it may be necessary to poll. */
+      public static final Kind Overflow = new Kind("Overflow");
 
       private final String name;
 

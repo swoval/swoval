@@ -340,11 +340,10 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
             final Path p = it.next();
             if (p.toString().isEmpty()) return result;
             final Path resolved = currentDir.getPath().resolve(p);
-            final Path realPath = typedPath.expanded();
             if (!it.hasNext()) {
               // We will always return from this block
               final boolean isDirectory = typedPath.isDirectory();
-              if (!isDirectory || currentDir.depth <= 0 || isLoop(resolved, realPath)) {
+              if (!isDirectory || currentDir.depth <= 0 || isLoop(resolved, typedPath.expanded())) {
                 final CachedDirectoryImpl<T> previousCachedDirectoryImpl =
                     isDirectory ? currentDir.subdirectories.get(p) : null;
                 final Entry<T> oldEntry =
@@ -534,11 +533,10 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
           while (it.hasNext()) {
             final TypedPath file = it.next();
             final Path path = file.getPath();
-            final Path expandedPath = file.expanded();
             final Path key = this.typedPath.getPath().relativize(path).getFileName();
             if (file.isDirectory()) {
               if (depth > 0) {
-                if (!file.isSymbolicLink() || !isLoop(path, expandedPath)) {
+                if (!file.isSymbolicLink() || !isLoop(path, file.expanded())) {
                   final CachedDirectoryImpl<T> dir =
                       new CachedDirectoryImpl<>(
                           file, converter, subdirectoryDepth(), pathFilter, fileTreeView);

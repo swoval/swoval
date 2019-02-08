@@ -4,6 +4,7 @@ import static com.swoval.files.PathWatchers.Event.Kind.Create;
 import static com.swoval.files.PathWatchers.Event.Kind.Delete;
 import static com.swoval.files.PathWatchers.Event.Kind.Error;
 import static com.swoval.files.PathWatchers.Event.Kind.Modify;
+import static com.swoval.files.PathWatchers.Event.Kind.Overflow;
 import static com.swoval.functional.Filters.AllPass;
 
 import com.swoval.files.FileTreeDataViews.CacheObserver;
@@ -111,7 +112,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
 
             @Override
             public void onNext(final Event event) {
-              handleEvent(event.getTypedPath());
+              handleEvent(event);
             }
           });
     }
@@ -228,7 +229,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   }
 
   @SuppressWarnings("EmptyCatchBlock")
-  void handleEvent(final TypedPath typedPath) {
+  void handleEvent(final Event event) {
+    final TypedPath typedPath = event.getTypedPath();
     final List<TypedPath> symlinks = new ArrayList<>();
     final List<Callback> callbacks = new ArrayList<>();
     if (!closed.get() && directories.lock()) {
@@ -242,8 +244,11 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
                   (followLinks || !typedPath.isSymbolicLink())
                       ? typedPath
                       : TypedPaths.get(typedPath.getPath(), Entries.LINK | Entries.FILE);
-              dir.update(updatePath, rescanOnDirectoryUpdate || typedPath.isSymbolicLink())
-                  .observe(callbackObserver(callbacks, symlinks));
+              final boolean rescan =
+                  rescanOnDirectoryUpdate
+                      || typedPath.isSymbolicLink()
+                      || event.getKind().equals(Overflow);
+              dir.update(updatePath, rescan).observe(callbackObserver(callbacks, symlinks));
             } catch (final IOException e) {
               handleDelete(path, callbacks, symlinks);
             }
