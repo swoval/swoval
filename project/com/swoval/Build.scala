@@ -67,6 +67,8 @@ object Build {
         val p = publishTo.value
         if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true"))
           Some(Opts.resolver.sonatypeSnapshots): Option[Resolver]
+        else if (sys.props.get("SonatypeStaging").fold(false)(_ == "true"))
+          Some(Opts.resolver.sonatypeStaging): Option[Resolver]
         else if (sys.props.get("SonatypeRelease").fold(false)(_ == "true"))
           Some(Opts.resolver.sonatypeReleases): Option[Resolver]
         else p
