@@ -152,7 +152,7 @@ object Build {
     }
   }
 
-  private def releaseNpmTask(dryRun: Boolean) =
+  private def releaseNpmTask(otp: Option[String]) =
     Def.task {
       val log = streams.value.log
       Def.sequential(
@@ -171,7 +171,7 @@ object Build {
 
           val noLocalDiffs = checkFormat.toTask(" silent").value
           if (noLocalDiffs) {
-            val args = Seq("npm", "publish") ++ (if (dryRun) Seq("--dry-run") else Nil)
+            val args = Seq("npm", "publish", otp.getOrElse("--dry-run"))
             val proc = new ProcessBuilder(args: _*).directory(npmDir).start()
             proc.waitFor(30, TimeUnit.SECONDS)
             log.info(scala.io.Source.fromInputStream(proc.getInputStream).mkString(""))
@@ -211,8 +211,8 @@ object Build {
       releaseSigned := releaseTask(publishSigned).value,
       releaseSnapshot := releaseTask(publish).value,
       releaseNpm := Def.inputTaskDyn {
-        val dryRun = Def.spaceDelimited("<arg>").parsed.isEmpty
-        Def.taskDyn(releaseNpmTask(dryRun).value)
+        val otp = Def.spaceDelimited().parsed.headOption.map(otp => s"--otp=$otp")
+        Def.taskDyn(releaseNpmTask(otp).value)
       }.evaluated
     )
 
