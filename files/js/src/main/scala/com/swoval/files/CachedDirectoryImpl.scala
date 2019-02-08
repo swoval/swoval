@@ -357,7 +357,9 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
         MapOps.diffDirectoryEntries(oldEntries, newEntries, result)
       } else {
         val oldEntry: Entry[T] = getEntry
-        val newEntry: Entry[T] = Entries.get(typedPath, converter, typedPath)
+        val tp: TypedPath =
+          TypedPaths.getDelegate(getTypedPath.expanded(), typedPath)
+        val newEntry: Entry[T] = Entries.get(tp, converter, tp)
         _cacheEntry.set(newEntry)
         result.onUpdate(oldEntry, getEntry)
       } finally this.subdirectories.unlock()

@@ -4,7 +4,7 @@ package com.swoval.files
 
 import com.swoval.files.PathWatchers.Event.Kind.Create
 import com.swoval.files.PathWatchers.Event.Kind.Delete
-import com.swoval.files.PathWatchers.Event.Kind.Modify
+import com.swoval.files.PathWatchers.Event.Kind.Overflow
 import com.swoval.functional.Filters.AllPass
 import java.util.Map.Entry
 import com.swoval.files.FileTreeDataViews.CacheObserver
@@ -340,7 +340,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
       } finally rootDirectories.unlock()
     }
     val tp: TypedPath = TypedPaths.get(path)
-    events.add(new Event(tp, if (tp.exists()) Modify else Delete))
+    events.add(new Event(tp, if (tp.exists()) Overflow else Delete))
     runCallbacks(events)
   }
 

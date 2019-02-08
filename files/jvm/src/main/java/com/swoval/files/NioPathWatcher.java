@@ -2,7 +2,7 @@ package com.swoval.files;
 
 import static com.swoval.files.PathWatchers.Event.Kind.Create;
 import static com.swoval.files.PathWatchers.Event.Kind.Delete;
-import static com.swoval.files.PathWatchers.Event.Kind.Modify;
+import static com.swoval.files.PathWatchers.Event.Kind.Overflow;
 import static com.swoval.functional.Filters.AllPass;
 import static java.util.Map.Entry;
 
@@ -364,7 +364,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
       }
     }
     final TypedPath tp = TypedPaths.get(path);
-    events.add(new Event(tp, tp.exists() ? Modify : Delete));
+    events.add(new Event(tp, tp.exists() ? Overflow : Delete));
     runCallbacks(events);
   }
 

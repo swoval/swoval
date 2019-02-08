@@ -6,6 +6,7 @@ import com.swoval.files.PathWatchers.Event.Kind.Create
 import com.swoval.files.PathWatchers.Event.Kind.Delete
 import com.swoval.files.PathWatchers.Event.Kind.Error
 import com.swoval.files.PathWatchers.Event.Kind.Modify
+import com.swoval.files.PathWatchers.Event.Kind.Overflow
 import com.swoval.functional.Filters.AllPass
 import com.swoval.files.FileTreeDataViews.CacheObserver
 import com.swoval.files.FileTreeDataViews.Converter
@@ -91,7 +92,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
       }
 
       override def onNext(event: Event): Unit = {
-        handleEvent(event.getTypedPath)
+        handleEvent(event)
       }
     })
   }
@@ -184,7 +185,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     }
   }
 
-  def handleEvent(typedPath: TypedPath): Unit = {
+  def handleEvent(event: Event): Unit = {
+    val typedPath: TypedPath = event.getTypedPath
     val symlinks: List[TypedPath] = new ArrayList[TypedPath]()
     val callbacks: List[Callback] = new ArrayList[Callback]()
     if (!closed.get && directories.lock()) {
@@ -198,8 +200,10 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                 if ((followLinks || !typedPath.isSymbolicLink)) typedPath
                 else
                   TypedPaths.get(typedPath.getPath, Entries.LINK | Entries.FILE)
+              val rescan: Boolean = rescanOnDirectoryUpdate || typedPath.isSymbolicLink ||
+                event.getKind == Overflow
               dir
-                .update(updatePath, rescanOnDirectoryUpdate || typedPath.isSymbolicLink)
+                .update(updatePath, rescan)
                 .observe(callbackObserver(callbacks, symlinks))
             } catch {
               case e: IOException => handleDelete(path, callbacks, symlinks)
