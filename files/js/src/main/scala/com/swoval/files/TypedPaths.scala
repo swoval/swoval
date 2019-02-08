@@ -15,7 +15,7 @@ object TypedPaths {
     override def expanded(): Path = path.synchronized {
       if (realPath == null) {
         try {
-          realPath = path.toRealPath()
+          realPath = if (isSymbolicLink) path.toRealPath() else path
           realPath
         } catch {
           case e: IOException => path
