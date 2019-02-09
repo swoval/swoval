@@ -112,6 +112,8 @@ class ApplePathWatcher(private val latency: java.lang.Long,
 
   private val observers: Observers[PathWatchers.Event] = new Observers()
 
+  private val logger: DebugLogger = Loggers.getDebug
+
   override def addObserver(observer: Observer[_ >: Event]): Int =
     observers.addObserver(observer)
 
@@ -168,6 +170,10 @@ class ApplePathWatcher(private val latency: java.lang.Long,
 
       }
     }
+    if (logger.shouldLog())
+      logger.debug(
+        "ApplePathWatcher registered " + path + " with max depth " +
+          maxDepth)
     Either.right(result)
   }
 
@@ -209,6 +215,8 @@ class ApplePathWatcher(private val latency: java.lang.Long,
 
         }
       }
+      if (logger.shouldLog())
+        logger.debug("ApplePathWatcher unregistered " + path)
     }
   }
 
@@ -217,6 +225,7 @@ class ApplePathWatcher(private val latency: java.lang.Long,
    */
   override def close(): Unit = {
     if (closed.compareAndSet(false, true)) {
+      if (logger.shouldLog()) logger.debug("Closed ApplePathWatcher " + this)
       appleFileEventStreams.clear()
       fileEventMonitor.close()
     }

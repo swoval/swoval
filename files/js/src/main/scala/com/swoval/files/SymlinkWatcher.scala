@@ -60,12 +60,16 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
   private val callbackExecutor: Executor =
     Executor.make("com.swoval.files.SymlinkWather.callback-executor")
 
+  private val logger: DebugLogger = Loggers.getDebug
+
   val reentrantLock: ReentrantLock = new ReentrantLock()
 
   watcher.addObserver(new Observer[Event]() {
     override def onError(t: Throwable): Unit = {}
 
     override def onNext(event: Event): Unit = {
+      if (logger.shouldLog())
+        logger.debug("SymlinkWatcher received event " + event)
       if (!isClosed.get) {
         val paths: List[Path] = new ArrayList[Path]()
         val path: Path = event.getTypedPath.getPath
@@ -101,6 +105,8 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
         val it: Iterator[Path] = paths.iterator()
         while (it.hasNext) {
           val typedPath: TypedPath = TypedPaths.get(it.next())
+          if (logger.shouldLog())
+            logger.debug("SymlinkWatcher evaluating callback for " + typedPath)
           observers.onNext(new Event(typedPath, kind))
         }
       }
@@ -113,7 +119,7 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
     observers.addObserver(observer)
 
   override def removeObserver(handle: Int): Unit = {
-    removeObserver(handle)
+    observers.removeObserver(handle)
   }
 
   private def find(path: Path, registeredPaths: RegisteredPaths): RegisteredPath = {
@@ -166,6 +172,10 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
       if (path.startsWith(realPath) && path != realPath) {
         throw new FileSystemLoopException(path.toString)
       } else {
+        if (logger.shouldLog())
+          logger.debug(
+            "SymlinkWatcher adding link " + path + " with max depth " +
+              maxDepth)
         if (watchedSymlinksByTarget.lock()) {
           try {
             val targetRegistrationPath: RegisteredPath =
@@ -216,6 +226,8 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
               }
             }
           }
+          if (logger.shouldLog())
+            logger.debug("SymlinkWatcher stopped monitoring link " + path)
         } finally watchedSymlinksByTarget.unlock()
       }
     }

@@ -15,7 +15,6 @@ import com.swoval.files.PathWatchers.Overflow;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
-import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.NoSuchFileException;
@@ -35,6 +34,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   private final RootDirectories rootDirectories = new RootDirectories();
   private final DirectoryRegistry directoryRegistry;
   private final Converter<WatchedDirectory> converter;
+  private final DebugLogger logger = Loggers.getDebug();
 
   private CacheObserver<WatchedDirectory> updateCacheObserver(final List<Event> events) {
     return new CacheObserver<WatchedDirectory>() {
@@ -162,6 +162,8 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
       }
     }
     runCallbacks(events);
+    if (logger.shouldLog())
+      logger.debug("NioPathWatcher registered " + path + " with max depth " + maxDepth);
     return Either.right(result);
   }
 
@@ -292,6 +294,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         rootDirectories.unlock();
       }
     }
+    if (logger.shouldLog()) logger.debug("NioPathWatcher unregistered " + path);
   }
 
   @Override
@@ -327,6 +330,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
   private void handleOverflow(final Overflow overflow) {
     final Path path = overflow.getPath();
+    if (logger.shouldLog()) logger.debug("NioPathWatcher received overflow for " + path);
     final List<Event> events = new ArrayList<>();
     if (rootDirectories.lock()) {
       try {
@@ -381,6 +385,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   }
 
   private void handleEvent(final Event event) {
+    if (logger.shouldLog()) logger.debug("NioPathWatcher received event " + event);
     final List<Event> events = new ArrayList<>();
     if (!closed.get() && rootDirectories.lock()) {
       try {

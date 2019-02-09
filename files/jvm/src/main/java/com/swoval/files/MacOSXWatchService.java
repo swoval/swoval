@@ -48,6 +48,7 @@ class MacOSXWatchService implements RegisterableWatchService {
   private final AtomicBoolean open = new AtomicBoolean(true);
   private final WatchKeys registered = new WatchKeys();
   private final LinkedBlockingQueue<MacOSXWatchKey> readyKeys = new LinkedBlockingQueue<>();
+  private final DebugLogger logger = Loggers.getDebug();
 
   private final Consumer<String> dropEvent =
       new Consumer<String>() {
@@ -65,6 +66,8 @@ class MacOSXWatchService implements RegisterableWatchService {
         @Override
         public void accept(final FileEvent fileEvent) {
           final Path path = Paths.get(fileEvent.fileName);
+          if (logger.shouldLog())
+            logger.debug("MacOSXWatchService received event for path " + fileEvent);
           final WatchKey childKeys = registered.get(path);
           final WatchKey watchKey =
               childKeys == null ? registered.get(path.getParent()) : childKeys;
@@ -84,6 +87,9 @@ class MacOSXWatchService implements RegisterableWatchService {
                 else if (!exists && key.reportDeleteEvents()) key.createEvent(ENTRY_DELETE, path);
               }
             }
+          } else {
+            if (logger.shouldLog())
+              logger.debug("MacOSXWatchService dropping event for unregistered path " + path);
           }
         }
       };
@@ -208,6 +214,7 @@ class MacOSXWatchService implements RegisterableWatchService {
           result = new MacOSXWatchKey(realPath, queueSize, Handles.INVALID, kinds);
           watchKey.keys.add(result);
         }
+        if (logger.shouldLog()) logger.debug("MacOSXWatchService registered path " + path);
         return result;
       } finally {
         registered.unlock();
@@ -361,6 +368,8 @@ class MacOSXWatchService implements RegisterableWatchService {
     }
 
     void createEvent(final WatchEvent.Kind<Path> kind, final Path file) {
+      if (logger.shouldLog())
+        logger.debug("MacOSXWatchService creating event for " + file + " with kind " + kind);
       Event<Path> event = new Event<>(kind, 1, watchable.relativize(file));
       addEvent(event);
     }

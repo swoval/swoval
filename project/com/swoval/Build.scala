@@ -443,6 +443,7 @@ object Build {
                 "CachedDirectory",
                 "CachedDirectoryImpl",
                 "CacheObservers",
+                "DebugLogger",
                 "DirectoryDataView",
                 "DirectoryLister",
                 "DirectoryView",
@@ -476,6 +477,7 @@ object Build {
               ).value
               convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
               convertSources("com/swoval/functional", "Consumer", "Either", "Filter", "Filters").value
+              convertSources("com/swoval/logging", "Logger").value
             }
           },
           scalafmt in Compile,
@@ -509,6 +511,8 @@ object Build {
         "com.swoval.files.CachedDirectories*",
         "com.swoval.files.CacheObservers*",
         "com.swoval.files.DataViews*",
+        "com.swoval.files.Logger*",
+        "com.swoval.files.DebugLogger*",
         "com.swoval.files.*DirectoryLister*",
         "com.swoval.files.Observers*",
         "com.swoval.files.RegisterableWatchServices*",
@@ -516,7 +520,8 @@ object Build {
         "com.swoval.files.WatchedDirectory*",
         "com.swoval.files.apple.Event*",
         "com.swoval.files.apple.Flag*",
-        "com.swoval.files.apple.Native*"
+        "com.swoval.files.apple.Native*",
+        "com.swoval.logging.*",
       ) ++ (if (!Properties.isMac) Seq("*apple*", "*Apple*", "*MacOS*")
             else Nil),
       javacOptions in (Compile, doc) :=

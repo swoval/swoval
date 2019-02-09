@@ -14,6 +14,7 @@ import com.swoval.files.FileTreeDataViews.Entry
 import com.swoval.files.FileTreeDataViews.ObservableCache
 import com.swoval.files.FileTreeRepositoryImpl.Callback
 import com.swoval.files.FileTreeViews.Observer
+import com.swoval.files.FileTreeViews.Updates
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.PathWatchers.Event.Kind
 import com.swoval.functional.Filter
@@ -85,6 +86,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
 
+  private val logger: DebugLogger = Loggers.getDebug
+
   if (symlinkWatcher != null) {
     symlinkWatcher.addObserver(new Observer[Event]() {
       override def onError(t: Throwable): Unit = {
@@ -144,6 +147,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         }
       } finally directories.unlock()
     }
+    if (logger.shouldLog())
+      logger.debug("FileCacheDirectoryTree unregistered " + path)
   }
 
   private def find(path: Path): CachedDirectory[T] = {
@@ -186,6 +191,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
   }
 
   def handleEvent(event: Event): Unit = {
+    if (logger.shouldLog())
+      logger.debug("FileCacheDirectoryTree received event " + event)
     val typedPath: TypedPath = event.getTypedPath
     val symlinks: List[TypedPath] = new ArrayList[TypedPath]()
     val callbacks: List[Callback] = new ArrayList[Callback]()
@@ -313,6 +320,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         pendingFiles.clear()
       } finally directories.unlock()
     }
+    if (logger.shouldLog())
+      logger.debug("FileCacheDirectoryTree " + this + " was closed")
   }
 
   def register(path: Path,
@@ -368,6 +377,10 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
           dir = existing
         }
         cleanupDirectories(absolutePath, maxDepth)
+        if (logger.shouldLog())
+          logger.debug(
+            "FileCacheDirectoryTree registered " + path + " with max depth " +
+              maxDepth)
         dir
       } finally directories.unlock()
     } else {

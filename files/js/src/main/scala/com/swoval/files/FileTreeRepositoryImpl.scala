@@ -43,6 +43,8 @@ class FileTreeRepositoryImpl[T <: AnyRef](private val directoryTree: FileCacheDi
 
   private val shutdownHookId: Int = ShutdownHooks.addHook(1, closeRunnable)
 
+  private val logger: DebugLogger = Loggers.getDebug
+
   /**
  Cleans up the path watcher and clears the directory cache.
    */
@@ -83,7 +85,13 @@ class FileTreeRepositoryImpl[T <: AnyRef](private val directoryTree: FileCacheDi
     try {
       val absolutePath: Path =
         if (path.isAbsolute) path else path.toAbsolutePath()
-      Either.right(watcher.register(absolutePath, maxDepth))
+      val res: Either[IOException, Boolean] =
+        Either.right(watcher.register(absolutePath, maxDepth))
+      if (logger.shouldLog())
+        logger.debug(
+          "FileTreeRepository registered " + path + " with max depth " +
+            maxDepth)
+      res
     } catch {
       case e: IOException => Either.left(e)
 
