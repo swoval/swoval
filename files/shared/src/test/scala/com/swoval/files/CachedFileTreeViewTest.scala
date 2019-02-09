@@ -27,7 +27,7 @@ object CachedFileTreeViewTest extends TestSuite {
                             (_: TypedPath).getPath,
                             maxDepth,
                             AllPass,
-                            FileTreeViews.getDefault(followLinks, false))
+                            followLinks)
       .init()
   class Updates[T <: AnyRef](u: FileTreeViews.Updates[T]) {
     private[this] var _creations: Seq[Entry[T]] = Nil
@@ -239,7 +239,7 @@ object CachedFileTreeViewTest extends TestSuite {
                               converter,
                               Integer.MAX_VALUE,
                               (_: TypedPath) => true,
-                              FileTreeViews.getDefault(true, false)).init()
+                              true).init()
     def overrides: Future[Unit] = withTempFileSync { f =>
       val dir = newDirectory(f.getParent, LastModified(_: TypedPath))
       val lastModified = f.lastModified

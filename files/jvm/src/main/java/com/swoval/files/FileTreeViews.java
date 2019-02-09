@@ -57,11 +57,7 @@ public class FileTreeViews {
   public static DirectoryView cached(final Path path, final int depth, final boolean followLinks)
       throws IOException {
     return new CachedDirectoryImpl<>(
-            TypedPaths.get(path),
-            PATH_CONVERTER,
-            depth,
-            Filters.AllPass,
-            getDefault(followLinks, false))
+            TypedPaths.get(path), PATH_CONVERTER, depth, Filters.AllPass, followLinks)
         .init();
   }
 
@@ -103,7 +99,7 @@ public class FileTreeViews {
    * @return an instance of {@link FileTreeView}.
    */
   public static FileTreeView getDefault(final boolean followLinks) {
-    return getDefault(followLinks, true);
+    return new SimpleFileTreeView(defaultDirectoryLister, followLinks, false);
   }
 
   /**
@@ -118,7 +114,7 @@ public class FileTreeViews {
    *     caused an exception.
    * @return an instance of {@link FileTreeView}.
    */
-  public static FileTreeView getDefault(final boolean followLinks, final boolean ignoreExceptions) {
+  static FileTreeView getDefault(final boolean followLinks, final boolean ignoreExceptions) {
     return new SimpleFileTreeView(defaultDirectoryLister, followLinks, ignoreExceptions);
   }
 

@@ -38,7 +38,7 @@ final class SimpleFileTreeView implements FileTreeView {
   }
 
   SimpleFileTreeView(final DirectoryLister directoryLister, final boolean followLinks) {
-    this(directoryLister, followLinks, true);
+    this(directoryLister, followLinks, false);
   }
 
   @Override

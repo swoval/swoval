@@ -26,11 +26,8 @@ object FileTreeDataViews {
                           converter: Converter[T],
                           depth: Int,
                           followLinks: Boolean): DirectoryDataView[T] =
-    new CachedDirectoryImpl(TypedPaths.get(path),
-                            converter,
-                            depth,
-                            Filters.AllPass,
-                            FileTreeViews.getDefault(followLinks, false)).init()
+    new CachedDirectoryImpl(TypedPaths.get(path), converter, depth, Filters.AllPass, followLinks)
+      .init()
 
   /**
    * Container class for [[CachedDirectoryImpl]] entries. Contains both the path to which the

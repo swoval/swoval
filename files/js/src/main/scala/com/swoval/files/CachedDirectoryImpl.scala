@@ -67,6 +67,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
                                        private val converter: Converter[T],
                                        private val depth: Int,
                                        filter: Filter[_ >: TypedPath],
+                                       private val followLinks: Boolean,
                                        private val fileTreeView: FileTreeView)
     extends CachedDirectory[T] {
 
@@ -80,6 +81,13 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
   private val files: Map[Path, Entry[T]] = new HashMap()
 
   this._cacheEntry.set(Entries.get(this.typedPath, converter, this.typedPath))
+
+  def this(typedPath: TypedPath,
+           converter: Converter[T],
+           depth: Int,
+           filter: Filter[_ >: TypedPath],
+           followLinks: Boolean) =
+    this(typedPath, converter, depth, filter, followLinks, FileTreeViews.getDefault(followLinks))
 
   def getMaxDepth(): Int = depth
 
@@ -231,10 +239,16 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
                                                                  converter,
                                                                  currentDir.subdirectoryDepth(),
                                                                  pathFilter,
-                                                                 fileTreeView)
+                                                                 followLinks)
     var exists: Boolean = true
-    try dir.init()
-    catch {
+    try {
+      val tp: TypedPath = dir.getEntry.getTypedPath
+      if (tp.isDirectory && (followLinks || !tp.isSymbolicLink)) dir.init()
+      else {
+        currentDir.files.put(tp.getPath, dir.getEntry)
+        exists = false
+      }
+    } catch {
       case nsfe: NoSuchFileException => exists = false
 
       case e: IOException => {}
@@ -293,7 +307,8 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
           val resolved: Path = currentDir.getPath.resolve(p)
           if (!it.hasNext) {
 // We will always return from this block
-            val isDirectory: Boolean = typedPath.isDirectory
+            val isDirectory
+              : Boolean = typedPath.isDirectory && (followLinks || !typedPath.isSymbolicLink)
             if (!isDirectory || currentDir.depth <= 0 || isLoop(resolved,
                                                                 TypedPaths.expanded(typedPath))) {
               val previousCachedDirectoryImpl: CachedDirectoryImpl[T] =
@@ -302,7 +317,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
                 if (previousCachedDirectoryImpl != null)
                   previousCachedDirectoryImpl.getEntry
                 else currentDir.files.get(p)
-              val newEntry: Entry[T] = Entries.get(TypedPaths.getDelegate(p, typedPath),
+              val newEntry: Entry[T] = Entries.get(TypedPaths.getDelegate(resolved, typedPath),
                                                    converter,
                                                    TypedPaths.getDelegate(resolved, typedPath))
               if (isDirectory) {
@@ -315,7 +330,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
                                             converter,
                                             -1,
                                             pathFilter,
-                                            fileTreeView))
+                                            followLinks))
                 } else {
                   updateDirectory(previous, result, newEntry)
                 }
@@ -344,9 +359,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
           } else {
             val dir: CachedDirectoryImpl[T] = currentDir.subdirectories.get(p)
             if (dir == null && currentDir.depth > 0) {
-              addDirectory(currentDir,
-                           TypedPaths.getDelegate(currentDir.getPath.resolve(p), typedPath),
-                           result)
+              addDirectory(currentDir, TypedPaths.get(currentDir.getPath.resolve(p)), result)
             }
             currentDir = dir
           }
@@ -486,7 +499,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
                                                                                converter,
                                                                                subdirectoryDepth(),
                                                                                pathFilter,
-                                                                               fileTreeView)
+                                                                               followLinks)
                   try {
                     dir.init()
                     subdirectories.put(key, dir)
@@ -500,7 +513,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
                 } else {
                   subdirectories.put(
                     key,
-                    new CachedDirectoryImpl(file, converter, -1, pathFilter, fileTreeView))
+                    new CachedDirectoryImpl(file, converter, -1, pathFilter, followLinks))
                 }
               } else {
                 files.put(key, Entries.get(TypedPaths.getDelegate(key, file), converter, file))

@@ -207,8 +207,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                 if ((followLinks || !typedPath.isSymbolicLink)) typedPath
                 else
                   TypedPaths.get(typedPath.getPath, Entries.LINK | Entries.FILE)
-              val rescan: Boolean = rescanOnDirectoryUpdate || typedPath.isSymbolicLink ||
-                event.getKind == Overflow
+              val rescan: Boolean = rescanOnDirectoryUpdate || event.getKind == Overflow
               dir
                 .update(updatePath, rescan)
                 .observe(callbackObserver(callbacks, symlinks))
@@ -418,7 +417,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                           kind: Kind,
                           ioException: IOException): Unit = {
     val typedPath: TypedPath = if (entry == null) null else entry.getTypedPath
-    if (typedPath != null && typedPath.isSymbolicLink) {
+    if (typedPath != null && typedPath.isSymbolicLink && followLinks) {
       symlinks.add(typedPath)
     }
     callbacks.add(new Callback(if (typedPath == null) Paths.get("") else typedPath.getPath) {
@@ -515,10 +514,6 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     }
 
   private def newCachedDirectory(path: Path, depth: Int): CachedDirectory[T] =
-    new CachedDirectoryImpl(TypedPaths.get(path),
-                            converter,
-                            depth,
-                            filter,
-                            FileTreeViews.getDefault(followLinks, false)).init()
+    new CachedDirectoryImpl(TypedPaths.get(path), converter, depth, filter, followLinks).init()
 
 }

@@ -286,7 +286,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
       'updated - withTempDirectory { root =>
         val dir = Files.createDirectory(root.resolve("no-follow"))
         withTempDirectory { otherDir =>
-          val file = otherDir.resolve("file").createFile()
+          val file = otherDir.resolve("updated-file").createFile()
           Files.write(file, "foo".getBytes)
           val latch = new CountDownLatch(1)
           val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
@@ -309,7 +309,8 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           }.flatMap { _ =>
             using(FileTreeRepositories.get(identity, true)) { c =>
               c.register(dir)
-              c.ls(dir, true, functional.Filters.AllPass) === Set(link, link.resolve("file"))
+              c.ls(dir, true, functional.Filters.AllPass) === Set(link,
+                                                                  link.resolve("updated-file"))
             }
           }
         }

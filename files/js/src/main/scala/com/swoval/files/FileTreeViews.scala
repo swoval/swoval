@@ -53,7 +53,7 @@ object FileTreeViews {
                             PATH_CONVERTER,
                             depth,
                             Filters.AllPass,
-                            getDefault(followLinks, false)).init()
+                            followLinks).init()
 
   /**
    * Returns an instance of [[FileTreeView]] that uses only apis available in java.nio.file.
@@ -87,7 +87,7 @@ object FileTreeViews {
    * @return an instance of [[FileTreeView]].
    */
   def getDefault(followLinks: Boolean): FileTreeView =
-    getDefault(followLinks, true)
+    new SimpleFileTreeView(defaultDirectoryLister, followLinks, false)
 
   /**
    * Returns the default [[FileTreeView]] for the runtime platform. If a native implementation

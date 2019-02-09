@@ -248,10 +248,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
                   (followLinks || !typedPath.isSymbolicLink())
                       ? typedPath
                       : TypedPaths.get(typedPath.getPath(), Entries.LINK | Entries.FILE);
-              final boolean rescan =
-                  rescanOnDirectoryUpdate
-                      || typedPath.isSymbolicLink()
-                      || event.getKind().equals(Overflow);
+              final boolean rescan = rescanOnDirectoryUpdate || event.getKind().equals(Overflow);
               dir.update(updatePath, rescan).observe(callbackObserver(callbacks, symlinks));
             } catch (final IOException e) {
               handleDelete(path, callbacks, symlinks);
@@ -452,7 +449,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
       final Kind kind,
       final IOException ioException) {
     final TypedPath typedPath = entry == null ? null : entry.getTypedPath();
-    if (typedPath != null && typedPath.isSymbolicLink()) {
+    if (typedPath != null && typedPath.isSymbolicLink() && followLinks) {
       symlinks.add(typedPath);
     }
     callbacks.add(
@@ -569,12 +566,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
 
   private CachedDirectory<T> newCachedDirectory(final Path path, final int depth)
       throws IOException {
-    return new CachedDirectoryImpl<>(
-            TypedPaths.get(path),
-            converter,
-            depth,
-            filter,
-            FileTreeViews.getDefault(followLinks, false))
+    return new CachedDirectoryImpl<>(TypedPaths.get(path), converter, depth, filter, followLinks)
         .init();
   }
 }
