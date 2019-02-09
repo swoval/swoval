@@ -403,7 +403,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
               currentDir = dir;
             }
           }
-        } else if (typedPath.isDirectory()) {
+        } else if (typedPath.isDirectory() && rescanOnDirectoryUpdate) {
           final List<Entry<T>> oldEntries = listEntries(getMaxDepth(), AllPass);
           init();
           final List<Entry<T>> newEntries = listEntries(getMaxDepth(), AllPass);

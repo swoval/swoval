@@ -351,7 +351,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
             currentDir = dir
           }
         }
-      } else if (typedPath.isDirectory) {
+      } else if (typedPath.isDirectory && rescanOnDirectoryUpdate) {
         val oldEntries: List[Entry[T]] = listEntries(getMaxDepth, AllPass)
         init()
         val newEntries: List[Entry[T]] = listEntries(getMaxDepth, AllPass)
