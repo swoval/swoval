@@ -2,7 +2,7 @@ package com.swoval
 package files
 
 import java.io.IOException
-import java.nio.file.{ Files, Path }
+import java.nio.file.{ Files, Path, Paths }
 
 import FileTreeDataViews.Entry
 import com.swoval.files.FileCacheTest.FileCacheOps
@@ -328,13 +328,11 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
               identity,
               new FileTreeDataViews.CacheObserver[Path] {
                 override def onCreate(newEntry: Entry[Path]): Unit = {}
-
                 override def onDelete(oldEntry: Entry[Path]): Unit = {}
-
                 override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
-                  if (paths.add(newEntry.getTypedPath.getPath)) latch.countDown()
+                  val path = newEntry.getTypedPath.getPath
+                  if (path.getFileName == Paths.get("link") && paths.add(path)) latch.countDown()
                 }
-
                 override def onError(exception: IOException): Unit = {}
               }
             )) { c =>
