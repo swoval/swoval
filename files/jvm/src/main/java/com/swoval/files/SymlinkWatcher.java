@@ -7,6 +7,7 @@ import static java.util.Map.Entry;
 import com.swoval.files.FileTreeViews.Observable;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
+import com.swoval.files.PathWatchers.Event.Kind;
 import com.swoval.files.SymlinkWatcher.RegisteredPath;
 import com.swoval.functional.Either;
 import java.io.IOException;
@@ -41,7 +42,6 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
   SymlinkWatcher(final PathWatcher<PathWatchers.Event> watcher) {
     this.watcher = watcher;
     final ReentrantLock reentrantLock = new ReentrantLock();
-    watchedSymlinksByDirectory = new RegisteredPaths(reentrantLock);
     watchedSymlinksByTarget = new RegisteredPaths(reentrantLock);
     watcher.addObserver(
         new Observer<Event>() {
@@ -51,8 +51,9 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
           @Override
           public void onNext(final Event event) {
             if (!isClosed.get()) {
-              final List<Event> events = new ArrayList<>();
+              final List<Path> paths = new ArrayList<>();
               final Path path = event.getTypedPath().getPath();
+              final Kind kind = event.getKind();
               if (watchedSymlinksByTarget.lock()) {
                 try {
                   final RegisteredPath registeredPath = find(path, watchedSymlinksByTarget);
@@ -61,11 +62,7 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
                     final Iterator<Path> it = registeredPath.paths.iterator();
                     while (it.hasNext()) {
                       final Path rawPath = it.next().resolve(relativized);
-                      if (!hasLoop(rawPath)) {
-                        // final TypedPath typedPath = TypedPaths.get(rawPath);
-                        events.add(
-                            new Event(TypedPaths.get(rawPath, Entries.UNKNOWN), event.getKind()));
-                      }
+                      if (!hasLoop(rawPath)) paths.add(rawPath);
                     }
                   }
                 } finally {
@@ -75,13 +72,11 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
               if (!Files.exists(path)) {
                 if (watchedSymlinksByTarget.lock()) {
                   try {
-                    watchedSymlinksByTarget.remove(path);
-                    final RegisteredPath registeredPath = watchedSymlinksByDirectory.get(path);
+                    final RegisteredPath registeredPath = watchedSymlinksByTarget.remove(path);
                     if (registeredPath != null) {
                       registeredPath.paths.remove(path);
                       if (registeredPath.paths.isEmpty()) {
                         watcher.unregister(path);
-                        watchedSymlinksByDirectory.remove(path);
                       }
                     }
                   } finally {
@@ -90,18 +85,16 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
                 }
               }
 
-              final Iterator<Event> it = events.iterator();
+              final Iterator<Path> it = paths.iterator();
               while (it.hasNext()) {
-                final Event ev = it.next();
-                observers.onNext(
-                    new Event(TypedPaths.get(ev.getTypedPath().getPath()), ev.getKind()));
+                final TypedPath typedPath = TypedPaths.get(it.next());
+                observers.onNext(new Event(typedPath, kind));
               }
             }
           }
         });
   }
 
-  private final RegisteredPaths watchedSymlinksByDirectory;
   private final RegisteredPaths watchedSymlinksByTarget;
 
   @Override
@@ -166,11 +159,6 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
         targetIt.next().paths.clear();
       }
       watchedSymlinksByTarget.clear();
-      final Iterator<RegisteredPath> dirIt = watchedSymlinksByDirectory.values().iterator();
-      while (dirIt.hasNext()) {
-        dirIt.next().paths.clear();
-      }
-      watchedSymlinksByDirectory.clear();
       watcher.close();
       callbackExecutor.close();
     }
@@ -197,15 +185,11 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
             try {
               final RegisteredPath targetRegistrationPath = watchedSymlinksByTarget.get(realPath);
               if (targetRegistrationPath == null) {
-                final RegisteredPath registeredPath = watchedSymlinksByDirectory.get(realPath);
-                if (registeredPath == null) {
-                  final Either<IOException, Boolean> result = watcher.register(realPath, maxDepth);
-                  if (getOrElse(result, false)) {
-                    watchedSymlinksByDirectory.put(realPath, new RegisteredPath(path, realPath));
-                    watchedSymlinksByTarget.put(realPath, new RegisteredPath(realPath, path));
-                  } else if (result.isLeft()) {
-                    throw leftProjection(result).getValue();
-                  }
+                final Either<IOException, Boolean> result = watcher.register(realPath, maxDepth);
+                if (getOrElse(result, false)) {
+                  watchedSymlinksByTarget.put(realPath, new RegisteredPath(realPath, path));
+                } else if (result.isLeft()) {
+                  throw leftProjection(result).getValue();
                 }
               } else {
                 targetRegistrationPath.paths.add(path);
@@ -245,14 +229,6 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
               targetRegisteredPath.paths.remove(path);
               if (targetRegisteredPath.paths.isEmpty()) {
                 watchedSymlinksByTarget.remove(target);
-                final RegisteredPath registeredPath = watchedSymlinksByDirectory.get(target);
-                if (registeredPath != null) {
-                  registeredPath.paths.remove(target);
-                  if (registeredPath.paths.isEmpty()) {
-                    watcher.unregister(target);
-                    watchedSymlinksByDirectory.remove(target);
-                  }
-                }
               }
             }
           }
