@@ -120,6 +120,7 @@ object Build {
   lazy val setProp = inputKey[Unit]("Set a system property")
   lazy val checkFormat = inputKey[Boolean]("Check that the source code is formatted correctly")
   lazy val buildNative = taskKey[Unit]("Build the native libraries")
+  lazy val formatSources = taskKey[Unit]("Format source code")
 
   def projects: Seq[ProjectReference] = Seq[ProjectReference](
     files.js,
@@ -553,15 +554,15 @@ object Build {
             res
           }
       }.value,
-      Compile / compile := Def.taskDyn {
-        val res = (Compile / compile).value
-        if (System.getProperty("swoval.format", "true") == "true")
-          Def.task {
-            javafmt.toTask("").value
-            clangfmt.toTask("").value
-            res
-          } else Def.task(res)
+      skip in formatSources := System.getProperty("swoval.format", "true") == "true",
+      formatSources := Def.taskDyn {
+        if ((skip in formatSources).value) Def.task {
+          javafmt.toTask("").value
+          clangfmt.toTask("").value
+          ()
+        } else Def.task(())
       }.value,
+      Compile / compile := (Compile / compile).dependsOn(formatSources).value,
       fork in Test := System.getProperty("swoval.fork.tests", "false") == "true",
       travisQuickListReflectionTest := {
         quickListReflectionTest
