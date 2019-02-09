@@ -340,6 +340,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
       final Iterator<FileTreeDataViews.Entry<T>> removeIterator = it.next();
       while (removeIterator.hasNext()) {
         final FileTreeDataViews.Entry<T> entry = Entries.setExists(removeIterator.next(), false);
+        if (symlinkWatcher != null && entry.getTypedPath().isSymbolicLink())
+          symlinkWatcher.remove(entry.getTypedPath().getPath());
         addCallback(callbacks, symlinks, entry, entry, null, Delete, null);
       }
     }

@@ -108,7 +108,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         new Converter<WatchedDirectory>() {
           @Override
           public WatchedDirectory apply(final TypedPath typedPath) {
-            return typedPath.isDirectory()
+            return typedPath.isDirectory() && !typedPath.isSymbolicLink()
                 ? Either.getOrElse(
                     service.register(typedPath.getPath()), WatchedDirectories.INVALID)
                 : WatchedDirectories.INVALID;
@@ -419,7 +419,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
             }
           }
           events.add(event);
-          if (typedPath.isDirectory()) {
+          if (typedPath.isDirectory() && !typedPath.isSymbolicLink()) {
             add(typedPath, events);
           }
         }

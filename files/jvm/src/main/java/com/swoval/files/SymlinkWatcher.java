@@ -91,7 +91,9 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
               while (it.hasNext()) {
                 final TypedPath typedPath = TypedPaths.get(it.next());
                 if (logger.shouldLog())
-                  logger.debug("SymlinkWatcher evaluating callback for " + typedPath);
+                  logger.debug(
+                      "SymlinkWatcher evaluating callback for "
+                          + ("link " + typedPath + " to target " + path));
                 observers.onNext(new Event(typedPath, kind));
               }
             }

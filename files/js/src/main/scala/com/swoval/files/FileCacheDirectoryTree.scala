@@ -304,6 +304,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
       while (removeIterator.hasNext) {
         val entry: FileTreeDataViews.Entry[T] =
           Entries.setExists(removeIterator.next(), false)
+        if (symlinkWatcher != null && entry.getTypedPath.isSymbolicLink)
+          symlinkWatcher.remove(entry.getTypedPath.getPath)
         addCallback(callbacks, symlinks, entry, entry, null, Delete, null)
       }
     }

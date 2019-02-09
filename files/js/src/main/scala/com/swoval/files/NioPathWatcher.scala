@@ -46,7 +46,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
   private val converter: Converter[WatchedDirectory] =
     new Converter[WatchedDirectory]() {
       override def apply(typedPath: TypedPath): WatchedDirectory =
-        if (typedPath.isDirectory)
+        if (typedPath.isDirectory && !typedPath.isSymbolicLink)
           Either.getOrElse(service.register(typedPath.getPath), WatchedDirectories.INVALID)
         else WatchedDirectories.INVALID
     }
@@ -400,7 +400,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           }
         }
         events.add(event)
-        if (typedPath.isDirectory) {
+        if (typedPath.isDirectory && !typedPath.isSymbolicLink) {
           add(typedPath, events)
         }
       } finally rootDirectories.unlock()
