@@ -131,6 +131,25 @@ object CachedFileTreeViewTest extends TestSuite {
           updates.creations === Seq(file)
         }
       }
+      def remove: Future[Unit] = withTempDirectory { dir =>
+        withTempFileSync(dir) { file =>
+          val directory = newCachedView(dir)
+          Files.deleteIfExists(file)
+          val updates = directory.update(TypedPaths.get(file)).toUpdates
+          updates.deletions === Seq(file)
+        }
+      }
+      def concurrentRemove: Future[Unit] = withTempDirectory { dir =>
+        val directory = newCachedView(dir)
+        withTempDirectorySync(dir) { subdir =>
+          val typedPath = TypedPaths.get(subdir)
+          Files.deleteIfExists(subdir)
+          val updates = directory.update(typedPath).toUpdates
+          assert(updates.creations.isEmpty)
+          assert(updates.deletions.isEmpty)
+          assert(updates.updates.isEmpty)
+        }
+      }
       object nested {
         def created: Future[Unit] = withTempDirectory { dir =>
           withTempDirectorySync(dir) { subdir =>
@@ -315,6 +334,8 @@ object CachedFileTreeViewTest extends TestSuite {
     'update - {
       'directory - {
         'simple - update.directory.simple
+        'remove - update.directory.remove
+        'concurrentRemove - update.directory.concurrentRemove
         'nested - {
           'created - update.directory.nested.created
           'removed - update.directory.nested.removed
