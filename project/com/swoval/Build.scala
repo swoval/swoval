@@ -73,6 +73,8 @@ object Build {
           Some(Opts.resolver.sonatypeReleases): Option[Resolver]
         else p
       },
+      skip in ThisBuild in buildNative := java.lang.Boolean
+        .valueOf(System.getProperty("swoval.skip.native", "true")),
       version in ThisBuild := {
         val v = baseVersion
         if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true")) {
@@ -117,6 +119,7 @@ object Build {
   lazy val allTests = inputKey[Unit]("Run all tests")
   lazy val setProp = inputKey[Unit]("Set a system property")
   lazy val checkFormat = inputKey[Boolean]("Check that the source code is formatted correctly")
+  lazy val buildNative = taskKey[Unit]("Build the native libraries")
 
   def projects: Seq[ProjectReference] = Seq[ProjectReference](
     files.js,
@@ -529,21 +532,27 @@ object Build {
       crossScalaVersions := scalaCrossVersions,
       crossPaths := false,
       autoScalaLibrary := false,
-      unmanagedResources in Compile := {
+      buildNative := {
         val log = state.value.log
-        if (System.getProperty("swoval.skip.native", "false") == "false") {
-          val nativeDir = sourceDirectory.value.toPath.resolve("main/native").toFile
-          val makeCmd = System.getProperty("swoval.make.cmd", "make")
-          val proc = new ProcessBuilder(makeCmd, "-j", "8").directory(nativeDir).start()
-          proc.waitFor(1, TimeUnit.MINUTES)
-          log.info(Source.fromInputStream(proc.getInputStream).mkString)
-          if (proc.exitValue() != 0) {
-            log.error(Source.fromInputStream(proc.getErrorStream).mkString)
-            throw new IllegalStateException("Couldn't build native library!")
-          }
+        val nativeDir = sourceDirectory.value.toPath.resolve("main/native").toFile
+        val makeCmd = System.getProperty("swoval.make.cmd", "make")
+        val proc = new ProcessBuilder(makeCmd, "-j", "8").directory(nativeDir).start()
+        proc.waitFor(1, TimeUnit.MINUTES)
+        log.info(Source.fromInputStream(proc.getInputStream).mkString)
+        if (proc.exitValue() != 0) {
+          log.error(Source.fromInputStream(proc.getErrorStream).mkString)
+          throw new IllegalStateException("Couldn't build native library!")
         }
-        (unmanagedResources in Compile).value
       },
+      unmanagedResources in Compile := Def.taskDyn {
+        val res = (unmanagedResources in Compile).value
+        if ((skip in buildNative).value) Def.task(res)
+        else
+          Def.task {
+            buildNative.value
+            res
+          }
+      }.value,
       Compile / compile := Def.taskDyn {
         val res = (Compile / compile).value
         if (System.getProperty("swoval.format", "true") == "true")
