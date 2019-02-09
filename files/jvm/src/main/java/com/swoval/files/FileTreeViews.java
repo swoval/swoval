@@ -8,6 +8,7 @@ import com.swoval.functional.Filters;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
@@ -217,5 +218,16 @@ public class FileTreeViews {
 
     @Override
     public void onError(final IOException exception) {}
+
+    @Override
+    public String toString() {
+      final List<List<Entry<T>>> updateList = new ArrayList<>();
+      final Iterator<Entry<T>[]> it = updates.iterator();
+      while (it.hasNext()) updateList.add(Arrays.asList(it.next()));
+      return "Updates("
+          + ("creations: " + creations)
+          + (", deletions: " + deletions)
+          + (", updates: " + updateList + ")");
+    }
   }
 }

@@ -10,6 +10,7 @@ import com.swoval.functional.Filters
 import java.io.IOException
 import java.nio.file.Path
 import java.util.ArrayList
+import java.util.Arrays
 import java.util.Iterator
 import java.util.List
 
@@ -192,6 +193,14 @@ object FileTreeViews {
     }
 
     override def onError(exception: IOException): Unit = {}
+
+    override def toString(): String = {
+      val updateList: List[List[Entry[T]]] = new ArrayList[List[Entry[T]]]()
+      val it: Iterator[Array[Entry[T]]] = updates.iterator()
+      while (it.hasNext) updateList.add(Arrays.asList(it.next(): _*))
+      "Updates(" + ("creations: " + creations) + (", deletions: " + deletions) +
+        (", updates: " + updateList + ")")
+    }
 
   }
 
