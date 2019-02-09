@@ -294,7 +294,8 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
           if (!it.hasNext) {
 // We will always return from this block
             val isDirectory: Boolean = typedPath.isDirectory
-            if (!isDirectory || currentDir.depth <= 0 || isLoop(resolved, typedPath.expanded())) {
+            if (!isDirectory || currentDir.depth <= 0 || isLoop(resolved,
+                                                                TypedPaths.expanded(typedPath))) {
               val previousCachedDirectoryImpl: CachedDirectoryImpl[T] =
                 if (isDirectory) currentDir.subdirectories.get(p) else null
               val oldEntry: Entry[T] =
@@ -358,7 +359,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
       } else {
         val oldEntry: Entry[T] = getEntry
         val tp: TypedPath =
-          TypedPaths.getDelegate(getTypedPath.expanded(), typedPath)
+          TypedPaths.getDelegate(TypedPaths.expanded(getTypedPath), typedPath)
         val newEntry: Entry[T] = Entries.get(tp, converter, tp)
         _cacheEntry.set(newEntry)
         result.onUpdate(oldEntry, getEntry)
@@ -480,7 +481,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
             val key: Path = this.typedPath.getPath.relativize(path).getFileName
             if (file.isDirectory) {
               if (depth > 0) {
-                if (!file.isSymbolicLink || !isLoop(path, file.expanded())) {
+                if (!file.isSymbolicLink || !isLoop(path, TypedPaths.expanded(file))) {
                   val dir: CachedDirectoryImpl[T] = new CachedDirectoryImpl[T](file,
                                                                                converter,
                                                                                subdirectoryDepth(),

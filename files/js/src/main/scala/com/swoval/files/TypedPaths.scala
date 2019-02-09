@@ -12,7 +12,7 @@ object TypedPaths {
 
     private var realPath: Path = _
 
-    override def expanded(): Path = path.synchronized {
+    def expanded(): Path = path.synchronized {
       if (realPath == null) {
         try {
           realPath = if (isSymbolicLink) path.toRealPath() else path
@@ -27,7 +27,13 @@ object TypedPaths {
     }
 
     override def toString(): String =
-      "TypedPath(" + path + ", " + isSymbolicLink + ", " + expanded() +
+      "TypedPath(path: " + path + ", exists: " + exists() +
+        ", isFile: " +
+        isFile +
+        ", isDirectory: " +
+        isDirectory +
+        ", isSymbolicLink: " +
+        isSymbolicLink +
         ")"
 
     override def equals(other: Any): Boolean = other match {
@@ -39,6 +45,18 @@ object TypedPaths {
     override def hashCode(): Int = getPath.hashCode
 
   }
+
+  def expanded(typedPath: TypedPath): Path =
+    if (typedPath.isInstanceOf[TypedPathImpl]) {
+      typedPath.asInstanceOf[TypedPathImpl].expanded()
+    } else {
+      try if (typedPath.isSymbolicLink) typedPath.getPath.toRealPath()
+      else typedPath.getPath
+      catch {
+        case e: IOException => typedPath.getPath
+
+      }
+    }
 
   def getDelegate(path: Path, typedPath: TypedPath): TypedPath =
     new TypedPathImpl(path) {

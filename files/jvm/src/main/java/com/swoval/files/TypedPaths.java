@@ -20,8 +20,7 @@ public class TypedPaths {
       return path;
     }
 
-    @Override
-    public Path expanded() {
+    Path expanded() {
       synchronized (path) {
         if (realPath == null) {
           try {
@@ -38,7 +37,17 @@ public class TypedPaths {
 
     @Override
     public String toString() {
-      return "TypedPath(" + path + ", " + isSymbolicLink() + ", " + expanded() + ")";
+      return "TypedPath(path: "
+          + path
+          + ", exists: "
+          + exists()
+          + ", isFile: "
+          + isFile()
+          + ", isDirectory: "
+          + isDirectory()
+          + ", isSymbolicLink: "
+          + isSymbolicLink()
+          + ")";
     }
 
     @Override
@@ -49,6 +58,18 @@ public class TypedPaths {
     @Override
     public int hashCode() {
       return getPath().hashCode();
+    }
+  }
+
+  static Path expanded(final TypedPath typedPath) {
+    if (typedPath instanceof TypedPathImpl) {
+      return ((TypedPathImpl) typedPath).expanded();
+    } else {
+      try {
+        return typedPath.isSymbolicLink() ? typedPath.getPath().toRealPath() : typedPath.getPath();
+      } catch (final IOException e) {
+        return typedPath.getPath();
+      }
     }
   }
 

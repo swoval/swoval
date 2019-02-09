@@ -343,7 +343,9 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
             if (!it.hasNext()) {
               // We will always return from this block
               final boolean isDirectory = typedPath.isDirectory();
-              if (!isDirectory || currentDir.depth <= 0 || isLoop(resolved, typedPath.expanded())) {
+              if (!isDirectory
+                  || currentDir.depth <= 0
+                  || isLoop(resolved, TypedPaths.expanded(typedPath))) {
                 final CachedDirectoryImpl<T> previousCachedDirectoryImpl =
                     isDirectory ? currentDir.subdirectories.get(p) : null;
                 final Entry<T> oldEntry =
@@ -408,7 +410,8 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
           MapOps.diffDirectoryEntries(oldEntries, newEntries, result);
         } else {
           final Entry<T> oldEntry = getEntry();
-          final TypedPath tp = TypedPaths.getDelegate(getTypedPath().expanded(), typedPath);
+          final TypedPath tp =
+              TypedPaths.getDelegate(TypedPaths.expanded(getTypedPath()), typedPath);
           final Entry<T> newEntry = Entries.get(tp, converter, tp);
           _cacheEntry.set(newEntry);
           result.onUpdate(oldEntry, getEntry());
@@ -536,7 +539,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
             final Path key = this.typedPath.getPath().relativize(path).getFileName();
             if (file.isDirectory()) {
               if (depth > 0) {
-                if (!file.isSymbolicLink() || !isLoop(path, file.expanded())) {
+                if (!file.isSymbolicLink() || !isLoop(path, TypedPaths.expanded(file))) {
                   final CachedDirectoryImpl<T> dir =
                       new CachedDirectoryImpl<>(
                           file, converter, subdirectoryDepth(), pathFilter, fileTreeView);

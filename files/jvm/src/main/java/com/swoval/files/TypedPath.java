@@ -38,13 +38,4 @@ public interface TypedPath {
    * @return true if the underlying path is a symbolic link
    */
   boolean isSymbolicLink();
-
-  /**
-   * Returns the real path when this typed path is a symbolic link. Otherwise returns the path
-   * itself. Unlike {@link java.nio.file.Path#toRealPath}, if a parent of the path is a symbolic
-   * link, but the path itself is not, the path is not expanded.
-   *
-   * @return the expanded path.
-   */
-  Path expanded();
 }
