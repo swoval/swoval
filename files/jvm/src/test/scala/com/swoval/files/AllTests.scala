@@ -1,6 +1,6 @@
 package com.swoval.files
 
-import java.util.concurrent.atomic.{ AtomicBoolean, AtomicReference }
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{ CountDownLatch, TimeUnit }
 
 import com.swoval.files.apple.FileEventMonitorTest
