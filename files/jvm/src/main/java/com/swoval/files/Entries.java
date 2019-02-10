@@ -37,10 +37,11 @@ final class Entries {
             | (typedPath.isFile() ? FILE : 0)
             | (typedPath.isDirectory() ? DIRECTORY : 0)
             | (typedPath.isSymbolicLink() ? LINK : 0);
+    final TypedPath nonExistent = TypedPaths.get(typedPath.getPath(), kind);
     if (entry.getValue().isLeft()) {
-      return new InvalidEntry<>(typedPath, Either.leftProjection(entry.getValue()).getValue());
+      return new InvalidEntry<>(nonExistent, Either.leftProjection(entry.getValue()).getValue());
     } else {
-      return new ValidEntry<>(typedPath, entry.getValue().get());
+      return new ValidEntry<>(nonExistent, entry.getValue().get());
     }
   }
 

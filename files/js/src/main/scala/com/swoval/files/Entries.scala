@@ -39,10 +39,11 @@ object Entries {
                                                         else 0) |
       (if (typedPath.isDirectory) DIRECTORY else 0) |
       (if (typedPath.isSymbolicLink) LINK else 0)
+    val nonExistent: TypedPath = TypedPaths.get(typedPath.getPath, kind)
     if (entry.getValue.isLeft) {
-      new InvalidEntry(typedPath, Either.leftProjection(entry.getValue).getValue)
+      new InvalidEntry(nonExistent, Either.leftProjection(entry.getValue).getValue)
     } else {
-      new ValidEntry(typedPath, entry.getValue.get)
+      new ValidEntry(nonExistent, entry.getValue.get)
     }
   }
 
