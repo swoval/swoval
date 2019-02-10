@@ -1,12 +1,13 @@
 package com.swoval.files
 
 import java.util.concurrent.atomic.AtomicReference
-import java.util.concurrent.{ CountDownLatch, TimeUnit }
+import java.util.concurrent.{ ArrayBlockingQueue, CountDownLatch, TimeUnit }
 
 import com.swoval.files.apple.FileEventMonitorTest
 import utest._
+import utest.framework.{ HTree, Result }
 
-import scala.util.{ Failure, Try }
+import scala.util.{ Failure, Success, Try }
 
 object AllTests {
   def main(args: Array[String]): Unit = {
@@ -49,7 +50,7 @@ object AllTests {
       test(DirectoryFileTreeViewTest),
       test(ApplePathWatcherTest)
     )
-    val latch = new CountDownLatch(tests.size)
+    val queue = new ArrayBlockingQueue[Try[HTree[String, Result]]](tests.size)
     val failure = new AtomicReference[Option[Throwable]](None)
     val threads = tests.map {
       case (t, n) =>
@@ -57,23 +58,26 @@ object AllTests {
           setDaemon(true)
           override def run(): Unit = {
             try {
-              val res = TestRunner.runAndPrint(t, n)
-              res.leaves.toIndexedSeq.foreach { l =>
-                l.value match {
-                  case Failure(e) => failure.compareAndSet(None, Some(e))
-                  case _          =>
-                }
-              }
+              queue.add(Try(TestRunner.runAndPrint(t, n)))
             } catch {
-              case _: InterruptedException =>
+              case e: InterruptedException => queue.add(Failure(e))
             }
-            latch.countDown()
           }
         }
         thread.start()
         thread
     }
-    latch.await(30, TimeUnit.SECONDS)
+    tests.indices foreach { _ =>
+      queue.poll(10, TimeUnit.SECONDS) match {
+        case null => throw new IllegalStateException("Test failed")
+        case Success(result) =>
+          result.leaves.map(_.value).foreach {
+            case Failure(e) => failure.compareAndSet(None, Some(e))
+            case _          =>
+          }
+        case Failure(e) => failure.compareAndSet(None, Some(e))
+      }
+    }
     val now = System.nanoTime
     println(s"joining threads for iteration $count")
     threads.foreach(_.interrupt())
