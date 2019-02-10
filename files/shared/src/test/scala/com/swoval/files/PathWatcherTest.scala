@@ -84,9 +84,8 @@ trait PathWatcherTest extends TestSuite {
               events.add(e)
         usingAsync(defaultWatcher(callback)) { w =>
           w.register(f.getParent)
-          f.lastModified
-          Defer(1.second)(f.setLastModifiedTime(3000L))
-          events.poll(2.seconds)(_ ==> new Event(TypedPaths.get(f), Modify))
+          f.setLastModifiedTime(3000L)
+          events.poll(DEFAULT_TIMEOUT)(_ ==> new Event(TypedPaths.get(f), Modify))
         }
       }
       'onModify - withTempFile { f =>
@@ -96,8 +95,8 @@ trait PathWatcherTest extends TestSuite {
               events.add(e)
         usingAsync(defaultWatcher(callback)) { w =>
           w.register(f.getParent)
-          Defer(1.second)(f.write("hello"))
-          events.poll(2.seconds)(_.path ==> f)
+          f write "hello"
+          events.poll(DEFAULT_TIMEOUT)(_.path ==> f)
         }
       }
       'onDelete - {
@@ -108,8 +107,8 @@ trait PathWatcherTest extends TestSuite {
           }
           usingAsync(defaultWatcher(callback)) { w =>
             w.register(f.getParent)
-            Defer(1.second)(f.delete())
-            events.poll(2.seconds) { e =>
+            f.delete()
+            events.poll(DEFAULT_TIMEOUT) { e =>
               e ==> new Event(TypedPaths.get(f), Delete)
             }
           }
@@ -121,8 +120,8 @@ trait PathWatcherTest extends TestSuite {
           }
           usingAsync(defaultWatcher(callback)) { w =>
             w.register(dir)
-            Defer(1.second)(dir.delete())
-            events.poll(2.seconds) { e =>
+            dir.delete()
+            events.poll(DEFAULT_TIMEOUT) { e =>
               e ==> new Event(TypedPaths.get(dir), Delete)
             }
           }
