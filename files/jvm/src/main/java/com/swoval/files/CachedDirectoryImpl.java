@@ -427,7 +427,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
           final Entry<T> oldEntry = getEntry();
           final TypedPath tp =
               TypedPaths.getDelegate(TypedPaths.expanded(getTypedPath()), typedPath);
-          final Entry<T> newEntry = Entries.get(tp, converter, tp);
+          final Entry<T> newEntry = Entries.get(typedPath, converter, tp);
           _cacheEntry.set(newEntry);
           result.onUpdate(oldEntry, getEntry());
         }

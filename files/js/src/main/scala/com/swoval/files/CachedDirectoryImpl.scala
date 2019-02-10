@@ -373,7 +373,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
         val oldEntry: Entry[T] = getEntry
         val tp: TypedPath =
           TypedPaths.getDelegate(TypedPaths.expanded(getTypedPath), typedPath)
-        val newEntry: Entry[T] = Entries.get(tp, converter, tp)
+        val newEntry: Entry[T] = Entries.get(typedPath, converter, tp)
         _cacheEntry.set(newEntry)
         result.onUpdate(oldEntry, getEntry)
       } finally this.subdirectories.unlock()
