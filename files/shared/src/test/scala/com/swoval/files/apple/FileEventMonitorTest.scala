@@ -1,6 +1,5 @@
 package com.swoval.files.apple
 
-import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
 import com.swoval.files.test.{ CountDownLatch, _ }
@@ -21,11 +20,11 @@ object FileEventMonitorTest extends TestSuite {
       val file = dir.resolve("file")
       val api = getFileEventsApi(fe => {
         assert(fe.fileName.startsWith(dir.toString))
-        Files.deleteIfExists(file)
+        file.delete()
         latch.countDown()
       })
       api.createStream(dir, 50, TimeUnit.MILLISECONDS, new Flags.Create().setNoDefer())
-      Files.createFile(file)
+      file.createFile()
 
       latch
         .waitFor(DEFAULT_TIMEOUT) {}

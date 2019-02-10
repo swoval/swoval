@@ -1,7 +1,7 @@
 package com.swoval.files
 
 import java.io.IOException
-import java.nio.file.{ Files, Path }
+import java.nio.file.Path
 
 import com.swoval.files.FileTreeDataViews.{ CacheObserver, Entry }
 import com.swoval.files.FileTreeViewTest.RepositoryOps
@@ -134,7 +134,7 @@ object CachedFileTreeViewTest extends TestSuite {
       def remove: Future[Unit] = withTempDirectory { dir =>
         withTempFileSync(dir) { file =>
           val directory = newCachedView(dir)
-          Files.deleteIfExists(file)
+          file.delete()
           val updates = directory.update(TypedPaths.get(file)).toUpdates
           updates.deletions === Seq(file)
         }
@@ -143,7 +143,7 @@ object CachedFileTreeViewTest extends TestSuite {
         val directory = newCachedView(dir)
         withTempDirectorySync(dir) { subdir =>
           val typedPath = TypedPaths.get(subdir)
-          Files.deleteIfExists(subdir)
+          subdir.delete()
           val updates = directory.update(typedPath).toUpdates
           assert(updates.creations.isEmpty)
           assert(updates.deletions.isEmpty)
@@ -154,7 +154,7 @@ object CachedFileTreeViewTest extends TestSuite {
         def created: Future[Unit] = withTempDirectory { dir =>
           withTempDirectorySync(dir) { subdir =>
             val directory = newCachedView(dir)
-            val nestedSubdir = Files.createDirectory(subdir.resolve("nested"))
+            val nestedSubdir = subdir.resolve("nested").createDirectory()
             val nestedFile = nestedSubdir.resolve("file").createFile()
             val updates = directory.update(TypedPaths.get(subdir, Entries.DIRECTORY)).toUpdates
             val typedPath = TypedPaths.get(subdir, Entries.DIRECTORY)
@@ -165,7 +165,7 @@ object CachedFileTreeViewTest extends TestSuite {
         }
         def removed: Future[Unit] = withTempDirectory { dir =>
           withTempDirectorySync(dir) { subdir =>
-            val nestedSubdir = Files.createDirectory(subdir.resolve("nested"))
+            val nestedSubdir = subdir.resolve("nested").createDirectory()
             val nestedFile = nestedSubdir.resolve("file").createFile()
             val directory = newCachedView(dir)
             nestedSubdir.deleteRecursive()
@@ -183,7 +183,7 @@ object CachedFileTreeViewTest extends TestSuite {
       def subfiles: Future[Unit] = withTempDirectorySync { dir =>
         val directory = newCachedView(dir)
         directory.list(Integer.MAX_VALUE, AllPass).asScala.toSeq === Seq.empty[TypedPath]
-        val subdir: Path = Files.createDirectories(dir.resolve("subdir").resolve("nested"))
+        val subdir: Path = dir.resolve("subdir").resolve("nested").createDirectories()
         val files = 1 to 2 map (i => subdir.resolve(s"file-$i").createFile())
         val found = mutable.Set.empty[Path]
         val updates = directory.update(TypedPaths.get(files.last, Entries.FILE))
@@ -272,13 +272,13 @@ object CachedFileTreeViewTest extends TestSuite {
     object indirect {
       def remoteLink: Future[Unit] = withTempDirectory { dir =>
         withTempDirectorySync { otherDir =>
-          val dirToOtherDirLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
-          val otherDirToDirLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+          val dirToOtherDirLink = dir.resolve("other") linkTo otherDir
+          val otherDirToDirLink = otherDir.resolve("dir") linkTo dir
           val directory = newCachedView(dir, Integer.MAX_VALUE, followLinks = true)
           directory.ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink,
                                                                dirToOtherDirLink.resolve("dir"))
           otherDirToDirLink.delete()
-          Files.createDirectory(otherDirToDirLink)
+          otherDirToDirLink.createDirectory()
           val nestedFile = otherDirToDirLink.resolve("file").createFile()
           val file = dirToOtherDirLink.resolve("dir").resolve("file")
           directory.update(TypedPaths.get(dir, Entries.DIRECTORY))
@@ -289,13 +289,13 @@ object CachedFileTreeViewTest extends TestSuite {
       }
       def localLink: Future[Unit] = withTempDirectory { dir =>
         withTempDirectorySync { otherDir =>
-          val dirToOtherDirLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
-          val otherDirToDirLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+          val dirToOtherDirLink = dir.resolve("other") linkTo otherDir
+          val otherDirToDirLink = otherDir.resolve("dir") linkTo dir
           val directory = newCachedView(dir, Integer.MAX_VALUE, followLinks = true)
           directory.ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink,
                                                                dirToOtherDirLink.resolve("dir"))
           dirToOtherDirLink.delete()
-          Files.createDirectory(dirToOtherDirLink)
+          dirToOtherDirLink.createDirectory()
           val nestedFile = dirToOtherDirLink.resolve("file").createFile()
           directory.update(TypedPaths.get(dir, Entries.DIRECTORY))
           directory.ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink, nestedFile)
@@ -306,13 +306,13 @@ object CachedFileTreeViewTest extends TestSuite {
     // rather than with dir
     def direct: Future[Unit] = withTempDirectory { dir =>
       withTempDirectorySync { otherDir =>
-        val dirToOtherDirLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
-        val otherDirToDirLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+        val dirToOtherDirLink = dir.resolve("other") linkTo otherDir
+        val otherDirToDirLink = otherDir.resolve("dir") linkTo dir
         val directory = newCachedView(dir, Integer.MAX_VALUE, followLinks = true)
         directory.ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink,
                                                              dirToOtherDirLink.resolve("dir"))
         dirToOtherDirLink.delete()
-        Files.createDirectory(dirToOtherDirLink)
+        dirToOtherDirLink.createDirectory()
         val nestedFile = dirToOtherDirLink.resolve("file").createFile()
         directory.update(TypedPaths.get(dirToOtherDirLink, Entries.DIRECTORY))
         directory.ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink, nestedFile)

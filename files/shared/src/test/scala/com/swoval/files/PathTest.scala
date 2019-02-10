@@ -83,28 +83,28 @@ object PathTest extends TestSuite {
         f.getBytes ==> "foo".getBytes
       }
     }
-    'mkdir - {
+    'createDirectory - {
       'absolute - {
         val path = get(Platform.tmpDir).resolve(s"foo${random.nextInt}")
         path.delete()
         try {
-          path.mkdir ==> path
+          path.createDirectory() ==> path
           assert(path.exists)
         } finally path.delete()
       }
       'relative - {
         val path = get(s"foo${random.nextInt}")
-        try path.mkdir ==> path
+        try path.createDirectory() ==> path
         finally path.delete()
       }
     }
-    'mkdirs - {
+    'createDirectories - {
       'absolute - {
         val path = get(root, "tmp", s"foo${random.nextInt}", s"bar${random.nextInt}")
         try {
           path.getParent.deleteRecursive()
           path.getParent.delete()
-          path.mkdirs() ==> path
+          path.createDirectories() ==> path
           assert(path.exists)
         } finally path.getParent.deleteRecursive()
       }
@@ -112,7 +112,7 @@ object PathTest extends TestSuite {
         val path = get(s"foo${random.nextInt}", s"bar${random.nextInt}")
         try {
           path.getParent.deleteRecursive()
-          path.mkdirs().toAbsolutePath ==> path.toAbsolutePath
+          path.createDirectories().toAbsolutePath ==> path.toAbsolutePath
           assert(path.exists)
         } finally path.getParent.deleteRecursive()
       }

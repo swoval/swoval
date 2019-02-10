@@ -1,7 +1,7 @@
 package com.swoval.files
 
 import java.io.IOException
-import java.nio.file.{ Files, Path, Paths }
+import java.nio.file.{ Path, Paths }
 
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.FileTreeDataViews.Entry
@@ -53,7 +53,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
 
   val testsImpl = Tests {
     'overflow - withTempDirectory { root =>
-      val dir = Files.createDirectories(root.resolve("overflow").resolve(name))
+      val dir = root.resolve("overflow").resolve(name).createDirectories()
       // Windows is slow (at least on my vm)
       val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
       val creationLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
@@ -73,27 +73,27 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
       val deletedFiles = mutable.Set.empty[Path]
       val observer = getObserver[Path](
         (e: Entry[Path]) => {
-          if (foundFiles.add(e.getTypedPath.getPath)) creationLatch.countDown()
+          if (foundFiles.add(e.path)) creationLatch.countDown()
         },
         (_: Entry[Path], e: Entry[Path]) =>
-          if (Try(e.getTypedPath.getPath.lastModified) == Success(3000)) {
-            if (updatedFiles.add(e.getTypedPath.getPath)) {
-              e.getTypedPath.getPath.setLastModifiedTime(4000)
+          if (Try(e.path.lastModified) == Success(3000)) {
+            if (updatedFiles.add(e.path)) {
+              e.path.setLastModifiedTime(4000)
               updateLatch.countDown()
             }
         },
-        (e: Entry[Path]) => if (deletedFiles.add(e.getTypedPath.getPath)) deletionLatch.countDown(),
+        (e: Entry[Path]) => if (deletedFiles.add(e.path)) deletionLatch.countDown(),
         (_: IOException) => {}
       )
       usingAsync(getBounded[Path](identity, observer)) { c =>
         c.reg(dir)
         executor.run(() => {
-          subdirs.foreach(Files.createDirectories(_))
-          files.foreach(Files.createFile(_))
+          subdirs.foreach(_.createDirectories())
+          files.foreach(_.createFile())
         })
         creationLatch
           .waitFor(timeout) {
-            val found = c.ls(dir).map(_.getTypedPath.getPath).toSet
+            val found = c.ls(dir).map(_.path).toSet
             // Need to synchronize since files is first set on a different thread
             allFiles.synchronized {
               found === allFiles
@@ -106,15 +106,15 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
             })
             updateLatch
               .waitFor(timeout) {
-                val found = c.ls(dir).map(_.getTypedPath.getPath).toSet
+                val found = c.ls(dir).map(_.path).toSet
                 allFiles.synchronized {
                   found === allFiles
                 }
               }
               .flatMap { _ =>
                 executor.run(() => {
-                  files.foreach(Files.deleteIfExists)
-                  subdirs.foreach(Files.deleteIfExists)
+                  files.foreach(_.delete())
+                  subdirs.foreach(_.delete())
                 })
                 deletionLatch
                   .waitFor(timeout) {

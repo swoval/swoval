@@ -1,6 +1,6 @@
 package com.swoval.files
 
-import java.nio.file.{ Files, Path, Paths }
+import java.nio.file.{ Path, Paths }
 import java.util
 
 import com.swoval.files.TestHelpers._
@@ -159,12 +159,12 @@ class FileTreeViewTest(newFileTreeView: (Path, Int, Boolean) => DirectoryView) e
   object symlinks {
     def file: Future[Unit] = withTempFileSync { file =>
       val parent = file.getParent
-      val link = Files.createSymbolicLink(parent.resolve("link"), file)
+      val link = parent.resolve("link") linkTo file
       newFileTreeView(parent).ls(parent, recursive = true, AllPass) === Set(file, link)
     }
     def directory: Future[Unit] = withTempDirectory { dir =>
       withTempDirectorySync { otherDir =>
-        val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
+        val link = dir.resolve("link") linkTo otherDir
         val file = otherDir.resolve("file").createFile()
         val dirFile = dir.resolve("link").resolve("file")
         newFileTreeView(dir, Integer.MAX_VALUE, true).ls(dir, recursive = true, AllPass) === Set(
@@ -175,8 +175,8 @@ class FileTreeViewTest(newFileTreeView: (Path, Int, Boolean) => DirectoryView) e
     object loop {
       def initial: Future[Unit] = withTempDirectory { dir =>
         withTempDirectorySync { otherDir =>
-          val dirToOtherDirLink = Files.createSymbolicLink(dir.resolve("other"), otherDir)
-          val otherDirToDirLink = Files.createSymbolicLink(otherDir.resolve("dir"), dir)
+          val dirToOtherDirLink = dir.resolve("other") linkTo otherDir
+          val otherDirToDirLink = otherDir.resolve("dir") linkTo dir
           newFileTreeView(dir, Integer.MAX_VALUE, true)
             .ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink,
                                                         dirToOtherDirLink.resolve("dir"))

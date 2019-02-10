@@ -11,11 +11,13 @@ import scala.util.{ Failure, Try }
 object AllTests {
   def main(args: Array[String]): Unit = {
     val count = args.headOption.flatMap(a => Try(a.toInt).toOption).getOrElse(1)
+    System.setProperty("swoval.test.timeout",
+                       args.lastOption.flatMap(a => Try(a.toInt).toOption).getOrElse(10).toString)
     try {
       1 to count foreach { i =>
         println(s"Iteration $i:")
         try {
-          run()
+          run(i)
         } catch {
           case e: Throwable =>
             System.err.println(s"Tests failed during run $i")
@@ -26,10 +28,10 @@ object AllTests {
       println("finished")
       System.exit(0)
     } catch {
-      case e: Exception => System.exit(1)
+      case _: Exception => System.exit(1)
     }
   }
-  def run(): Unit = {
+  def run(count: Int): Unit = {
     def test[T <: TestSuite](t: T): (Tests, String) =
       (t.tests, t.getClass.getName.replaceAll("[$]", ""))
     val tests = Seq(
@@ -54,12 +56,16 @@ object AllTests {
         val thread = new Thread(s"$n test thread") {
           setDaemon(true)
           override def run(): Unit = {
-            val res = TestRunner.runAndPrint(t, n)
-            res.leaves.toIndexedSeq.foreach { l =>
-              l.value match {
-                case Failure(e) => failure.compareAndSet(None, Some(e))
-                case _          =>
+            try {
+              val res = TestRunner.runAndPrint(t, n)
+              res.leaves.toIndexedSeq.foreach { l =>
+                l.value match {
+                  case Failure(e) => failure.compareAndSet(None, Some(e))
+                  case _          =>
+                }
               }
+            } catch {
+              case _: InterruptedException =>
             }
             latch.countDown()
           }
@@ -68,11 +74,12 @@ object AllTests {
         thread
     }
     latch.await(30, TimeUnit.SECONDS)
-    println("joining threads")
-    threads.foreach { t =>
-      t.interrupt()
-      t.join(5000)
-    }
+    val now = System.nanoTime
+    println(s"joining threads for iteration $count")
+    threads.foreach(_.interrupt())
+    threads.foreach(_.join(5000))
+    val elapsed = System.nanoTime - now
+    println(s"finished joining thread for iteration $count in ${elapsed / 1.0e6} ms")
     failure.get.foreach(throw _)
   }
 }
