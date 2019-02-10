@@ -18,6 +18,7 @@ import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
 
 trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
+  import FileCacheOverflowTest._
   def getBounded[T <: AnyRef](
       converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeDataViews.CacheObserver[T]
@@ -73,16 +74,18 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
       val deletedFiles = mutable.Set.empty[Path]
       val observer = getObserver[Path](
         (e: Entry[Path]) => {
-          if (foundFiles.add(e.path)) creationLatch.countDown()
+          if (foundFiles.sync(_.add(e.path))) creationLatch.countDown()
         },
-        (_: Entry[Path], e: Entry[Path]) =>
+        (_: Entry[Path], e: Entry[Path]) => {
+          if (foundFiles.sync(_.add(e.path))) creationLatch.countDown()
           if (Try(e.path.lastModified) == Success(3000)) {
-            if (updatedFiles.add(e.path)) {
+            if (updatedFiles.sync(_.add(e.path))) {
               e.path.setLastModifiedTime(4000)
               updateLatch.countDown()
             }
+          }
         },
-        (e: Entry[Path]) => if (deletedFiles.add(e.path)) deletionLatch.countDown(),
+        (e: Entry[Path]) => if (deletedFiles.sync(_.add(e.path))) deletionLatch.countDown(),
         (_: IOException) => {}
       )
       usingAsync(getBounded[Path](identity, observer)) { c =>
@@ -168,6 +171,9 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
   }
 }
 object FileCacheOverflowTest extends FileCacheOverflowTest with DefaultFileCacheTest {
+  private implicit class SyncOps[T](val t: T) extends AnyVal {
+    def sync[R](f: T => R): R = t.synchronized(f(t))
+  }
   override def getBounded[T <: AnyRef](
       converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeDataViews.CacheObserver[T]): FileTreeRepository[T] =
