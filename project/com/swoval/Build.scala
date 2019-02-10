@@ -585,7 +585,8 @@ object Build {
                                               cp,
                                               "-verbose:gc",
                                               "com.swoval.files.AllTests",
-                                              count.toString)
+                                              count.toString,
+                                              System.getProperty("swoval.test.timeout", "10"))
         val process = pb.inheritIO().start()
         process.waitFor()
         if (process.exitValue != 0) throw new IllegalStateException("AllTests failed")
