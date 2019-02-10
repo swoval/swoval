@@ -74,13 +74,13 @@ class MacOSXWatchService implements RegisterableWatchService {
           final boolean exists = Files.exists(path, LinkOption.NOFOLLOW_LINKS);
           if (watchKey != null) {
             if (fileEvent.mustScanSubDirs()) {
-              final Iterator<MacOSXWatchKey> it = watchKey.keys.iterator();
+              final Iterator<MacOSXWatchKey> it = watchKey.keys().iterator();
               while (it.hasNext()) {
                 final MacOSXWatchKey key = it.next();
                 key.addOverflow();
               }
             } else {
-              final Iterator<MacOSXWatchKey> it = watchKey.keys.iterator();
+              final Iterator<MacOSXWatchKey> it = watchKey.keys().iterator();
               while (it.hasNext()) {
                 final MacOSXWatchKey key = it.next();
                 if (exists && key.reportModifyEvents()) key.createEvent(ENTRY_MODIFY, path);
@@ -137,11 +137,7 @@ class MacOSXWatchService implements RegisterableWatchService {
             e.printStackTrace(System.err);
           }
         }
-        final Iterator<MacOSXWatchKey> keys = watchKey.keys.iterator();
-        while (keys.hasNext()) {
-          keys.next().cancel();
-        }
-        watchKey.keys.clear();
+        watchKey.close();
       }
       registered.clear();
       fileEventMonitor.close();
@@ -212,7 +208,7 @@ class MacOSXWatchService implements RegisterableWatchService {
           }
         } else {
           result = new MacOSXWatchKey(realPath, queueSize, Handles.INVALID, kinds);
-          watchKey.keys.add(result);
+          watchKey.add(result);
         }
         if (logger.shouldLog()) logger.debug("MacOSXWatchService registered path " + path);
         return result;
@@ -377,20 +373,38 @@ class MacOSXWatchService implements RegisterableWatchService {
 
   private class WatchKey implements AutoCloseable {
     private Handle handle;
-    private final Set<MacOSXWatchKey> keys = new HashSet<>();
+
+    private void add(final MacOSXWatchKey key) {
+      synchronized (_keys) {
+        _keys.add(key);
+      }
+    }
+
+    private List<MacOSXWatchKey> keys() {
+      synchronized (_keys) {
+        return new ArrayList<>(_keys);
+      }
+    }
+
+    private final Set<MacOSXWatchKey> _keys =
+        java.util.Collections.synchronizedSet(new HashSet<MacOSXWatchKey>());
 
     WatchKey(final Handle handle, final MacOSXWatchKey key) {
       this.handle = handle;
-      keys.add(key);
+      synchronized (_keys) {
+        _keys.add(key);
+      }
     }
 
     @Override
     public void close() {
-      final Iterator<MacOSXWatchKey> it = keys.iterator();
-      while (it.hasNext()) {
-        it.next().cancel();
+      synchronized (_keys) {
+        final Iterator<MacOSXWatchKey> it = new ArrayList<>(_keys).iterator();
+        while (it.hasNext()) {
+          it.next().cancel();
+        }
+        _keys.clear();
       }
-      keys.clear();
     }
   }
 }
