@@ -79,6 +79,10 @@ object TestHelpers extends PlatformFiles {
 
   implicit class EntryOps[T](val entry: Entry[T]) {
     def value: T = entry.getValue.get
+    def path: Path = entry.getTypedPath.getPath
+  }
+  implicit class EventOps(val event: PathWatchers.Event) {
+    def path: Path = event.getTypedPath.getPath
   }
 
   implicit class RunableOps(val f: () => _) extends Runnable {

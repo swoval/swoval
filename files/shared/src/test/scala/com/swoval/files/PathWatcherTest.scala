@@ -2,7 +2,7 @@ package com.swoval
 package files
 
 import java.nio.file.attribute.FileTime
-import java.nio.file.{ Files, Path, Paths }
+import java.nio.file.{ Path, Paths }
 import java.util.concurrent.{ TimeUnit, TimeoutException }
 
 import com.swoval.files.PathWatchers.Event.Kind
@@ -20,6 +20,8 @@ import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
+import TestHelpers._
+import EntryOps._
 
 trait PathWatcherTest extends TestSuite {
   type Event = PathWatchers.Event
@@ -28,14 +30,14 @@ trait PathWatcherTest extends TestSuite {
   def defaultWatcher(callback: PathWatchers.Event => _,
                      followLinks: Boolean = false): PathWatcher[PathWatchers.Event]
   def unregisterTest(followLinks: Boolean): Future[Unit] = withTempDirectory { root =>
-    val base = Files.createDirectory(root.resolve("unregister"))
-    val dir = Files.createDirectory(base.resolve("nested"))
+    val base = root.resolve("unregister").createDirectory()
+    val dir = base.resolve("nested").createDirectory()
     val firstLatch = new CountDownLatch(1)
     val secondLatch = new CountDownLatch(2)
     val callback = (e: PathWatchers.Event) => {
-      if (e.getTypedPath.getPath.endsWith("foo")) {
+      if (e.path.endsWith("foo")) {
         firstLatch.countDown()
-      } else if (e.getTypedPath.getPath.endsWith("bar")) {
+      } else if (e.path.endsWith("bar")) {
         secondLatch.countDown()
       }
     }
@@ -45,7 +47,7 @@ trait PathWatcherTest extends TestSuite {
       val file = dir.resolve("foo").createFile()
       firstLatch
         .waitFor(DEFAULT_TIMEOUT) {
-          assert(Files.exists(file))
+          assert(file.exists())
         }
         .flatMap { _ =>
           c.unregister(base)
@@ -67,19 +69,19 @@ trait PathWatcherTest extends TestSuite {
     'files - {
       'onCreate - withTempDirectory { dir =>
         val callback = (e: PathWatchers.Event) => {
-          if (e.getTypedPath.getPath.endsWith("foo")) events.add(e)
+          if (e.path.endsWith("foo")) events.add(e)
         }
 
         usingAsync(defaultWatcher(callback)) { w =>
           w.register(dir)
           val file = dir.resolve(Paths.get("foo")).createFile()
-          events.poll(DEFAULT_TIMEOUT)(_.getTypedPath.getPath ==> file)
+          events.poll(DEFAULT_TIMEOUT)(_.path ==> file)
         }
       }
       'onTouch - withTempFile { f =>
         val callback =
           (e: PathWatchers.Event) =>
-            if (e.getTypedPath.getPath == f && e.getKind != Create && f.lastModified == 3000L)
+            if (e.path == f && e.getKind != Create && f.lastModified == 3000L)
               events.add(e)
         usingAsync(defaultWatcher(callback)) { w =>
           w.register(f.getParent)
@@ -91,18 +93,18 @@ trait PathWatcherTest extends TestSuite {
       'onModify - withTempFile { f =>
         val callback =
           (e: PathWatchers.Event) =>
-            if (e.getTypedPath.getPath == f && e.getKind != Create && f.content == "hello")
+            if (e.path == f && e.getKind != Create && f.read == "hello")
               events.add(e)
         usingAsync(defaultWatcher(callback)) { w =>
           w.register(f.getParent)
           Defer(1.second)(f.write("hello"))
-          events.poll(2.seconds)(_.getTypedPath.getPath ==> f)
+          events.poll(2.seconds)(_.path ==> f)
         }
       }
       'onDelete - {
         'file - withTempFile { f =>
           val callback = (e: PathWatchers.Event) => {
-            if (!e.getTypedPath.getPath.exists && e.getKind == Delete && e.getTypedPath.getPath == f)
+            if (!e.path.exists && e.getKind == Delete && e.path == f)
               events.add(e)
           }
           usingAsync(defaultWatcher(callback)) { w =>
@@ -115,7 +117,7 @@ trait PathWatcherTest extends TestSuite {
         }
         'directory - withTempDirectory { dir =>
           val callback = (e: PathWatchers.Event) => {
-            if (!e.getTypedPath.getPath.exists && e.getKind == Delete && e.getTypedPath.getPath == dir)
+            if (!e.path.exists && e.getKind == Delete && e.path == dir)
               events.add(e)
           }
           usingAsync(defaultWatcher(callback)) { w =>
@@ -169,14 +171,14 @@ trait PathWatcherTest extends TestSuite {
 
       }
       'change - withTempDirectory { root =>
-        val dir = Files.createDirectories(root.resolve("change").resolve("debug"))
+        val dir = root.resolve("change").resolve("debug").createDirectories()
         val file = dir.resolve("file").createFile()
         val dirLatch = new CountDownLatch(1)
         val fileLatch = new CountDownLatch(1)
         val subfile = file.resolve("subfile")
         val callback = (e: PathWatchers.Event) => {
-          if (e.getTypedPath.getPath == file) dirLatch.countDown()
-          else if (e.getTypedPath.getPath == subfile) fileLatch.countDown()
+          if (e.path == file) dirLatch.countDown()
+          else if (e.path == subfile) fileLatch.countDown()
         }
 
         usingAsync(defaultWatcher(callback)) { w =>
@@ -186,7 +188,7 @@ trait PathWatcherTest extends TestSuite {
             .waitFor(DEFAULT_TIMEOUT) {
               file.lastModified ==> 3000
               file.delete()
-              Files.createDirectory(file)
+              file.createDirectory()
               subfile.createFile()
             }
             .flatMap { _ =>
@@ -199,27 +201,27 @@ trait PathWatcherTest extends TestSuite {
       }
       'absent - {
         'initially - withTempDirectory { root =>
-          val dir = Files.createDirectories(root.resolve("initial").resolve("debug"))
+          val dir = root.resolve("initial").resolve("debug").createDirectories()
           val dirLatch = new CountDownLatch(1)
           val fileLatch = new CountDownLatch(1)
           val subdir = dir.resolve("subdir")
           val file = subdir.resolve("file-initial")
           val callback = (e: PathWatchers.Event) => {
-            if (e.getTypedPath.getPath == subdir && e.getTypedPath.exists) dirLatch.countDown()
-            else if (e.getTypedPath.getPath == file && e.getTypedPath.exists) fileLatch.countDown()
+            if (e.path == subdir && e.getTypedPath.exists) dirLatch.countDown()
+            else if (e.path == file && e.getTypedPath.exists) fileLatch.countDown()
           }
 
           usingAsync(defaultWatcher(callback)) { w =>
             w.register(subdir)
-            Files.createDirectory(subdir)
+            subdir.createDirectory()
             dirLatch
               .waitFor(DEFAULT_TIMEOUT) {
-                assert(Files.exists(subdir))
+                assert(subdir.exists())
                 file.createFile()
               }
               .flatMap { _ =>
                 fileLatch.waitFor(DEFAULT_TIMEOUT) {
-                  assert(Files.exists(file))
+                  assert(file.exists())
                 }
               }
           }.andThen {
@@ -231,13 +233,13 @@ trait PathWatcherTest extends TestSuite {
       'relative - withTempDirectory(targetDir) { dir =>
         val latch = new CountDownLatch(1)
         val file = dir.resolve("file")
-        val callback = (e: PathWatchers.Event) =>
-          if (e.getTypedPath.getPath.getFileName.toString == "file") latch.countDown()
+        val callback =
+          (e: PathWatchers.Event) => if (e.path.getFileName.toString == "file") latch.countDown()
         usingAsync(defaultWatcher(callback)) { w =>
           w.register(baseDir.relativize(dir))
-          Files.createFile(file)
+          file.createFile()
           latch.waitFor(DEFAULT_TIMEOUT) {
-            assert(Files.exists(file))
+            assert(file.exists())
           }
         }
       }
@@ -252,12 +254,12 @@ trait PathWatcherTest extends TestSuite {
                        val creationLatch = new CountDownLatch(1)
                        var creationPending = false
                        val callback = (e: PathWatchers.Event) => {
-                         if (e.getKind == Kind.Delete && deletions.add(e.getTypedPath.getPath)) {
-                           if (e.getTypedPath.getPath == dir) dirDeletionLatch.countDown()
-                           else if (e.getTypedPath.getPath == subdir)
+                         if (e.getKind == Kind.Delete && deletions.add(e.path)) {
+                           if (e.path == dir) dirDeletionLatch.countDown()
+                           else if (e.path == subdir)
                              subdirDeletionLatch.countDown()
                          }
-                         if (e.getTypedPath.getPath.equals(dir) && creationPending) {
+                         if (e.path.equals(dir) && creationPending) {
                            creationPending = false
                            creationLatch.countDown()
                          }
@@ -275,7 +277,7 @@ trait PathWatcherTest extends TestSuite {
                                .waitFor(DEFAULT_TIMEOUT) {
                                  deletions.toSet === Set(dir, subdir)
                                  creationPending = true
-                                 Files.createDirectory(dir)
+                                 dir.createDirectory()
                                }
                                .flatMap { _ =>
                                  creationLatch.waitFor(DEFAULT_TIMEOUT) {}
@@ -296,7 +298,7 @@ trait PathWatcherTest extends TestSuite {
       'limit - withTempDirectory { dir =>
         withTempDirectory(dir) { subdir =>
           val callback =
-            (e: PathWatchers.Event) => if (e.getTypedPath.getPath.endsWith("foo")) events.add(e)
+            (e: PathWatchers.Event) => if (e.path.endsWith("foo")) events.add(e)
           usingAsync(defaultWatcher(callback)) { w =>
             w.register(dir, 0)
             val file = subdir.resolve(Paths.get("foo")).createFile()
@@ -310,8 +312,8 @@ trait PathWatcherTest extends TestSuite {
                   w.register(dir, 1)
                   file.setLastModifiedTime(3000)
                   events.poll(DEFAULT_TIMEOUT) { e =>
-                    e.getTypedPath.getPath ==> file
-                    e.getTypedPath.getPath.lastModified ==> 3000
+                    e.path ==> file
+                    e.path.lastModified ==> 3000
                   }
 
               }
@@ -325,8 +327,8 @@ trait PathWatcherTest extends TestSuite {
               withTempDirectory(secondSubdir) { thirdSubdir =>
                 val subdirEvents = new ArrayBlockingQueue[PathWatchers.Event](1)
                 val callback = (e: PathWatchers.Event) => {
-                  if (e.getTypedPath.getPath.endsWith("foo")) events.add(e)
-                  if (e.getTypedPath.getPath.endsWith("bar")) subdirEvents.add(e)
+                  if (e.path.endsWith("foo")) events.add(e)
+                  if (e.path.endsWith("bar")) subdirEvents.add(e)
                 }
                 usingAsync(defaultWatcher(callback)) { w =>
                   w.register(dir, 0)
@@ -343,13 +345,13 @@ trait PathWatcherTest extends TestSuite {
                         file.setLastModifiedTime(3000)
                         events
                           .poll(DEFAULT_TIMEOUT) { e =>
-                            e.getTypedPath.getPath ==> file
-                            e.getTypedPath.getPath.lastModified ==> 3000
+                            e.path ==> file
+                            e.path.lastModified ==> 3000
                           }
                           .flatMap { _ =>
                             val subdirFile = subdir.resolve("bar").createFile()
                             subdirEvents.poll(DEFAULT_TIMEOUT) { e =>
-                              e.getTypedPath.getPath ==> subdirFile
+                              e.path ==> subdirFile
                             }
                           }
                     }
@@ -359,14 +361,14 @@ trait PathWatcherTest extends TestSuite {
           }
         }
         'extend - withTempDirectory { root =>
-          val dir = Files.createDirectories(root.resolve("extend").resolve("debug"))
+          val dir = root.resolve("extend").resolve("debug").createDirectories()
           withTempDirectory(dir) { subdir =>
             withTempDirectory(subdir) { secondSubdir =>
               withTempDirectory(secondSubdir) { thirdSubdir =>
                 val subdirEvents = new ArrayBlockingQueue[PathWatchers.Event](1)
                 val callback = (e: PathWatchers.Event) => {
-                  if (e.getTypedPath.getPath.endsWith("foo")) events.add(e)
-                  if (e.getTypedPath.getPath.endsWith("bar")) subdirEvents.add(e)
+                  if (e.path.endsWith("foo")) events.add(e)
+                  if (e.path.endsWith("bar")) subdirEvents.add(e)
                 }
                 usingAsync(defaultWatcher(callback)) { w =>
                   w.register(dir, 0)
@@ -380,15 +382,15 @@ trait PathWatcherTest extends TestSuite {
                     .recoverWith {
                       case _: TimeoutException =>
                         w.register(dir, 2)
-                        Files.setLastModifiedTime(file, FileTime.fromMillis(3000))
+                        file setLastModifiedTime 3000
                         val files = events.poll(DEFAULT_TIMEOUT) { e =>
-                          e.getTypedPath.getPath ==> file
-                          e.getTypedPath.getPath.lastModified ==> 3000
+                          e.path ==> file
+                          e.path.lastModified ==> 3000
                         }
                         files.flatMap { _ =>
                           val subdirFile = subdir.resolve("bar").createFile()
                           subdirEvents.poll(DEFAULT_TIMEOUT) { e =>
-                            e.getTypedPath.getPath ==> subdirFile
+                            e.path ==> subdirFile
                           }
                         }
                     }

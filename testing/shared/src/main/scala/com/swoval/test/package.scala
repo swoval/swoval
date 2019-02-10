@@ -20,25 +20,43 @@ package object test {
   final val DEFAULT_TIMEOUT =
     Try(System.getProperty("swoval.test.timeout", "5").toInt).getOrElse(5).seconds
 
-  implicit class PathOps(val path: Path) {
-    def getBytes: Array[Byte] = Files.readAllBytes(path)
-    def createFile(): Path = Files.createFile(path)
-    def delete(): Boolean = deleteImpl(path)
-    private def deleteImpl(path: Path) = {
-      var attempt = 0
-      var result = false
-      while (!result && attempt < 10) {
-        try {
-          Files.deleteIfExists(path)
-          result = true
-        } catch {
-          case _: IOException =>
+  implicit class PathOps(val path: Path) extends AnyVal {
+    def getBytes: Array[Byte] = retry(Files.readAllBytes(path), classOf[NoSuchFileException])
+    def createDirectory(): Path =
+      retry(Files.createDirectory(path), classOf[FileAlreadyExistsException])
+    def createDirectories(): Path =
+      retry(Files.createDirectories(path), classOf[FileAlreadyExistsException])
+    def createFile(): Path = retry(Files.createFile(path))
+    def createTempFile(prefix: String): Path = {
+      if (!path.isDirectory()) throw new NotDirectoryException(path.toString)
+      retry(Files.createTempFile(path, prefix, ""))
+    }
+    def delete(): Boolean = retry(Files.deleteIfExists(path))
+    def isRegularFile(): Boolean = retry(Files.isRegularFile(path))
+    def isDirectory(): Boolean = retry(Files.isDirectory(path))
+    def linkTo(target: Path): Path = retry(Files.createSymbolicLink(path, target))
+    def read: String = retry(new String(Files.readAllBytes(path)), classOf[NoSuchFileException])
+    def write(content: String): Unit = retry(Files.write(path, content.getBytes))
+    private def retry[T](f: => T, excludes: Class[_ <: IOException]*): T =
+      retry(f, maxAttempts = 10, excludes: _*)
+    private def retry[T](f: => T, maxAttempts: Int, excludes: Class[_ <: IOException]*): T = {
+      @tailrec
+      def impl(attempt: Int): T = {
+        (try Right(f)
+        catch {
+          case e if !excludes.exists(_.isAssignableFrom(e.getClass)) && attempt < maxAttempts =>
+            Left(e)
+        }) match {
+          case Right(t) => t
+          case Left(_) =>
             platform.sleep(2.milliseconds)
-            attempt += 1
+            impl(attempt + 1)
         }
       }
-      result
+      impl(0)
     }
+    private def deleteImpl(path: Path): Boolean =
+      retry(Files.deleteIfExists(path), maxAttempts = 10)
     def deleteRecursive(): Unit = {
       var deleted = false
       while (!deleted && Files.isDirectory(path)) {
@@ -71,13 +89,9 @@ package object test {
       }
       deleteImpl(path)
     }
-    def content: String = Try(new String(Files.readAllBytes(path))).getOrElse(null)
-    def exists: Boolean = Files.exists(path)
-    def isDirectory: Boolean = Files.isDirectory(path)
+    def exists(): Boolean = retry(Files.exists(path), 10)
     def lastModified: Long =
       Try(Files.getLastModifiedTime(path).toMillis).getOrElse(java.lang.Long.MIN_VALUE)
-    def mkdir(): Path = Files.createDirectory(path)
-    def mkdirs(): Path = Files.createDirectories(path)
     def name: String = path.getFileName.toString
     def parts: Seq[Path] = path.iterator.asScala.toIndexedSeq
     def renameTo(target: Path): Path = Files.move(path, target)
