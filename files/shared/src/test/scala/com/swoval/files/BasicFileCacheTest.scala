@@ -21,6 +21,8 @@ import TestHelpers._
 import EntryOps._
 
 trait BasicFileCacheTest extends TestSuite with FileCacheTest {
+  def ignore[T]: Entry[T] => Unit = (_: Entry[T]) => ()
+  def ignoreOld[T](f: Entry[T] => Unit): (Entry[T], Entry[T]) => Unit = (_, e) => f(e)
   val testsImpl: Tests = Tests {
     'directory - {
       'subdirectories - {
@@ -53,7 +55,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
       'register - {
         'existing - withTempFile { f =>
           val parent = f.getParent
-          using(simpleCache(_ => {})) { c =>
+          using(simpleCache(ignore)) { c =>
             c.reg(parent)
             c.ls(parent) === Seq(f)
           }
@@ -62,12 +64,14 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           'new - {
             'files - withTempDirectory { dir =>
               val latch = new CountDownLatch(1)
-              usingAsync(simpleCache((_: Entry[Path]) => latch.countDown())) { c =>
+              val file = dir.resolve("file")
+              usingAsync(simpleCache((e: Entry[Path]) => {
+                if (e.getTypedPath.getPath == file) latch.countDown()
+              })) { c =>
                 c.reg(dir)
-                withTempFile(dir) { f =>
-                  latch.waitFor(DEFAULT_TIMEOUT) {
-                    c.ls(dir) === Seq(f)
-                  }
+                file.createFile()
+                latch.waitFor(DEFAULT_TIMEOUT) {
+                  c.ls(dir) === Seq(file)
                 }
               }
             }
@@ -86,11 +90,11 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           }
         }
         'move - withTempDirectory { dir =>
-          val latch = new CountDownLatch(2)
+          val latch = new CountDownLatch(1)
           val initial = Files.createTempFile(dir, "move", "")
           val moved = Paths.get(s"${initial.toString}.moved")
-          val onChange = (_: Entry[Path]) => latch.countDown()
-          val onUpdate = (_: Entry[Path], _: Entry[Path]) => {}
+          val onChange = (e: Entry[Path]) => if (e.getTypedPath.getPath == moved) latch.countDown()
+          val onUpdate = ignoreOld[Path](ignore)
           val onError = (_: IOException) => {}
           val observer = getObserver(onChange, onUpdate, onChange, onError)
           usingAsync(FileCacheTest.getCached(false, identity, observer)) { c =>
@@ -109,14 +113,15 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
       'nonRecursive - withTempDirectory { dir =>
         withTempDirectory(dir) { subdir =>
           val latch = new CountDownLatch(1)
-          usingAsync(simpleCache((_: Entry[Path]) => latch.countDown())) { c =>
+          val file = subdir.resolve("file")
+          usingAsync(simpleCache((e: Entry[Path]) =>
+            if (e.getTypedPath.getPath == subdir) latch.countDown())) { c =>
             c.reg(dir, recursive = false)
-            withTempFile(subdir) { f =>
-              assert(f.exists)
-              subdir.setLastModifiedTime(3000)
-              latch.waitFor(DEFAULT_TIMEOUT) {
-                c.ls(dir) === Seq(subdir)
-              }
+            file.createFile()
+            assert(file.exists)
+            subdir.setLastModifiedTime(3000)
+            latch.waitFor(DEFAULT_TIMEOUT) {
+              c.ls(dir) === Seq(subdir)
             }
           }
         }
@@ -127,7 +132,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
             withTempDirectory(dir) { subdir =>
               withTempDirectory(subdir) { nestedSubdir =>
                 withTempFile(nestedSubdir) { file =>
-                  using(simpleCache((_: Entry[Path]) => {})) { c =>
+                  using(simpleCache(ignore)) { c =>
                     c.register(dir, 1)
                     c.ls(dir) === Set(subdir, nestedSubdir)
                     c.register(dir, 2)
@@ -142,7 +147,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           withTempDirectory(dir) { subdir =>
             withTempDirectory(subdir) { nestedSubdir =>
               withTempFile(nestedSubdir) { file =>
-                using(simpleCache((e: Entry[Path]) => {})) { c =>
+                using(simpleCache(ignore)) { c =>
                   c.register(dir, 0)
                   c.ls(dir) === Set(subdir)
                   c.register(subdir, Integer.MAX_VALUE)
@@ -158,7 +163,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
             withTempDirectory(dir) { subdir =>
               withTempDirectory(subdir) { nestedSubdir =>
                 withTempFile(nestedSubdir) { file =>
-                  using(simpleCache((e: Entry[Path]) => {})) { c =>
+                  using(simpleCache(ignore)) { c =>
                     c.register(dir, 0)
                     c.ls(dir) === Set(subdir)
                     c.register(subdir, Integer.MAX_VALUE)
@@ -202,7 +207,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
               val deeplyNestedSubdir =
                 Files.createDirectories(subdir.resolve("very").resolve("deeply").resolve("nested"))
               val file = deeplyNestedSubdir.resolve("file").createFile()
-              using(simpleCache((e: Entry[Path]) => {})) { c =>
+              using(simpleCache(ignore)) { c =>
                 c.register(dir, 0)
                 c.register(nestedSubdir, Integer.MAX_VALUE)
                 c.ls(deeplyNestedSubdir) ==> Nil
@@ -217,7 +222,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
             withTempDirectory(dir) { subdir =>
               withTempDirectory(subdir) { nestedSubdir =>
                 withTempFile(nestedSubdir) { file =>
-                  using(simpleCache((_: Entry[Path]) => {})) { c =>
+                  using(simpleCache(ignore)) { c =>
                     c.register(dir, 0)
                     c.ls(dir) === Set(subdir)
                     c.register(nestedSubdir, 0)
@@ -236,7 +241,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
             withTempDirectory(dir) { subdir =>
               withTempDirectory(subdir) { nestedSubdir =>
                 withTempFile(nestedSubdir) { file =>
-                  using(simpleCache((_: Entry[Path]) => {})) { c =>
+                  using(simpleCache(ignore)) { c =>
                     c.register(dir, 0)
                     c.ls(dir) === Set(subdir)
                     c.register(nestedSubdir, Integer.MAX_VALUE)
@@ -253,7 +258,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         'initially - withTempDirectory { dir =>
           withTempDirectory(dir) { subdir =>
             withTempFile(subdir) { f =>
-              using(simpleCache((_: Entry[Path]) => {})) { c =>
+              using(simpleCache(ignore)) { c =>
                 c.reg(dir)
                 c.ls(dir) === Set(subdir, f)
               }
@@ -263,7 +268,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         'added - withTempDirectory { dir =>
           withTempDirectory(dir) { subdir =>
             withTempFile(subdir) { f =>
-              using(simpleCache((_: Entry[Path]) => {})) { c =>
+              using(simpleCache(ignore)) { c =>
                 c.reg(dir, recursive = false)
                 c.ls(dir) === Set(subdir)
                 c.reg(dir)
@@ -275,7 +280,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         'removed - withTempDirectory { dir =>
           withTempDirectory(dir) { subdir =>
             withTempFile(subdir) { f =>
-              using(simpleCache((_: Entry[Path]) => {})) { c =>
+              using(simpleCache(ignore)) { c =>
                 c.reg(dir)
                 c.ls(dir) === Set(subdir, f)
                 c.register(dir, false)
@@ -423,7 +428,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
     'list - {
       'entries - {
         'file - withTempFile { file =>
-          using(simpleCache((_: Entry[Path]) => {})) { c =>
+          using(simpleCache(ignore)) { c =>
             c.reg(file)
             c.ls(file) === Seq(file)
             c.list(file, 0, AllPass).asScala.toSeq === Seq(TypedPaths.get(file))
@@ -431,7 +436,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         }
         'directory - {
           'empty - withTempDirectory { dir =>
-            using(simpleCache((_: Entry[Path]) => {})) { c =>
+            using(simpleCache(ignore)) { c =>
               c.reg(dir)
               c.ls(dir) === Seq.empty[Path]
               c.list(dir, 0, AllPass).asScala.toSeq === Seq.empty[TypedPath]
@@ -439,7 +444,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           }
           'nonEmpty - withTempFile { file =>
             val dir = file.getParent
-            using(simpleCache((_: Entry[Path]) => {})) { c =>
+            using(simpleCache(ignore)) { c =>
               c.reg(dir)
               c.ls(dir) === Seq(file)
               c.list(dir, 0, AllPass).asScala.toSeq === Seq(TypedPaths.get(file))
@@ -447,13 +452,13 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           }
           'limit - withTempFile { file =>
             val dir = file.getParent
-            using(simpleCache((_: Entry[Path]) => {})) { c =>
+            using(simpleCache(ignore)) { c =>
               c.register(dir, -1)
               c.ls(dir) === Seq(dir)
               c.list(dir, 0, AllPass).asScala.toSeq.map(_.getPath).headOption ==> Some(dir)
             }
           }
-          'nonExistent - using(simpleCache((_: Entry[Path]) => {})) { c =>
+          'nonExistent - using(simpleCache(ignore)) { c =>
             val dir = Paths.get("/foo")
             c.ls(dir) === Seq.empty[Path]
             c.list(dir, 0, AllPass).asScala.toSeq === Seq.empty[TypedPath]
@@ -469,8 +474,9 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         val deletionLatch = new CountDownLatch(1)
         usingAsync(
           lastModifiedCache(false)(
-            (_: Entry[LastModified]) => creationLatch.countDown(),
-            (_: Entry[LastModified], newEntry: Entry[LastModified]) =>
+            (e: Entry[LastModified]) =>
+              if (e.getTypedPath.getPath == file) creationLatch.countDown(),
+            (e: Entry[LastModified], newEntry: Entry[LastModified]) =>
               if (newEntry.getValue.isRight && newEntry.getValue.get.lastModified == 3000)
                 updateLatch.countDown(),
             (oldEntry: Entry[LastModified]) =>
@@ -520,7 +526,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
     }
     'unregister - {
       'noop - withTempDirectory { dir =>
-        using(simpleCache((_: Entry[Path]) => {})) { c =>
+        using(simpleCache(ignore)) { c =>
           c.unregister(dir)
           c.ls(dir) === Seq.empty[Path]
         }
@@ -531,10 +537,11 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         val latch = new CountDownLatch(1)
         usingAsync(
           lastModifiedCache(true)(
-            (_: Entry[LastModified]) => {},
-            (_: Entry[LastModified], newEntry: Entry[LastModified]) =>
-              if (newEntry.value.lastModified == 3000) latch.countDown(),
-            (_: Entry[LastModified]) => {}
+            ignore,
+            ignoreOld { (newEntry: Entry[LastModified]) =>
+              if (newEntry.value.lastModified == 3000) latch.countDown()
+            },
+            ignore
           )) { c =>
           c.register(file)
           c.ls(file) === Seq(file)
@@ -557,14 +564,15 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
             val latch = new CountDownLatch(1)
             val secondLatch = new CountDownLatch(1)
             usingAsync(lastModifiedCache(true)(
-              (_: Entry[LastModified]) => {},
-              (_: Entry[LastModified], newEntry: Entry[LastModified]) =>
+              ignore,
+              ignoreOld { (newEntry: Entry[LastModified]) =>
                 newEntry.value.lastModified match {
                   case 3000 => latch.countDown()
                   case 4000 => secondLatch.countDown()
                   case _    =>
+                }
               },
-              (_: Entry[LastModified]) => {}
+              ignore
             )) { c =>
               c.register(dir)
               c.register(file)
