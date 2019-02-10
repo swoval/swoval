@@ -1,7 +1,6 @@
 package com.swoval
 package files
 
-import java.nio.file.attribute.FileTime
 import java.nio.file.{ Path, Paths }
 import java.util.concurrent.{ TimeUnit, TimeoutException }
 
