@@ -499,8 +499,9 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
       'remove - withTempDirectory { dir =>
         val latch = new CountDownLatch(1)
         var secondObserverFired = false
-        usingAsync(simpleCache((_: Entry[Path]) => latch.countDown())) { c =>
-          val file = dir.resolve("file")
+        val file = dir.resolve("file")
+        usingAsync(simpleCache((e: Entry[Path]) =>
+          if (e.entry.getTypedPath.getPath == file) latch.countDown())) { c =>
           val handle = c.addObserver(new FileTreeViews.Observer[Entry[Path]] {
             override def onNext(entry: Entry[Path]): Unit =
               if (entry.getTypedPath.getPath == file) secondObserverFired = true
