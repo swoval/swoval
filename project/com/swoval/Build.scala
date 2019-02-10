@@ -73,6 +73,8 @@ object Build {
           Some(Opts.resolver.sonatypeReleases): Option[Resolver]
         else p
       },
+      skip in ThisBuild in buildNative := java.lang.Boolean
+        .valueOf(System.getProperty("swoval.skip.native", "true")),
       version in ThisBuild := {
         val v = baseVersion
         if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true")) {
@@ -117,6 +119,8 @@ object Build {
   lazy val allTests = inputKey[Unit]("Run all tests")
   lazy val setProp = inputKey[Unit]("Set a system property")
   lazy val checkFormat = inputKey[Boolean]("Check that the source code is formatted correctly")
+  lazy val buildNative = taskKey[Unit]("Build the native libraries")
+  lazy val formatSources = taskKey[Unit]("Format source code")
 
   def projects: Seq[ProjectReference] = Seq[ProjectReference](
     files.js,
@@ -443,6 +447,7 @@ object Build {
                 "CachedDirectory",
                 "CachedDirectoryImpl",
                 "CacheObservers",
+                "DebugLogger",
                 "DirectoryDataView",
                 "DirectoryLister",
                 "DirectoryView",
@@ -476,6 +481,7 @@ object Build {
               ).value
               convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
               convertSources("com/swoval/functional", "Consumer", "Either", "Filter", "Filters").value
+              convertSources("com/swoval/logging", "Logger").value
             }
           },
           scalafmt in Compile,
@@ -509,6 +515,8 @@ object Build {
         "com.swoval.files.CachedDirectories*",
         "com.swoval.files.CacheObservers*",
         "com.swoval.files.DataViews*",
+        "com.swoval.files.Logger*",
+        "com.swoval.files.DebugLogger*",
         "com.swoval.files.*DirectoryLister*",
         "com.swoval.files.Observers*",
         "com.swoval.files.RegisterableWatchServices*",
@@ -516,7 +524,8 @@ object Build {
         "com.swoval.files.WatchedDirectory*",
         "com.swoval.files.apple.Event*",
         "com.swoval.files.apple.Flag*",
-        "com.swoval.files.apple.Native*"
+        "com.swoval.files.apple.Native*",
+        "com.swoval.logging.*",
       ) ++ (if (!Properties.isMac) Seq("*apple*", "*Apple*", "*MacOS*")
             else Nil),
       javacOptions in (Compile, doc) :=
@@ -524,30 +533,36 @@ object Build {
       crossScalaVersions := scalaCrossVersions,
       crossPaths := false,
       autoScalaLibrary := false,
-      unmanagedResources in Compile := {
+      buildNative := {
         val log = state.value.log
-        if (System.getProperty("swoval.skip.native", "false") == "false") {
-          val nativeDir = sourceDirectory.value.toPath.resolve("main/native").toFile
-          val makeCmd = System.getProperty("swoval.make.cmd", "make")
-          val proc = new ProcessBuilder(makeCmd, "-j", "8").directory(nativeDir).start()
-          proc.waitFor(1, TimeUnit.MINUTES)
-          log.info(Source.fromInputStream(proc.getInputStream).mkString)
-          if (proc.exitValue() != 0) {
-            log.error(Source.fromInputStream(proc.getErrorStream).mkString)
-            throw new IllegalStateException("Couldn't build native library!")
-          }
+        val nativeDir = sourceDirectory.value.toPath.resolve("main/native").toFile
+        val makeCmd = System.getProperty("swoval.make.cmd", "make")
+        val proc = new ProcessBuilder(makeCmd, "-j", "8").directory(nativeDir).start()
+        proc.waitFor(1, TimeUnit.MINUTES)
+        log.info(Source.fromInputStream(proc.getInputStream).mkString)
+        if (proc.exitValue() != 0) {
+          log.error(Source.fromInputStream(proc.getErrorStream).mkString)
+          throw new IllegalStateException("Couldn't build native library!")
         }
-        (unmanagedResources in Compile).value
       },
-      Compile / compile := Def.taskDyn {
-        val res = (Compile / compile).value
-        if (System.getProperty("swoval.format", "true") == "true")
+      unmanagedResources in Compile := Def.taskDyn {
+        val res = (unmanagedResources in Compile).value
+        if ((skip in buildNative).value) Def.task(res)
+        else
           Def.task {
-            javafmt.toTask("").value
-            clangfmt.toTask("").value
+            buildNative.value
             res
-          } else Def.task(res)
+          }
       }.value,
+      skip in formatSources := System.getProperty("swoval.format", "true") == "true",
+      formatSources := Def.taskDyn {
+        if ((skip in formatSources).value) Def.task {
+          javafmt.toTask("").value
+          clangfmt.toTask("").value
+          ()
+        } else Def.task(())
+      }.value,
+      Compile / compile := (Compile / compile).dependsOn(formatSources).value,
       fork in Test := System.getProperty("swoval.fork.tests", "false") == "true",
       travisQuickListReflectionTest := {
         quickListReflectionTest

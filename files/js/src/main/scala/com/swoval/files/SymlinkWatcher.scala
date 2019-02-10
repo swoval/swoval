@@ -8,6 +8,7 @@ import java.util.Map.Entry
 import com.swoval.files.FileTreeViews.Observable
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
+import com.swoval.files.PathWatchers.Event.Kind
 import com.swoval.files.SymlinkWatcher.RegisteredPath
 import com.swoval.functional.Either
 import java.io.IOException
@@ -59,15 +60,20 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
   private val callbackExecutor: Executor =
     Executor.make("com.swoval.files.SymlinkWather.callback-executor")
 
+  private val logger: DebugLogger = Loggers.getDebug
+
   val reentrantLock: ReentrantLock = new ReentrantLock()
 
   watcher.addObserver(new Observer[Event]() {
     override def onError(t: Throwable): Unit = {}
 
     override def onNext(event: Event): Unit = {
+      if (logger.shouldLog())
+        logger.debug("SymlinkWatcher received event " + event)
       if (!isClosed.get) {
-        val events: List[Event] = new ArrayList[Event]()
+        val paths: List[Path] = new ArrayList[Path]()
         val path: Path = event.getTypedPath.getPath
+        val kind: Kind = event.getKind
         if (watchedSymlinksByTarget.lock()) {
           try {
             val registeredPath: RegisteredPath =
@@ -77,10 +83,7 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
               val it: Iterator[Path] = registeredPath.paths.iterator()
               while (it.hasNext) {
                 val rawPath: Path = it.next().resolve(relativized)
-                if (!hasLoop(rawPath)) {
-// final TypedPath typedPath = TypedPaths.get(rawPath);
-                  events.add(new Event(TypedPaths.get(rawPath, Entries.UNKNOWN), event.getKind))
-                }
+                if (!hasLoop(rawPath)) paths.add(rawPath)
               }
             }
           } finally watchedSymlinksByTarget.unlock()
@@ -88,30 +91,28 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
         if (!Files.exists(path)) {
           if (watchedSymlinksByTarget.lock()) {
             try {
-              watchedSymlinksByTarget.remove(path)
               val registeredPath: RegisteredPath =
-                watchedSymlinksByDirectory.get(path)
+                watchedSymlinksByTarget.remove(path)
               if (registeredPath != null) {
                 registeredPath.paths.remove(path)
                 if (registeredPath.paths.isEmpty) {
                   watcher.unregister(path)
-                  watchedSymlinksByDirectory.remove(path)
                 }
               }
             } finally watchedSymlinksByTarget.unlock()
           }
         }
-        val it: Iterator[Event] = events.iterator()
+        val it: Iterator[Path] = paths.iterator()
         while (it.hasNext) {
-          val ev: Event = it.next()
-          observers.onNext(new Event(TypedPaths.get(ev.getTypedPath.getPath), ev.getKind))
+          val typedPath: TypedPath = TypedPaths.get(it.next())
+          if (logger.shouldLog())
+            logger.debug(
+              "SymlinkWatcher evaluating callback for " + ("link " + typedPath + " to target " + path))
+          observers.onNext(new Event(typedPath, kind))
         }
       }
     }
   })
-
-  private val watchedSymlinksByDirectory: RegisteredPaths =
-    new RegisteredPaths(reentrantLock)
 
   private val watchedSymlinksByTarget: RegisteredPaths = new RegisteredPaths(reentrantLock)
 
@@ -119,7 +120,7 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
     observers.addObserver(observer)
 
   override def removeObserver(handle: Int): Unit = {
-    removeObserver(handle)
+    observers.removeObserver(handle)
   }
 
   private def find(path: Path, registeredPaths: RegisteredPaths): RegisteredPath = {
@@ -152,10 +153,6 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
         watchedSymlinksByTarget.values.iterator()
       while (targetIt.hasNext) targetIt.next().paths.clear()
       watchedSymlinksByTarget.clear()
-      val dirIt: Iterator[RegisteredPath] =
-        watchedSymlinksByDirectory.values.iterator()
-      while (dirIt.hasNext) dirIt.next().paths.clear()
-      watchedSymlinksByDirectory.clear()
       watcher.close()
       callbackExecutor.close()
     }
@@ -176,22 +173,21 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
       if (path.startsWith(realPath) && path != realPath) {
         throw new FileSystemLoopException(path.toString)
       } else {
+        if (logger.shouldLog())
+          logger.debug(
+            "SymlinkWatcher adding link " + path + " with max depth " +
+              maxDepth)
         if (watchedSymlinksByTarget.lock()) {
           try {
             val targetRegistrationPath: RegisteredPath =
               watchedSymlinksByTarget.get(realPath)
             if (targetRegistrationPath == null) {
-              val registeredPath: RegisteredPath =
-                watchedSymlinksByDirectory.get(realPath)
-              if (registeredPath == null) {
-                val result: Either[IOException, Boolean] =
-                  watcher.register(realPath, maxDepth)
-                if (getOrElse(result, false)) {
-                  watchedSymlinksByDirectory.put(realPath, new RegisteredPath(path, realPath))
-                  watchedSymlinksByTarget.put(realPath, new RegisteredPath(realPath, path))
-                } else if (result.isLeft) {
-                  throw leftProjection(result).getValue
-                }
+              val result: Either[IOException, Boolean] =
+                watcher.register(realPath, maxDepth)
+              if (getOrElse(result, false)) {
+                watchedSymlinksByTarget.put(realPath, new RegisteredPath(realPath, path))
+              } else if (result.isLeft) {
+                throw leftProjection(result).getValue
               }
             } else {
               targetRegistrationPath.paths.add(path)
@@ -228,18 +224,11 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
               targetRegisteredPath.paths.remove(path)
               if (targetRegisteredPath.paths.isEmpty) {
                 watchedSymlinksByTarget.remove(target)
-                val registeredPath: RegisteredPath =
-                  watchedSymlinksByDirectory.get(target)
-                if (registeredPath != null) {
-                  registeredPath.paths.remove(target)
-                  if (registeredPath.paths.isEmpty) {
-                    watcher.unregister(target)
-                    watchedSymlinksByDirectory.remove(target)
-                  }
-                }
               }
             }
           }
+          if (logger.shouldLog())
+            logger.debug("SymlinkWatcher stopped monitoring link " + path)
         } finally watchedSymlinksByTarget.unlock()
       }
     }

@@ -10,6 +10,7 @@ import com.swoval.functional.Filters
 import java.io.IOException
 import java.nio.file.Path
 import java.util.ArrayList
+import java.util.Arrays
 import java.util.Iterator
 import java.util.List
 
@@ -52,7 +53,7 @@ object FileTreeViews {
                             PATH_CONVERTER,
                             depth,
                             Filters.AllPass,
-                            getDefault(followLinks, false)).init()
+                            followLinks).init()
 
   /**
    * Returns an instance of [[FileTreeView]] that uses only apis available in java.nio.file.
@@ -86,7 +87,7 @@ object FileTreeViews {
    * @return an instance of [[FileTreeView]].
    */
   def getDefault(followLinks: Boolean): FileTreeView =
-    getDefault(followLinks, true)
+    new SimpleFileTreeView(defaultDirectoryLister, followLinks, false)
 
   /**
    * Returns the default [[FileTreeView]] for the runtime platform. If a native implementation
@@ -192,6 +193,14 @@ object FileTreeViews {
     }
 
     override def onError(exception: IOException): Unit = {}
+
+    override def toString(): String = {
+      val updateList: List[List[Entry[T]]] = new ArrayList[List[Entry[T]]]()
+      val it: Iterator[Array[Entry[T]]] = updates.iterator()
+      while (it.hasNext) updateList.add(Arrays.asList(it.next(): _*))
+      "Updates(" + ("creations: " + creations) + (", deletions: " + deletions) +
+        (", updates: " + updateList + ")")
+    }
 
   }
 

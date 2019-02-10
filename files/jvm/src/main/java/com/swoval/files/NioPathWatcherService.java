@@ -36,6 +36,7 @@ class NioPathWatcherService implements AutoCloseable {
   private final RegisterableWatchService watchService;
   private final WatchedDirectoriesByPath watchedDirectoriesByPath = new WatchedDirectoriesByPath();
   private final int shutdownHookId;
+  private final DebugLogger logger = Loggers.getDebug();
 
   NioPathWatcherService(
       final Consumer<Either<Overflow, Event>> eventConsumer,
@@ -69,6 +70,12 @@ class NioPathWatcherService implements AutoCloseable {
                 while (it.hasNext()) {
                   final WatchEvent<?> e = it.next();
                   final WatchEvent.Kind<?> k = e.kind();
+                  if (logger.shouldLog())
+                    logger.debug(
+                        "NioPathWatcherService received event for path "
+                            + e.context()
+                            + " with kind "
+                            + k);
                   if (OVERFLOW.equals(k)) {
                     final Either<Overflow, Event> result =
                         Either.left(new Overflow((Path) key.watchable()));

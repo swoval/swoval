@@ -16,7 +16,6 @@ import com.swoval.files.PathWatchers.Overflow
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
-import com.swoval.runtime.Platform
 import java.io.IOException
 import java.nio.file.FileSystems
 import java.nio.file.NoSuchFileException
@@ -47,10 +46,12 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
   private val converter: Converter[WatchedDirectory] =
     new Converter[WatchedDirectory]() {
       override def apply(typedPath: TypedPath): WatchedDirectory =
-        if (typedPath.isDirectory)
+        if (typedPath.isDirectory && !typedPath.isSymbolicLink)
           Either.getOrElse(service.register(typedPath.getPath), WatchedDirectories.INVALID)
         else WatchedDirectories.INVALID
     }
+
+  private val logger: DebugLogger = Loggers.getDebug
 
   private def updateCacheObserver(events: List[Event]): CacheObserver[WatchedDirectory] =
     new CacheObserver[WatchedDirectory]() {
@@ -151,6 +152,10 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
       }
     }
     runCallbacks(events)
+    if (logger.shouldLog())
+      logger.debug(
+        "NioPathWatcher registered " + path + " with max depth " +
+          maxDepth)
     Either.right(result)
   }
 
@@ -210,7 +215,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
               typedPath.isDirectory && !typedPath.isSymbolicLink && directoryRegistry
                 .acceptPrefix(typedPath.getPath)
           },
-          FileTreeViews.getDefault(false, false)
+          false
         ).init()
         init = true
         rootDirectories.put(path, result)
@@ -270,6 +275,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
         }
       } finally rootDirectories.unlock()
     }
+    if (logger.shouldLog()) logger.debug("NioPathWatcher unregistered " + path)
   }
 
   override def close(): Unit = {
@@ -304,6 +310,8 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
 
   private def handleOverflow(overflow: Overflow): Unit = {
     val path: Path = overflow.getPath
+    if (logger.shouldLog())
+      logger.debug("NioPathWatcher received overflow for " + path)
     val events: List[Event] = new ArrayList[Event]()
     if (rootDirectories.lock()) {
       try {
@@ -357,6 +365,8 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
   }
 
   private def handleEvent(event: Event): Unit = {
+    if (logger.shouldLog())
+      logger.debug("NioPathWatcher received event " + event)
     val events: List[Event] = new ArrayList[Event]()
     if (!closed.get && rootDirectories.lock()) {
       try if (directoryRegistry.acceptPrefix(event.getTypedPath.getPath)) {
@@ -390,7 +400,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           }
         }
         events.add(event)
-        if (typedPath.isDirectory) {
+        if (typedPath.isDirectory && !typedPath.isSymbolicLink) {
           add(typedPath, events)
         }
       } finally rootDirectories.unlock()

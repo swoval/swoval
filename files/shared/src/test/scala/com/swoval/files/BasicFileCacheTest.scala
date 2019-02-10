@@ -27,9 +27,12 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         'callback - withTempDirectory { dir =>
           val events = new ArrayBlockingQueue[Path](2)
           val eventSet = mutable.Set.empty[Path]
-          usingAsync(simpleCache((cacheEntry: Entry[Path]) =>
-            if (eventSet.add(cacheEntry.getTypedPath.getPath))
-              events.add(cacheEntry.getTypedPath.getPath))) { c =>
+          usingAsync(
+            simpleCache(
+              (cacheEntry: Entry[Path]) =>
+                if (cacheEntry.getTypedPath.getPath != dir && eventSet.add(
+                      cacheEntry.getTypedPath.getPath))
+                  events.add(cacheEntry.getTypedPath.getPath))) { c =>
             c.register(dir)
             withTempDirectory(dir) { subdir =>
               withTempFile(subdir) { f =>
@@ -70,7 +73,8 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
             }
             'directories - withTempDirectory { dir =>
               val latch = new CountDownLatch(1)
-              usingAsync(simpleCache((_: Entry[Path]) => latch.countDown())) { c =>
+              usingAsync(simpleCache((e: Entry[Path]) =>
+                if (e.getTypedPath.getPath.getParent == dir) latch.countDown())) { c =>
                 c.reg(dir)
                 withTempDirectory(dir) { subdir =>
                   latch.waitFor(DEFAULT_TIMEOUT) {
@@ -496,14 +500,16 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         val latch = new CountDownLatch(1)
         var secondObserverFired = false
         usingAsync(simpleCache((_: Entry[Path]) => latch.countDown())) { c =>
+          val file = dir.resolve("file")
           val handle = c.addObserver(new FileTreeViews.Observer[Entry[Path]] {
-            override def onNext(entry: Entry[Path]): Unit = secondObserverFired = true
+            override def onNext(entry: Entry[Path]): Unit =
+              if (entry.getTypedPath.getPath == file) secondObserverFired = true
 
             override def onError(t: Throwable): Unit = {}
           })
           c.reg(dir)
           c.removeObserver(handle)
-          val file = Files.createFile(dir.resolve("file"))
+          Files.createFile(file)
           latch.waitFor(DEFAULT_TIMEOUT) {
             assert(!secondObserverFired)
             c.ls(dir) === Seq(file)

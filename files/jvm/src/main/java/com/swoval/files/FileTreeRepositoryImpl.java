@@ -28,6 +28,7 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
         }
       };
   private final int shutdownHookId;
+  private final DebugLogger logger = Loggers.getDebug();
 
   FileTreeRepositoryImpl(
       final FileCacheDirectoryTree<T> directoryTree, final FileCachePathWatcher<T> watcher) {
@@ -85,7 +86,11 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
     try {
       final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
-      return Either.right(watcher.register(absolutePath, maxDepth));
+      final Either<IOException, Boolean> res =
+          Either.right(watcher.register(absolutePath, maxDepth));
+      if (logger.shouldLog())
+        logger.debug("FileTreeRepository registered " + path + " with max depth " + maxDepth);
+      return res;
     } catch (final IOException e) {
       return Either.left(e);
     }

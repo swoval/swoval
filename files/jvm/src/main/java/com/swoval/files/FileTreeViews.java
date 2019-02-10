@@ -8,6 +8,7 @@ import com.swoval.functional.Filters;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
@@ -56,11 +57,7 @@ public class FileTreeViews {
   public static DirectoryView cached(final Path path, final int depth, final boolean followLinks)
       throws IOException {
     return new CachedDirectoryImpl<>(
-            TypedPaths.get(path),
-            PATH_CONVERTER,
-            depth,
-            Filters.AllPass,
-            getDefault(followLinks, false))
+            TypedPaths.get(path), PATH_CONVERTER, depth, Filters.AllPass, followLinks)
         .init();
   }
 
@@ -102,7 +99,7 @@ public class FileTreeViews {
    * @return an instance of {@link FileTreeView}.
    */
   public static FileTreeView getDefault(final boolean followLinks) {
-    return getDefault(followLinks, true);
+    return new SimpleFileTreeView(defaultDirectoryLister, followLinks, false);
   }
 
   /**
@@ -117,7 +114,7 @@ public class FileTreeViews {
    *     caused an exception.
    * @return an instance of {@link FileTreeView}.
    */
-  public static FileTreeView getDefault(final boolean followLinks, final boolean ignoreExceptions) {
+  static FileTreeView getDefault(final boolean followLinks, final boolean ignoreExceptions) {
     return new SimpleFileTreeView(defaultDirectoryLister, followLinks, ignoreExceptions);
   }
 
@@ -217,5 +214,16 @@ public class FileTreeViews {
 
     @Override
     public void onError(final IOException exception) {}
+
+    @Override
+    public String toString() {
+      final List<List<Entry<T>>> updateList = new ArrayList<>();
+      final Iterator<Entry<T>[]> it = updates.iterator();
+      while (it.hasNext()) updateList.add(Arrays.asList(it.next()));
+      return "Updates("
+          + ("creations: " + creations)
+          + (", deletions: " + deletions)
+          + (", updates: " + updateList + ")");
+    }
   }
 }

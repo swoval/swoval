@@ -95,7 +95,7 @@ class SimpleFileTreeView(private val directoryLister: DirectoryLister,
     extends FileTreeView {
 
   def this(directoryLister: DirectoryLister, followLinks: Boolean) =
-    this(directoryLister, followLinks, true)
+    this(directoryLister, followLinks, false)
 
   override def list(path: Path, maxDepth: Int, filter: Filter[_ >: TypedPath]): List[TypedPath] = {
     val result: List[TypedPath] = new ArrayList[TypedPath]()

@@ -105,10 +105,12 @@ class PollingPathWatcher(private val converter: Converter[java.lang.Long],
     try {
       val view: DirectoryDataView[java.lang.Long] =
         FileTreeDataViews.cached(path, converter, maxDepth, followLinks)
-      val entries: List[FileTreeDataViews.Entry[java.lang.Long]] =
+      val newEntries: List[FileTreeDataViews.Entry[java.lang.Long]] =
+        view.listEntries(maxDepth, AllPass)
+      val pathEntry: List[FileTreeDataViews.Entry[java.lang.Long]] =
         view.listEntries(-1, AllPass)
-      entries.addAll(view.listEntries(maxDepth, AllPass))
-      entries
+      if (pathEntry.size == 1) newEntries.add(pathEntry.get(0))
+      newEntries
     } catch {
       case e: NotDirectoryException => {
         val result: List[FileTreeDataViews.Entry[java.lang.Long]] =

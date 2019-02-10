@@ -84,8 +84,7 @@ class FileTreeViewTest(newFileTreeView: (Path, Int, Boolean) => DirectoryView) e
       withTempDirectory(dir) { subdir =>
         withTempFileSync(subdir) { f =>
           newFileTreeView(dir).ls(subdir, recursive = true, AllPass) === Seq(f)
-          newFileTreeView(dir).ls(Paths.get(s"$subdir.1"), recursive = true, AllPass) === Seq
-            .empty[Path]
+          newFileTreeView(dir).ls(Paths.get(s"$subdir.1"), recursive = true, AllPass) === Nil
         }
       }
     }
@@ -224,7 +223,7 @@ object DirectoryFileTreeViewTest extends FileTreeViewTest(FileTreeViews.cached)
 object DefaultFileTreeViewTest
     extends FileTreeViewTest((path, depth, follow: Boolean) => {
       new DirectoryView {
-        private val view = FileTreeViews.getDefault(follow)
+        private val view = FileTreeViews.getDefault(follow, true)
         override def getPath: Path = path
         override val getTypedPath: TypedPath = TypedPaths.get(path)
         override def list(maxDepth: Int, filter: Filter[_ >: TypedPath]): util.List[TypedPath] = {
@@ -255,4 +254,5 @@ object NioFileTreeViewTest
                                       (tp: TypedPath) => tp.getPath,
                                       depth,
                                       AllPass,
+                                      followLinks,
                                       FileTreeViews.getNio(followLinks)).init())

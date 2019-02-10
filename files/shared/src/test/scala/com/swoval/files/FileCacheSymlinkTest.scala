@@ -2,7 +2,7 @@ package com.swoval
 package files
 
 import java.io.IOException
-import java.nio.file.{ Files, Path }
+import java.nio.file.{ Files, Path, Paths }
 
 import FileTreeDataViews.Entry
 import com.swoval.files.FileCacheTest.FileCacheOps
@@ -286,7 +286,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
       'updated - withTempDirectory { root =>
         val dir = Files.createDirectory(root.resolve("no-follow"))
         withTempDirectory { otherDir =>
-          val file = otherDir.resolve("file").createFile()
+          val file = otherDir.resolve("updated-file").createFile()
           Files.write(file, "foo".getBytes)
           val latch = new CountDownLatch(1)
           val link = Files.createSymbolicLink(dir.resolve("link"), otherDir)
@@ -309,7 +309,8 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           }.flatMap { _ =>
             using(FileTreeRepositories.get(identity, true)) { c =>
               c.register(dir)
-              c.ls(dir, true, functional.Filters.AllPass) === Set(link, link.resolve("file"))
+              c.ls(dir, true, functional.Filters.AllPass) === Set(link,
+                                                                  link.resolve("updated-file"))
             }
           }
         }
@@ -328,13 +329,11 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
               identity,
               new FileTreeDataViews.CacheObserver[Path] {
                 override def onCreate(newEntry: Entry[Path]): Unit = {}
-
                 override def onDelete(oldEntry: Entry[Path]): Unit = {}
-
                 override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
-                  if (paths.add(newEntry.getTypedPath.getPath)) latch.countDown()
+                  val path = newEntry.getTypedPath.getPath
+                  if (path.getFileName == Paths.get("link") && paths.add(path)) latch.countDown()
                 }
-
                 override def onError(exception: IOException): Unit = {}
               }
             )) { c =>
@@ -379,7 +378,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
                   if (newEntry.getTypedPath.getPath == link) {
                     paths.add(newEntry.getTypedPath.getPath)
                     updateLatch.countDown()
-                  } else if (closed) {
+                  } else if (closed && newEntry.getTypedPath.getPath.startsWith(link)) {
                     secondUpdateLatch.countDown()
                   }
                 }

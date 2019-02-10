@@ -30,11 +30,7 @@ public class FileTreeDataViews {
       throws IOException {
 
     return new CachedDirectoryImpl<>(
-            TypedPaths.get(path),
-            converter,
-            depth,
-            Filters.AllPass,
-            FileTreeViews.getDefault(followLinks, false))
+            TypedPaths.get(path), converter, depth, Filters.AllPass, followLinks)
         .init();
   }
 

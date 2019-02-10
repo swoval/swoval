@@ -14,6 +14,7 @@ import com.swoval.files.FileTreeDataViews.Entry
 import com.swoval.files.FileTreeDataViews.ObservableCache
 import com.swoval.files.FileTreeRepositoryImpl.Callback
 import com.swoval.files.FileTreeViews.Observer
+import com.swoval.files.FileTreeViews.Updates
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.PathWatchers.Event.Kind
 import com.swoval.functional.Filter
@@ -85,6 +86,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
 
+  private val logger: DebugLogger = Loggers.getDebug
+
   if (symlinkWatcher != null) {
     symlinkWatcher.addObserver(new Observer[Event]() {
       override def onError(t: Throwable): Unit = {
@@ -144,6 +147,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         }
       } finally directories.unlock()
     }
+    if (logger.shouldLog())
+      logger.debug("FileCacheDirectoryTree unregistered " + path)
   }
 
   private def find(path: Path): CachedDirectory[T] = {
@@ -186,6 +191,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
   }
 
   def handleEvent(event: Event): Unit = {
+    if (logger.shouldLog())
+      logger.debug("FileCacheDirectoryTree received event " + event)
     val typedPath: TypedPath = event.getTypedPath
     val symlinks: List[TypedPath] = new ArrayList[TypedPath]()
     val callbacks: List[Callback] = new ArrayList[Callback]()
@@ -200,8 +207,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                 if ((followLinks || !typedPath.isSymbolicLink)) typedPath
                 else
                   TypedPaths.get(typedPath.getPath, Entries.LINK | Entries.FILE)
-              val rescan: Boolean = rescanOnDirectoryUpdate || typedPath.isSymbolicLink ||
-                event.getKind == Overflow
+              val rescan: Boolean = rescanOnDirectoryUpdate || event.getKind == Overflow
               dir
                 .update(updatePath, rescan)
                 .observe(callbackObserver(callbacks, symlinks))
@@ -297,6 +303,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
       while (removeIterator.hasNext) {
         val entry: FileTreeDataViews.Entry[T] =
           Entries.setExists(removeIterator.next(), false)
+        if (symlinkWatcher != null && entry.getTypedPath.isSymbolicLink)
+          symlinkWatcher.remove(entry.getTypedPath.getPath)
         addCallback(callbacks, symlinks, entry, entry, null, Delete, null)
       }
     }
@@ -313,6 +321,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         pendingFiles.clear()
       } finally directories.unlock()
     }
+    if (logger.shouldLog())
+      logger.debug("FileCacheDirectoryTree " + this + " was closed")
   }
 
   def register(path: Path,
@@ -368,6 +378,10 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
           dir = existing
         }
         cleanupDirectories(absolutePath, maxDepth)
+        if (logger.shouldLog())
+          logger.debug(
+            "FileCacheDirectoryTree registered " + path + " with max depth " +
+              maxDepth)
         dir
       } finally directories.unlock()
     } else {
@@ -403,7 +417,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                           kind: Kind,
                           ioException: IOException): Unit = {
     val typedPath: TypedPath = if (entry == null) null else entry.getTypedPath
-    if (typedPath != null && typedPath.isSymbolicLink) {
+    if (typedPath != null && typedPath.isSymbolicLink && followLinks) {
       symlinks.add(typedPath)
     }
     callbacks.add(new Callback(if (typedPath == null) Paths.get("") else typedPath.getPath) {
@@ -500,10 +514,6 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     }
 
   private def newCachedDirectory(path: Path, depth: Int): CachedDirectory[T] =
-    new CachedDirectoryImpl(TypedPaths.get(path),
-                            converter,
-                            depth,
-                            filter,
-                            FileTreeViews.getDefault(followLinks, false)).init()
+    new CachedDirectoryImpl(TypedPaths.get(path), converter, depth, filter, followLinks).init()
 
 }
