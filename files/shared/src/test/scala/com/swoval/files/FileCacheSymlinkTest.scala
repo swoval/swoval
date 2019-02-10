@@ -377,7 +377,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
                   if (newEntry.getTypedPath.getPath == link) {
                     paths.add(newEntry.getTypedPath.getPath)
                     updateLatch.countDown()
-                  } else if (closed) {
+                  } else if (closed && newEntry.getTypedPath.getPath.startsWith(link)) {
                     secondUpdateLatch.countDown()
                   }
                 }
