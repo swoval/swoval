@@ -588,6 +588,7 @@ object Build {
                                               count.toString)
         val process = pb.inheritIO().start()
         process.waitFor()
+        if (process.exitValue != 0) throw new IllegalStateException("AllTests failed")
       },
       quickListReflectionTest := {
         ("" +: Def.spaceDelimited("<arg>").parsed) foreach {
