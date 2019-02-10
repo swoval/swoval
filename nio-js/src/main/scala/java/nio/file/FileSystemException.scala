@@ -21,7 +21,7 @@ class FileSystemException(file: String, other: String, reason: String) extends I
         sb.append(": ")
         sb.append(getReason())
       }
-      return sb.toString()
+      sb.toString()
     }
   }
 }
