@@ -296,11 +296,12 @@ trait PathWatcherTest extends TestSuite {
     'depth - {
       'limit - withTempDirectory { dir =>
         withTempDirectory(dir) { subdir =>
+          val file = subdir.resolve("foo")
           val callback =
-            (e: PathWatchers.Event) => if (e.path.endsWith("foo")) events.add(e)
+            (e: PathWatchers.Event) => if (e.path == file) events.add(e)
           usingAsync(defaultWatcher(callback)) { w =>
             w.register(dir, 0)
-            val file = subdir.resolve(Paths.get("foo")).createFile()
+            file.createFile()
             events
               .poll(100.milliseconds) { _ =>
                 throw new IllegalStateException(
