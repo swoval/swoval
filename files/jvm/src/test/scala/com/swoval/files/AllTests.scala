@@ -21,7 +21,7 @@ object AllTests {
           run(i)
         } catch {
           case e: Throwable =>
-            System.err.println(s"Tests failed during run $i")
+            System.err.println(s"Tests failed during run $i ($e)")
             e.printStackTrace(System.err)
             System.exit(1)
         }
@@ -60,7 +60,7 @@ object AllTests {
             try {
               queue.add(Try(TestRunner.runAndPrint(t, n)))
             } catch {
-              case e: InterruptedException => queue.add(Failure(e))
+              case _: InterruptedException =>
             }
           }
         }
