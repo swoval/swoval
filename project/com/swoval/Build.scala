@@ -595,7 +595,8 @@ object Build {
           "com.swoval.files.AllTests",
           count.toString,
           System.getProperty("swoval.test.timeout", "10"),
-          System.getProperty("swoval.debug", "false")
+          System.getProperty("swoval.debug", "true"),
+          System.getProperty("swoval.debug.logger", "com.swoval.files.test.TestLogger")
         )
         val process = pb.inheritIO().start()
         process.waitFor()

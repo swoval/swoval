@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{ ArrayBlockingQueue, ConcurrentHashMap, TimeUnit }
 
 import com.swoval.files.apple.FileEventMonitorTest
+import com.swoval.files.test.TestLogger
 import utest._
 import utest.framework.{ HTree, Result }
 
@@ -15,20 +16,26 @@ object AllTests {
   private implicit class StringOps(val s: String) extends AnyVal {
     def intValue(default: Int): Int = Try(Integer.valueOf(s).toInt).getOrElse(default)
   }
-  def baseArgs(count: String, timeout: String): Int = {
+  def baseArgs(count: String,
+               timeout: String,
+               debug: Option[String],
+               logger: Option[String]): Int = {
     System.setProperty("swoval.test.timeout", timeout.intValue(default = 10).toString)
+    debug.foreach(System.setProperty("swoval.debug", _))
+    logger.foreach(System.setProperty("swoval.debug.logger", _))
     count.intValue(default = 1)
   }
   def main(args: Array[String]): Unit = {
     val iterations = args match {
-      case Array(count, timeout, debug) =>
-        System.setProperty("swoval.debug", java.lang.Boolean.valueOf(debug).toString)
-        baseArgs(count, timeout)
-      case Array(count, timeout) => baseArgs(count, timeout)
+      case Array(count, timeout, debug, logger) =>
+        baseArgs(count, timeout, Some(debug), Some(logger))
+      case Array(count, timeout, debug) => baseArgs(count, timeout, Some(debug), None)
+      case Array(count, timeout)        => baseArgs(count, timeout, None, None)
     }
     try {
       1 to iterations foreach { i =>
         println(s"Iteration $i:")
+        TestLogger.lines.clear()
         try {
           run(i)
         } catch {
