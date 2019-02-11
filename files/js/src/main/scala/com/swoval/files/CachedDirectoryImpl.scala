@@ -313,10 +313,12 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
                                                                 TypedPaths.expanded(typedPath))) {
               val previousCachedDirectoryImpl: CachedDirectoryImpl[T] =
                 if (isDirectory) currentDir.subdirectories.get(p) else null
+              val fileEntry: Entry[T] = currentDir.files.remove(p)
               val oldEntry: Entry[T] =
-                if (previousCachedDirectoryImpl != null)
+                if (fileEntry != null) fileEntry
+                else if (previousCachedDirectoryImpl != null)
                   previousCachedDirectoryImpl.getEntry
-                else currentDir.files.get(p)
+                else null
               val newEntry: Entry[T] = Entries.get(TypedPaths.getDelegate(resolved, typedPath),
                                                    converter,
                                                    TypedPaths.getDelegate(resolved, typedPath))

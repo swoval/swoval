@@ -366,10 +366,13 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
                   || isLoop(resolved, TypedPaths.expanded(typedPath))) {
                 final CachedDirectoryImpl<T> previousCachedDirectoryImpl =
                     isDirectory ? currentDir.subdirectories.get(p) : null;
+                final Entry<T> fileEntry = currentDir.files.remove(p);
                 final Entry<T> oldEntry =
-                    previousCachedDirectoryImpl != null
-                        ? previousCachedDirectoryImpl.getEntry()
-                        : currentDir.files.get(p);
+                    fileEntry != null
+                        ? fileEntry
+                        : previousCachedDirectoryImpl != null
+                            ? previousCachedDirectoryImpl.getEntry()
+                            : null;
                 final Entry<T> newEntry =
                     Entries.get(
                         TypedPaths.getDelegate(resolved, typedPath),
