@@ -247,7 +247,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
               final TypedPath updatePath =
                   (followLinks || !typedPath.isSymbolicLink())
                       ? typedPath
-                      : TypedPaths.get(typedPath.getPath(), Entries.LINK | Entries.FILE);
+                      : TypedPaths.get(typedPath.getPath(), Entries.LINK);
               final boolean rescan = rescanOnDirectoryUpdate || event.getKind().equals(Overflow);
               dir.update(updatePath, rescan).observe(callbackObserver(callbacks, symlinks));
             } catch (final IOException e) {

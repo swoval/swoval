@@ -1,4 +1,5 @@
-package com.swoval.files
+package com.swoval
+package files
 
 import java.nio.file.{ Path, Paths }
 

@@ -564,6 +564,13 @@ object Build {
       }.value,
       Compile / compile := (Compile / compile).dependsOn(formatSources).value,
       fork in Test := System.getProperty("swoval.fork.tests", "false") == "true",
+      forkOptions in Test := {
+        val prev = (forkOptions in Test).value
+        prev.withRunJVMOptions(
+          prev.runJVMOptions ++ Option(System.getProperty("swoval.debug")).map(v =>
+            s"-Dswoval.debug=$v") ++ Option(System.getProperty("swoval.debug.logger")).map(v =>
+            s"-Dswoval.debug.logger=$v"))
+      },
       travisQuickListReflectionTest := {
         quickListReflectionTest
           .toTask(" com.swoval.files.NioDirectoryLister com.swoval.files.NativeDirectoryLister")
@@ -580,13 +587,17 @@ object Build {
           .map(_.data)
           .filterNot(_.toString.contains("jacoco"))
           .mkString(File.pathSeparator)
-        val pb = new java.lang.ProcessBuilder("java",
-                                              "-classpath",
-                                              cp,
-                                              "-verbose:gc",
-                                              "com.swoval.files.AllTests",
-                                              count.toString,
-                                              System.getProperty("swoval.test.timeout", "10"))
+        val pb = new java.lang.ProcessBuilder(
+          "java",
+          "-classpath",
+          cp,
+          "-verbose:gc",
+          "com.swoval.files.AllTests",
+          count.toString,
+          System.getProperty("swoval.test.timeout", "10"),
+          System.getProperty("swoval.debug", "true"),
+          System.getProperty("swoval.debug.logger", "com.swoval.files.test.TestLogger")
+        )
         val process = pb.inheritIO().start()
         process.waitFor()
         if (process.exitValue != 0) throw new IllegalStateException("AllTests failed")

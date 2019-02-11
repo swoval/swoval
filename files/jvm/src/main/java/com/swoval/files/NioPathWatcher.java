@@ -131,7 +131,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
     if (directoryRegistry.maxDepthFor(typedPath.getPath()) >= 0) {
       final CachedDirectory<WatchedDirectory> dir = getOrAdd(typedPath.getPath());
       if (dir != null) {
-        update(dir, typedPath, events);
+        update(dir, typedPath, events, true);
       }
     }
   }
@@ -158,7 +158,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
           dir.listEntries(typedPath.getPath(), -1, AllPass);
       if (result || directories.isEmpty() || directories.get(0).getValue().isRight()) {
         Path toUpdate = typedPath.getPath();
-        if (toUpdate != null) update(dir, typedPath, events);
+        if (toUpdate != null) update(dir, typedPath, events, true);
       }
     }
     runCallbacks(events);
@@ -313,9 +313,10 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   private void update(
       final CachedDirectory<WatchedDirectory> dir,
       final TypedPath typedPath,
-      final List<Event> events) {
+      final List<Event> events,
+      final boolean rescanDirectories) {
     try {
-      dir.update(typedPath).observe(updateCacheObserver(events));
+      dir.update(typedPath, rescanDirectories).observe(updateCacheObserver(events));
     } catch (final NoSuchFileException e) {
       remove(dir, typedPath.getPath());
       final TypedPath newTypedPath = TypedPaths.get(typedPath.getPath());
@@ -414,7 +415,8 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
               final CachedDirectory<WatchedDirectory> parent =
                   find(typedPath.getPath().getParent(), new ArrayList<Path>());
               if (parent != null) {
-                update(parent, parent.getEntry().getTypedPath(), events);
+                update(
+                    parent, parent.getEntry().getTypedPath(), events, event.getKind() == Overflow);
               }
               if (isRoot) {
                 rootDirectories.remove(root.getPath());

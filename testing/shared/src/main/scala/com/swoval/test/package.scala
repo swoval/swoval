@@ -27,6 +27,14 @@ package object test {
     def createDirectories(): Path =
       retry(Files.createDirectories(path), classOf[FileAlreadyExistsException])
     def createFile(): Path = retry(Files.createFile(path))
+    def createFile(mkdirs: Boolean): Path =
+      retry(
+        try Files.createFile(path)
+        catch {
+          case e: IOException if mkdirs =>
+            Option(path.getParent).map(_.createDirectories())
+            throw e
+        })
     def createTempFile(prefix: String): Path = {
       if (!path.isDirectory()) throw new NotDirectoryException(path.toString)
       retry(Files.createTempFile(path, prefix, ""))
@@ -38,7 +46,7 @@ package object test {
     def read: String = retry(new String(Files.readAllBytes(path)))
     def write(content: String): Unit = retry(Files.write(path, content.getBytes))
     private def retry[T](f: => T, excludes: Class[_ <: IOException]*): T =
-      retry(f, maxAttempts = 10, excludes: _*)
+      retry(f, maxAttempts = 100, excludes: _*)
     private def retry[T](f: => T, maxAttempts: Int, excludes: Class[_ <: IOException]*): T = {
       @tailrec
       def impl(attempt: Int): T = {
@@ -48,8 +56,9 @@ package object test {
             Left(e)
         }) match {
           case Right(t) => t
-          case Left(_) =>
-            platform.sleep(2.milliseconds)
+          case Left(e) =>
+            try platform.sleep(1.milliseconds)
+            catch { case _: InterruptedException => throw e }
             impl(attempt + 1)
         }
       }
@@ -57,7 +66,7 @@ package object test {
     }
     private def deleteImpl(path: Path): Boolean =
       retry(Files.deleteIfExists(path), maxAttempts = 10)
-    def deleteRecursive(): Unit = {
+    def deleteRecursive(): Unit = retry {
       var deleted = false
       while (!deleted && Files.isDirectory(path)) {
         try {
@@ -96,7 +105,9 @@ package object test {
     def parts: Seq[Path] = path.iterator.asScala.toIndexedSeq
     def renameTo(target: Path): Path = Files.move(path, target)
     def setLastModifiedTime(lastModified: Long): Unit =
-      Files.setLastModifiedTime(path, FileTime.fromMillis(lastModified))
+      retry(
+        try Files.setLastModifiedTime(path, FileTime.fromMillis(lastModified))
+        catch { case _: NoSuchFileException => })
     def write(bytes: Array[Byte]): Path = Files.write(path, bytes)
     def write(content: String, charset: Charset = Charset.defaultCharset()): Path =
       Files.write(path, content.getBytes(charset))
