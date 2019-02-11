@@ -34,6 +34,7 @@ object AllTests {
     }
   }
   def run(count: Int): Unit = {
+    System.gc()
     def test[T <: TestSuite](t: T): (Tests, String) =
       (t.tests, t.getClass.getName.replaceAll("[$]", ""))
     val tests = Seq(
