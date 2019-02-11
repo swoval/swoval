@@ -66,7 +66,7 @@ object AllTests {
     }
     val completed = ConcurrentHashMap.newKeySet[String]
     tests.indices foreach { _ =>
-      queue.poll(10, TimeUnit.SECONDS) match {
+      queue.poll(30, TimeUnit.SECONDS) match {
         case null if completed.size != tests.size =>
           throw new IllegalStateException(
             s"Test failed: ${tests.map(_._2).toSet diff completed.asScala.toSet} failed to complete")
