@@ -564,6 +564,12 @@ object Build {
       }.value,
       Compile / compile := (Compile / compile).dependsOn(formatSources).value,
       fork in Test := System.getProperty("swoval.fork.tests", "false") == "true",
+      forkOptions in Test := {
+        val prev = (forkOptions in Test).value
+        prev.withRunJVMOptions(
+          prev.runJVMOptions ++ Option(System.getProperty("swoval.debug")).map(v =>
+            s"-Dswoval.debug=$v"))
+      },
       travisQuickListReflectionTest := {
         quickListReflectionTest
           .toTask(" com.swoval.files.NioDirectoryLister com.swoval.files.NativeDirectoryLister")
