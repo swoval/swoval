@@ -56,8 +56,9 @@ package object test {
             Left(e)
         }) match {
           case Right(t) => t
-          case Left(_) =>
-            platform.sleep(2.milliseconds)
+          case Left(e) =>
+            try platform.sleep(2.milliseconds)
+            catch { case _: InterruptedException => throw e }
             impl(attempt + 1)
         }
       }
