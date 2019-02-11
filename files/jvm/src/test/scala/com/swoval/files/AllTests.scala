@@ -7,16 +7,28 @@ import com.swoval.files.apple.FileEventMonitorTest
 import utest._
 import utest.framework.{ HTree, Result }
 
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
-import scala.util.{ Failure, Success, Try }
+import scala.util.{ Failure, Random, Success, Try }
 
 object AllTests {
+  val random = new Random()
+  private implicit class StringOps(val s: String) extends AnyVal {
+    def intValue(default: Int): Int = Try(Integer.valueOf(s).toInt).getOrElse(default)
+  }
+  def baseArgs(count: String, timeout: String): Int = {
+    System.setProperty("swoval.test.timeout", timeout.intValue(default = 10).toString)
+    count.intValue(default = 1)
+  }
   def main(args: Array[String]): Unit = {
-    val count = args.headOption.flatMap(a => Try(a.toInt).toOption).getOrElse(1)
-    System.setProperty("swoval.test.timeout",
-                       args.lastOption.flatMap(a => Try(a.toInt).toOption).getOrElse(10).toString)
+    val iterations = args match {
+      case Array(count, timeout, debug) =>
+        System.setProperty("swoval.debug", java.lang.Boolean.valueOf(debug).toString)
+        baseArgs(count, timeout)
+      case Array(count, timeout) => baseArgs(count, timeout)
+    }
     try {
-      1 to count foreach { i =>
+      1 to iterations foreach { i =>
         println(s"Iteration $i:")
         try {
           run(i)
@@ -54,15 +66,23 @@ object AllTests {
     )
     val queue = new ArrayBlockingQueue[(String, Try[HTree[String, Result]])](tests.size)
     val failure = new AtomicReference[Option[Throwable]](None)
-    tests.foreach {
-      case (t, n) =>
-        new Thread(s"$n test thread") {
-          setDaemon(true)
-          start()
-          override def run(): Unit =
-            try queue.add(n -> Try(TestRunner.runAndPrint(t, n)))
-            catch { case e: InterruptedException => queue.add(n -> Failure(e)) }
-        }
+    def groupSize: Int = {
+      val n = tests.size
+      val uniform = random.nextInt(n)
+      1 + (uniform * (uniform + 1)) / n
+    }
+    System.out.println(s"Group size: $groupSize")
+    tests.grouped(1) foreach { group =>
+      new Thread(s"${group.map(_._2)} test thread") {
+        setDaemon(true)
+        start()
+        override final def run(): Unit =
+          group.foreach {
+            case (t, n) =>
+              try queue.add(n -> Try(TestRunner.runAndPrint(t, n)))
+              catch { case e: InterruptedException => queue.add(n -> Failure(e)) }
+          }
+      }
     }
     val completed = ConcurrentHashMap.newKeySet[String]
     tests.indices foreach { _ =>
