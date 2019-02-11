@@ -46,7 +46,7 @@ package object test {
     def read: String = retry(new String(Files.readAllBytes(path)))
     def write(content: String): Unit = retry(Files.write(path, content.getBytes))
     private def retry[T](f: => T, excludes: Class[_ <: IOException]*): T =
-      retry(f, maxAttempts = 10, excludes: _*)
+      retry(f, maxAttempts = 100, excludes: _*)
     private def retry[T](f: => T, maxAttempts: Int, excludes: Class[_ <: IOException]*): T = {
       @tailrec
       def impl(attempt: Int): T = {
@@ -57,7 +57,7 @@ package object test {
         }) match {
           case Right(t) => t
           case Left(e) =>
-            try platform.sleep(2.milliseconds)
+            try platform.sleep(1.milliseconds)
             catch { case _: InterruptedException => throw e }
             impl(attempt + 1)
         }
