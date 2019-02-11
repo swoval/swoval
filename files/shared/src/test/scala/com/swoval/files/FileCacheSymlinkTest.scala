@@ -193,8 +193,8 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
         val contentLatch = new CountDownLatch(1)
         val link = dir.resolve("link")
         usingAsync(simpleCache((e: Entry[Path]) => {
-          val content = if (e.path == link) Some(e.path.read) else None
-          content.foreach(c => if (c == "foo") contentLatch.countDown() else linkLatch.countDown())
+          if (e.path == link)
+            if (linkLatch.getCount == 1) linkLatch.countDown() else contentLatch.countDown()
         })) { c =>
           c.reg(dir)
           link linkTo file
