@@ -109,13 +109,11 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
       )
       usingAsync(getBounded[Path](identity, observer)) { c =>
         c.reg(dir)
-        executor.run(() => {
-          val lambdas =
-            new java.util.ArrayList((subdirs.map(d => () => d.createDirectories()) ++ files.map(f =>
-              () => f.createFile(true))).asJava)
-          java.util.Collections.shuffle(lambdas)
-          lambdas.asScala.foreach(_())
-        })
+        val lambdas =
+          new java.util.ArrayList((subdirs.map(d => () => d.createDirectories()) ++ files.map(f =>
+            () => f.createFile(true))).asJava)
+        java.util.Collections.shuffle(lambdas)
+        lambdas.asScala.foreach(executor.run(_))
         creationLatch
           .waitFor(timeout) {
             val found = c.ls(dir).map(_.path).toSet
@@ -125,16 +123,14 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
             }
           }
           .flatMap { _ =>
-            executor.run(() => {
-              val lambdas = new java.util.ArrayList(subdirs.flatMap { d =>
-                Seq(
-                  () => d setLastModifiedTime 3000L,
-                  () => d.resolve("file-1") setLastModifiedTime 3000L
-                )
-              }.asJava)
-              java.util.Collections.shuffle(lambdas)
-              lambdas.asScala.foreach(_())
-            })
+            val lambdas = new java.util.ArrayList(subdirs.flatMap { d =>
+              Seq(
+                () => d setLastModifiedTime 3000L,
+                () => d.resolve("file-1") setLastModifiedTime 3000L
+              )
+            }.asJava)
+            java.util.Collections.shuffle(lambdas)
+            lambdas.asScala.foreach(executor.run(_))
             updateLatch
               .waitFor(timeout) {
                 val found = c.ls(dir).map(_.path).toSet
@@ -143,13 +139,11 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
                 }
               }
               .flatMap { _ =>
-                executor.run(() => {
-                  val lambdas =
-                    new java.util.ArrayList((files.map(f => () => f.delete()) ++ subdirs.map(f =>
-                      () => f.deleteRecursive())).asJava)
-                  java.util.Collections.shuffle(lambdas)
-                  lambdas.asScala.foreach(_())
-                })
+                val lambdas =
+                  new java.util.ArrayList((files.map(f => () => f.delete()) ++ subdirs.map(f =>
+                    () => f.deleteRecursive())).asJava)
+                java.util.Collections.shuffle(lambdas)
+                lambdas.asScala.foreach(executor.run(_))
                 deletionLatch
                   .waitFor(timeout) {
                     c.ls(dir) === Seq.empty
