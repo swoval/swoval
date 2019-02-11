@@ -290,22 +290,24 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
         withTempDirectory { otherDir =>
           val file = otherDir.resolve("updated-file").createFile()
           file write "foo"
-          val latch = new CountDownLatch(1)
+          val creationLatch = new CountDownLatch(1)
+          val deletionLatch = new CountDownLatch(1)
           val link = dir.resolve("link") linkTo otherDir
           usingAsync(FileTreeRepositories.get[Path](identity, false)) { c =>
             c.register(dir, Integer.MAX_VALUE)
             c.addCacheObserver(new CacheObserver[Path] {
               override def onCreate(newEntry: Entry[Path]): Unit =
-                if (newEntry.getTypedPath.getPath == link) latch.countDown()
-              override def onDelete(oldEntry: Entry[Path]): Unit = {}
-              override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
-                if (newEntry.getTypedPath.getPath == link) latch.countDown()
-              }
+                if (newEntry.path == link) creationLatch.countDown()
+              override def onDelete(oldEntry: Entry[Path]): Unit =
+                if (oldEntry.path == link) deletionLatch.countDown()
+              override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
               override def onError(exception: IOException): Unit = {}
             })
             link.delete()
-            link linkTo otherDir
-            latch.waitFor(DEFAULT_TIMEOUT) {
+            deletionLatch.waitFor(DEFAULT_TIMEOUT) {
+              link linkTo otherDir
+            }
+            creationLatch.waitFor(DEFAULT_TIMEOUT) {
               c.ls(dir, true, functional.Filters.AllPass) === Set(link)
             }
           }.flatMap { _ =>
