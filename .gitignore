@@ -19,6 +19,7 @@ files/jvm/src/test/scala/com/swoval/files/PathWatcherTest.scala
 files/jvm/src/test/scala/com/swoval/files/TestHelpers.scala
 files/jvm/src/test/scala/com/swoval/files/apple/FileEventMonitorTest.scala
 files/jvm/src/test/scala/com/swoval/files/test/FileBytes.scala
+files/jvm/src/test/scala/com/swoval/files/test/TestLogger.scala
 files/jvm/src/test/scala/com/swoval/files/test/package.scala
 files/jvm/src/test/scala/com/swoval/functional/EitherTest.scala
 #END FILESJVM TEST SYMLINKS
@@ -39,6 +40,7 @@ files/js/src/test/scala/com/swoval/files/PathWatcherTest.scala
 files/js/src/test/scala/com/swoval/files/TestHelpers.scala
 files/js/src/test/scala/com/swoval/files/apple/FileEventMonitorTest.scala
 files/js/src/test/scala/com/swoval/files/test/FileBytes.scala
+files/js/src/test/scala/com/swoval/files/test/TestLogger.scala
 files/js/src/test/scala/com/swoval/files/test/package.scala
 files/js/src/test/scala/com/swoval/functional/EitherTest.scala
 #END FILESJS TEST SYMLINKS

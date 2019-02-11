@@ -153,6 +153,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
           .andThen {
             case Failure(e) =>
               println(s"Task failed $e")
+              println(s"Log lines:\n${TestLogger.lines.asScala mkString "\n"}")
               if (creationLatch.getCount > 0) {
                 val count = creationLatch.getCount
                 println((allFiles diff foundFiles).toSeq.take(10).sorted mkString "\n")

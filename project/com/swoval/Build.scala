@@ -568,7 +568,8 @@ object Build {
         val prev = (forkOptions in Test).value
         prev.withRunJVMOptions(
           prev.runJVMOptions ++ Option(System.getProperty("swoval.debug")).map(v =>
-            s"-Dswoval.debug=$v"))
+            s"-Dswoval.debug=$v") ++ Option(System.getProperty("swoval.debug.logger")).map(v =>
+            s"-Dswoval.debug.logger=$v"))
       },
       travisQuickListReflectionTest := {
         quickListReflectionTest
