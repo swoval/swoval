@@ -5,7 +5,7 @@ import java.nio.file.{ Path, Paths }
 import java.util.concurrent.{ TimeUnit, TimeoutException }
 
 import com.swoval.files.PathWatchers.Event.Kind
-import com.swoval.files.PathWatchers.Event.Kind.{ Create, Delete, Modify }
+import com.swoval.files.PathWatchers.Event.Kind.{ Delete, Modify }
 import com.swoval.files.TestHelpers._
 import com.swoval.files.apple.Flags
 import com.swoval.files.test.{ ArrayBlockingQueue, _ }
@@ -19,13 +19,12 @@ import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
-import TestHelpers._
-import EntryOps._
 
 trait PathWatcherTest extends TestSuite {
   type Event = PathWatchers.Event
   val DEFAULT_LATENCY = 5.milliseconds
   val fileFlags = new Flags.Create().setNoDefer().setFileEvents()
+  def checkModified(e: Event): Boolean = e.getKind == Modify
   def defaultWatcher(callback: PathWatchers.Event => _,
                      followLinks: Boolean = false): PathWatcher[PathWatchers.Event]
   def unregisterTest(followLinks: Boolean): Future[Unit] = withTempDirectory { root =>
@@ -80,7 +79,7 @@ trait PathWatcherTest extends TestSuite {
       'onTouch - withTempFile { f =>
         val callback =
           (e: PathWatchers.Event) =>
-            if (e.path == f && e.getKind != Create && f.lastModified == 3000L)
+            if (e.path == f && checkModified(e) && f.lastModified == 3000L)
               events.add(e)
         usingAsync(defaultWatcher(callback)) { w =>
           w.register(f.getParent)
@@ -91,7 +90,7 @@ trait PathWatcherTest extends TestSuite {
       'onModify - withTempFile { f =>
         val callback =
           (e: PathWatchers.Event) =>
-            if (e.path == f && e.getKind != Create && f.read == "hello")
+            if (e.path == f && checkModified(e) && f.read == "hello")
               events.add(e)
         usingAsync(defaultWatcher(callback)) { w =>
           w.register(f.getParent)
@@ -129,7 +128,7 @@ trait PathWatcherTest extends TestSuite {
         }
       }
       'redundant - withTempDirectory { dir =>
-        if (Platform.isMac) {
+        if (Platform.isMac && this != PollingPathWatcherTest) {
           val events = new ArrayBlockingQueue[String](10)
           val callback: Consumer[String] = (stream: String) => events.add(stream)
           withTempDirectory(dir) { subdir =>
@@ -435,6 +434,7 @@ object NioPathWatcherTest extends PathWatcherTest {
 
 object PollingPathWatcherTest extends PathWatcherTest {
   val tests = testsImpl
+  override def checkModified(event: PathWatchers.Event): Boolean = event.getKind != Delete
   override def defaultWatcher(callback: PathWatchers.Event => _,
                               followLinks: Boolean): PathWatcher[PathWatchers.Event] = {
     val res = PathWatchers.polling(followLinks, 100, TimeUnit.MILLISECONDS)
