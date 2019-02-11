@@ -406,7 +406,9 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
   }
 
   private def find(path: Path): Either[Entry[T], CachedDirectoryImpl[T]] =
-    if (path == this.getPath) {
+    if (!getEntry.getTypedPath.exists()) {
+      null
+    } else if (path == this.getPath) {
       Either.right(this)
     } else if (!path.isAbsolute) {
       findImpl(parts(path))
@@ -453,7 +455,17 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
   private def removeImpl(parts: List[Path]): List[Entry[T]] = {
     val result: List[Entry[T]] = new ArrayList[Entry[T]]()
     if (this.subdirectories.lock()) {
-      try {
+      try if (parts.isEmpty) {
+        val dirIt: Iterator[CachedDirectoryImpl[T]] =
+          this.subdirectories.values.iterator()
+        while (dirIt.hasNext) {
+          val dir: CachedDirectoryImpl[T] = dirIt.next()
+          result.addAll(dir.remove(dir.getPath))
+        }
+        val fileIt: Iterator[Entry[T]] = this.files.values.iterator()
+        while (fileIt.hasNext) result.add(Entries.setExists(fileIt.next(), false))
+        _cacheEntry.set(Entries.setExists(getEntry, false))
+      } else {
         val it: Iterator[Path] = parts.iterator()
         var currentDir: CachedDirectoryImpl[T] = this
         while (it.hasNext && currentDir != null) {
@@ -461,14 +473,16 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
           if (!it.hasNext) {
             val entry: Entry[T] = currentDir.files.remove(p)
             if (entry != null) {
-              result.add(Entries.resolve(currentDir.getPath, entry))
-            } else {
-              val dir: CachedDirectoryImpl[T] =
-                currentDir.subdirectories.remove(p)
-              if (dir != null) {
-                result.addAll(dir.listEntries(java.lang.Integer.MAX_VALUE, AllPass))
-                result.add(dir.getEntry)
-              }
+              result.add(Entries.setExists(Entries.resolve(currentDir.getPath, entry), false))
+            }
+            val dir: CachedDirectoryImpl[T] =
+              currentDir.subdirectories.remove(p)
+            if (dir != null) {
+              val removeIt: Iterator[Entry[T]] = dir
+                .listEntries(java.lang.Integer.MAX_VALUE, AllPass)
+                .iterator()
+              while (removeIt.hasNext) result.add(Entries.setExists(removeIt.next(), false))
+              result.add(Entries.setExists(dir.getEntry, false))
             }
           } else {
             currentDir = currentDir.subdirectories.get(p)
