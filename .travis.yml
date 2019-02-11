@@ -4,6 +4,11 @@ env:
   global:
   - SBT_VER=1.1.2
 
+addons:
+  homebrew:
+    packages:
+      - clang-format
+
 matrix:
   include:
    - scala: 2.12.8
@@ -19,8 +24,6 @@ matrix:
        - rm sbt-1.1.4.tgz
        - mv sbt /tmp/sbt
        - npm install -g cmake-js;
-       - brew update
-       - brew install clang-format
 
    - scala: 2.12.8
      env:
