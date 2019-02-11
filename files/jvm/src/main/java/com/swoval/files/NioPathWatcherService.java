@@ -32,6 +32,7 @@ class NioPathWatcherService implements AutoCloseable {
   private final Thread loopThread;
   private final AtomicBoolean isStopped = new AtomicBoolean(false);
   private static final AtomicInteger threadId = new AtomicInteger(0);
+  private final AtomicBoolean isShutdown = new AtomicBoolean(false);
   private final CountDownLatch shutdownLatch = new CountDownLatch(1);
   private final RegisterableWatchService watchService;
   private final WatchedDirectoriesByPath watchedDirectoriesByPath = new WatchedDirectoriesByPath();
@@ -115,7 +116,7 @@ class NioPathWatcherService implements AutoCloseable {
 
     @Override
     public void close() {
-      if (closed.compareAndSet(false, true)) {
+      if (!isShutdown.get() && closed.compareAndSet(false, true)) {
         watchedDirectoriesByPath.remove(path);
         key.reset();
         key.cancel();
@@ -162,7 +163,11 @@ class NioPathWatcherService implements AutoCloseable {
       ShutdownHooks.removeHook(shutdownHookId);
       loopThread.interrupt();
       try {
-        watchedDirectoriesByPath.clear();
+        final Iterator<WatchedDirectory> it = watchedDirectoriesByPath.values().iterator();
+        while (it.hasNext()) {
+          it.next().close();
+        }
+        isShutdown.set(true);
         watchService.close();
         shutdownLatch.await(5, TimeUnit.SECONDS);
         loopThread.join(5000);
