@@ -580,13 +580,16 @@ object Build {
           .map(_.data)
           .filterNot(_.toString.contains("jacoco"))
           .mkString(File.pathSeparator)
-        val pb = new java.lang.ProcessBuilder("java",
-                                              "-classpath",
-                                              cp,
-                                              "-verbose:gc",
-                                              "com.swoval.files.AllTests",
-                                              count.toString,
-                                              System.getProperty("swoval.test.timeout", "10"))
+        val pb = new java.lang.ProcessBuilder(
+          "java",
+          "-classpath",
+          cp,
+          "-verbose:gc",
+          "com.swoval.files.AllTests",
+          count.toString,
+          System.getProperty("swoval.test.timeout", "10"),
+          System.getProperty("swoval.debug", "false")
+        )
         val process = pb.inheritIO().start()
         process.waitFor()
         if (process.exitValue != 0) throw new IllegalStateException("AllTests failed")
