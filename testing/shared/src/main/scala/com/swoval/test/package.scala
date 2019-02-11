@@ -35,7 +35,7 @@ package object test {
     def isRegularFile(): Boolean = retry(Files.isRegularFile(path))
     def isDirectory(): Boolean = retry(Files.isDirectory(path))
     def linkTo(target: Path): Path = retry(Files.createSymbolicLink(path, target))
-    def read: String = new String(Files.readAllBytes(path))
+    def read: String = retry(new String(Files.readAllBytes(path)))
     def write(content: String): Unit = retry(Files.write(path, content.getBytes))
     private def retry[T](f: => T, excludes: Class[_ <: IOException]*): T =
       retry(f, maxAttempts = 10, excludes: _*)

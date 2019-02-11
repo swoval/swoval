@@ -4,6 +4,11 @@ env:
   global:
   - SBT_VER=1.1.2
 
+addons:
+  homebrew:
+    packages:
+      - clang-format
+
 matrix:
   include:
    - scala: 2.12.8
@@ -19,8 +24,6 @@ matrix:
        - rm sbt-1.1.4.tgz
        - mv sbt /tmp/sbt
        - npm install -g cmake-js;
-       - brew update
-       - brew install clang-format
 
    - scala: 2.12.8
      env:
@@ -30,28 +33,28 @@ matrix:
    - scala: 2.11.12
      os: osx
      env:
-       CMD="filesJVM/jacoco filesJS/test"
+       CMD="filesJVM/jacoco filesJS/test filesJVM/allTests"
        TRAVIS_SCALA_VERSION=2.11.12
      osx_image: xcode9.3
 
    - scala: 2.11.12
      env:
-       CMD="filesJVM/jacoco filesJS/test"
+       CMD="filesJVM/jacoco filesJS/test filesJVM/allTests"
        TRAVIS_SCALA_VERSION=2.11.12
 
    - scala: 2.10.7
      os: osx
      env:
-       CMD="filesJVM/jacoco plugin/compile"
+       CMD="filesJVM/jacoco plugin/compile filesJVM/allTests"
        TRAVIS_SCALA_VERSION=2.10.7
      osx_image: xcode9.3
 
    - scala: 2.10.7
      env:
-       CMD="filesJVM/jacoco plugin/compile"
+       CMD="filesJVM/jacoco plugin/compile filesJVM/allTests"
        TRAVIS_SCALA_VERSION=2.10.7
 
-script: /tmp/sbt/bin/sbt -Dswoval.format=false -Dsbt.version=$SBT_VER -Dswoval.skip.native=true -Dswoval.fork.tests=true -Dswoval.alltests.iterations=20 ++$TRAVIS_SCALA_VERSION $CMD
+script: /tmp/sbt/bin/sbt -Dswoval.format=false -Dsbt.version=$SBT_VER -Dswoval.skip.native=true -Dswoval.fork.tests=true -Dswoval.alltests.iterations=50 ++$TRAVIS_SCALA_VERSION $CMD
 
 before_install:
   # https://github.com/travis-ci/travis-ci/issues/8408

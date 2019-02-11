@@ -1,12 +1,14 @@
 package com.swoval.files
 
 import java.util.concurrent.atomic.AtomicReference
-import java.util.concurrent.{ CountDownLatch, TimeUnit }
+import java.util.concurrent.{ ArrayBlockingQueue, ConcurrentHashMap, TimeUnit }
 
 import com.swoval.files.apple.FileEventMonitorTest
 import utest._
+import utest.framework.{ HTree, Result }
 
-import scala.util.{ Failure, Try }
+import scala.collection.JavaConverters._
+import scala.util.{ Failure, Success, Try }
 
 object AllTests {
   def main(args: Array[String]): Unit = {
@@ -20,7 +22,7 @@ object AllTests {
           run(i)
         } catch {
           case e: Throwable =>
-            System.err.println(s"Tests failed during run $i")
+            System.err.println(s"Tests failed during run $i ($e)")
             e.printStackTrace(System.err)
             System.exit(1)
         }
@@ -32,6 +34,7 @@ object AllTests {
     }
   }
   def run(count: Int): Unit = {
+    System.gc()
     def test[T <: TestSuite](t: T): (Tests, String) =
       (t.tests, t.getClass.getName.replaceAll("[$]", ""))
     val tests = Seq(
@@ -49,37 +52,35 @@ object AllTests {
       test(DirectoryFileTreeViewTest),
       test(ApplePathWatcherTest)
     )
-    val latch = new CountDownLatch(tests.size)
+    val queue = new ArrayBlockingQueue[(String, Try[HTree[String, Result]])](tests.size)
     val failure = new AtomicReference[Option[Throwable]](None)
-    val threads = tests.map {
+    tests.foreach {
       case (t, n) =>
-        val thread = new Thread(s"$n test thread") {
+        new Thread(s"$n test thread") {
           setDaemon(true)
-          override def run(): Unit = {
-            try {
-              val res = TestRunner.runAndPrint(t, n)
-              res.leaves.toIndexedSeq.foreach { l =>
-                l.value match {
-                  case Failure(e) => failure.compareAndSet(None, Some(e))
-                  case _          =>
-                }
-              }
-            } catch {
-              case _: InterruptedException =>
-            }
-            latch.countDown()
-          }
+          start()
+          override def run(): Unit =
+            try queue.add(n -> Try(TestRunner.runAndPrint(t, n)))
+            catch { case e: InterruptedException => queue.add(n -> Failure(e)) }
         }
-        thread.start()
-        thread
     }
-    latch.await(30, TimeUnit.SECONDS)
-    val now = System.nanoTime
-    println(s"joining threads for iteration $count")
-    threads.foreach(_.interrupt())
-    threads.foreach(_.join(5000))
-    val elapsed = System.nanoTime - now
-    println(s"finished joining thread for iteration $count in ${elapsed / 1.0e6} ms")
+    val completed = ConcurrentHashMap.newKeySet[String]
+    tests.indices foreach { _ =>
+      queue.poll(30, TimeUnit.SECONDS) match {
+        case null if completed.size != tests.size =>
+          throw new IllegalStateException(
+            s"Test failed: ${tests.map(_._2).toSet diff completed.asScala.toSet} failed to complete")
+        case (n, Success(result)) =>
+          completed.add(n)
+          result.leaves.map(_.value).foreach {
+            case Failure(e) => failure.compareAndSet(None, Some(e))
+            case _          =>
+          }
+        case (n, Failure(e)) =>
+          completed.add(n)
+          failure.compareAndSet(None, Some(e))
+      }
+    }
     failure.get.foreach(throw _)
   }
 }

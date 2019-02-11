@@ -1,7 +1,6 @@
 package com.swoval
 package files
 
-import java.nio.file.attribute.FileTime
 import java.nio.file.{ Path, Paths }
 import java.util.concurrent.{ TimeUnit, TimeoutException }
 
@@ -85,9 +84,8 @@ trait PathWatcherTest extends TestSuite {
               events.add(e)
         usingAsync(defaultWatcher(callback)) { w =>
           w.register(f.getParent)
-          f.lastModified
-          Defer(1.second)(f.setLastModifiedTime(3000L))
-          events.poll(2.seconds)(_ ==> new Event(TypedPaths.get(f), Modify))
+          f.setLastModifiedTime(3000L)
+          events.poll(DEFAULT_TIMEOUT)(_ ==> new Event(TypedPaths.get(f), Modify))
         }
       }
       'onModify - withTempFile { f =>
@@ -97,8 +95,9 @@ trait PathWatcherTest extends TestSuite {
               events.add(e)
         usingAsync(defaultWatcher(callback)) { w =>
           w.register(f.getParent)
-          Defer(1.second)(f.write("hello"))
-          events.poll(2.seconds)(_.path ==> f)
+          f write "hello"
+          f.setLastModifiedTime(3000L)
+          events.poll(DEFAULT_TIMEOUT)(_.path ==> f)
         }
       }
       'onDelete - {
@@ -109,8 +108,8 @@ trait PathWatcherTest extends TestSuite {
           }
           usingAsync(defaultWatcher(callback)) { w =>
             w.register(f.getParent)
-            Defer(1.second)(f.delete())
-            events.poll(2.seconds) { e =>
+            f.delete()
+            events.poll(DEFAULT_TIMEOUT) { e =>
               e ==> new Event(TypedPaths.get(f), Delete)
             }
           }
@@ -122,8 +121,8 @@ trait PathWatcherTest extends TestSuite {
           }
           usingAsync(defaultWatcher(callback)) { w =>
             w.register(dir)
-            Defer(1.second)(dir.delete())
-            events.poll(2.seconds) { e =>
+            dir.delete()
+            events.poll(DEFAULT_TIMEOUT) { e =>
               e ==> new Event(TypedPaths.get(dir), Delete)
             }
           }
@@ -297,11 +296,12 @@ trait PathWatcherTest extends TestSuite {
     'depth - {
       'limit - withTempDirectory { dir =>
         withTempDirectory(dir) { subdir =>
+          val file = subdir.resolve("foo")
           val callback =
-            (e: PathWatchers.Event) => if (e.path.endsWith("foo")) events.add(e)
+            (e: PathWatchers.Event) => if (e.path == file) events.add(e)
           usingAsync(defaultWatcher(callback)) { w =>
             w.register(dir, 0)
-            val file = subdir.resolve(Paths.get("foo")).createFile()
+            file.createFile()
             events
               .poll(100.milliseconds) { _ =>
                 throw new IllegalStateException(
