@@ -104,7 +104,9 @@ package object test {
     def parts: Seq[Path] = path.iterator.asScala.toIndexedSeq
     def renameTo(target: Path): Path = Files.move(path, target)
     def setLastModifiedTime(lastModified: Long): Unit =
-      Files.setLastModifiedTime(path, FileTime.fromMillis(lastModified))
+      retry(
+        try Files.setLastModifiedTime(path, FileTime.fromMillis(lastModified))
+        catch { case _: NoSuchFileException => })
     def write(bytes: Array[Byte]): Path = Files.write(path, bytes)
     def write(content: String, charset: Charset = Charset.defaultCharset()): Path =
       Files.write(path, content.getBytes(charset))
