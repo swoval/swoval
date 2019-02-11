@@ -7,7 +7,7 @@ class TestLogger extends logging.Logger {
 }
 object TestLogger {
   val lines = new java.util.Vector[String]
-  def log(message: String): Unit = {
+  def log(message: String): Unit = lines.synchronized {
     lines.add(System.currentTimeMillis() + " " + message)
     ()
   }
