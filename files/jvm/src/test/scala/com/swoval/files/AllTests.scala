@@ -1,12 +1,13 @@
 package com.swoval.files
 
 import java.util.concurrent.atomic.AtomicReference
-import java.util.concurrent.{ ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, TimeUnit }
+import java.util.concurrent.{ ArrayBlockingQueue, ConcurrentHashMap, TimeUnit }
 
 import com.swoval.files.apple.FileEventMonitorTest
 import utest._
 import utest.framework.{ HTree, Result }
 
+import scala.collection.JavaConverters._
 import scala.util.{ Failure, Success, Try }
 
 object AllTests {
@@ -71,7 +72,8 @@ object AllTests {
     tests.indices foreach { _ =>
       queue.poll(10, TimeUnit.SECONDS) match {
         case null if completed.size != tests.size =>
-          throw new IllegalStateException("Test failed")
+          throw new IllegalStateException(
+            s"Test failed: ${tests.map(_._2).toSet diff completed.asScala.toSet} failed to complete")
         case (n, Success(result)) =>
           completed.add(n)
           result.leaves.map(_.value).foreach {
