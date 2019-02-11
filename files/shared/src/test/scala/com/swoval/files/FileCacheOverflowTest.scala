@@ -2,6 +2,7 @@ package com.swoval.files
 
 import java.io.IOException
 import java.nio.file.{ Path, Paths }
+import java.util.concurrent.ConcurrentHashMap
 
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.FileTreeDataViews.Entry
@@ -13,6 +14,7 @@ import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
 import utest._
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
@@ -68,31 +70,51 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
           subdir.resolve(s"file-$j")
         }
       }
+      val pendingCreations = new ConcurrentHashMap[Path, CountDownLatch].asScala
+      val pendingDeletions = new ConcurrentHashMap[Path, CountDownLatch].asScala
+      val pendingUpdates = new ConcurrentHashMap[Path, CountDownLatch].asScala
       val allFiles = (subdirs ++ files).toSet
+      allFiles.foreach { f =>
+        pendingCreations.put(f, creationLatch)
+        pendingDeletions.put(f, deletionLatch)
+      }
+      subdirs.foreach { f =>
+        pendingUpdates.put(f.resolve("file-1"), updateLatch)
+        pendingUpdates.put(f, updateLatch)
+      }
       val foundFiles = mutable.Set.empty[Path]
       val updatedFiles = mutable.Set.empty[Path]
       val deletedFiles = mutable.Set.empty[Path]
       val observer = getObserver[Path](
-        (e: Entry[Path]) => {
-          if (foundFiles.sync(_.add(e.path))) creationLatch.countDown()
+        (e: Entry[Path]) =>
+          pendingCreations.remove(e.path).foreach { l =>
+            l.countDown()
+            foundFiles.add(e.path)
         },
         (_: Entry[Path], e: Entry[Path]) => {
-          if (foundFiles.sync(_.add(e.path))) creationLatch.countDown()
           if (Try(e.path.lastModified) == Success(3000)) {
-            if (updatedFiles.sync(_.add(e.path))) {
+            pendingUpdates.remove(e.path).foreach { l =>
+              l.countDown()
               e.path.setLastModifiedTime(4000)
-              updateLatch.countDown()
+              updatedFiles.add(e.path)
             }
           }
         },
-        (e: Entry[Path]) => if (deletedFiles.sync(_.add(e.path))) deletionLatch.countDown(),
+        (e: Entry[Path]) =>
+          pendingDeletions.remove(e.path).foreach { l =>
+            l.countDown()
+            deletedFiles.add(e.path)
+        },
         (_: IOException) => {}
       )
       usingAsync(getBounded[Path](identity, observer)) { c =>
         c.reg(dir)
         executor.run(() => {
-          subdirs.foreach(_.createDirectories())
-          files.foreach(_.createFile())
+          val lambdas =
+            new java.util.ArrayList((subdirs.map(d => () => d.createDirectories()) ++ files.map(f =>
+              () => f.createFile(true))).asJava)
+          java.util.Collections.shuffle(lambdas)
+          lambdas.asScala.foreach(_())
         })
         creationLatch
           .waitFor(timeout) {
@@ -104,8 +126,14 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
           }
           .flatMap { _ =>
             executor.run(() => {
-              val name = Paths.get("file-1")
-              files.filter(_.getFileName == name).foreach(_.setLastModifiedTime(3000))
+              val lambdas = new java.util.ArrayList(subdirs.flatMap { d =>
+                Seq(
+                  () => d setLastModifiedTime 3000L,
+                  () => d.resolve("file-1") setLastModifiedTime 3000L
+                )
+              }.asJava)
+              java.util.Collections.shuffle(lambdas)
+              lambdas.asScala.foreach(_())
             })
             updateLatch
               .waitFor(timeout) {
@@ -116,8 +144,11 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
               }
               .flatMap { _ =>
                 executor.run(() => {
-                  files.foreach(_.delete())
-                  subdirs.foreach(_.delete())
+                  val lambdas =
+                    new java.util.ArrayList((files.map(f => () => f.delete()) ++ subdirs.map(f =>
+                      () => f.deleteRecursive())).asJava)
+                  java.util.Collections.shuffle(lambdas)
+                  lambdas.asScala.foreach(_())
                 })
                 deletionLatch
                   .waitFor(timeout) {

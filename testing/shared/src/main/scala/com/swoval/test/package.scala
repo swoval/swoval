@@ -27,6 +27,14 @@ package object test {
     def createDirectories(): Path =
       retry(Files.createDirectories(path), classOf[FileAlreadyExistsException])
     def createFile(): Path = retry(Files.createFile(path))
+    def createFile(mkdirs: Boolean): Path =
+      retry(
+        try Files.createFile(path)
+        catch {
+          case e: IOException if mkdirs =>
+            Option(path.getParent).map(_.createDirectories())
+            throw e
+        })
     def createTempFile(prefix: String): Path = {
       if (!path.isDirectory()) throw new NotDirectoryException(path.toString)
       retry(Files.createTempFile(path, prefix, ""))
