@@ -41,18 +41,17 @@ package object test {
         case Some(_) => Future.successful(f(queue.dequeue()))
         case _ =>
           val p = Promise[T]
-          val tp = platform.newTimedPromise(p, timeout)
+          val tp: TimedPromise[T] = platform.newTimedPromise(p, timeout)
           promises.enqueue(tp)
-          def dequeue(): Unit = { promises.dequeueAll(_ == tp); () }
-          p.future.transform(r => { dequeue(); f(r) }, e => { dequeue(); e })(
+          def dequeue[R](r: => R): R = { promises.dequeueAll(_ == tp); r }
+          p.future.transform(r => dequeue(f(r)), e => dequeue(e))(
             utest.framework.ExecutionContext.RunNow)
       })
     def add(t: T): Unit = lock.synchronized {
-      promises.dequeueFirst(_ => true) match {
-        case Some(promise) =>
-          promise.tryComplete(Success(t))
-        case _ =>
-          queue.enqueue(t)
+      queue.enqueue(t)
+      promises.dequeueFirst(_ => true).foreach { p =>
+        queue.dequeue()
+        p.tryComplete(Success(t))
       }
     }
   }
