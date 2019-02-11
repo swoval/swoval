@@ -28,7 +28,7 @@ object Files {
     path
   }
   def createDirectories(path: Path, attrs: Array[FileAttribute[_]] = Array.empty): Path = {
-    if (!repeat(path.toFile.mkdirs())) {
+    if (!repeat(path.toFile.mkdirs()) && !Files.isDirectory(path)) {
       throw new IOException(s"Couldn't create directory $path")
     }
     path
