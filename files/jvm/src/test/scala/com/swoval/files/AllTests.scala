@@ -1,7 +1,7 @@
 package com.swoval.files
 
 import java.util.concurrent.atomic.AtomicReference
-import java.util.concurrent.{ ArrayBlockingQueue, CountDownLatch, TimeUnit }
+import java.util.concurrent.{ ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, TimeUnit }
 
 import com.swoval.files.apple.FileEventMonitorTest
 import utest._
@@ -50,7 +50,7 @@ object AllTests {
       test(DirectoryFileTreeViewTest),
       test(ApplePathWatcherTest)
     )
-    val queue = new ArrayBlockingQueue[Try[HTree[String, Result]]](tests.size)
+    val queue = new ArrayBlockingQueue[(String, Try[HTree[String, Result]])](tests.size)
     val failure = new AtomicReference[Option[Throwable]](None)
     val threads = tests.map {
       case (t, n) =>
@@ -58,7 +58,7 @@ object AllTests {
           setDaemon(true)
           override def run(): Unit = {
             try {
-              queue.add(Try(TestRunner.runAndPrint(t, n)))
+              queue.add(n -> Try(TestRunner.runAndPrint(t, n)))
             } catch {
               case _: InterruptedException =>
             }
@@ -67,15 +67,20 @@ object AllTests {
         thread.start()
         thread
     }
+    val completed = ConcurrentHashMap.newKeySet[String]
     tests.indices foreach { _ =>
       queue.poll(10, TimeUnit.SECONDS) match {
-        case null => throw new IllegalStateException("Test failed")
-        case Success(result) =>
+        case null if completed.size != tests.size =>
+          throw new IllegalStateException("Test failed")
+        case (n, Success(result)) =>
+          completed.add(n)
           result.leaves.map(_.value).foreach {
             case Failure(e) => failure.compareAndSet(None, Some(e))
             case _          =>
           }
-        case Failure(e) => failure.compareAndSet(None, Some(e))
+        case (n, Failure(e)) =>
+          completed.add(n)
+          failure.compareAndSet(None, Some(e))
       }
     }
     val now = System.nanoTime
