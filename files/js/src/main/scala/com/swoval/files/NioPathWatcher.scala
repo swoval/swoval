@@ -262,13 +262,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           while (it.hasNext) {
             val entry: FileTreeDataViews.Entry[WatchedDirectory] = it.next()
             if (!directoryRegistry.acceptPrefix(entry.getTypedPath.getPath)) {
-              val toCancel: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
-                dir.remove(entry.getTypedPath.getPath).iterator()
-              while (toCancel.hasNext) {
-                val either: Either[IOException, WatchedDirectory] =
-                  toCancel.next().getValue
-                if (either.isRight) either.get.close()
-              }
+              remove(dir, entry.getTypedPath.getPath)
             }
           }
           rootDirectories.remove(dir.getPath)
@@ -276,6 +270,16 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
       } finally rootDirectories.unlock()
     }
     if (logger.shouldLog()) logger.debug("NioPathWatcher unregistered " + path)
+  }
+
+  private def remove(cachedDirectory: CachedDirectory[WatchedDirectory], path: Path): Unit = {
+    val toCancel: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
+      cachedDirectory.remove(path).iterator()
+    while (toCancel.hasNext) {
+      val either: Either[IOException, WatchedDirectory] =
+        toCancel.next().getValue
+      if (either.isRight) either.get.close()
+    }
   }
 
   override def close(): Unit = {
@@ -291,7 +295,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     try dir.update(typedPath).observe(updateCacheObserver(events))
     catch {
       case e: NoSuchFileException => {
-        dir.remove(typedPath.getPath)
+        remove(dir, typedPath.getPath)
         val newTypedPath: TypedPath = TypedPaths.get(typedPath.getPath)
         events.add(new Event(newTypedPath, if (newTypedPath.exists()) Kind.Modify else Kind.Delete))
         val root: CachedDirectory[WatchedDirectory] =

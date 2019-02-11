@@ -205,8 +205,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
             try {
               val updatePath: TypedPath =
                 if ((followLinks || !typedPath.isSymbolicLink)) typedPath
-                else
-                  TypedPaths.get(typedPath.getPath, Entries.LINK | Entries.FILE)
+                else TypedPaths.get(typedPath.getPath, Entries.LINK)
               val rescan: Boolean = rescanOnDirectoryUpdate || event.getKind == Overflow
               dir
                 .update(updatePath, rescan)
