@@ -66,7 +66,7 @@ package object test {
     }
     private def deleteImpl(path: Path): Boolean =
       retry(Files.deleteIfExists(path), maxAttempts = 10)
-    def deleteRecursive(): Unit = {
+    def deleteRecursive(): Unit = retry {
       var deleted = false
       while (!deleted && Files.isDirectory(path)) {
         try {
