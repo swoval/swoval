@@ -96,6 +96,7 @@ trait PathWatcherTest extends TestSuite {
         usingAsync(defaultWatcher(callback)) { w =>
           w.register(f.getParent)
           f write "hello"
+          f.setLastModifiedTime(3000L)
           events.poll(DEFAULT_TIMEOUT)(_.path ==> f)
         }
       }
