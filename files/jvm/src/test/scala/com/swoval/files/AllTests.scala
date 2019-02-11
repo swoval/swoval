@@ -53,20 +53,15 @@ object AllTests {
     )
     val queue = new ArrayBlockingQueue[(String, Try[HTree[String, Result]])](tests.size)
     val failure = new AtomicReference[Option[Throwable]](None)
-    val threads = tests.map {
+    tests.foreach {
       case (t, n) =>
-        val thread = new Thread(s"$n test thread") {
+        new Thread(s"$n test thread") {
           setDaemon(true)
-          override def run(): Unit = {
-            try {
-              queue.add(n -> Try(TestRunner.runAndPrint(t, n)))
-            } catch {
-              case _: InterruptedException =>
-            }
-          }
+          start()
+          override def run(): Unit =
+            try queue.add(n -> Try(TestRunner.runAndPrint(t, n)))
+            catch { case e: InterruptedException => queue.add(n -> Failure(e)) }
         }
-        thread.start()
-        thread
     }
     val completed = ConcurrentHashMap.newKeySet[String]
     tests.indices foreach { _ =>
@@ -85,12 +80,6 @@ object AllTests {
           failure.compareAndSet(None, Some(e))
       }
     }
-    val now = System.nanoTime
-    println(s"joining threads for iteration $count")
-    threads.foreach(_.interrupt())
-    threads.foreach(_.join(5000))
-    val elapsed = System.nanoTime - now
-    println(s"finished joining thread for iteration $count in ${elapsed / 1.0e6} ms")
     failure.get.foreach(throw _)
   }
 }
