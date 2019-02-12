@@ -592,9 +592,10 @@ object Build {
           "-classpath",
           cp,
           s"-Dswoval.alltest.verbose=${System.getProperty("swoval.alltest.verbose", "false")}",
+          s"-Dswoval.test.timeout=${System.getProperty("swoval.alltest.timeout", "20")}",
           "com.swoval.files.AllTests",
           count.toString,
-          System.getProperty("swoval.test.timeout", "10"),
+          System.getProperty("swoval.alltest.timeout", "20"),
           System.getProperty("swoval.debug", "true"),
           System.getProperty("swoval.debug.logger", "com.swoval.files.test.TestLogger")
         )

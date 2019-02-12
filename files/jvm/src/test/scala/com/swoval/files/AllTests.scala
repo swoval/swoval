@@ -57,7 +57,6 @@ object AllTests {
                timeout: String,
                debug: Option[String],
                logger: Option[String]): Int = {
-    System.setProperty("swoval.test.timeout", timeout.intValue(default = 10).toString)
     debug.foreach(System.setProperty("swoval.debug", _))
     logger.foreach(System.setProperty("swoval.debug.logger", _))
     count.intValue(default = 1)
