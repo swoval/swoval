@@ -16,8 +16,11 @@ import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.FileTreeViews.Updates;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Event.Kind;
+import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
+import com.swoval.runtime.Platform;
 import java.io.IOException;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
@@ -61,6 +64,18 @@ class FileCachePendingFiles extends Lockable {
     if (lock()) {
       try {
         return pendingFiles.add(path);
+      } finally {
+        unlock();
+      }
+    } else {
+      return false;
+    }
+  }
+
+  boolean contains(final Path path) {
+    if (lock()) {
+      try {
+        return pendingFiles.contains(path);
       } finally {
         unlock();
       }
@@ -256,7 +271,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
             } catch (final IOException e) {
               handleDelete(path, callbacks, symlinks);
             }
-          } else if (pendingFiles.remove(path)) {
+          } else if (pendingFiles.contains(path)) {
             try {
               CachedDirectory<T> cachedDirectory;
               try {
@@ -281,6 +296,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
                 addCallback(callbacks, symlinks, entry, null, entry, Create, null);
               }
             } catch (final IOException e) {
+              System.err.println("Caught unexpected io exception handling event for " + path);
+              e.printStackTrace(System.err);
               pendingFiles.add(path);
             }
           }
@@ -570,7 +587,26 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
 
   private CachedDirectory<T> newCachedDirectory(final Path path, final int depth)
       throws IOException {
-    return new CachedDirectoryImpl<>(TypedPaths.get(path), converter, depth, filter, followLinks)
-        .init();
+    int attempt = 1;
+    int MAX_ATTEMPTS = 10;
+    CachedDirectory<T> result = null;
+    do {
+      try {
+        result =
+            new CachedDirectoryImpl<>(TypedPaths.get(path), converter, depth, filter, followLinks)
+                .init();
+      } catch (final NoSuchFileException | NotDirectoryException e) {
+        throw e;
+      } catch (final IOException e) {
+        try {
+          Sleep.sleep(0);
+        } catch (final InterruptedException ie) {
+          throw e;
+        }
+      }
+      attempt += 1;
+    } while (result == null && attempt <= MAX_ATTEMPTS);
+    if (result == null) throw new NoSuchFileException(path.toString());
+    return result;
   }
 }

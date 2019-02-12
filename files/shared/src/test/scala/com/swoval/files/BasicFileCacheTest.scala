@@ -390,7 +390,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
       }
       'replaced - withTempFile { file =>
         val dir = file.getParent
-        val deletionLatch = new CountDownLatch(1)
+        val deletionLatch = new CountDownLatch(2)
         val newFileLatch = new CountDownLatch(1)
         val newFile = dir.resolve("new-file")
         val observer = new FileTreeDataViews.CacheObserver[Path] {
@@ -399,7 +399,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
           }
 
           override def onDelete(oldEntry: Entry[Path]): Unit =
-            if (oldEntry.path == dir) deletionLatch.countDown()
+            if (oldEntry.path == dir || oldEntry.path == file) deletionLatch.countDown()
 
           override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
 
@@ -412,8 +412,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
           deletionLatch
             .waitFor(DEFAULT_TIMEOUT) {
               c.ls(dir) === Seq.empty[Path]
-              dir.createDirectories()
-              newFile.createFile()
+              newFile.createFile(mkdirs = true)
             }
             .flatMap { _ =>
               newFileLatch.waitFor(DEFAULT_TIMEOUT) {

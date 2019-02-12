@@ -17,8 +17,11 @@ import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.FileTreeViews.Updates
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.PathWatchers.Event.Kind
+import com.swoval.functional.Either
 import com.swoval.functional.Filter
+import com.swoval.runtime.Platform
 import java.io.IOException
+import java.nio.file.AccessDeniedException
 import java.nio.file.NoSuchFileException
 import java.nio.file.NotDirectoryException
 import java.nio.file.Path
@@ -52,6 +55,14 @@ class FileCachePendingFiles(reentrantLock: ReentrantLock) extends Lockable(reent
   def add(path: Path): Boolean =
     if (lock()) {
       try pendingFiles.add(path)
+      finally unlock()
+    } else {
+      false
+    }
+
+  def contains(path: Path): Boolean =
+    if (lock()) {
+      try pendingFiles.contains(path)
       finally unlock()
     } else {
       false
@@ -212,7 +223,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
               case e: IOException => handleDelete(path, callbacks, symlinks)
 
             }
-          } else if (pendingFiles.remove(path)) {
+          } else if (pendingFiles.contains(path)) {
             try {
               var cachedDirectory: CachedDirectory[T] = null
               try cachedDirectory = newCachedDirectory(path, directoryRegistry.maxDepthFor(path))
@@ -239,7 +250,13 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                 addCallback(callbacks, symlinks, entry, null, entry, Create, null)
               }
             } catch {
-              case e: IOException => pendingFiles.add(path)
+              case e: IOException => {
+                System.err.println(
+                  "Caught unexpected io exception handling event for " +
+                    path)
+                e.printStackTrace(System.err)
+                pendingFiles.add(path)
+              }
 
             }
           }
@@ -508,7 +525,23 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
       Collections.emptyList()
     }
 
-  private def newCachedDirectory(path: Path, depth: Int): CachedDirectory[T] =
-    new CachedDirectoryImpl(TypedPaths.get(path), converter, depth, filter, followLinks).init()
+  private def newCachedDirectory(path: Path, depth: Int): CachedDirectory[T] = {
+    var attempt: Int = 1
+    val MAX_ATTEMPTS: Int = 10
+    var result: CachedDirectory[T] = null
+    do {
+      try result =
+        new CachedDirectoryImpl(TypedPaths.get(path), converter, depth, filter, followLinks).init()
+      catch {
+        case e @ (_: NoSuchFileException | _: NotDirectoryException) => throw e
+
+        case e: IOException => Sleep.sleep(0)
+
+      }
+      attempt += 1
+    } while (result == null && attempt <= MAX_ATTEMPTS);
+    if (result == null) throw new NoSuchFileException(path.toString)
+    result
+  }
 
 }

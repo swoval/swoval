@@ -520,6 +520,7 @@ object Build {
         "com.swoval.files.*DirectoryLister*",
         "com.swoval.files.Observers*",
         "com.swoval.files.RegisterableWatchServices*",
+        "com.swoval.files.Sleep*",
         "com.swoval.files.WatchServices*",
         "com.swoval.files.WatchedDirectory*",
         "com.swoval.files.apple.Event*",
