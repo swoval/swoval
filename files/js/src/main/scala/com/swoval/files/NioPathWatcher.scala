@@ -118,7 +118,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     if (directoryRegistry.maxDepthFor(typedPath.getPath) >= 0) {
       val dir: CachedDirectory[WatchedDirectory] = getOrAdd(typedPath.getPath)
       if (dir != null) {
-        update(dir, typedPath, events)
+        update(dir, typedPath, events, true)
       }
     }
   }
@@ -148,7 +148,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
             .getValue
             .isRight) {
         val toUpdate: Path = typedPath.getPath
-        if (toUpdate != null) update(dir, typedPath, events)
+        if (toUpdate != null) update(dir, typedPath, events, true)
       }
     }
     runCallbacks(events)
@@ -291,8 +291,11 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
 
   private def update(dir: CachedDirectory[WatchedDirectory],
                      typedPath: TypedPath,
-                     events: List[Event]): Unit = {
-    try dir.update(typedPath).observe(updateCacheObserver(events))
+                     events: List[Event],
+                     rescanDirectories: Boolean): Unit = {
+    try dir
+      .update(typedPath, rescanDirectories)
+      .observe(updateCacheObserver(events))
     catch {
       case e: NoSuchFileException => {
         remove(dir, typedPath.getPath)
@@ -395,7 +398,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
             val parent: CachedDirectory[WatchedDirectory] =
               find(typedPath.getPath.getParent, new ArrayList[Path]())
             if (parent != null) {
-              update(parent, parent.getEntry.getTypedPath, events)
+              update(parent, parent.getEntry.getTypedPath, events, event.getKind == Overflow)
             }
             if (isRoot) {
               rootDirectories.remove(root.getPath)
