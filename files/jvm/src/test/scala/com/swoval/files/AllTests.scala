@@ -1,5 +1,6 @@
 package com.swoval.files
 
+import java.io.{ OutputStream, PrintStream }
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{ ArrayBlockingQueue, ConcurrentHashMap, TimeUnit }
 
@@ -15,6 +16,10 @@ object AllTests {
   val random = new Random()
   private implicit class StringOps(val s: String) extends AnyVal {
     def intValue(default: Int): Int = Try(Integer.valueOf(s).toInt).getOrElse(default)
+  }
+  final class CachingOutputStream extends OutputStream {
+    val content = new StringBuilder
+    override def write(b: Int): Unit = content.append(b)
   }
   def baseArgs(count: String,
                timeout: String,
@@ -85,8 +90,16 @@ object AllTests {
         override final def run(): Unit =
           group.foreach {
             case (t, n) =>
-              try queue.add(n -> Try(TestRunner.runAndPrint(t, n)))
-              catch { case e: InterruptedException => queue.add(n -> Failure(e)) }
+              val outputStream = new CachingOutputStream
+              val printStream = new PrintStream(outputStream, false)
+              try queue.add(n -> Try(TestRunner.runAndPrint(t, n, printStream = printStream)))
+              catch {
+                case e: InterruptedException =>
+                  System.err.println(s"Tests failed. Dumping output.")
+                  System.err.println(outputStream.content.toString)
+                  queue.add(n -> Failure(e))
+              }
+              outputStream.content.clear()
           }
       }
     }
