@@ -67,7 +67,7 @@ class MacOSXWatchService implements RegisterableWatchService {
         public void accept(final FileEvent fileEvent) {
           final Path path = Paths.get(fileEvent.fileName);
           if (logger.shouldLog())
-            logger.debug("MacOSXWatchService received event for path " + fileEvent);
+            logger.debug("MacOSXWatchService received event for path " + fileEvent.fileName);
           final WatchKey childKeys = registered.get(path);
           final WatchKey watchKey =
               childKeys == null ? registered.get(path.getParent()) : childKeys;
