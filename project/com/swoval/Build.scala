@@ -591,7 +591,6 @@ object Build {
           "java",
           "-classpath",
           cp,
-          "-verbose:gc",
           "com.swoval.files.AllTests",
           count.toString,
           System.getProperty("swoval.test.timeout", "10"),
