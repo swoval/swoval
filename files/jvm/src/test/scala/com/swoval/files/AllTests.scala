@@ -39,7 +39,6 @@ object AllTests {
     }
     try {
       1 to iterations foreach { i =>
-        println(s"Iteration $i:")
         TestLogger.lines.clear()
         try {
           run(i)
@@ -50,7 +49,6 @@ object AllTests {
             System.exit(1)
         }
       }
-      println("finished")
       System.exit(0)
     } catch {
       case _: Exception => System.exit(1)
@@ -82,7 +80,7 @@ object AllTests {
       val uniform = random.nextInt(n)
       1 + (uniform * (uniform + 1)) / n
     }
-    System.out.println(s"Group size: $groupSize")
+    print(s"Iteration $count (group size $groupSize)...")
     tests.grouped(1) foreach { group =>
       new Thread(s"${group.map(_._2)} test thread") {
         setDaemon(true)
@@ -121,5 +119,6 @@ object AllTests {
       }
     }
     failure.get.foreach(throw _)
+    println("done.")
   }
 }
