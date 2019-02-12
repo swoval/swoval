@@ -2,13 +2,14 @@ package com.swoval.files
 
 import java.nio.file.{ Path, Paths }
 
+import com.swoval.files.test.LoggingTestSuite
 import com.swoval.runtime.Platform
 import com.swoval.test._
 import utest._
 
 import scala.util.Random
 
-object PathTest extends TestSuite {
+object PathTest extends LoggingTestSuite {
   private val random: Random = new Random()
   private val root: String = if (Platform.isWin) "C:" else ""
   def get(parts: String*): Path = {

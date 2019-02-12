@@ -20,7 +20,7 @@ import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
 
-trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
+trait FileCacheOverflowTest extends LoggingTestSuite with FileCacheTest {
   def getBounded[T <: AnyRef](
       converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeDataViews.CacheObserver[T]
@@ -153,8 +153,6 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
           .andThen {
             case Failure(e) =>
               println(s"Task failed $e")
-              println(
-                s"Log lines:\n${TestLogger.lines.synchronized(TestLogger.lines.asScala.toIndexedSeq) mkString "\n"}")
               if (creationLatch.getCount > 0) {
                 val count = creationLatch.getCount
                 println((allFiles diff foundFiles).toSeq.take(10).sorted mkString "\n")

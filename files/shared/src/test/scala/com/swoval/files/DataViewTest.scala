@@ -13,7 +13,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import TestHelpers._
 
-object DataViewTest extends TestSuite {
+object DataViewTest extends LoggingTestSuite {
   import FileTreeViewTest.RepositoryOps
   def directory: Future[Unit] = withTempFileSync { file =>
     val parent = file.getParent

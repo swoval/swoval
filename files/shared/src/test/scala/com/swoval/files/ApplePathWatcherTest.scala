@@ -15,7 +15,7 @@ import utest._
 
 import scala.concurrent.duration._
 import scala.collection.JavaConverters._
-object ApplePathWatcherTest extends TestSuite {
+object ApplePathWatcherTest extends LoggingTestSuite {
   val DEFAULT_LATENCY = 5.milliseconds
   val dirFlags = new Flags.Create().setNoDefer()
   def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event] = {

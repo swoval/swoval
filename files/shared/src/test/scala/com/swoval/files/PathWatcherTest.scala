@@ -21,7 +21,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 
-trait PathWatcherTest extends TestSuite {
+trait PathWatcherTest extends LoggingTestSuite {
   type Event = PathWatchers.Event
   val DEFAULT_LATENCY = 5.milliseconds
   val fileFlags = new Flags.Create().setNoDefer().setFileEvents()

@@ -15,7 +15,7 @@ import utest._
 import scala.collection.mutable
 import scala.util.Failure
 
-object NioPathWatcherOverflowTest extends TestSuite {
+object NioPathWatcherOverflowTest extends LoggingTestSuite {
   val tests = if (Platform.isJVM || !Platform.isMac) Tests {
     val subdirsToAdd = 200
     val executor = Executor.make("NioPathWatcherOverflowTest-executor")

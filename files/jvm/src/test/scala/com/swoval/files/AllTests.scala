@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{ ArrayBlockingQueue, ConcurrentHashMap, TimeUnit }
 
 import com.swoval.files.apple.FileEventMonitorTest
-import com.swoval.files.test.TestLogger
+import com.swoval.files.test.LoggingTestSuite
 import utest._
 import utest.framework.{ HTree, Result }
 
@@ -16,13 +16,42 @@ import scala.util.{ Failure, Random, Success, Try }
 
 object AllTests {
   swoval.test.setVerbose(false)
+  private[this] val outputStreams = new ConcurrentHashMap[String, CachingOutputStream].asScala
+  LoggingTestSuite.setOutputStreamFactory((s: String) => {
+    outputStreams.synchronized {
+      outputStreams.get(s) match {
+        case Some(os) => os
+        case None =>
+          val outputStream = new CachingOutputStream
+          outputStreams.put(s, outputStream)
+          outputStream
+      }
+    }
+  })
   val random = new Random()
   private implicit class StringOps(val s: String) extends AnyVal {
     def intValue(default: Int): Int = Try(Integer.valueOf(s).toInt).getOrElse(default)
   }
   final class CachingOutputStream extends OutputStream {
-    val content = new StringBuilder
-    override def write(b: Int): Unit = content.append(b)
+    val size = 20000
+    val limit = 10
+    var builders: Seq[StringBuilder] = new StringBuilder(size) :: Nil
+    override def write(b: Int): Unit = {
+      val builder = builders.last
+      if (builder.size >= size - limit) {
+        val newBuilder = new StringBuilder(size)
+        builders = builders :+ newBuilder
+        newBuilder.append(b.toChar)
+      } else {
+        builder.append(b.toChar)
+      }
+    }
+    def printContent(outputStream: OutputStream): Unit = {
+      builders.foreach { b =>
+        outputStream.write(b.toString.getBytes)
+      }
+      outputStream.flush()
+    }
   }
   def baseArgs(count: String,
                timeout: String,
@@ -42,7 +71,7 @@ object AllTests {
     }
     try {
       1 to iterations foreach { i =>
-        TestLogger.lines.clear()
+        outputStreams.clear()
         try {
           run(i)
         } catch {
@@ -59,8 +88,8 @@ object AllTests {
   }
   def run(count: Int): Unit = {
     System.gc()
-    def test[T <: TestSuite](t: T): (Tests, String) =
-      (t.tests, t.getClass.getName.replaceAll("[$]", ""))
+    def test[T <: LoggingTestSuite](t: T): (Tests, String, T) =
+      (t.tests, t.getClass.getCanonicalName, t)
     val tests = Seq(
       test(BasicFileCacheTest),
       test(NioBasicFileCacheTest),
@@ -90,17 +119,18 @@ object AllTests {
         start()
         override final def run(): Unit =
           group.foreach {
-            case (t, n) =>
+            case (t, n, test) =>
               val outputStream = new CachingOutputStream
+              outputStreams.put(n, outputStream)
+              test.setOutputStream(outputStream)
+              test.setName(n)
+              if (System.getProperty("swoval.alltest.verbose", "false") == "true") {
+                test.register()
+              }
               val printStream = new PrintStream(outputStream, false)
               try queue.add(n -> Try(TestRunner.runAndPrint(t, n, printStream = printStream)))
-              catch {
-                case e: InterruptedException =>
-                  System.err.println(s"Tests failed. Dumping output.")
-                  System.err.println(outputStream.content.toString)
-                  queue.add(n -> Failure(e))
-              }
-              outputStream.content.clear()
+              catch { case e: InterruptedException => queue.add(n -> Failure(e)) } finally test
+                .unregister()
           }
       }
     }
@@ -108,16 +138,25 @@ object AllTests {
     tests.indices foreach { _ =>
       queue.poll(30, TimeUnit.SECONDS) match {
         case null if completed.size != tests.size =>
+          tests.foreach {
+            case (_, name, _) if !completed.contains(name) =>
+              outputStreams.get(name).foreach(s => s.printContent(System.err))
+          }
           throw new IllegalStateException(
             s"Test failed: ${tests.map(_._2).toSet diff completed.asScala.toSet} failed to complete")
         case (n, Success(result)) =>
           completed.add(n)
           result.leaves.map(_.value).foreach {
-            case Failure(e) => failure.compareAndSet(None, Some(e))
-            case _          =>
+            case Failure(e) =>
+              System.err.println(s"Tests failed. Dumping output.")
+              outputStreams.get(n).foreach(s => System.err.println(s.content.toString))
+              failure.compareAndSet(None, Some(e))
+            case _ =>
           }
         case (n, Failure(e)) =>
           completed.add(n)
+          System.err.println(s"Tests failed. Dumping output.")
+          outputStreams.get(n).foreach(s => System.err.println(s.content.toString))
           failure.compareAndSet(None, Some(e))
       }
     }
