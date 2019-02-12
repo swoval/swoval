@@ -1,4 +1,6 @@
-package com.swoval.files
+package com
+package swoval
+package files
 
 import java.nio.file.Files
 
@@ -96,8 +98,10 @@ object NioPathWatcherSymlinkTest extends PathWatcherSymlinkTest {
     testsImpl
   } else {
     Tests {
-      'ignore - println(
-        "Not running NioPathWatcherSymlinkTest on platform other than osx on the jvm")
+      'ignore - {
+        if (swoval.test.verbose)
+          println("Not running NioPathWatcherSymlinkTest on platform other than osx on the jvm")
+      }
     }
   }
 }

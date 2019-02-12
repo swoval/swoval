@@ -1,12 +1,13 @@
-package com.swoval.files
+package com
+package swoval
+package files
 
 import java.io.IOException
-import java.nio.file.{ Path, Paths }
+import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.FileTreeDataViews.Entry
-import com.swoval.files.TestHelpers.EntryOps._
 import com.swoval.files.TestHelpers._
 import com.swoval.files.test._
 import com.swoval.runtime.Platform
@@ -20,7 +21,6 @@ import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
 
 trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
-  import FileCacheOverflowTest._
   def getBounded[T <: AnyRef](
       converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeDataViews.CacheObserver[T]
@@ -213,6 +213,7 @@ object NioFileCacheOverflowTest extends FileCacheOverflowTest with NioFileCacheT
     if (Platform.isJVM && Platform.isMac) testsImpl
     else
       Tests('ignore - {
-        println("Not running NioFileCacheTest on platform other than the jvm on osx")
+        if (swoval.test.verbose)
+          println("Not running NioFileCacheTest on platform other than the jvm on osx")
       })
 }

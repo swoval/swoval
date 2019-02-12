@@ -23,7 +23,8 @@ object Macros {
     c.Expr[Tests](q"""
       utest.Tests {
         'ignore - {
-          println(${Literal(Constant("Not running "))} + $context + ${Literal(Constant(s" on $p"))})
+          if (com.swoval.test.verbose)
+            println(${Literal(Constant("Not running "))} + $context + ${Literal(Constant(s" on $p"))})
         }
       }
     """)

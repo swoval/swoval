@@ -1,4 +1,5 @@
-package com.swoval
+package com
+package swoval
 package files
 
 import java.nio.file.{ Path, Paths }
@@ -420,7 +421,8 @@ object NioPathWatcherTest extends PathWatcherTest {
     else
       Tests {
         'ignore - {
-          println("Not running NioDirectoryWatcherTest on platform other than osx on the jvm")
+          if (swoval.test.verbose)
+            println("Not running NioDirectoryWatcherTest on platform other than osx on the jvm")
         }
       }
 

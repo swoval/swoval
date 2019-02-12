@@ -1,4 +1,6 @@
-package com.swoval.files
+package com
+package swoval
+package files
 
 import java.io.IOException
 import java.nio.file.{ Path, Paths }
@@ -611,6 +613,7 @@ object NioBasicFileCacheTest extends BasicFileCacheTest with NioFileCacheTest {
     if (Platform.isJVM && Platform.isMac) testsImpl
     else
       Tests('ignore - {
-        println("Not running NioFileCacheTest on platform other than the jvm on osx")
+        if (swoval.test.verbose)
+          println("Not running NioFileCacheTest on platform other than the jvm on osx")
       })
 }

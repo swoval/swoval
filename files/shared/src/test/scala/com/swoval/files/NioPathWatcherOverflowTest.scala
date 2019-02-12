@@ -1,4 +1,6 @@
-package com.swoval.files
+package com
+package swoval
+package files
 
 import java.nio.file.{ Path }
 
@@ -57,9 +59,7 @@ object NioPathWatcherOverflowTest extends TestSuite {
       }
     }
   } else
-    Tests {
-      'ignore - {
-        println("Not running NioPathWatcher on scala.js on osx")
-      }
-    }
+    Tests('ignore - {
+      if (swoval.test.verbose) println("Not running NioPathWatcher on scala.js on osx")
+    })
 }

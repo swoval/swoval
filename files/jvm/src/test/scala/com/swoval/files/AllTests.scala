@@ -1,4 +1,6 @@
-package com.swoval.files
+package com
+package swoval
+package files
 
 import java.io.{ OutputStream, PrintStream }
 import java.util.concurrent.atomic.AtomicReference
@@ -13,6 +15,7 @@ import scala.collection.JavaConverters._
 import scala.util.{ Failure, Random, Success, Try }
 
 object AllTests {
+  swoval.test.setVerbose(false)
   val random = new Random()
   private implicit class StringOps(val s: String) extends AnyVal {
     def intValue(default: Int): Int = Try(Integer.valueOf(s).toInt).getOrElse(default)

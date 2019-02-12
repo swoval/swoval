@@ -2,6 +2,7 @@ package com.swoval
 package files
 
 import java.nio.file.{ Path, Paths }
+import java.util.concurrent.atomic.AtomicBoolean
 
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test.NotFuture

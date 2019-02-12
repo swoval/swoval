@@ -4,6 +4,7 @@ import java.io.IOException
 import java.nio.charset.Charset
 import java.nio.file._
 import java.nio.file.attribute.{ BasicFileAttributes, FileTime }
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ BlockingQueue, TimeUnit }
 
 import utest._
@@ -220,4 +221,8 @@ package object test {
   }
   def testOn(desc: String, platforms: Platform*)(tests: Any): Tests = macro Macros.testOnWithDesc
   def testOn(platforms: Platform*)(tests: Any): Tests = macro Macros.testOn
+
+  private[this] val _verbose = new AtomicBoolean(true)
+  def setVerbose(value: Boolean): Unit = _verbose.set(value)
+  def verbose: Boolean = _verbose.get()
 }
