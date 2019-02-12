@@ -591,6 +591,7 @@ object Build {
           "java",
           "-classpath",
           cp,
+          s"-Dswoval.alltest.verbose=${System.getProperty("swoval.alltest.verbose", "false")}",
           "com.swoval.files.AllTests",
           count.toString,
           System.getProperty("swoval.test.timeout", "10"),
