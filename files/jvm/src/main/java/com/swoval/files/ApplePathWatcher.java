@@ -117,7 +117,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
       }
     }
     if (logger.shouldLog())
-      logger.debug("ApplePathWatcher registered " + path + " with max depth " + maxDepth);
+      logger.debug(this + " registered " + path + " with max depth " + maxDepth);
     return Either.right(result);
   }
 
@@ -171,7 +171,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   @SuppressWarnings("EmptyCatchBlock")
   public void close() {
     if (closed.compareAndSet(false, true)) {
-      if (logger.shouldLog()) logger.debug("Closed ApplePathWatcher " + this);
+      if (logger.shouldLog()) logger.debug(this + " closed");
       appleFileEventStreams.clear();
       fileEventMonitor.close();
     }
@@ -226,6 +226,8 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
             new Consumer<FileEvent>() {
               @Override
               public void accept(final FileEvent fileEvent) {
+                if (logger.shouldLog())
+                  logger.debug(this + " received event for " + fileEvent.fileName);
                 if (!closed.get()) {
                   final String fileName = fileEvent.fileName;
                   final TypedPath path = TypedPaths.get(Paths.get(fileName));
@@ -245,8 +247,11 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
                       event = new Event(path, Delete);
                     }
                     try {
+                      if (logger.shouldLog())
+                        logger.debug(this + " passing " + event + " to observers");
                       observers.onNext(event);
                     } catch (final Exception e) {
+                      logger.debug(this + " invoking onError for " + e);
                       observers.onError(e);
                     }
                   }

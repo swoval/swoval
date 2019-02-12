@@ -51,7 +51,7 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
 
           @Override
           public void onNext(final Event event) {
-            if (logger.shouldLog()) logger.debug("SymlinkWatcher received event " + event);
+            if (logger.shouldLog()) logger.debug(this + " received event " + event);
             if (!isClosed.get()) {
               final List<Path> paths = new ArrayList<>();
               final Path path = event.getTypedPath().getPath();
@@ -187,7 +187,8 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
         throw new FileSystemLoopException(path.toString());
       } else {
         if (logger.shouldLog())
-          logger.debug("SymlinkWatcher adding link " + path + " with max depth " + maxDepth);
+          logger.debug(
+              this + " SymlinkWatcher adding link " + path + " with max depth " + maxDepth);
         if (watchedSymlinksByTarget.lock()) {
           try {
             final RegisteredPath targetRegistrationPath = watchedSymlinksByTarget.get(realPath);
@@ -236,7 +237,7 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
               }
             }
           }
-          if (logger.shouldLog()) logger.debug("SymlinkWatcher stopped monitoring link " + path);
+          if (logger.shouldLog()) logger.debug(this + " stopped monitoring link " + path);
         } finally {
           watchedSymlinksByTarget.unlock();
         }

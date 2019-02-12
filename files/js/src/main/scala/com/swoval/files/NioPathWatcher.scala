@@ -153,9 +153,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     }
     runCallbacks(events)
     if (logger.shouldLog())
-      logger.debug(
-        "NioPathWatcher registered " + path + " with max depth " +
-          maxDepth)
+      logger.debug(this + " registered " + path + " with max depth " + maxDepth)
     Either.right(result)
   }
 
@@ -269,7 +267,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
         }
       } finally rootDirectories.unlock()
     }
-    if (logger.shouldLog()) logger.debug("NioPathWatcher unregistered " + path)
+    if (logger.shouldLog()) logger.debug(this + " unregistered " + path)
   }
 
   private def remove(cachedDirectory: CachedDirectory[WatchedDirectory], path: Path): Unit = {
@@ -318,7 +316,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
   private def handleOverflow(overflow: Overflow): Unit = {
     val path: Path = overflow.getPath
     if (logger.shouldLog())
-      logger.debug("NioPathWatcher received overflow for " + path)
+      logger.debug(this + " received overflow for " + path)
     val events: List[Event] = new ArrayList[Event]()
     if (rootDirectories.lock()) {
       try {
@@ -372,8 +370,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
   }
 
   private def handleEvent(event: Event): Unit = {
-    if (logger.shouldLog())
-      logger.debug("NioPathWatcher received event " + event)
+    if (logger.shouldLog()) logger.debug(this + " received event " + event)
     val events: List[Event] = new ArrayList[Event]()
     if (!closed.get && rootDirectories.lock()) {
       try if (directoryRegistry.acceptPrefix(event.getTypedPath.getPath)) {

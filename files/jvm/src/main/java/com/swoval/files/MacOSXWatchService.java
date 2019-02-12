@@ -67,7 +67,7 @@ class MacOSXWatchService implements RegisterableWatchService {
         public void accept(final FileEvent fileEvent) {
           final Path path = Paths.get(fileEvent.fileName);
           if (logger.shouldLog())
-            logger.debug("MacOSXWatchService received event for path " + fileEvent.fileName);
+            logger.debug(this + " received event for path " + fileEvent.fileName);
           final WatchKey childKeys = registered.get(path);
           final WatchKey watchKey =
               childKeys == null ? registered.get(path.getParent()) : childKeys;
@@ -89,7 +89,7 @@ class MacOSXWatchService implements RegisterableWatchService {
             }
           } else {
             if (logger.shouldLog())
-              logger.debug("MacOSXWatchService dropping event for unregistered path " + path);
+              logger.debug(this + " dropping event for unregistered path " + path);
           }
         }
       };
@@ -210,7 +210,7 @@ class MacOSXWatchService implements RegisterableWatchService {
           result = new MacOSXWatchKey(realPath, queueSize, Handles.INVALID, kinds);
           watchKey.add(result);
         }
-        if (logger.shouldLog()) logger.debug("MacOSXWatchService registered path " + path);
+        if (logger.shouldLog()) logger.debug(this + " registered path " + path);
         return result;
       } finally {
         registered.unlock();
@@ -365,7 +365,7 @@ class MacOSXWatchService implements RegisterableWatchService {
 
     void createEvent(final WatchEvent.Kind<Path> kind, final Path file) {
       if (logger.shouldLog())
-        logger.debug("MacOSXWatchService creating event for " + file + " with kind " + kind);
+        logger.debug(this + " creating event for " + file + " with kind " + kind);
       Event<Path> event = new Event<>(kind, 1, watchable.relativize(file));
       addEvent(event);
     }

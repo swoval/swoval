@@ -77,6 +77,8 @@ class ApplePathWatcher(private val latency: java.lang.Long,
   private val fileEventMonitor: FileEventMonitor = FileEventMonitors.get(
     new Consumer[FileEvent]() {
       override def accept(fileEvent: FileEvent): Unit = {
+        if (logger.shouldLog())
+          logger.debug(this + " received event for " + fileEvent.fileName)
         if (!closed.get) {
           val fileName: String = fileEvent.fileName
           val path: TypedPath = TypedPaths.get(Paths.get(fileName))
@@ -91,9 +93,15 @@ class ApplePathWatcher(private val latency: java.lang.Long,
                 else new Event(path, Modify)
               else if (path.exists()) new Event(path, Modify)
               else new Event(path, Delete)
-            try observers.onNext(event)
-            catch {
-              case e: Exception => observers.onError(e)
+            try {
+              if (logger.shouldLog())
+                logger.debug(this + " passing " + event + " to observers")
+              observers.onNext(event)
+            } catch {
+              case e: Exception => {
+                logger.debug(this + " invoking onError for " + e)
+                observers.onError(e)
+              }
 
             }
           }
@@ -171,9 +179,7 @@ class ApplePathWatcher(private val latency: java.lang.Long,
       }
     }
     if (logger.shouldLog())
-      logger.debug(
-        "ApplePathWatcher registered " + path + " with max depth " +
-          maxDepth)
+      logger.debug(this + " registered " + path + " with max depth " + maxDepth)
     Either.right(result)
   }
 
@@ -225,7 +231,7 @@ class ApplePathWatcher(private val latency: java.lang.Long,
    */
   override def close(): Unit = {
     if (closed.compareAndSet(false, true)) {
-      if (logger.shouldLog()) logger.debug("Closed ApplePathWatcher " + this)
+      if (logger.shouldLog()) logger.debug(this + " closed")
       appleFileEventStreams.clear()
       fileEventMonitor.close()
     }

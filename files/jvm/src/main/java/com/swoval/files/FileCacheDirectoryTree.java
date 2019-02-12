@@ -183,7 +183,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         directories.unlock();
       }
     }
-    if (logger.shouldLog()) logger.debug("FileCacheDirectoryTree unregistered " + path);
+    if (logger.shouldLog()) logger.debug(this + " unregistered " + path);
   }
 
   private CachedDirectory<T> find(final Path path) {
@@ -233,7 +233,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
 
   @SuppressWarnings("EmptyCatchBlock")
   void handleEvent(final Event event) {
-    if (logger.shouldLog()) logger.debug("FileCacheDirectoryTree received event " + event);
+    if (logger.shouldLog()) logger.debug(this + " received event " + event);
     final TypedPath typedPath = event.getTypedPath();
     final List<TypedPath> symlinks = new ArrayList<>();
     final List<Callback> callbacks = new ArrayList<>();
@@ -249,6 +249,9 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
                       ? typedPath
                       : TypedPaths.get(typedPath.getPath(), Entries.LINK);
               final boolean rescan = rescanOnDirectoryUpdate || event.getKind().equals(Overflow);
+              if (logger.shouldLog())
+                logger.debug(
+                    this + " updating " + updatePath.getPath() + " in " + dir.getTypedPath());
               dir.update(updatePath, rescan).observe(callbackObserver(callbacks, symlinks));
             } catch (final IOException e) {
               handleDelete(path, callbacks, symlinks);
@@ -359,7 +362,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         directories.unlock();
       }
     }
-    if (logger.shouldLog()) logger.debug("FileCacheDirectoryTree " + this + " was closed");
+    if (logger.shouldLog()) logger.debug(this + " was closed");
   }
 
   CachedDirectory<T> register(
@@ -408,7 +411,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         }
         cleanupDirectories(absolutePath, maxDepth);
         if (logger.shouldLog())
-          logger.debug("FileCacheDirectoryTree registered " + path + " with max depth " + maxDepth);
+          logger.debug(this + " registered " + path + " with max depth " + maxDepth);
         return dir;
       } finally {
         directories.unlock();

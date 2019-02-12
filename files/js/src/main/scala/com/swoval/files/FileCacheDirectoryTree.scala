@@ -147,8 +147,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         }
       } finally directories.unlock()
     }
-    if (logger.shouldLog())
-      logger.debug("FileCacheDirectoryTree unregistered " + path)
+    if (logger.shouldLog()) logger.debug(this + " unregistered " + path)
   }
 
   private def find(path: Path): CachedDirectory[T] = {
@@ -191,8 +190,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
   }
 
   def handleEvent(event: Event): Unit = {
-    if (logger.shouldLog())
-      logger.debug("FileCacheDirectoryTree received event " + event)
+    if (logger.shouldLog()) logger.debug(this + " received event " + event)
     val typedPath: TypedPath = event.getTypedPath
     val symlinks: List[TypedPath] = new ArrayList[TypedPath]()
     val callbacks: List[Callback] = new ArrayList[Callback]()
@@ -321,8 +319,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         pendingFiles.clear()
       } finally directories.unlock()
     }
-    if (logger.shouldLog())
-      logger.debug("FileCacheDirectoryTree " + this + " was closed")
+    if (logger.shouldLog()) logger.debug(this + " was closed")
   }
 
   def register(path: Path,
@@ -379,9 +376,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         }
         cleanupDirectories(absolutePath, maxDepth)
         if (logger.shouldLog())
-          logger.debug(
-            "FileCacheDirectoryTree registered " + path + " with max depth " +
-              maxDepth)
+          logger.debug(this + " registered " + path + " with max depth " + maxDepth)
         dir
       } finally directories.unlock()
     } else {

@@ -89,7 +89,7 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
       final Either<IOException, Boolean> res =
           Either.right(watcher.register(absolutePath, maxDepth));
       if (logger.shouldLog())
-        logger.debug("FileTreeRepository registered " + path + " with max depth " + maxDepth);
+        logger.debug(this + " registered " + path + " with max depth " + maxDepth);
       return res;
     } catch (final IOException e) {
       return Either.left(e);

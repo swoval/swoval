@@ -31,9 +31,9 @@ class Loggers {
     synchronized (lock) {
       if (debug == null) {
         final boolean debug = Boolean.getBoolean("swoval.debug");
+        String className = System.getProperty("swoval.debug.logger");
         Logger impl = null;
-        if (debug) {
-          final String className = System.getProperty("swoval.debug.logger");
+        if (debug || className != null) {
           if (className != null) {
             try {
               final Class<Logger> clazz = (Class<Logger>) Class.forName(className);

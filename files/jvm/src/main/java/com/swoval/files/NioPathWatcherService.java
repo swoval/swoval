@@ -54,6 +54,7 @@ class NioPathWatcherService implements AutoCloseable {
               }
             });
     final CountDownLatch latch = new CountDownLatch(1);
+    final String prefix = this.toString();
     loopThread =
         new Thread("NioPathWatcher-loop-thread-" + threadId.incrementAndGet()) {
           @Override
@@ -73,10 +74,7 @@ class NioPathWatcherService implements AutoCloseable {
                   final WatchEvent.Kind<?> k = e.kind();
                   if (logger.shouldLog())
                     logger.debug(
-                        "NioPathWatcherService received event for path "
-                            + e.context()
-                            + " with kind "
-                            + k);
+                        prefix + " received event for path " + e.context() + " with kind " + k);
                   if (OVERFLOW.equals(k)) {
                     final Either<Overflow, Event> result =
                         Either.left(new Overflow((Path) key.watchable()));
@@ -117,6 +115,7 @@ class NioPathWatcherService implements AutoCloseable {
     @Override
     public void close() {
       if (!isShutdown.get() && closed.compareAndSet(false, true)) {
+        if (logger.shouldLog()) logger.debug(this + " stopping watch");
         watchedDirectoriesByPath.remove(path);
         key.reset();
         key.cancel();
@@ -131,6 +130,7 @@ class NioPathWatcherService implements AutoCloseable {
 
   Either<IOException, WatchedDirectory> register(final Path path) {
     Either<IOException, WatchedDirectory> result;
+    if (logger.shouldLog()) logger.debug(this + " registering " + path);
     try {
       if (watchedDirectoriesByPath.lock()) {
         try {
@@ -138,8 +138,10 @@ class NioPathWatcherService implements AutoCloseable {
           if (previousWatchedDirectory == null) {
             final WatchedDirectory watchedDirectory = new CachedWatchDirectory(path);
             watchedDirectoriesByPath.put(path, watchedDirectory);
+            if (logger.shouldLog()) logger.debug(this + " creating new watch key for " + path);
             result = Either.right(watchedDirectory);
           } else {
+            if (logger.shouldLog()) logger.debug(this + " using existing watch key for " + path);
             result = Either.right(previousWatchedDirectory);
           }
         } finally {
@@ -153,6 +155,11 @@ class NioPathWatcherService implements AutoCloseable {
     } catch (final IOException e) {
       result = Either.left(e);
     }
+    if (logger.shouldLog())
+      logger.debug(
+          this
+              + (" registration for " + path + " ")
+              + (result.isLeft() ? "failed (" + result + ")" : "succeeded"));
     return result;
   }
 

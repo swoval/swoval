@@ -68,8 +68,7 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
     override def onError(t: Throwable): Unit = {}
 
     override def onNext(event: Event): Unit = {
-      if (logger.shouldLog())
-        logger.debug("SymlinkWatcher received event " + event)
+      if (logger.shouldLog()) logger.debug(this + " received event " + event)
       if (!isClosed.get) {
         val paths: List[Path] = new ArrayList[Path]()
         val path: Path = event.getTypedPath.getPath
@@ -175,7 +174,7 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
       } else {
         if (logger.shouldLog())
           logger.debug(
-            "SymlinkWatcher adding link " + path + " with max depth " +
+            this + " SymlinkWatcher adding link " + path + " with max depth " +
               maxDepth)
         if (watchedSymlinksByTarget.lock()) {
           try {
@@ -228,7 +227,7 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event])
             }
           }
           if (logger.shouldLog())
-            logger.debug("SymlinkWatcher stopped monitoring link " + path)
+            logger.debug(this + " stopped monitoring link " + path)
         } finally watchedSymlinksByTarget.unlock()
       }
     }
