@@ -149,14 +149,14 @@ object AllTests {
           result.leaves.map(_.value).foreach {
             case Failure(e) =>
               System.err.println(s"Tests failed. Dumping output.")
-              outputStreams.get(n).foreach(s => System.err.println(s.content.toString))
+              outputStreams.get(n).foreach(s => s.printContent(System.err))
               failure.compareAndSet(None, Some(e))
             case _ =>
           }
         case (n, Failure(e)) =>
           completed.add(n)
           System.err.println(s"Tests failed. Dumping output.")
-          outputStreams.get(n).foreach(s => System.err.println(s.content.toString))
+          outputStreams.get(n).foreach(s => s.printContent(System.err))
           failure.compareAndSet(None, Some(e))
       }
     }
