@@ -588,7 +588,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   private CachedDirectory<T> newCachedDirectory(final Path path, final int depth)
       throws IOException {
     int attempt = 1;
-    int MAX_ATTEMPTS = 10;
+    int MAX_ATTEMPTS = 3;
     CachedDirectory<T> result = null;
     do {
       try {
@@ -597,11 +597,13 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
                 .init();
       } catch (final NoSuchFileException | NotDirectoryException e) {
         throw e;
-      } catch (final IOException e) {
-        try {
-          Sleep.sleep(0);
-        } catch (final InterruptedException ie) {
-          throw e;
+      } catch (final AccessDeniedException e) {
+        if (Platform.isWin()) {
+          try {
+            Sleep.sleep(0);
+          } catch (final InterruptedException ie) {
+            throw e;
+          }
         }
       }
       attempt += 1;
