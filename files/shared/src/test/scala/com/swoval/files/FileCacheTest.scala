@@ -15,7 +15,7 @@ import utest._
 import scala.collection.JavaConverters._
 
 trait FileCacheTest { self: TestSuite =>
-  val factory: (DirectoryRegistry) => PathWatcher[Event]
+  val factory: DirectoryRegistry => PathWatcher[Event]
   def identity: Converter[Path] = (_: TypedPath).getPath
 
   def simpleCache(f: Entry[Path] => Unit): FileTreeRepository[Path] =
@@ -73,7 +73,7 @@ object FileCacheTest {
       followLinks: Boolean,
       converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeDataViews.CacheObserver[T],
-      watcherFactory: (DirectoryRegistry) => PathWatcher[PathWatchers.Event])
+      watcherFactory: DirectoryRegistry => PathWatcher[PathWatchers.Event])
     : FileTreeRepository[T] = {
     val symlinkWatcher =
       if (followLinks) new SymlinkWatcher(watcherFactory(new DirectoryRegistryImpl)) else null
