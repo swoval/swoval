@@ -55,14 +55,6 @@ object Build {
       licenses += ("MIT", url("https://opensource.org/licenses/MIT")),
       scalacOptions ++= Seq("-feature"),
       publishMavenStyle in publishLocal := false,
-      setProp := {
-        val args = Def.spaceDelimited("<arg>").parsed
-        val Array(key, value) = args.toArray match {
-          case Array(prop) => prop.split("=")
-          case s           => s
-        }
-        System.setProperty(key, value)
-      },
       publishTo := {
         val p = publishTo.value
         if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true"))
@@ -194,6 +186,14 @@ object Build {
     .enablePlugins(CrossPerProjectPlugin)
     .aggregate(projects: _*)
     .settings(
+      setProp := {
+        val args = Def.spaceDelimited("<arg>").parsed
+        val Array(key, value) = args.toArray match {
+          case Array(prop) => prop.split("=")
+          case s           => s
+        }
+        System.setProperty(key, value)
+      },
       crossScalaVersions := scalaCrossVersions,
       version := baseVersion,
       publishSigned := {},
