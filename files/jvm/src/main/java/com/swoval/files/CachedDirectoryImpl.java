@@ -41,7 +41,6 @@ import java.util.concurrent.atomic.AtomicReference;
 class CachedDirectoryImpl<T> implements CachedDirectory<T> {
   private final AtomicReference<Entry<T>> _cacheEntry;
   private final int depth;
-  private final TypedPath typedPath;
   private final FileTreeView fileTreeView;
   private final boolean followLinks;
   private final Converter<T> converter;
@@ -60,12 +59,10 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
       final Filter<? super TypedPath> filter,
       final boolean followLinks,
       final FileTreeView fileTreeView) {
-    this.typedPath = typedPath;
     this.converter = converter;
     this.depth = depth;
-    this._cacheEntry = new AtomicReference<>(null);
+    this._cacheEntry = new AtomicReference<>(Entries.get(typedPath, converter, typedPath));
     this.pathFilter = filter;
-    this._cacheEntry.set(Entries.get(this.typedPath, converter, this.typedPath));
     this.fileTreeView = fileTreeView;
     this.followLinks = followLinks;
   }
@@ -98,12 +95,12 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
 
   @Override
   public Path getPath() {
-    return typedPath.getPath();
+    return getTypedPath().getPath();
   }
 
   @Override
   public TypedPath getTypedPath() {
-    return typedPath;
+    return getEntry().getTypedPath();
   }
 
   @Override
@@ -557,7 +554,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
   }
 
   CachedDirectoryImpl<T> init() throws IOException {
-    return init(typedPath.getPath());
+    return init(getTypedPath().getPath());
   }
 
   private CachedDirectoryImpl<T> init(final Path realPath) throws IOException {
@@ -572,7 +569,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
           while (it.hasNext()) {
             final TypedPath file = it.next();
             final Path path = file.getPath();
-            final Path key = this.typedPath.getPath().relativize(path).getFileName();
+            final Path key = this.getTypedPath().getPath().relativize(path).getFileName();
             if (file.isDirectory()) {
               if (depth > 0) {
                 if (!file.isSymbolicLink() || !isLoop(path, TypedPaths.expanded(file))) {

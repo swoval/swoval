@@ -76,6 +76,8 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
 
       override def onDelete(oldEntry: FileTreeDataViews.Entry[WatchedDirectory]): Unit = {
         if (oldEntry.getValue.isRight) {
+          if (logger.shouldLog())
+            logger.debug(this + " closing key for " + oldEntry.getTypedPath.getPath)
           oldEntry.getValue.get.close()
         }
         events.add(new Event(oldEntry.getTypedPath, Delete))

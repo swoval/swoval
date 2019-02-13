@@ -100,9 +100,11 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
   private val logger: DebugLogger = Loggers.getDebug
 
   if (symlinkWatcher != null) {
+    val log: Boolean =
+      System.getProperty("swoval.symlink.debug", "false").==("true")
     symlinkWatcher.addObserver(new Observer[Event]() {
       override def onError(t: Throwable): Unit = {
-        t.printStackTrace(System.err)
+        if (log) t.printStackTrace(System.err)
       }
 
       override def onNext(event: Event): Unit = {
@@ -216,6 +218,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                 if ((followLinks || !typedPath.isSymbolicLink)) typedPath
                 else TypedPaths.get(typedPath.getPath, Entries.LINK)
               val rescan: Boolean = rescanOnDirectoryUpdate || event.getKind == Overflow
+              if (logger.shouldLog())
+                logger.debug(this + " updating " + updatePath.getPath + " in " + dir.getTypedPath)
               dir
                 .update(updatePath, rescan)
                 .observe(callbackObserver(callbacks, symlinks))
@@ -527,7 +531,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
 
   private def newCachedDirectory(path: Path, depth: Int): CachedDirectory[T] = {
     var attempt: Int = 1
-    val MAX_ATTEMPTS: Int = 10
+    val MAX_ATTEMPTS: Int = 3
     var result: CachedDirectory[T] = null
     do {
       try result =
@@ -535,7 +539,10 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
       catch {
         case e @ (_: NoSuchFileException | _: NotDirectoryException) => throw e
 
-        case e: IOException => Sleep.sleep(0)
+        case e: AccessDeniedException =>
+          if (Platform.isWin) {
+            Sleep.sleep(0)
+          }
 
       }
       attempt += 1
