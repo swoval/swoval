@@ -120,11 +120,12 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
     this.followLinks = symlinkWatcher != null;
     this.rescanOnDirectoryUpdate = rescanOnDirectoryUpdate;
     if (symlinkWatcher != null) {
+      final boolean log = System.getProperty("swoval.symlink.debug", "false").equals("true");
       symlinkWatcher.addObserver(
           new Observer<Event>() {
             @Override
             public void onError(final Throwable t) {
-              t.printStackTrace(System.err);
+              if (log) t.printStackTrace(System.err);
             }
 
             @Override
