@@ -388,37 +388,39 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
           }
         }
       }
-      'replaced - withTempFile { file =>
-        val dir = file.getParent
-        val deletionLatch = new CountDownLatch(2)
-        val newFileLatch = new CountDownLatch(1)
-        val newFile = dir.resolve("new-file")
-        val observer = new FileTreeDataViews.CacheObserver[Path] {
-          override def onCreate(newEntry: Entry[Path]): Unit = {
-            if (newEntry.path == newFile) newFileLatch.countDown()
+      'replaced - withTempDirectory { root =>
+        val dir = root.resolve("register-replace").createDirectories()
+        withTempFile(dir) { file =>
+          val deletionLatch = new CountDownLatch(2)
+          val newFileLatch = new CountDownLatch(1)
+          val newFile = dir.resolve("new-file")
+          val observer = new FileTreeDataViews.CacheObserver[Path] {
+            override def onCreate(newEntry: Entry[Path]): Unit = {
+              if (newEntry.path == newFile) newFileLatch.countDown()
+            }
+
+            override def onDelete(oldEntry: Entry[Path]): Unit =
+              if (oldEntry.path == dir || oldEntry.path == file) deletionLatch.countDown()
+
+            override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
+
+            override def onError(exception: IOException): Unit = {}
           }
-
-          override def onDelete(oldEntry: Entry[Path]): Unit =
-            if (oldEntry.path == dir || oldEntry.path == file) deletionLatch.countDown()
-
-          override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
-
-          override def onError(exception: IOException): Unit = {}
-        }
-        usingAsync(FileCacheTest.getCached(false, identity, observer)) { c =>
-          c.reg(dir)
-          c.ls(dir) === Seq(file)
-          dir.deleteRecursive()
-          deletionLatch
-            .waitFor(DEFAULT_TIMEOUT) {
-              c.ls(dir) === Seq.empty[Path]
-              newFile.createFile(mkdirs = true)
-            }
-            .flatMap { _ =>
-              newFileLatch.waitFor(DEFAULT_TIMEOUT) {
-                c.ls(dir) === Seq(newFile)
+          usingAsync(FileCacheTest.getCached(false, identity, observer)) { c =>
+            c.reg(dir)
+            c.ls(dir) === Seq(file)
+            dir.deleteRecursive()
+            deletionLatch
+              .waitFor(DEFAULT_TIMEOUT) {
+                c.ls(dir) === Seq.empty[Path]
+                newFile.createFile(mkdirs = true)
               }
-            }
+              .flatMap { _ =>
+                newFileLatch.waitFor(DEFAULT_TIMEOUT) {
+                  c.ls(dir) === Seq(newFile)
+                }
+              }
+          }
         }
       }
     }
