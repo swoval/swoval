@@ -112,7 +112,7 @@ object AllTests {
       1 + (uniform * (uniform + 1)) / n
     }
     print(s"Iteration $count (group size $groupSize)...")
-    tests.grouped(1) foreach { group =>
+    tests.grouped(groupSize) foreach { group =>
       new Thread(s"${group.map(_._2)} test thread") {
         setDaemon(true)
         start()
