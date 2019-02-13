@@ -11,7 +11,6 @@ import com.swoval.files.TestHelpers.EntryOps._
 import com.swoval.files.TestHelpers._
 import com.swoval.files.test._
 import com.swoval.functional.Filters.AllPass
-import com.swoval.logging.Logger
 import com.swoval.runtime.Platform
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
@@ -29,6 +28,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
     'directory - {
       'subdirectories - {
         'callback - withTempDirectory { dir =>
+          implicit val logger: TestLogger = new CachingLogger
           val events = new ArrayBlockingQueue[Path](2)
           val eventSet = mutable.Set.empty[Path]
           usingAsync(simpleCache((cacheEntry: Entry[Path]) =>
@@ -53,6 +53,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
     'files - {
       'register - {
         'existing - withTempFile { f =>
+          implicit val logger: TestLogger = new CachingLogger
           val parent = f.getParent
           using(simpleCache(ignore)) { c =>
             c.reg(parent)
@@ -62,6 +63,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
         'monitor - {
           'new - {
             'files - withTempDirectory { dir =>
+              implicit val logger: TestLogger = new CachingLogger
               val latch = new CountDownLatch(1)
               val file = dir.resolve("file")
               usingAsync(simpleCache((e: Entry[Path]) => {
@@ -75,6 +77,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
               }
             }
             'directories - withTempDirectory { dir =>
+              implicit val logger: TestLogger = new CachingLogger
               val latch = new CountDownLatch(1)
               usingAsync(
                 simpleCache((e: Entry[Path]) => if (e.path.getParent == dir) latch.countDown())) {
@@ -90,6 +93,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
           }
         }
         'move - withTempDirectory { dir =>
+          implicit val logger: TestLogger = new CachingLogger
           val latch = new CountDownLatch(1)
           val initial = dir createTempFile "move"
           val moved = Paths.get(s"${initial.toString}.moved")
@@ -97,7 +101,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
           val onUpdate = ignoreOld[Path](ignore)
           val onError = (_: IOException) => {}
           val observer = getObserver(onChange, onUpdate, onChange, onError)
-          usingAsync(FileCacheTest.getCached(false, identity, observer, logger)) { c =>
+          usingAsync(FileCacheTest.getCached(false, identity, observer)) { c =>
             c.reg(dir, recursive = false)
             c.ls(dir, recursive = false) === Seq(initial)
             initial.renameTo(moved)
@@ -106,11 +110,11 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
             }
           }
         }
-
       }
     }
     'register - {
       'nonRecursive - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         withTempDirectory(dir) { subdir =>
           val latch = new CountDownLatch(1)
           val file = subdir.resolve("file")
@@ -128,6 +132,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
       }
       'depth - {
         'initial - {
+          implicit val logger: TestLogger = new CachingLogger
           withTempDirectory { dir =>
             withTempDirectory(dir) { subdir =>
               withTempDirectory(subdir) { nestedSubdir =>
@@ -144,6 +149,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
           }
         }
         'adjacent - withTempDirectory { dir =>
+          implicit val logger: TestLogger = new CachingLogger
           withTempDirectory(dir) { subdir =>
             withTempDirectory(subdir) { nestedSubdir =>
               withTempFile(nestedSubdir) { file =>
@@ -160,6 +166,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
         }
         'overlap - {
           'infinite - withTempDirectory { dir =>
+            implicit val logger: TestLogger = new CachingLogger
             withTempDirectory(dir) { subdir =>
               withTempDirectory(subdir) { nestedSubdir =>
                 withTempFile(nestedSubdir) { file =>
@@ -177,6 +184,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
             }
           }
           'finite - withTempDirectory { dir =>
+            implicit val logger: TestLogger = new CachingLogger
             withTempDirectory(dir) { subdir =>
               withTempDirectory(subdir) { nestedSubdir =>
                 withTempDirectory(nestedSubdir) { nestedNestedSubdir =>
@@ -202,6 +210,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
             }
           }
           'deeplyNested - withTempDirectory { dir =>
+            implicit val logger: TestLogger = new CachingLogger
             withTempDirectory(dir) { subdir =>
               val nestedSubdir = subdir.resolve("nested").createDirectories()
               val deeplyNestedSubdir =
@@ -219,6 +228,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
         }
         'holes - {
           'limit - withTempDirectory { dir =>
+            implicit val logger: TestLogger = new CachingLogger
             withTempDirectory(dir) { subdir =>
               withTempDirectory(subdir) { nestedSubdir =>
                 withTempFile(nestedSubdir) { file =>
@@ -238,6 +248,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
             }
           }
           'unlimited - withTempDirectory { dir =>
+            implicit val logger: TestLogger = new CachingLogger
             withTempDirectory(dir) { subdir =>
               withTempDirectory(subdir) { nestedSubdir =>
                 withTempFile(nestedSubdir) { file =>
@@ -256,6 +267,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
       }
       'recursive - {
         'initially - withTempDirectory { dir =>
+          implicit val logger: TestLogger = new CachingLogger
           withTempDirectory(dir) { subdir =>
             withTempFile(subdir) { f =>
               using(simpleCache(ignore)) { c =>
@@ -266,6 +278,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
           }
         }
         'added - withTempDirectory { dir =>
+          implicit val logger: TestLogger = new CachingLogger
           withTempDirectory(dir) { subdir =>
             withTempFile(subdir) { f =>
               using(simpleCache(ignore)) { c =>
@@ -278,6 +291,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
           }
         }
         'removed - withTempDirectory { dir =>
+          implicit val logger: TestLogger = new CachingLogger
           withTempDirectory(dir) { subdir =>
             withTempFile(subdir) { f =>
               using(simpleCache(ignore)) { c =>
@@ -291,6 +305,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
         }
       }
       'relative - withTempDirectory(targetDir) { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         val latch = new CountDownLatch(1)
         val file = dir.resolve("file")
         val callback =
@@ -304,6 +319,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
         }
       }
       'order - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         withTempDirectory(dir) { subdir =>
           val latch = new CountDownLatch(1)
           val file = subdir.resolve("file")
@@ -323,6 +339,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
     }
     'cache - {
       'update - withTempFile { file =>
+        implicit val logger: TestLogger = new CachingLogger
         val latch = new CountDownLatch(1)
         usingAsync(
           FileCacheTest.getCached[LastModified](
@@ -339,20 +356,20 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
                   latch.countDown()
 
               override def onError(iOException: IOException): Unit = {}
-            },
-            logger
+            }
           )) { c =>
           c.reg(file.getParent, recursive = false)
           val cachedFile: Entry[LastModified] =
             c.ls(file.getParent, recursive = false) match {
-              case Seq(f) if f.path == file => f
-              case p                        => throw new IllegalStateException(p.toString)
+              case s if s.size == 1 && s.head.path == file => s.head
+              case p                                       => throw new IllegalStateException(p.toString)
             }
           val lastModified = cachedFile.value.lastModified
           lastModified ==> file.lastModified
           val updatedLastModified = 3000
           file.setLastModifiedTime(updatedLastModified)
           latch.waitFor(DEFAULT_TIMEOUT) {
+
             val newCachedFile: Entry[LastModified] =
               c.ls(file.getParent, recursive = false) match {
                 case Seq(f) if f.path == file => f
@@ -366,6 +383,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
     }
     'registeredFiles - {
       'exists - withTempFile { file =>
+        implicit val logger: TestLogger = new CachingLogger
         val latch = new CountDownLatch(1)
         usingAsync(simpleCache((e: Entry[Path]) => {
           if (e.path.lastModified == 3000) latch.countDown()
@@ -378,6 +396,8 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
         }
       }
       'absent - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
+        val _ = "DEBUG PLEASE"
         val file = dir.resolve("file")
         val latch = new CountDownLatch(1)
         usingAsync(simpleCache((e: Entry[Path]) => {
@@ -391,6 +411,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
         }
       }
       'replaced - withTempDirectory { root =>
+        implicit val logger: TestLogger = new CachingLogger
         val dir = root.resolve("register-replace").createDirectories()
         withTempFile(dir) { file =>
           val deletionLatch = new CountDownLatch(2)
@@ -408,7 +429,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
 
             override def onError(exception: IOException): Unit = {}
           }
-          usingAsync(FileCacheTest.getCached(false, identity, observer, logger)) { c =>
+          usingAsync(FileCacheTest.getCached(false, identity, observer)) { c =>
             c.reg(dir)
             c.ls(dir) === Seq(file)
             dir.deleteRecursive()
@@ -429,6 +450,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
     'list - {
       'entries - {
         'file - withTempFile { file =>
+          implicit val logger: TestLogger = new CachingLogger
           using(simpleCache(ignore)) { c =>
             c.reg(file)
             c.ls(file) === Seq(file)
@@ -437,6 +459,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
         }
         'directory - {
           'empty - withTempDirectory { dir =>
+            implicit val logger: TestLogger = new CachingLogger
             using(simpleCache(ignore)) { c =>
               c.reg(dir)
               c.ls(dir) === Seq.empty[Path]
@@ -444,6 +467,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
             }
           }
           'nonEmpty - withTempFile { file =>
+            implicit val logger: TestLogger = new CachingLogger
             val dir = file.getParent
             using(simpleCache(ignore)) { c =>
               c.reg(dir)
@@ -452,6 +476,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
             }
           }
           'limit - withTempFile { file =>
+            implicit val logger: TestLogger = new CachingLogger
             val dir = file.getParent
             using(simpleCache(ignore)) { c =>
               c.register(dir, -1)
@@ -459,16 +484,20 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
               c.list(dir, 0, AllPass).asScala.toSeq.map(_.getPath).headOption ==> Some(dir)
             }
           }
-          'nonExistent - using(simpleCache(ignore)) { c =>
-            val dir = Paths.get("/foo")
-            c.ls(dir) === Seq.empty[Path]
-            c.list(dir, 0, AllPass).asScala.toSeq === Seq.empty[TypedPath]
+          'nonExistent - {
+            implicit val logger: TestLogger = new CachingLogger
+            using(simpleCache(ignore)) { c =>
+              val dir = Paths.get("/foo")
+              c.ls(dir) === Seq.empty[Path]
+              c.list(dir, 0, AllPass).asScala.toSeq === Seq.empty[TypedPath]
+            }
           }
         }
       }
     }
     'callbacks - {
       'add - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         val file = dir.resolve("file")
         val creationLatch = new CountDownLatch(1)
         val updateLatch = new CountDownLatch(1)
@@ -502,6 +531,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
         }
       }
       'remove - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         val latch = new CountDownLatch(1)
         var secondObserverFired = false
         val file = dir.resolve("file")
@@ -524,19 +554,21 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
     }
     'unregister - {
       'noop - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         using(simpleCache(ignore)) { c =>
           c.unregister(dir)
           c.ls(dir) === Seq.empty[Path]
         }
       }
       'simple - withTempDirectory { root =>
+        implicit val logger: TestLogger = new CachingLogger
         val dir = root.resolve("unregister").createDirectories()
         val file = dir.resolve("simple").createFile()
         val latch = new CountDownLatch(1)
         usingAsync(
           lastModifiedCache(true)(
             ignore,
-            ignoreOld { (newEntry: Entry[LastModified]) =>
+            ignoreOld { newEntry: Entry[LastModified] =>
               if (newEntry.value.lastModified == 3000) latch.countDown()
             },
             ignore
@@ -557,13 +589,14 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
         }
       }
       'covered - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         withTempDirectory(dir) { subdir =>
           withTempFile(subdir) { file =>
             val latch = new CountDownLatch(1)
             val secondLatch = new CountDownLatch(1)
             usingAsync(lastModifiedCache(true)(
               ignore,
-              ignoreOld { (newEntry: Entry[LastModified]) =>
+              ignoreOld { newEntry: Entry[LastModified] =>
                 newEntry.value.lastModified match {
                   case 3000 => latch.countDown()
                   case 4000 => secondLatch.countDown()

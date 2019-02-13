@@ -24,6 +24,7 @@ import com.swoval.files.FileTreeDataViews.CacheObserver
 trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
   val testsImpl = Tests {
     'initial - withTempDirectory { dir =>
+      implicit val logger: TestLogger = new CachingLogger
       withTempFile { file =>
         val latch = new CountDownLatch(1)
         val link = dir.resolve("link") linkTo file
@@ -37,6 +38,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
       }
     }
     'file - withTempDirectory { dir =>
+      implicit val logger: TestLogger = new CachingLogger
       withTempFile { file =>
         val latch = new CountDownLatch(1)
         val link = dir.resolve("link") linkTo file
@@ -52,6 +54,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
     }
     'directory - {
       'base - withTempDirectory { root =>
+        implicit val logger: TestLogger = new CachingLogger
         val dir = root.resolve("directory_base").createDirectories()
         withTempDirectory { otherDir =>
           val file = otherDir.resolve("file").createFile()
@@ -68,6 +71,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
         }
       }
       'nested - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         withTempDirectory { otherDir =>
           val subdir = otherDir.resolve("subdir").resolve("nested").createDirectories()
           val file = subdir.resolve("file").createFile()
@@ -85,6 +89,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
         }
       }
       'link - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         withTempDirectory { otherDir =>
           val link = otherDir.resolve("link") linkTo dir
           val file = dir.resolve("file").createFile()
@@ -101,6 +106,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
       }
       'loop - {
         'initial - withTempDirectory { dir =>
+          implicit val logger: TestLogger = new CachingLogger
           withTempDirectory { otherDir =>
             dir.resolve("other") linkTo otherDir
             otherDir.resolve("dir") linkTo dir
@@ -113,6 +119,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
         'added - {
           'original - {
             withTempDirectory { root =>
+              implicit val logger: TestLogger = new CachingLogger
               val dir = root.resolve("original").createDirectories()
               withTempDirectory { otherDir =>
                 otherDir.resolve("dir") linkTo dir
@@ -130,6 +137,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
             }
           }
           'symlink - {
+            implicit val logger: TestLogger = new CachingLogger
             withTempDirectory { root =>
               val dir = root.resolve("symlink").createDirectories()
               withTempDirectory { otherDir =>
@@ -151,6 +159,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
         }
       }
       'newLink - withTempDirectory { root =>
+        implicit val logger: TestLogger = new CachingLogger
         val dir = root.resolve("directory_base").createDirectories()
         withTempDirectory { otherRoot =>
           val otherDir = otherRoot.resolve("directory_link").createDirectory()
@@ -189,6 +198,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
       }
     }
     'created - withTempDirectory { dir =>
+      implicit val logger: TestLogger = new CachingLogger
       withTempFile { file =>
         val linkLatch = new CountDownLatch(1)
         val contentLatch = new CountDownLatch(1)
@@ -213,6 +223,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
     }
     'removed - {
       'file - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         withTempFile { file =>
           val linkLatch = new CountDownLatch(1)
           usingAsync(simpleCache((e: Entry[Path]) => {
@@ -232,6 +243,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
         }
       }
       'link - withTempDirectory { root =>
+        implicit val logger: TestLogger = new CachingLogger
         val dir = root.resolve("remove-link").createDirectories()
         withTempFile { file =>
           val linkLatch = new CountDownLatch(1)
@@ -249,8 +261,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
               override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
 
               override def onError(exception: IOException): Unit = {}
-            },
-            logger
+            }
           )) { c =>
             link linkTo file
             c.reg(dir)
@@ -268,6 +279,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
     }
     'noFollow - {
       'initially - withTempDirectory { root =>
+        implicit val logger: TestLogger = new CachingLogger
         val dir = root.resolve("no-follow").createDirectories()
         withTempDirectory { otherDir =>
           val file = otherDir.resolve("file").createFile()
@@ -288,6 +300,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
         }
       }
       'updated - withTempDirectory { root =>
+        implicit val logger: TestLogger = new CachingLogger
         val dir = root.resolve("no-follow").createDirectories()
         withTempDirectory { otherDir =>
           val file = otherDir.resolve("updated-file").createFile()
@@ -324,6 +337,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
     }
     'multiple - {
       'static - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         val latch = new CountDownLatch(2)
         val paths: mutable.Set[Path] = mutable.Set.empty[Path]
         withTempDirectory { otherDir =>
@@ -341,8 +355,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
                   if (path.getFileName == Paths.get("link") && paths.add(path)) latch.countDown()
                 }
                 override def onError(exception: IOException): Unit = {}
-              },
-              logger
+              }
             )) { c =>
               c.register(dir)
               c.register(otherDir)
@@ -355,6 +368,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
         }
       }
       'removed - withTempDirectory { root =>
+        implicit val logger: TestLogger = new CachingLogger
         val name = FileCacheSymlinkTest.this.getClass.getSimpleName
         val dir = root.resolve(name).resolve("directory-base").createDirectories()
         val updateLatch = new CountDownLatch(1)
@@ -391,8 +405,7 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
                 }
 
                 override def onError(exception: IOException): Unit = {}
-              },
-              logger
+              }
             )) { c =>
               c.register(dir)
               c.register(otherDir)

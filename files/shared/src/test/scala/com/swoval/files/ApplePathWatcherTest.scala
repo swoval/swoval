@@ -34,6 +34,7 @@ object ApplePathWatcherTest extends LoggingTestSuite {
     val dirFlags = new Flags.Create().setNoDefer()
     "directories" - {
       'onCreate - {
+        implicit val logger: TestLogger = new CachingLogger
         withTempDirectory { dir =>
           assert(dir.exists)
           val callback = (e: Event) => events.add(e)
@@ -46,6 +47,7 @@ object ApplePathWatcherTest extends LoggingTestSuite {
         }
       }
       'onModify - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         val callback = (e: Event) => events.add(e)
 
         usingAsync(defaultWatcher(callback)) { w =>
@@ -58,6 +60,7 @@ object ApplePathWatcherTest extends LoggingTestSuite {
         }
       }
       'onDelete - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         val callback = (e: Event) => events.add(e)
 
         usingAsync(defaultWatcher(callback)) { w =>
@@ -69,6 +72,7 @@ object ApplePathWatcherTest extends LoggingTestSuite {
       }
       'subdirectories - {
         'onCreate - withTempDirectory { dir =>
+          implicit val logger: TestLogger = new CachingLogger
           withTempDirectory(dir) { subdir =>
             val callback = (e: Event) => if (e.getTypedPath.getPath != dir) events.add(e)
 

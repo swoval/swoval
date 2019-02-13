@@ -19,6 +19,7 @@ object NioPathWatcherOverflowTest extends LoggingTestSuite {
     val subdirsToAdd = 200
     val executor = Executor.make("NioPathWatcherOverflowTest-executor")
     'overflows - withTempDirectory { dir =>
+      implicit val logger: TestLogger = new CachingLogger
       val subdirs = 1 to subdirsToAdd map { i =>
         dir.resolve(s"subdir-$i")
       }

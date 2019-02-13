@@ -26,9 +26,10 @@ trait PathWatcherTest extends LoggingTestSuite {
   val DEFAULT_LATENCY = 5.milliseconds
   val fileFlags = new Flags.Create().setNoDefer().setFileEvents()
   def checkModified(e: Event): Boolean = e.getKind == Modify
-  def defaultWatcher(callback: PathWatchers.Event => _,
-                     followLinks: Boolean = false): PathWatcher[PathWatchers.Event]
+  def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean = false)(
+      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event]
   def unregisterTest(followLinks: Boolean): Future[Unit] = withTempDirectory { root =>
+    implicit val logger: TestLogger = new CachingLogger
     val base = root.resolve("unregister").createDirectory()
     val dir = base.resolve("nested").createDirectory()
     val firstLatch = new CountDownLatch(1)
@@ -67,6 +68,7 @@ trait PathWatcherTest extends LoggingTestSuite {
     val events = new ArrayBlockingQueue[PathWatchers.Event](10)
     'files - {
       'onCreate - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         val callback = (e: PathWatchers.Event) => {
           if (e.path.endsWith("foo")) events.add(e)
         }
@@ -78,6 +80,7 @@ trait PathWatcherTest extends LoggingTestSuite {
         }
       }
       'onTouch - withTempFile { f =>
+        implicit val logger: TestLogger = new CachingLogger
         val callback =
           (e: PathWatchers.Event) =>
             if (e.path == f && checkModified(e) && f.lastModified == 3000L)
@@ -89,6 +92,7 @@ trait PathWatcherTest extends LoggingTestSuite {
         }
       }
       'onModify - withTempFile { f =>
+        implicit val logger: TestLogger = new CachingLogger
         val callback =
           (e: PathWatchers.Event) =>
             if (e.path == f && checkModified(e) && f.read == "hello")
@@ -102,6 +106,7 @@ trait PathWatcherTest extends LoggingTestSuite {
       }
       'onDelete - {
         'file - withTempFile { f =>
+          implicit val logger: TestLogger = new CachingLogger
           val callback = (e: PathWatchers.Event) => {
             if (!e.path.exists && e.getKind == Delete && e.path == f)
               events.add(e)
@@ -115,6 +120,7 @@ trait PathWatcherTest extends LoggingTestSuite {
           }
         }
         'directory - withTempDirectory { dir =>
+          implicit val logger: TestLogger = new CachingLogger
           val callback = (e: PathWatchers.Event) => {
             if (!e.path.exists && e.getKind == Delete && e.path == dir)
               events.add(e)
@@ -129,6 +135,7 @@ trait PathWatcherTest extends LoggingTestSuite {
         }
       }
       'redundant - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         if (Platform.isMac && this != PollingPathWatcherTest) {
           val events = new ArrayBlockingQueue[String](10)
           val callback: Consumer[String] = (stream: String) => events.add(stream)
@@ -157,6 +164,7 @@ trait PathWatcherTest extends LoggingTestSuite {
     }
     'register - {
       'file - withTempFile { file =>
+        implicit val logger: TestLogger = new CachingLogger
         val latch = new CountDownLatch(1)
         val callback = (_: PathWatchers.Event) => latch.countDown()
 
@@ -170,6 +178,7 @@ trait PathWatcherTest extends LoggingTestSuite {
 
       }
       'change - withTempDirectory { root =>
+        implicit val logger: TestLogger = new CachingLogger
         val dir = root.resolve("change").resolve("debug").createDirectories()
         val file = dir.resolve("file").createFile()
         val dirLatch = new CountDownLatch(1)
@@ -200,6 +209,7 @@ trait PathWatcherTest extends LoggingTestSuite {
       }
       'absent - {
         'initially - withTempDirectory { root =>
+          implicit val logger: TestLogger = new CachingLogger
           val dir = root.resolve("initial").resolve("debug").createDirectories()
           val dirLatch = new CountDownLatch(1)
           val fileLatch = new CountDownLatch(1)
@@ -230,6 +240,7 @@ trait PathWatcherTest extends LoggingTestSuite {
         }
       }
       'relative - withTempDirectory(targetDir) { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         val latch = new CountDownLatch(1)
         val file = dir.resolve("file")
         val callback =
@@ -245,6 +256,7 @@ trait PathWatcherTest extends LoggingTestSuite {
     }
     'directory - {
       'delete - (if (Platform.isJVM || Platform.isMac) {
+                   implicit val logger: TestLogger = new CachingLogger
                    withTempDirectory { dir =>
                      withTempDirectory(dir) { subdir =>
                        val deletions = mutable.Set.empty[Path]
@@ -295,6 +307,7 @@ trait PathWatcherTest extends LoggingTestSuite {
     }
     'depth - {
       'limit - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         withTempDirectory(dir) { subdir =>
           val file = subdir.resolve("foo")
           val callback =
@@ -322,6 +335,7 @@ trait PathWatcherTest extends LoggingTestSuite {
       }
       'holes - {
         'connect - withTempDirectory { dir =>
+          implicit val logger: TestLogger = new CachingLogger
           withTempDirectory(dir) { subdir =>
             withTempDirectory(subdir) { secondSubdir =>
               withTempDirectory(secondSubdir) { thirdSubdir =>
@@ -361,6 +375,7 @@ trait PathWatcherTest extends LoggingTestSuite {
           }
         }
         'extend - withTempDirectory { root =>
+          implicit val logger: TestLogger = new CachingLogger
           val dir = root.resolve("extend").resolve("debug").createDirectories()
           withTempDirectory(dir) { subdir =>
             withTempDirectory(subdir) { secondSubdir =>
@@ -407,9 +422,9 @@ trait PathWatcherTest extends LoggingTestSuite {
 object PathWatcherTest extends PathWatcherTest {
   val tests = testsImpl
 
-  override def defaultWatcher(callback: PathWatchers.Event => _,
-                              followLinks: Boolean): PathWatcher[PathWatchers.Event] = {
-    val res = PathWatchers.get(followLinks)
+  override def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean)(
+      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
+    val res = PathWatchers.get(followLinks, new DirectoryRegistryImpl(), testLogger)
     res.addObserver(callback)
     res
   }
@@ -426,9 +441,9 @@ object NioPathWatcherTest extends PathWatcherTest {
         }
       }
 
-  override def defaultWatcher(callback: PathWatchers.Event => _,
-                              followLinks: Boolean): PathWatcher[PathWatchers.Event] = {
-    val res = PlatformWatcher.make(followLinks, new DirectoryRegistryImpl(), logger)
+  override def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean)(
+      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
+    val res = PlatformWatcher.make(followLinks, new DirectoryRegistryImpl(), testLogger)
     res.addObserver(callback)
     res
   }
@@ -437,8 +452,8 @@ object NioPathWatcherTest extends PathWatcherTest {
 object PollingPathWatcherTest extends PathWatcherTest {
   val tests = testsImpl
   override def checkModified(event: PathWatchers.Event): Boolean = event.getKind != Delete
-  override def defaultWatcher(callback: PathWatchers.Event => _,
-                              followLinks: Boolean): PathWatcher[PathWatchers.Event] = {
+  override def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean)(
+      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
     val res = PathWatchers.polling(followLinks, 100, TimeUnit.MILLISECONDS)
     res.addObserver(callback)
     res

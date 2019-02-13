@@ -10,14 +10,15 @@ import com.swoval.test.NotFuture
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ Future, Promise }
-import scala.util.{ Success, Try }
+import scala.language.experimental.macros
+import scala.util.{ Failure, Success, Try }
 
 package object test {
   implicit class FutureOps[R](val f: Future[R]) extends AnyVal {
-    def logOnFailure()(implicit l: Logger): Future[R] =
+    def logOnFailure()(implicit testLogger: TestLogger): Future[R] =
       f.recover {
         case e: Throwable =>
-          l match {
+          testLogger match {
             case cl: CachingLogger => System.err.println(cl.getLines mkString "\n")
             case _                 =>
           }
@@ -25,29 +26,28 @@ package object test {
       }(utest.framework.ExecutionContext.RunNow)
   }
   def using[C <: AutoCloseable, R: NotFuture](closeable: => C)(f: C => R)(
-      implicit l: Logger): Future[R] =
-    com.swoval.test
+      implicit testLogger: TestLogger): Future[R] = {
+    val res = com.swoval.test
       .usingT(closeable)(f)
-      .recover {
-        case e: Throwable =>
-          l match {
-            case cl: CachingLogger => System.err.println(cl.getLines mkString "\n")
-            case _                 =>
-          }
-          throw e
-      }(utest.framework.ExecutionContext.RunNow)
+    res.onComplete {
+      case Success(_) => if ("true" == System.getProperty("swoval.debug")) printLog(testLogger)
+      case Failure(_) => printLog(testLogger)
+    }(utest.framework.ExecutionContext.RunNow)
+    res
+  }
   def usingAsync[C <: AutoCloseable, R](closeable: => C)(f: C => Future[R])(
-      implicit l: Logger): Future[R] =
-    com.swoval.test
-      .usingAsyncT(closeable)(f)
-      .recover {
-        case e: Throwable =>
-          l match {
-            case cl: CachingLogger => System.err.println(cl.getLines mkString "\n")
-            case _                 =>
-          }
-          throw e
-      }(utest.framework.ExecutionContext.RunNow)
+      implicit testLogger: TestLogger): Future[R] = {
+    val res = com.swoval.test.usingAsyncT(closeable)(f)
+    res.onComplete {
+      case Success(_)            => if ("true" == System.getProperty("swoval.debug")) printLog(testLogger)
+      case Failure(_: Throwable) => printLog(testLogger)
+    }(utest.framework.ExecutionContext.RunNow)
+    res
+  }
+  private def printLog(logger: Logger): Unit = logger match {
+    case cl: CachingLogger => System.err.println(cl.getLines mkString "\n")
+    case l_                =>
+  }
   class CountDownLatch(private[this] var i: Int) {
     private[this] val promise = Promise.apply[Boolean]
     private[this] val lock = new Object

@@ -24,18 +24,17 @@ trait FileCacheOverflowTest extends LoggingTestSuite with FileCacheTest {
   def getBounded[T <: AnyRef](
       converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeDataViews.CacheObserver[T]
-  ): FileTreeRepository[T] =
+  )(implicit testLogger: TestLogger): FileTreeRepository[T] =
     FileCacheTest.get[T](
       false,
       converter,
       cacheObserver,
-      (r: DirectoryRegistry) => {
+      (r: DirectoryRegistry, _) => {
         PathWatchers.get(false,
                          new BoundedWatchService(boundedQueueSize, RegisterableWatchServices.get()),
                          r,
-                         logger)
-      },
-      logger
+                         testLogger)
+      }
     )
   private val name = getClass.getSimpleName
 
@@ -58,6 +57,7 @@ trait FileCacheOverflowTest extends LoggingTestSuite with FileCacheTest {
 
   val testsImpl = Tests {
     'overflow - withTempDirectory { root =>
+      implicit val logger: TestLogger = new CachingLogger
       val dir = root.resolve("overflow").resolve(name).createDirectories()
       // Windows is slow (at least on my vm)
       val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
@@ -198,13 +198,13 @@ trait FileCacheOverflowTest extends LoggingTestSuite with FileCacheTest {
   }
 }
 object FileCacheOverflowTest extends FileCacheOverflowTest with DefaultFileCacheTest {
-  private implicit class SyncOps[T](val t: T) extends AnyVal {
+  private implicit class SyncOps[T <: AnyRef](val t: T) extends AnyVal {
     def sync[R](f: T => R): R = t.synchronized(f(t))
   }
-  override def getBounded[T <: AnyRef](
-      converter: FileTreeDataViews.Converter[T],
-      cacheObserver: FileTreeDataViews.CacheObserver[T]): FileTreeRepository[T] =
-    if (Platform.isMac) FileCacheTest.getCached(false, converter, cacheObserver, logger)
+  override def getBounded[T <: AnyRef](converter: FileTreeDataViews.Converter[T],
+                                       cacheObserver: FileTreeDataViews.CacheObserver[T])(
+      implicit logger: TestLogger): FileTreeRepository[T] =
+    if (Platform.isMac) FileCacheTest.getCached(false, converter, cacheObserver)
     else super.getBounded(converter, cacheObserver)
   val tests = testsImpl
 }
