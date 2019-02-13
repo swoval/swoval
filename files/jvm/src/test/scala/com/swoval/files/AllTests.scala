@@ -87,6 +87,7 @@ object AllTests {
   }
   def run(count: Int): Unit = {
     System.gc()
+    val now = System.nanoTime
     def test[T <: LoggingTestSuite](t: T): (Tests, String, T) =
       (t.tests, t.getClass.getCanonicalName, t)
     val tests = Seq(
@@ -160,6 +161,7 @@ object AllTests {
       }
     }
     failure.get.foreach(throw _)
-    println("done.")
+    val elapsed = System.nanoTime - now
+    println(s"done (${elapsed / 1.0e6} ms).")
   }
 }
