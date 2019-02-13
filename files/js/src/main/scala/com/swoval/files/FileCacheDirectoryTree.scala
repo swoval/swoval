@@ -14,11 +14,12 @@ import com.swoval.files.FileTreeDataViews.Entry
 import com.swoval.files.FileTreeDataViews.ObservableCache
 import com.swoval.files.FileTreeRepositoryImpl.Callback
 import com.swoval.files.FileTreeViews.Observer
-import com.swoval.files.FileTreeViews.Updates
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.PathWatchers.Event.Kind
-import com.swoval.functional.Either
 import com.swoval.functional.Filter
+import com.swoval.logging.Logger
+import com.swoval.logging.Loggers
+import com.swoval.logging.Loggers.Level
 import com.swoval.runtime.Platform
 import java.io.IOException
 import java.nio.file.AccessDeniedException
@@ -81,7 +82,8 @@ class FileCachePendingFiles(reentrantLock: ReentrantLock) extends Lockable(reent
 class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                                           private val callbackExecutor: Executor,
                                           val symlinkWatcher: SymlinkWatcher,
-                                          private val rescanOnDirectoryUpdate: Boolean)
+                                          private val rescanOnDirectoryUpdate: Boolean,
+                                          private val logger: Logger)
     extends ObservableCache[T]
     with FileTreeDataView[T] {
 
@@ -96,8 +98,6 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
   private val followLinks: Boolean = symlinkWatcher != null
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
-
-  private val logger: DebugLogger = Loggers.getDebug
 
   if (symlinkWatcher != null) {
     val log: Boolean =
@@ -114,6 +114,12 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
   }
 
   val reentrantLock: ReentrantLock = new ReentrantLock()
+
+  def this(converter: Converter[T],
+           callbackExecutor: Executor,
+           symlinkWatcher: SymlinkWatcher,
+           rescanOnDirectoryUpdate: Boolean) =
+    this(converter, callbackExecutor, symlinkWatcher, rescanOnDirectoryUpdate, Loggers.getLogger)
 
   private val directories: FileCacheDirectories[T] = new FileCacheDirectories(reentrantLock)
 
@@ -160,7 +166,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         }
       } finally directories.unlock()
     }
-    if (logger.shouldLog()) logger.debug(this + " unregistered " + path)
+    if (Loggers.shouldLog(logger, Level.DEBUG))
+      logger.debug(this + " unregistered " + path)
   }
 
   private def find(path: Path): CachedDirectory[T] = {
@@ -196,14 +203,24 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         override def run(): Unit = {
           Collections.sort(callbacks)
           val it: Iterator[Callback] = callbacks.iterator()
-          while (it.hasNext) it.next().run()
+          while (it.hasNext) {
+            val callback: Callback = it.next()
+            if (Loggers.shouldLog(logger, Level.DEBUG))
+              logger.debug(this + " running callback " + callback)
+            try callback.run()
+            catch {
+              case e: Exception => {}
+
+            }
+          }
         }
       })
     }
   }
 
   def handleEvent(event: Event): Unit = {
-    if (logger.shouldLog()) logger.debug(this + " received event " + event)
+    if (Loggers.shouldLog(logger, Level.DEBUG))
+      logger.debug(this + " received event " + event)
     val typedPath: TypedPath = event.getTypedPath
     val symlinks: List[TypedPath] = new ArrayList[TypedPath]()
     val callbacks: List[Callback] = new ArrayList[Callback]()
@@ -218,7 +235,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
                 if ((followLinks || !typedPath.isSymbolicLink)) typedPath
                 else TypedPaths.get(typedPath.getPath, Entries.LINK)
               val rescan: Boolean = rescanOnDirectoryUpdate || event.getKind == Overflow
-              if (logger.shouldLog())
+              if (Loggers.shouldLog(logger, Level.DEBUG))
                 logger.debug(this + " updating " + updatePath.getPath + " in " + dir.getTypedPath)
               dir
                 .update(updatePath, rescan)
@@ -228,12 +245,20 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
 
             }
           } else if (pendingFiles.contains(path)) {
+            if (Loggers.shouldLog(logger, Level.DEBUG))
+              logger.debug(this + " found pending file for " + path)
             try {
               var cachedDirectory: CachedDirectory[T] = null
-              try cachedDirectory = newCachedDirectory(path, directoryRegistry.maxDepthFor(path))
-              catch {
-                case nde: NotDirectoryException =>
+              try {
+                cachedDirectory = newCachedDirectory(path, directoryRegistry.maxDepthFor(path))
+                if (Loggers.shouldLog(logger, Level.DEBUG))
+                  logger.debug(this + " successfully initialiazed directory for " + path)
+              } catch {
+                case nde: NotDirectoryException => {
+                  if (Loggers.shouldLog(logger, Level.DEBUG))
+                    logger.debug(this + " unable to initialize directory for " + path)
                   cachedDirectory = newCachedDirectory(path, -1)
+                }
 
               }
               val previous: CachedDirectory[T] =
@@ -265,6 +290,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
             }
           }
         } else {
+          if (Loggers.shouldLog(logger, Level.DEBUG))
+            logger.debug(this + " deleting directory for " + path)
           handleDelete(path, callbacks, symlinks)
         }
       } finally directories.unlock()
@@ -340,7 +367,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         pendingFiles.clear()
       } finally directories.unlock()
     }
-    if (logger.shouldLog()) logger.debug(this + " was closed")
+    if (Loggers.shouldLog(logger, Level.DEBUG))
+      logger.debug(this + " was closed")
   }
 
   def register(path: Path,
@@ -396,7 +424,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
           dir = existing
         }
         cleanupDirectories(absolutePath, maxDepth)
-        if (logger.shouldLog())
+        if (Loggers.shouldLog(logger, Level.DEBUG))
           logger.debug(this + " registered " + path + " with max depth " + maxDepth)
         dir
       } finally directories.unlock()

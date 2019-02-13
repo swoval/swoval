@@ -32,8 +32,10 @@ trait FileCacheOverflowTest extends LoggingTestSuite with FileCacheTest {
       (r: DirectoryRegistry) => {
         PathWatchers.get(false,
                          new BoundedWatchService(boundedQueueSize, RegisterableWatchServices.get()),
-                         r)
-      }
+                         r,
+                         logger)
+      },
+      logger
     )
   private val name = getClass.getSimpleName
 
@@ -202,7 +204,7 @@ object FileCacheOverflowTest extends FileCacheOverflowTest with DefaultFileCache
   override def getBounded[T <: AnyRef](
       converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeDataViews.CacheObserver[T]): FileTreeRepository[T] =
-    if (Platform.isMac) FileCacheTest.getCached(false, converter, cacheObserver)
+    if (Platform.isMac) FileCacheTest.getCached(false, converter, cacheObserver, logger)
     else super.getBounded(converter, cacheObserver)
   val tests = testsImpl
 }

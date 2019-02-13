@@ -10,6 +10,9 @@ import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Event.Kind;
 import com.swoval.files.SymlinkWatcher.RegisteredPath;
 import com.swoval.functional.Either;
+import com.swoval.logging.Logger;
+import com.swoval.logging.Loggers;
+import com.swoval.logging.Loggers.Level;
 import java.io.IOException;
 import java.nio.file.FileSystemLoopException;
 import java.nio.file.Files;
@@ -38,10 +41,15 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
   private final Observers<Event> observers = new Observers<>();
   private final Executor callbackExecutor =
       Executor.make("com.swoval.files.SymlinkWather.callback-executor");
-  private final DebugLogger logger = Loggers.getDebug();
+  private final Logger logger;
 
   SymlinkWatcher(final PathWatcher<PathWatchers.Event> watcher) {
+    this(watcher, Loggers.getLogger());
+  }
+
+  SymlinkWatcher(final PathWatcher<PathWatchers.Event> watcher, final Logger logger) {
     this.watcher = watcher;
+    this.logger = logger;
     final ReentrantLock reentrantLock = new ReentrantLock();
     watchedSymlinksByTarget = new RegisteredPaths(reentrantLock);
     watcher.addObserver(
@@ -51,7 +59,8 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
 
           @Override
           public void onNext(final Event event) {
-            if (logger.shouldLog()) logger.debug(this + " received event " + event);
+            if (Loggers.shouldLog(logger, Level.DEBUG))
+              logger.debug(this + " received event " + event);
             if (!isClosed.get()) {
               final List<Path> paths = new ArrayList<>();
               final Path path = event.getTypedPath().getPath();
@@ -90,7 +99,7 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
               final Iterator<Path> it = paths.iterator();
               while (it.hasNext()) {
                 final TypedPath typedPath = TypedPaths.get(it.next());
-                if (logger.shouldLog())
+                if (Loggers.shouldLog(logger, Level.DEBUG))
                   logger.debug(
                       "SymlinkWatcher evaluating callback for "
                           + ("link " + typedPath + " to target " + path));
@@ -186,7 +195,7 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
       if (path.startsWith(realPath) && !path.equals(realPath)) {
         throw new FileSystemLoopException(path.toString());
       } else {
-        if (logger.shouldLog())
+        if (Loggers.shouldLog(logger, Level.DEBUG))
           logger.debug(
               this + " SymlinkWatcher adding link " + path + " with max depth " + maxDepth);
         if (watchedSymlinksByTarget.lock()) {
@@ -237,7 +246,8 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
               }
             }
           }
-          if (logger.shouldLog()) logger.debug(this + " stopped monitoring link " + path);
+          if (Loggers.shouldLog(logger, Level.DEBUG))
+            logger.debug(this + " stopped monitoring link " + path);
         } finally {
           watchedSymlinksByTarget.unlock();
         }

@@ -13,11 +13,12 @@ import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.files.FileTreeDataViews.ObservableCache;
 import com.swoval.files.FileTreeRepositoryImpl.Callback;
 import com.swoval.files.FileTreeViews.Observer;
-import com.swoval.files.FileTreeViews.Updates;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Event.Kind;
-import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
+import com.swoval.logging.Logger;
+import com.swoval.logging.Loggers;
+import com.swoval.logging.Loggers.Level;
 import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.AccessDeniedException;
@@ -106,7 +107,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   private final boolean followLinks;
   private final boolean rescanOnDirectoryUpdate;
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private final DebugLogger logger = Loggers.getDebug();
+  private final Logger logger;
   final SymlinkWatcher symlinkWatcher;
 
   FileCacheDirectoryTree(
@@ -114,11 +115,21 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
       final Executor callbackExecutor,
       final SymlinkWatcher symlinkWatcher,
       final boolean rescanOnDirectoryUpdate) {
+    this(converter, callbackExecutor, symlinkWatcher, rescanOnDirectoryUpdate, Loggers.getLogger());
+  }
+
+  FileCacheDirectoryTree(
+      final Converter<T> converter,
+      final Executor callbackExecutor,
+      final SymlinkWatcher symlinkWatcher,
+      final boolean rescanOnDirectoryUpdate,
+      final Logger logger) {
     this.converter = converter;
     this.callbackExecutor = callbackExecutor;
     this.symlinkWatcher = symlinkWatcher;
     this.followLinks = symlinkWatcher != null;
     this.rescanOnDirectoryUpdate = rescanOnDirectoryUpdate;
+    this.logger = logger;
     if (symlinkWatcher != null) {
       final boolean log = System.getProperty("swoval.symlink.debug", "false").equals("true");
       symlinkWatcher.addObserver(
@@ -199,7 +210,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         directories.unlock();
       }
     }
-    if (logger.shouldLog()) logger.debug(this + " unregistered " + path);
+    if (Loggers.shouldLog(logger, Level.DEBUG)) logger.debug(this + " unregistered " + path);
   }
 
   private CachedDirectory<T> find(final Path path) {
@@ -240,7 +251,13 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
               Collections.sort(callbacks);
               final Iterator<Callback> it = callbacks.iterator();
               while (it.hasNext()) {
-                it.next().run();
+                final Callback callback = it.next();
+                if (Loggers.shouldLog(logger, Level.DEBUG))
+                  logger.debug(this + " running callback " + callback);
+                try {
+                  callback.run();
+                } catch (final Exception e) {
+                }
               }
             }
           });
@@ -249,7 +266,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
 
   @SuppressWarnings("EmptyCatchBlock")
   void handleEvent(final Event event) {
-    if (logger.shouldLog()) logger.debug(this + " received event " + event);
+    if (Loggers.shouldLog(logger, Level.DEBUG)) logger.debug(this + " received event " + event);
     final TypedPath typedPath = event.getTypedPath();
     final List<TypedPath> symlinks = new ArrayList<>();
     final List<Callback> callbacks = new ArrayList<>();
@@ -265,7 +282,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
                       ? typedPath
                       : TypedPaths.get(typedPath.getPath(), Entries.LINK);
               final boolean rescan = rescanOnDirectoryUpdate || event.getKind().equals(Overflow);
-              if (logger.shouldLog())
+              if (Loggers.shouldLog(logger, Level.DEBUG))
                 logger.debug(
                     this + " updating " + updatePath.getPath() + " in " + dir.getTypedPath());
               dir.update(updatePath, rescan).observe(callbackObserver(callbacks, symlinks));
@@ -273,11 +290,17 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
               handleDelete(path, callbacks, symlinks);
             }
           } else if (pendingFiles.contains(path)) {
+            if (Loggers.shouldLog(logger, Level.DEBUG))
+              logger.debug(this + " found pending file for " + path);
             try {
               CachedDirectory<T> cachedDirectory;
               try {
                 cachedDirectory = newCachedDirectory(path, directoryRegistry.maxDepthFor(path));
+                if (Loggers.shouldLog(logger, Level.DEBUG))
+                  logger.debug(this + " successfully initialiazed directory for " + path);
               } catch (final NotDirectoryException nde) {
+                if (Loggers.shouldLog(logger, Level.DEBUG))
+                  logger.debug(this + " unable to initialize directory for " + path);
                 cachedDirectory = newCachedDirectory(path, -1);
               }
               final CachedDirectory<T> previous = directories.put(path, cachedDirectory);
@@ -303,6 +326,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
             }
           }
         } else {
+          if (Loggers.shouldLog(logger, Level.DEBUG))
+            logger.debug(this + " deleting directory for " + path);
           handleDelete(path, callbacks, symlinks);
         }
       } finally {
@@ -380,7 +405,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         directories.unlock();
       }
     }
-    if (logger.shouldLog()) logger.debug(this + " was closed");
+    if (Loggers.shouldLog(logger, Level.DEBUG)) logger.debug(this + " was closed");
   }
 
   CachedDirectory<T> register(
@@ -428,7 +453,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
           dir = existing;
         }
         cleanupDirectories(absolutePath, maxDepth);
-        if (logger.shouldLog())
+        if (Loggers.shouldLog(logger, Level.DEBUG))
           logger.debug(this + " registered " + path + " with max depth " + maxDepth);
         return dir;
       } finally {

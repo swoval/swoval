@@ -7,6 +7,7 @@ import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Event.Kind;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
+import com.swoval.logging.Logger;
 import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -19,15 +20,18 @@ class SymlinkFollowingPathWatcher implements PathWatcher<PathWatchers.Event> {
   private final DirectoryRegistry pathWatcherDirectoryRegistry;
 
   SymlinkFollowingPathWatcher(
-      final PathWatcher<PathWatchers.Event> pathWatcher, final DirectoryRegistry directoryRegistry)
+      final PathWatcher<PathWatchers.Event> pathWatcher,
+      final DirectoryRegistry directoryRegistry,
+      final Logger logger)
       throws InterruptedException, IOException {
     this.pathWatcher = pathWatcher;
     this.pathWatcherDirectoryRegistry = directoryRegistry;
     this.symlinkWatcher =
         new SymlinkWatcher(
             Platform.isMac()
-                ? new ApplePathWatcher(new DirectoryRegistryImpl())
-                : PlatformWatcher.make(false, new DirectoryRegistryImpl()));
+                ? new ApplePathWatcher(new DirectoryRegistryImpl(), logger)
+                : PlatformWatcher.make(false, new DirectoryRegistryImpl(), logger),
+            logger);
     pathWatcher.addObserver(
         new Observer<Event>() {
           @Override

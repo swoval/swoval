@@ -8,18 +8,22 @@ import com.swoval.files.PathWatchers.Event
 import com.swoval.files.PathWatchers.Event.Kind
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
+import com.swoval.logging.Logger
 import com.swoval.runtime.Platform
 import java.io.IOException
 import java.nio.file.Path
 import java.util.Iterator
 
 class SymlinkFollowingPathWatcher(private val pathWatcher: PathWatcher[PathWatchers.Event],
-                                  directoryRegistry: DirectoryRegistry)
+                                  directoryRegistry: DirectoryRegistry,
+                                  logger: Logger)
     extends PathWatcher[PathWatchers.Event] {
 
   private val symlinkWatcher: SymlinkWatcher = new SymlinkWatcher(
-    if (Platform.isMac) new ApplePathWatcher(new DirectoryRegistryImpl())
-    else PlatformWatcher.make(false, new DirectoryRegistryImpl()))
+    if (Platform.isMac)
+      new ApplePathWatcher(new DirectoryRegistryImpl(), logger)
+    else PlatformWatcher.make(false, new DirectoryRegistryImpl(), logger),
+    logger)
 
   private val observers: Observers[PathWatchers.Event] = new Observers()
 

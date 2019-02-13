@@ -16,6 +16,9 @@ import com.swoval.files.PathWatchers.Overflow
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
+import com.swoval.logging.Logger
+import com.swoval.logging.Loggers
+import com.swoval.logging.Loggers.Level
 import java.io.IOException
 import java.nio.file.FileSystems
 import java.nio.file.NoSuchFileException
@@ -33,7 +36,8 @@ class RootDirectories extends LockableMap[Path, CachedDirectory[WatchedDirectory
  Provides a PathWatcher that is backed by a [[java.nio.file.WatchService]].
  */
 class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
-                     watchService: RegisterableWatchService)
+                     watchService: RegisterableWatchService,
+                     private val logger: Logger)
     extends PathWatcher[PathWatchers.Event]
     with AutoCloseable {
 
@@ -50,8 +54,6 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           Either.getOrElse(service.register(typedPath.getPath), WatchedDirectories.INVALID)
         else WatchedDirectories.INVALID
     }
-
-  private val logger: DebugLogger = Loggers.getDebug
 
   private def updateCacheObserver(events: List[Event]): CacheObserver[WatchedDirectory] =
     new CacheObserver[WatchedDirectory]() {
@@ -76,7 +78,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
 
       override def onDelete(oldEntry: FileTreeDataViews.Entry[WatchedDirectory]): Unit = {
         if (oldEntry.getValue.isRight) {
-          if (logger.shouldLog())
+          if (Loggers.shouldLog(logger, Level.DEBUG))
             logger.debug(this + " closing key for " + oldEntry.getTypedPath.getPath)
           oldEntry.getValue.get.close()
         }
@@ -102,8 +104,12 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
         }
       }
     },
-    watchService
+    watchService,
+    logger
   )
+
+  def this(directoryRegistry: DirectoryRegistry, watchService: RegisterableWatchService) =
+    this(directoryRegistry, watchService, Loggers.getLogger)
 
   /**
    * Similar to register, but tracks all of the new files found in the directory. It polls the
@@ -154,7 +160,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
       }
     }
     runCallbacks(events)
-    if (logger.shouldLog())
+    if (Loggers.shouldLog(logger, Level.DEBUG))
       logger.debug(this + " registered " + path + " with max depth " + maxDepth)
     Either.right(result)
   }
@@ -269,7 +275,8 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
         }
       } finally rootDirectories.unlock()
     }
-    if (logger.shouldLog()) logger.debug(this + " unregistered " + path)
+    if (Loggers.shouldLog(logger, Level.DEBUG))
+      logger.debug(this + " unregistered " + path)
   }
 
   private def remove(cachedDirectory: CachedDirectory[WatchedDirectory], path: Path): Unit = {
@@ -317,7 +324,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
 
   private def handleOverflow(overflow: Overflow): Unit = {
     val path: Path = overflow.getPath
-    if (logger.shouldLog())
+    if (Loggers.shouldLog(logger, Level.DEBUG))
       logger.debug(this + " received overflow for " + path)
     val events: List[Event] = new ArrayList[Event]()
     if (rootDirectories.lock()) {
@@ -372,7 +379,8 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
   }
 
   private def handleEvent(event: Event): Unit = {
-    if (logger.shouldLog()) logger.debug(this + " received event " + event)
+    if (Loggers.shouldLog(logger, Level.DEBUG))
+      logger.debug(this + " received event " + event)
     val events: List[Event] = new ArrayList[Event]()
     if (!closed.get && rootDirectories.lock()) {
       try if (directoryRegistry.acceptPrefix(event.getTypedPath.getPath)) {

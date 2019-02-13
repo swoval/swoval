@@ -11,11 +11,13 @@ import utest._
 import TestHelpers._
 
 trait PathWatcherSymlinkTest extends LoggingTestSuite {
-  def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event]
+  def defaultWatcher(callback: PathWatchers.Event => _)(
+      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event]
   val testsImpl = Tests {
     'follow - {
       'file - {
         'initial - {
+          implicit val logger: TestLogger = new CachingLogger
           withTempDirectory { dir =>
             withTempFile { file =>
               val link = Files.createSymbolicLink(dir.resolve("link"), file)
@@ -35,6 +37,7 @@ trait PathWatcherSymlinkTest extends LoggingTestSuite {
           }
         }
         'added - {
+          implicit val logger: TestLogger = new CachingLogger
           withTempDirectory { dir =>
             withTempFile { file =>
               val latch = new CountDownLatch(1)
@@ -56,6 +59,7 @@ trait PathWatcherSymlinkTest extends LoggingTestSuite {
         }
       }
       'directory - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         withTempDirectory { otherDir =>
           val file = otherDir.resolve("file").createFile()
           val latch = new CountDownLatch(1)
@@ -79,18 +83,18 @@ trait PathWatcherSymlinkTest extends LoggingTestSuite {
 }
 
 object PathWatcherSymlinkTest extends PathWatcherSymlinkTest {
-  override def defaultWatcher(
-      callback: Predef.Function[PathWatchers.Event, _]): PathWatcher[PathWatchers.Event] = {
-    val res = PathWatchers.get(true)
+  override def defaultWatcher(callback: Predef.Function[PathWatchers.Event, _])(
+      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
+    val res = PathWatchers.get(true, new DirectoryRegistryImpl(), testLogger)
     res.addObserver(callback)
     res
   }
   override val tests = testsImpl
 }
 object NioPathWatcherSymlinkTest extends PathWatcherSymlinkTest {
-  override def defaultWatcher(
-      callback: Predef.Function[PathWatchers.Event, _]): PathWatcher[PathWatchers.Event] = {
-    val res = PlatformWatcher.make(true, new DirectoryRegistryImpl())
+  override def defaultWatcher(callback: Predef.Function[PathWatchers.Event, _])(
+      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
+    val res = PlatformWatcher.make(true, new DirectoryRegistryImpl(), testLogger)
     res.addObserver(callback)
     res
   }

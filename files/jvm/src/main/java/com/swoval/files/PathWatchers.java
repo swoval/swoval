@@ -1,6 +1,8 @@
 package com.swoval.files;
 
 import com.swoval.files.FileTreeDataViews.Converter;
+import com.swoval.logging.Logger;
+import com.swoval.logging.Loggers;
 import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -24,7 +26,7 @@ public class PathWatchers {
    */
   public static PathWatcher<PathWatchers.Event> get(final boolean followLinks)
       throws IOException, InterruptedException {
-    return get(followLinks, new DirectoryRegistryImpl());
+    return get(followLinks, new DirectoryRegistryImpl(), Loggers.getLogger());
   }
 
   /**
@@ -69,16 +71,18 @@ public class PathWatchers {
    *
    * @param followLinks toggles whether or not the targets of symbolic links should be monitored
    * @param registry The registry of directories to monitor
+   * @param logger the logger
    * @return PathWatcher for the runtime platform
    * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
    *     initialized
    * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
    */
-  static PathWatcher<Event> get(final boolean followLinks, final DirectoryRegistry registry)
+  static PathWatcher<Event> get(
+      final boolean followLinks, final DirectoryRegistry registry, final Logger logger)
       throws InterruptedException, IOException {
     return Platform.isMac()
-        ? ApplePathWatchers.get(followLinks, registry)
-        : PlatformWatcher.make(followLinks, registry);
+        ? ApplePathWatchers.get(followLinks, registry, logger)
+        : PlatformWatcher.make(followLinks, registry, logger);
   }
 
   /**
@@ -93,7 +97,23 @@ public class PathWatchers {
       final RegisterableWatchService service,
       final DirectoryRegistry registry)
       throws InterruptedException, IOException {
-    return PlatformWatcher.make(followLinks, service, registry);
+    return PlatformWatcher.make(followLinks, service, registry, Loggers.getLogger());
+  }
+
+  /**
+   * Create a PathWatcher for the runtime platform.
+   *
+   * @param registry The registry of directories to monitor
+   * @return PathWatcher for the runtime platform
+   * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
+   */
+  static PathWatcher<Event> get(
+      final boolean followLinks,
+      final RegisterableWatchService service,
+      final DirectoryRegistry registry,
+      final Logger logger)
+      throws InterruptedException, IOException {
+    return PlatformWatcher.make(followLinks, service, registry, logger);
   }
 
   static final class Overflow {

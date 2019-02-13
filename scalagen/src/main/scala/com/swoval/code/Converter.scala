@@ -109,6 +109,8 @@ object Converter {
          .filterNot(_.contains("import Entry._"))
          .map(regex.replaceAllIn(_, "$1[T <: AnyRef"))
          .map(contraRegex.replaceAllIn(_, "$1[_ >: R"))
+     } else if (fileName.contains("Loggers")) {
+       newLines.view.filterNot(_.contains("import Level._"))
      } else if (fileName.contains("FileCache")) {
        val applyRegex = "(get|class FileCache(?:Impl)?)[\\[]T".r
        newLines.view

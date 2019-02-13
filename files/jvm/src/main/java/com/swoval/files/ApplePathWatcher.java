@@ -15,6 +15,9 @@ import com.swoval.files.apple.FileEventMonitors.Handles;
 import com.swoval.files.apple.Flags;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
+import com.swoval.logging.Logger;
+import com.swoval.logging.Loggers;
+import com.swoval.logging.Loggers.Level;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -58,7 +61,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   private final FileEventMonitor fileEventMonitor;
   private final Observers<PathWatchers.Event> observers = new Observers<>();
   private static final DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
-  private final DebugLogger logger = Loggers.getDebug();
+  private final Logger logger;
 
   @Override
   public int addObserver(final Observer<? super Event> observer) {
@@ -116,7 +119,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
         result = false;
       }
     }
-    if (logger.shouldLog())
+    if (Loggers.shouldLog(logger, Level.DEBUG))
       logger.debug(this + " registered " + path + " with max depth " + maxDepth);
     return Either.right(result);
   }
@@ -162,7 +165,8 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
           e.printStackTrace(System.err);
         }
       }
-      if (logger.shouldLog()) logger.debug("ApplePathWatcher unregistered " + path);
+      if (Loggers.shouldLog(logger, Level.DEBUG))
+        logger.debug("ApplePathWatcher unregistered " + path);
     }
   }
 
@@ -171,7 +175,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   @SuppressWarnings("EmptyCatchBlock")
   public void close() {
     if (closed.compareAndSet(false, true)) {
-      if (logger.shouldLog()) logger.debug(this + " closed");
+      if (Loggers.shouldLog(logger, Level.DEBUG)) logger.debug(this + " closed");
       appleFileEventStreams.clear();
       fileEventMonitor.close();
     }
@@ -185,13 +189,15 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
     public void accept(final String stream) {}
   }
 
-  ApplePathWatcher(final DirectoryRegistry directoryRegistry) throws InterruptedException {
+  ApplePathWatcher(final DirectoryRegistry directoryRegistry, final Logger logger)
+      throws InterruptedException {
     this(
         10,
         TimeUnit.MILLISECONDS,
         new Flags.Create().setNoDefer().setFileEvents(),
         DefaultOnStreamRemoved,
-        directoryRegistry);
+        directoryRegistry,
+        logger);
   }
   /**
    * Creates a new ApplePathWatcher which is a wrapper around {@link FileEventMonitor}, which in
@@ -216,17 +222,44 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
       final Consumer<String> onStreamRemoved,
       final DirectoryRegistry managedDirectoryRegistry)
       throws InterruptedException {
+    this(latency, timeUnit, flags, onStreamRemoved, managedDirectoryRegistry, Loggers.getLogger());
+  }
+  /**
+   * Creates a new ApplePathWatcher which is a wrapper around {@link FileEventMonitor}, which in
+   * turn is a native wrapper around <a
+   * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
+   * Apple File System Events</a>
+   *
+   * @param latency specified in fractional seconds
+   * @param flags Native flags
+   * @param onStreamRemoved {@link com.swoval.functional.Consumer} to run when a redundant stream is
+   *     removed from the underlying native file events implementation
+   * @param managedDirectoryRegistry The nullable registry of directories to monitor. If this is
+   *     non-null, then registrations are handled by an outer class and this watcher should not call
+   *     add or remove directory.
+   * @throws InterruptedException if the native file events implementation is interrupted during
+   *     initialization
+   */
+  ApplePathWatcher(
+      final long latency,
+      final TimeUnit timeUnit,
+      final Flags.Create flags,
+      final Consumer<String> onStreamRemoved,
+      final DirectoryRegistry managedDirectoryRegistry,
+      final Logger logger)
+      throws InterruptedException {
     this.latency = latency;
     this.timeUnit = timeUnit;
     this.flags = flags;
     this.directoryRegistry =
         managedDirectoryRegistry == null ? new DirectoryRegistryImpl() : managedDirectoryRegistry;
+    this.logger = logger;
     fileEventMonitor =
         FileEventMonitors.get(
             new Consumer<FileEvent>() {
               @Override
               public void accept(final FileEvent fileEvent) {
-                if (logger.shouldLog())
+                if (Loggers.shouldLog(logger, Level.DEBUG))
                   logger.debug(this + " received event for " + fileEvent.fileName);
                 if (!closed.get()) {
                   final String fileName = fileEvent.fileName;
@@ -247,7 +280,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
                       event = new Event(path, Delete);
                     }
                     try {
-                      if (logger.shouldLog())
+                      if (Loggers.shouldLog(logger, Level.DEBUG))
                         logger.debug(this + " passing " + event + " to observers");
                       observers.onNext(event);
                     } catch (final Exception e) {
@@ -289,9 +322,15 @@ class ApplePathWatchers {
   public static PathWatcher<PathWatchers.Event> get(
       final boolean followLinks, final DirectoryRegistry directoryRegistry)
       throws InterruptedException, IOException {
-    final ApplePathWatcher pathWatcher = new ApplePathWatcher(directoryRegistry);
+    return get(followLinks, directoryRegistry, Loggers.getLogger());
+  }
+
+  public static PathWatcher<PathWatchers.Event> get(
+      final boolean followLinks, final DirectoryRegistry directoryRegistry, final Logger logger)
+      throws InterruptedException, IOException {
+    final ApplePathWatcher pathWatcher = new ApplePathWatcher(directoryRegistry, logger);
     return followLinks
-        ? new SymlinkFollowingPathWatcher(pathWatcher, directoryRegistry)
+        ? new SymlinkFollowingPathWatcher(pathWatcher, directoryRegistry, logger)
         : pathWatcher;
   }
 }

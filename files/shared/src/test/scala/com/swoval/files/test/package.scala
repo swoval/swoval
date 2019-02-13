@@ -2,8 +2,8 @@ package com.swoval
 package files
 
 import java.nio.file.{ Path, Paths }
-import java.util.concurrent.atomic.AtomicBoolean
 
+import com.swoval.logging.Logger
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test.NotFuture
 
@@ -13,6 +13,41 @@ import scala.concurrent.{ Future, Promise }
 import scala.util.{ Success, Try }
 
 package object test {
+  implicit class FutureOps[R](val f: Future[R]) extends AnyVal {
+    def logOnFailure()(implicit l: Logger): Future[R] =
+      f.recover {
+        case e: Throwable =>
+          l match {
+            case cl: CachingLogger => System.err.println(cl.getLines mkString "\n")
+            case _                 =>
+          }
+          throw e
+      }(utest.framework.ExecutionContext.RunNow)
+  }
+  def using[C <: AutoCloseable, R: NotFuture](closeable: => C)(f: C => R)(
+      implicit l: Logger): Future[R] =
+    com.swoval.test
+      .usingT(closeable)(f)
+      .recover {
+        case e: Throwable =>
+          l match {
+            case cl: CachingLogger => System.err.println(cl.getLines mkString "\n")
+            case _                 =>
+          }
+          throw e
+      }(utest.framework.ExecutionContext.RunNow)
+  def usingAsync[C <: AutoCloseable, R](closeable: => C)(f: C => Future[R])(
+      implicit l: Logger): Future[R] =
+    com.swoval.test
+      .usingAsyncT(closeable)(f)
+      .recover {
+        case e: Throwable =>
+          l match {
+            case cl: CachingLogger => System.err.println(cl.getLines mkString "\n")
+            case _                 =>
+          }
+          throw e
+      }(utest.framework.ExecutionContext.RunNow)
   class CountDownLatch(private[this] var i: Int) {
     private[this] val promise = Promise.apply[Boolean]
     private[this] val lock = new Object

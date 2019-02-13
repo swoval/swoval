@@ -15,6 +15,9 @@ import com.swoval.files.PathWatchers.Overflow;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
+import com.swoval.logging.Logger;
+import com.swoval.logging.Loggers;
+import com.swoval.logging.Loggers.Level;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.NoSuchFileException;
@@ -34,7 +37,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   private final RootDirectories rootDirectories = new RootDirectories();
   private final DirectoryRegistry directoryRegistry;
   private final Converter<WatchedDirectory> converter;
-  private final DebugLogger logger = Loggers.getDebug();
+  private final Logger logger;
 
   private CacheObserver<WatchedDirectory> updateCacheObserver(final List<Event> events) {
     return new CacheObserver<WatchedDirectory>() {
@@ -67,7 +70,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
       @Override
       public void onDelete(final FileTreeDataViews.Entry<WatchedDirectory> oldEntry) {
         if (oldEntry.getValue().isRight()) {
-          if (logger.shouldLog())
+          if (Loggers.shouldLog(logger, Level.DEBUG))
             logger.debug(this + " closing key for " + oldEntry.getTypedPath().getPath());
           oldEntry.getValue().get().close();
         }
@@ -87,9 +90,12 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   private final NioPathWatcherService service;
 
   NioPathWatcher(
-      final DirectoryRegistry directoryRegistry, final RegisterableWatchService watchService)
+      final DirectoryRegistry directoryRegistry,
+      final RegisterableWatchService watchService,
+      final Logger logger)
       throws InterruptedException {
     this.directoryRegistry = directoryRegistry;
+    this.logger = logger;
     this.service =
         new NioPathWatcherService(
             new Consumer<Either<Overflow, Event>>() {
@@ -105,7 +111,8 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                 }
               }
             },
-            watchService);
+            watchService,
+            logger);
     this.converter =
         new Converter<WatchedDirectory>() {
           @Override
@@ -164,7 +171,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
       }
     }
     runCallbacks(events);
-    if (logger.shouldLog())
+    if (Loggers.shouldLog(logger, Level.DEBUG))
       logger.debug(this + " registered " + path + " with max depth " + maxDepth);
     return Either.right(result);
   }
@@ -291,7 +298,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         rootDirectories.unlock();
       }
     }
-    if (logger.shouldLog()) logger.debug(this + " unregistered " + path);
+    if (Loggers.shouldLog(logger, Level.DEBUG)) logger.debug(this + " unregistered " + path);
   }
 
   private void remove(final CachedDirectory<WatchedDirectory> cachedDirectory, final Path path) {
@@ -337,7 +344,8 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
   private void handleOverflow(final Overflow overflow) {
     final Path path = overflow.getPath();
-    if (logger.shouldLog()) logger.debug(this + " received overflow for " + path);
+    if (Loggers.shouldLog(logger, Level.DEBUG))
+      logger.debug(this + " received overflow for " + path);
     final List<Event> events = new ArrayList<>();
     if (rootDirectories.lock()) {
       try {
@@ -392,7 +400,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   }
 
   private void handleEvent(final Event event) {
-    if (logger.shouldLog()) logger.debug(this + " received event " + event);
+    if (Loggers.shouldLog(logger, Level.DEBUG)) logger.debug(this + " received event " + event);
     final List<Event> events = new ArrayList<>();
     if (!closed.get() && rootDirectories.lock()) {
       try {

@@ -168,14 +168,14 @@ package object test {
     }
   }
 
-  def using[C <: AutoCloseable, R: NotFuture](closeable: => C)(f: C => R): Future[R] = {
+  def usingT[C <: AutoCloseable, R: NotFuture](closeable: => C)(f: C => R): Future[R] = {
     val c = closeable
     val p = Promise[R]
     p.tryComplete(Try(f(c)))
     p.future.andThen { case _ => c.close() }
   }
 
-  def usingAsync[C <: AutoCloseable, R](closeable: => C)(f: C => Future[R]): Future[R] = {
+  def usingAsyncT[C <: AutoCloseable, R](closeable: => C)(f: C => Future[R]): Future[R] = {
     val c = closeable
     f(c).andThen { case _ => c.close() }
   }

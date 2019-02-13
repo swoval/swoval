@@ -16,18 +16,6 @@ import scala.util.{ Failure, Random, Success, Try }
 
 object AllTests {
   swoval.test.setVerbose(false)
-  private[this] val outputStreams = new ConcurrentHashMap[String, CachingOutputStream].asScala
-  LoggingTestSuite.setOutputStreamFactory((s: String) => {
-    outputStreams.synchronized {
-      outputStreams.get(s) match {
-        case Some(os) => os
-        case None =>
-          val outputStream = new CachingOutputStream
-          outputStreams.put(s, outputStream)
-          outputStream
-      }
-    }
-  })
   val random = new Random()
   private implicit class StringOps(val s: String) extends AnyVal {
     def intValue(default: Int): Int = Try(Integer.valueOf(s).toInt).getOrElse(default)

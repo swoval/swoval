@@ -2,7 +2,7 @@ package com
 package swoval
 package files
 
-import java.nio.file.{ Path }
+import java.nio.file.Path
 
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.TestHelpers._
@@ -13,7 +13,6 @@ import com.swoval.test._
 import utest._
 
 import scala.collection.mutable
-import scala.util.Failure
 
 object NioPathWatcherOverflowTest extends LoggingTestSuite {
   val tests = if (Platform.isJVM || !Platform.isMac) Tests {
@@ -41,7 +40,8 @@ object NioPathWatcherOverflowTest extends LoggingTestSuite {
         PlatformWatcher.make(
           false,
           new BoundedWatchService(4, RegisterableWatchServices.get()),
-          new DirectoryRegistryImpl()
+          new DirectoryRegistryImpl(),
+          logger
         )) { c =>
         c.addObserver(callback)
         c.register(dir, Integer.MAX_VALUE)

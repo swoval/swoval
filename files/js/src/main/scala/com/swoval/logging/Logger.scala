@@ -3,9 +3,23 @@
 package com.swoval.logging
 
 /**
- A debug logger.
+ A simple logger.
  */
 trait Logger {
+
+  /**
+   * Returns the level for this Logger.
+   *
+   * @return the level.
+   */
+  def getLevel(): Loggers.Level
+
+  /**
+   * Print a debug message. This is for debugging implementation details and may be very noisy.
+   *
+   * @param message the message to print.
+   */
+  def verbose(message: String): Unit
 
   /**
    * Print a debug message.
@@ -13,5 +27,26 @@ trait Logger {
    * @param message the message to print.
    */
   def debug(message: String): Unit
+
+  /**
+   * Print an informational message.
+   *
+   * @param message the message to print.
+   */
+  def info(message: String): Unit
+
+  /**
+   * Print a warning message.
+   *
+   * @param message the message to print.
+   */
+  def warn(message: String): Unit
+
+  /**
+   * Print an error message
+   *
+   * @param message the message to print.
+   */
+  def error(message: String): Unit
 
 }

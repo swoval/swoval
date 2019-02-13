@@ -7,6 +7,9 @@ import com.swoval.files.FileTreeDataViews.Entry
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
+import com.swoval.logging.Logger
+import com.swoval.logging.Loggers
+import com.swoval.logging.Loggers.Level
 import com.swoval.runtime.ShutdownHooks
 import java.io.IOException
 import java.nio.file.Path
@@ -26,7 +29,8 @@ object FileTreeRepositoryImpl {
 }
 
 class FileTreeRepositoryImpl[T <: AnyRef](private val directoryTree: FileCacheDirectoryTree[T],
-                                          private val watcher: FileCachePathWatcher[T])
+                                          private val watcher: FileCachePathWatcher[T],
+                                          private val logger: Logger)
     extends FileTreeRepository[T] {
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
@@ -43,7 +47,8 @@ class FileTreeRepositoryImpl[T <: AnyRef](private val directoryTree: FileCacheDi
 
   private val shutdownHookId: Int = ShutdownHooks.addHook(1, closeRunnable)
 
-  private val logger: DebugLogger = Loggers.getDebug
+  def this(directoryTree: FileCacheDirectoryTree[T], watcher: FileCachePathWatcher[T]) =
+    this(directoryTree, watcher, Loggers.getLogger)
 
   /**
  Cleans up the path watcher and clears the directory cache.
@@ -87,7 +92,7 @@ class FileTreeRepositoryImpl[T <: AnyRef](private val directoryTree: FileCacheDi
         if (path.isAbsolute) path else path.toAbsolutePath()
       val res: Either[IOException, Boolean] =
         Either.right(watcher.register(absolutePath, maxDepth))
-      if (logger.shouldLog())
+      if (Loggers.shouldLog(logger, Level.DEBUG))
         logger.debug(this + " registered " + path + " with max depth " + maxDepth)
       res
     } catch {

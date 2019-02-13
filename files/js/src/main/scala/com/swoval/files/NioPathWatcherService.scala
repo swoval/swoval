@@ -9,6 +9,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import com.swoval.files.PathWatchers.Event.Kind.{ Delete, Error, Modify }
 import com.swoval.files.PathWatchers.{ Event, Overflow }
 import com.swoval.functional.Consumer
+import com.swoval.logging.Loggers.Level
+import com.swoval.logging.{ Logger, Loggers }
 import io.scalajs.nodejs
 import io.scalajs.nodejs.fs.{ FSWatcherOptions, Fs }
 
@@ -22,7 +24,8 @@ import scala.util.Try
  */
 private[files] class NioPathWatcherService(
     eventConsumer: Consumer[functional.Either[Overflow, Event]],
-    registerable: RegisterableWatchService)
+    registerable: RegisterableWatchService,
+    logger: Logger)
     extends AutoCloseable {
   private[this] var closed = false
   private[this] val options = new FSWatcherOptions(recursive = false, persistent = false)
@@ -35,20 +38,27 @@ private[files] class NioPathWatcherService(
   }
   def register(path: Path): functional.Either[IOException, WatchedDirectory] = {
     val realPath = Try(path.toRealPath()).getOrElse(path)
+    if (Loggers.shouldLog(logger, Level.DEBUG)) {
+      logger.debug(s"$this registering path $path ${if (path != realPath) s" ($realPath)" else ""}")
+    }
     if (path.startsWith(realPath) && !path.equals(realPath)) {
       functional.Either.left(new FileSystemLoopException(path.toString))
     } else {
-      applyImpl(path)
+      registerImpl(path)
     }
   }
   private def isValid(path: Path): Boolean = {
     val attrs = NioWrappers.readAttributes(path, LinkOption.NOFOLLOW_LINKS)
     attrs.isDirectory && !attrs.isSymbolicLink
   }
-  private def applyImpl(path: Path): functional.Either[IOException, WatchedDirectory] = {
+  private def registerImpl(path: Path): functional.Either[IOException, WatchedDirectory] = {
     try {
       functional.Either.right(watchedDirectoriesByPath get path match {
-        case Some(w) => w
+        case Some(w) =>
+          if (Loggers.shouldLog(logger, Level.DEBUG)) {
+            logger.debug(this + " found existing monitor for " + path)
+          }
+          w
         case _ if isValid(path) =>
           val cb: js.Function2[nodejs.EventType, String, Unit] =
             (tpe: nodejs.EventType, name: String) => {
@@ -58,8 +68,11 @@ private[files] class NioPathWatcherService(
                 case "rename" if !exists => Delete
                 case _                   => Modify
               }
-              eventConsumer.accept(
-                functional.Either.right(new Event(TypedPaths.get(watchPath), kind)))
+              val event = new Event(TypedPaths.get(watchPath), kind)
+              if (Loggers.shouldLog(logger, Level.DEBUG)) {
+                logger.debug(this + " received event " + event)
+              }
+              eventConsumer.accept(functional.Either.right(event))
             }
 
           val closed = new AtomicBoolean(false)
@@ -77,15 +90,23 @@ private[files] class NioPathWatcherService(
           catch { case _: Exception => setTimeout(1.millis)(setOnError()) }
           val watchedDirectory: WatchedDirectory = new WatchedDirectory {
             override def close(): Unit = if (closed.compareAndSet(false, true)) {
+              if (Loggers.shouldLog(logger, Level.DEBUG)) {
+                logger.debug(this + " stopping monitor.")
+              }
               watchedDirectoriesByPath -= path
               watcher.close()
             }
           }
           watchedDirectoriesByPath += path -> watchedDirectory
+          if (Loggers.shouldLog(logger, Level.DEBUG)) {
+            logger.debug(this + " successfully registered " + path)
+          }
           watchedDirectory
-        case w =>
-          w.foreach(_.close())
+        case None =>
           watchedDirectoriesByPath += path -> WatchedDirectories.INVALID
+          if (Loggers.shouldLog(logger, Level.DEBUG)) {
+            logger.debug(this + " unable to monitor " + path)
+          }
           WatchedDirectories.INVALID
       })
     } catch {

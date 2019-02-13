@@ -428,7 +428,7 @@ object NioPathWatcherTest extends PathWatcherTest {
 
   override def defaultWatcher(callback: PathWatchers.Event => _,
                               followLinks: Boolean): PathWatcher[PathWatchers.Event] = {
-    val res = PlatformWatcher.make(followLinks, new DirectoryRegistryImpl())
+    val res = PlatformWatcher.make(followLinks, new DirectoryRegistryImpl(), logger)
     res.addObserver(callback)
     res
   }

@@ -5,10 +5,13 @@ package files
 import java.io.IOException
 import java.nio.file.{ Path, Paths }
 
-import FileTreeDataViews.Entry
 import com.swoval.files.FileCacheTest.FileCacheOps
+import com.swoval.files.FileTreeDataViews.Entry
+import com.swoval.files.TestHelpers.EntryOps._
+import com.swoval.files.TestHelpers._
 import com.swoval.files.test._
 import com.swoval.functional.Filters.AllPass
+import com.swoval.logging.Logger
 import com.swoval.runtime.Platform
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test._
@@ -18,8 +21,6 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
-import TestHelpers._
-import EntryOps._
 
 trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
   def ignore[T]: Entry[T] => Unit = (_: Entry[T]) => ()
@@ -96,7 +97,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
           val onUpdate = ignoreOld[Path](ignore)
           val onError = (_: IOException) => {}
           val observer = getObserver(onChange, onUpdate, onChange, onError)
-          usingAsync(FileCacheTest.getCached(false, identity, observer)) { c =>
+          usingAsync(FileCacheTest.getCached(false, identity, observer, logger)) { c =>
             c.reg(dir, recursive = false)
             c.ls(dir, recursive = false) === Seq(initial)
             initial.renameTo(moved)
@@ -338,7 +339,8 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
                   latch.countDown()
 
               override def onError(iOException: IOException): Unit = {}
-            }
+            },
+            logger
           )) { c =>
           c.reg(file.getParent, recursive = false)
           val cachedFile: Entry[LastModified] =
@@ -406,7 +408,7 @@ trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
 
             override def onError(exception: IOException): Unit = {}
           }
-          usingAsync(FileCacheTest.getCached(false, identity, observer)) { c =>
+          usingAsync(FileCacheTest.getCached(false, identity, observer, logger)) { c =>
             c.reg(dir)
             c.ls(dir) === Seq(file)
             dir.deleteRecursive()

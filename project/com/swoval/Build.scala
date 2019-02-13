@@ -447,7 +447,6 @@ object Build {
                 "CachedDirectory",
                 "CachedDirectoryImpl",
                 "CacheObservers",
-                "DebugLogger",
                 "DirectoryDataView",
                 "DirectoryLister",
                 "DirectoryView",
@@ -481,7 +480,7 @@ object Build {
               ).value
               convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
               convertSources("com/swoval/functional", "Consumer", "Either", "Filter", "Filters").value
-              convertSources("com/swoval/logging", "Logger").value
+              convertSources("com/swoval/logging", "Logger", "Loggers").value
             }
           },
           scalafmt in Compile,
@@ -597,8 +596,7 @@ object Build {
           "com.swoval.files.AllTests",
           count.toString,
           System.getProperty("swoval.alltest.timeout", "20"),
-          System.getProperty("swoval.debug", "true"),
-          System.getProperty("swoval.debug.logger", "com.swoval.files.test.TestLogger")
+          System.getProperty("swoval.debug", "false"),
         )
         val process = pb.inheritIO().start()
         process.waitFor()

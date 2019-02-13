@@ -249,7 +249,8 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
               override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
 
               override def onError(exception: IOException): Unit = {}
-            }
+            },
+            logger
           )) { c =>
             link linkTo file
             c.reg(dir)
@@ -340,7 +341,8 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
                   if (path.getFileName == Paths.get("link") && paths.add(path)) latch.countDown()
                 }
                 override def onError(exception: IOException): Unit = {}
-              }
+              },
+              logger
             )) { c =>
               c.register(dir)
               c.register(otherDir)
@@ -389,7 +391,8 @@ trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
                 }
 
                 override def onError(exception: IOException): Unit = {}
-              }
+              },
+              logger
             )) { c =>
               c.register(dir)
               c.register(otherDir)
