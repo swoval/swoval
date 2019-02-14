@@ -22,7 +22,6 @@ import java.util.List
 import java.util.Map
 import java.util.concurrent.atomic.AtomicReference
 import CachedDirectoryImpl._
-import scala.beans.{ BeanProperty, BooleanBeanProperty }
 
 object CachedDirectoryImpl {
 
@@ -63,7 +62,7 @@ object CachedDirectoryImpl {
  *
  * @tparam T the cache value type.
  */
-class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
+class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
                                        private val converter: Converter[T],
                                        private val depth: Int,
                                        filter: Filter[_ >: TypedPath],
@@ -71,7 +70,8 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
                                        private val fileTreeView: FileTreeView)
     extends CachedDirectory[T] {
 
-  private val _cacheEntry: AtomicReference[Entry[T]] = new AtomicReference(null)
+  private val _cacheEntry: AtomicReference[Entry[T]] = new AtomicReference(
+    Entries.get(typedPath, converter, typedPath))
 
   private val pathFilter: Filter[_ >: TypedPath] = filter
 
@@ -79,8 +79,6 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
     new LockableMap()
 
   private val files: Map[Path, Entry[T]] = new HashMap()
-
-  this._cacheEntry.set(Entries.get(this.typedPath, converter, this.typedPath))
 
   def this(typedPath: TypedPath,
            converter: Converter[T],
@@ -91,7 +89,9 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
 
   def getMaxDepth(): Int = depth
 
-  override def getPath(): Path = typedPath.getPath
+  override def getPath(): Path = getTypedPath.getPath
+
+  override def getTypedPath(): TypedPath = getEntry.getTypedPath
 
   override def list(maxDepth: Int, filter: Filter[_ >: TypedPath]): List[TypedPath] =
     list(getPath, maxDepth, filter)
@@ -493,7 +493,7 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
     result
   }
 
-  def init(): CachedDirectoryImpl[T] = init(typedPath.getPath)
+  def init(): CachedDirectoryImpl[T] = init(getTypedPath.getPath)
 
   private def init(realPath: Path): CachedDirectoryImpl[T] = {
     if (subdirectories.lock()) {
@@ -507,7 +507,8 @@ class CachedDirectoryImpl[T <: AnyRef](@BeanProperty val typedPath: TypedPath,
           while (it.hasNext) {
             val file: TypedPath = it.next()
             val path: Path = file.getPath
-            val key: Path = this.typedPath.getPath.relativize(path).getFileName
+            val key: Path =
+              this.getTypedPath.getPath.relativize(path).getFileName
             if (file.isDirectory) {
               if (depth > 0) {
                 if (!file.isSymbolicLink || !isLoop(path, TypedPaths.expanded(file))) {

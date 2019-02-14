@@ -16,6 +16,9 @@ import com.swoval.files.apple.FileEventMonitors.Handles
 import com.swoval.files.apple.Flags
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
+import com.swoval.logging.Logger
+import com.swoval.logging.Loggers
+import com.swoval.logging.Loggers.Level
 import java.io.IOException
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -62,7 +65,8 @@ class ApplePathWatcher(private val latency: java.lang.Long,
                        private val timeUnit: TimeUnit,
                        private val flags: Flags.Create,
                        onStreamRemoved: Consumer[String],
-                       managedDirectoryRegistry: DirectoryRegistry)
+                       managedDirectoryRegistry: DirectoryRegistry,
+                       private val logger: Logger)
     extends PathWatcher[PathWatchers.Event] {
 
   private val directoryRegistry: DirectoryRegistry =
@@ -77,6 +81,8 @@ class ApplePathWatcher(private val latency: java.lang.Long,
   private val fileEventMonitor: FileEventMonitor = FileEventMonitors.get(
     new Consumer[FileEvent]() {
       override def accept(fileEvent: FileEvent): Unit = {
+        if (Loggers.shouldLog(logger, Level.DEBUG))
+          logger.debug(this + " received event for " + fileEvent.fileName)
         if (!closed.get) {
           val fileName: String = fileEvent.fileName
           val path: TypedPath = TypedPaths.get(Paths.get(fileName))
@@ -91,9 +97,15 @@ class ApplePathWatcher(private val latency: java.lang.Long,
                 else new Event(path, Modify)
               else if (path.exists()) new Event(path, Modify)
               else new Event(path, Delete)
-            try observers.onNext(event)
-            catch {
-              case e: Exception => observers.onError(e)
+            try {
+              if (Loggers.shouldLog(logger, Level.DEBUG))
+                logger.debug(this + " passing " + event + " to observers")
+              observers.onNext(event)
+            } catch {
+              case e: Exception => {
+                logger.debug(this + " invoking onError for " + e)
+                observers.onError(e)
+              }
 
             }
           }
@@ -111,8 +123,6 @@ class ApplePathWatcher(private val latency: java.lang.Long,
   )
 
   private val observers: Observers[PathWatchers.Event] = new Observers()
-
-  private val logger: DebugLogger = Loggers.getDebug
 
   override def addObserver(observer: Observer[_ >: Event]): Int =
     observers.addObserver(observer)
@@ -170,10 +180,8 @@ class ApplePathWatcher(private val latency: java.lang.Long,
 
       }
     }
-    if (logger.shouldLog())
-      logger.debug(
-        "ApplePathWatcher registered " + path + " with max depth " +
-          maxDepth)
+    if (Loggers.shouldLog(logger, Level.DEBUG))
+      logger.debug(this + " registered " + path + " with max depth " + maxDepth)
     Either.right(result)
   }
 
@@ -215,7 +223,7 @@ class ApplePathWatcher(private val latency: java.lang.Long,
 
         }
       }
-      if (logger.shouldLog())
+      if (Loggers.shouldLog(logger, Level.DEBUG))
         logger.debug("ApplePathWatcher unregistered " + path)
     }
   }
@@ -225,18 +233,41 @@ class ApplePathWatcher(private val latency: java.lang.Long,
    */
   override def close(): Unit = {
     if (closed.compareAndSet(false, true)) {
-      if (logger.shouldLog()) logger.debug("Closed ApplePathWatcher " + this)
+      if (Loggers.shouldLog(logger, Level.DEBUG))
+        logger.debug(this + " closed")
       appleFileEventStreams.clear()
       fileEventMonitor.close()
     }
   }
 
-  def this(directoryRegistry: DirectoryRegistry) =
+  def this(directoryRegistry: DirectoryRegistry, logger: Logger) =
     this(10,
          TimeUnit.MILLISECONDS,
          new Flags.Create().setNoDefer().setFileEvents(),
          DefaultOnStreamRemoved,
-         directoryRegistry)
+         directoryRegistry,
+         logger)
+
+  /**
+   * Creates a new ApplePathWatcher which is a wrapper around [[FileEventMonitor]], which in
+   * turn is a native wrapper around [[https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1
+   * Apple File System Events]]
+   *
+   * @param latency specified in fractional seconds
+   * @param flags Native flags
+   * @param onStreamRemoved [[com.swoval.functional.Consumer]] to run when a redundant stream is
+   *     removed from the underlying native file events implementation
+   * @param managedDirectoryRegistry The nullable registry of directories to monitor. If this is
+   *     non-null, then registrations are handled by an outer class and this watcher should not call
+   *     add or remove directory.
+   *     initialization
+   */
+  def this(latency: java.lang.Long,
+           timeUnit: TimeUnit,
+           flags: Flags.Create,
+           onStreamRemoved: Consumer[String],
+           managedDirectoryRegistry: DirectoryRegistry) =
+    this(latency, timeUnit, flags, onStreamRemoved, managedDirectoryRegistry, Loggers.getLogger)
 
   private def find(path: Path): Entry[Path, Stream] = {
     val it: Iterator[Entry[Path, Stream]] = appleFileEventStreams.iterator()
@@ -255,10 +286,16 @@ class ApplePathWatcher(private val latency: java.lang.Long,
 object ApplePathWatchers {
 
   def get(followLinks: Boolean,
-          directoryRegistry: DirectoryRegistry): PathWatcher[PathWatchers.Event] = {
-    val pathWatcher: ApplePathWatcher = new ApplePathWatcher(directoryRegistry)
+          directoryRegistry: DirectoryRegistry): PathWatcher[PathWatchers.Event] =
+    get(followLinks, directoryRegistry, Loggers.getLogger)
+
+  def get(followLinks: Boolean,
+          directoryRegistry: DirectoryRegistry,
+          logger: Logger): PathWatcher[PathWatchers.Event] = {
+    val pathWatcher: ApplePathWatcher =
+      new ApplePathWatcher(directoryRegistry, logger)
     if (followLinks)
-      new SymlinkFollowingPathWatcher(pathWatcher, directoryRegistry)
+      new SymlinkFollowingPathWatcher(pathWatcher, directoryRegistry, logger)
     else pathWatcher
   }
 

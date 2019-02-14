@@ -3,15 +3,51 @@ package files
 
 import java.nio.file.{ Path, Paths }
 
+import com.swoval.logging.Logger
 import com.swoval.test.Implicits.executionContext
 import com.swoval.test.NotFuture
 
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ Future, Promise }
-import scala.util.{ Success, Try }
+import scala.language.experimental.macros
+import scala.util.{ Failure, Success, Try }
 
 package object test {
+  implicit class FutureOps[R](val f: Future[R]) extends AnyVal {
+    def logOnFailure()(implicit testLogger: TestLogger): Future[R] =
+      f.recover {
+        case e: Throwable =>
+          testLogger match {
+            case cl: CachingLogger => System.err.println(cl.getLines mkString "\n")
+            case _                 =>
+          }
+          throw e
+      }(utest.framework.ExecutionContext.RunNow)
+  }
+  def using[C <: AutoCloseable, R: NotFuture](closeable: => C)(f: C => R)(
+      implicit testLogger: TestLogger): Future[R] = {
+    val res = com.swoval.test
+      .usingT(closeable)(f)
+    res.onComplete {
+      case Success(_) => if ("true" == System.getProperty("swoval.debug")) printLog(testLogger)
+      case Failure(_) => printLog(testLogger)
+    }(utest.framework.ExecutionContext.RunNow)
+    res
+  }
+  def usingAsync[C <: AutoCloseable, R](closeable: => C)(f: C => Future[R])(
+      implicit testLogger: TestLogger): Future[R] = {
+    val res = com.swoval.test.usingAsyncT(closeable)(f)
+    res.onComplete {
+      case Success(_)            => if ("true" == System.getProperty("swoval.debug")) printLog(testLogger)
+      case Failure(_: Throwable) => printLog(testLogger)
+    }(utest.framework.ExecutionContext.RunNow)
+    res
+  }
+  private def printLog(logger: Logger): Unit = logger match {
+    case cl: CachingLogger => System.err.println(cl.getLines mkString "\n")
+    case l_                =>
+  }
   class CountDownLatch(private[this] var i: Int) {
     private[this] val promise = Promise.apply[Boolean]
     private[this] val lock = new Object

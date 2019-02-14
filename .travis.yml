@@ -71,7 +71,7 @@ matrix:
          - export JAVA_HOME="$JABBA_HOME/jdk/$TRAVIS_JDK" && export PATH="$JAVA_HOME/bin:$PATH" && java -Xmx32m -version
 
 
-script: /tmp/sbt/bin/sbt -Dswoval.debug=true -Dswoval.debug.logger=com.swoval.files.test.TestLogger -Dswoval.format=false -Dsbt.version=$SBT_VER -Dswoval.skip.native=true -Dswoval.fork.tests=true -Dswoval.alltests.iterations=50 ++$TRAVIS_SCALA_VERSION $CMD
+script: /tmp/sbt/bin/sbt -Dswoval.alltest.timeout=20 -Dswoval.format=false -Dsbt.version=$SBT_VER -Dswoval.skip.native=true -Dswoval.fork.tests=true -Dswoval.alltests.iterations=50 ++$TRAVIS_SCALA_VERSION $CMD
 
 before_install:
   # https://github.com/travis-ci/travis-ci/issues/8408

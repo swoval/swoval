@@ -6,11 +6,15 @@ import java.nio.file.{ Path, Paths }
 
 import com.swoval.files.FileTreeDataViews.{ CacheObserver, Converter, Entry }
 import com.swoval.files.FileTreeViews.Observer
+import com.swoval.files.test.CachingLogger
 import com.swoval.files.test.platform.Bool
 import com.swoval.functional.{ Consumer, Filter }
+import com.swoval.logging.Logger
 import com.swoval.runtime.Platform
 import com.swoval.test._
 import utest._
+
+import scala.concurrent.Future
 
 /**
  * Provides helper functions to make it more convenient to test the classes in com.swoval.files. It

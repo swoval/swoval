@@ -1,4 +1,6 @@
-package com.swoval.files
+package com
+package swoval
+package files
 
 import java.nio.file.Files
 
@@ -9,11 +11,13 @@ import utest._
 import TestHelpers._
 
 trait PathWatcherSymlinkTest extends TestSuite {
-  def defaultWatcher(callback: PathWatchers.Event => _): PathWatcher[PathWatchers.Event]
+  def defaultWatcher(callback: PathWatchers.Event => _)(
+      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event]
   val testsImpl = Tests {
     'follow - {
       'file - {
         'initial - {
+          implicit val logger: TestLogger = new CachingLogger
           withTempDirectory { dir =>
             withTempFile { file =>
               val link = Files.createSymbolicLink(dir.resolve("link"), file)
@@ -33,6 +37,7 @@ trait PathWatcherSymlinkTest extends TestSuite {
           }
         }
         'added - {
+          implicit val logger: TestLogger = new CachingLogger
           withTempDirectory { dir =>
             withTempFile { file =>
               val latch = new CountDownLatch(1)
@@ -54,6 +59,7 @@ trait PathWatcherSymlinkTest extends TestSuite {
         }
       }
       'directory - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
         withTempDirectory { otherDir =>
           val file = otherDir.resolve("file").createFile()
           val latch = new CountDownLatch(1)
@@ -77,18 +83,18 @@ trait PathWatcherSymlinkTest extends TestSuite {
 }
 
 object PathWatcherSymlinkTest extends PathWatcherSymlinkTest {
-  override def defaultWatcher(
-      callback: Predef.Function[PathWatchers.Event, _]): PathWatcher[PathWatchers.Event] = {
-    val res = PathWatchers.get(true)
+  override def defaultWatcher(callback: Predef.Function[PathWatchers.Event, _])(
+      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
+    val res = PathWatchers.get(true, new DirectoryRegistryImpl(), testLogger)
     res.addObserver(callback)
     res
   }
   override val tests = testsImpl
 }
 object NioPathWatcherSymlinkTest extends PathWatcherSymlinkTest {
-  override def defaultWatcher(
-      callback: Predef.Function[PathWatchers.Event, _]): PathWatcher[PathWatchers.Event] = {
-    val res = PlatformWatcher.make(true, new DirectoryRegistryImpl())
+  override def defaultWatcher(callback: Predef.Function[PathWatchers.Event, _])(
+      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
+    val res = PlatformWatcher.make(true, new DirectoryRegistryImpl(), testLogger)
     res.addObserver(callback)
     res
   }
@@ -96,8 +102,10 @@ object NioPathWatcherSymlinkTest extends PathWatcherSymlinkTest {
     testsImpl
   } else {
     Tests {
-      'ignore - println(
-        "Not running NioPathWatcherSymlinkTest on platform other than osx on the jvm")
+      'ignore - {
+        if (swoval.test.verbose)
+          println("Not running NioPathWatcherSymlinkTest on platform other than osx on the jvm")
+      }
     }
   }
 }

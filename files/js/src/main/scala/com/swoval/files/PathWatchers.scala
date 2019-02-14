@@ -3,6 +3,8 @@
 package com.swoval.files
 
 import com.swoval.files.FileTreeDataViews.Converter
+import com.swoval.logging.Logger
+import com.swoval.logging.Loggers
 import com.swoval.runtime.Platform
 import java.io.IOException
 import java.nio.file.Path
@@ -19,7 +21,7 @@ object PathWatchers {
    *     initialized
    */
   def get(followLinks: Boolean): PathWatcher[PathWatchers.Event] =
-    get(followLinks, new DirectoryRegistryImpl())
+    get(followLinks, new DirectoryRegistryImpl(), Loggers.getLogger)
 
   /**
    * Create a path watcher that periodically polls the file system to detect changes
@@ -57,12 +59,13 @@ object PathWatchers {
    *
    * @param followLinks toggles whether or not the targets of symbolic links should be monitored
    * @param registry The registry of directories to monitor
+   * @param logger the logger
    * @return PathWatcher for the runtime platform
    *     initialized
    */
-  def get(followLinks: Boolean, registry: DirectoryRegistry): PathWatcher[Event] =
-    if (Platform.isMac) ApplePathWatchers.get(followLinks, registry)
-    else PlatformWatcher.make(followLinks, registry)
+  def get(followLinks: Boolean, registry: DirectoryRegistry, logger: Logger): PathWatcher[Event] =
+    if (Platform.isMac) ApplePathWatchers.get(followLinks, registry, logger)
+    else PlatformWatcher.make(followLinks, registry, logger)
 
   /**
    * Create a PathWatcher for the runtime platform.
@@ -72,8 +75,9 @@ object PathWatchers {
    */
   def get(followLinks: Boolean,
           service: RegisterableWatchService,
-          registry: DirectoryRegistry): PathWatcher[Event] =
-    PlatformWatcher.make(followLinks, service, registry)
+          registry: DirectoryRegistry,
+          logger: Logger): PathWatcher[Event] =
+    PlatformWatcher.make(followLinks, service, registry, logger)
 
   class Overflow(@BeanProperty val path: Path)
 

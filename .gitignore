@@ -22,6 +22,7 @@ files/jvm/src/test/scala/com/swoval/files/test/FileBytes.scala
 files/jvm/src/test/scala/com/swoval/files/test/TestLogger.scala
 files/jvm/src/test/scala/com/swoval/files/test/package.scala
 files/jvm/src/test/scala/com/swoval/functional/EitherTest.scala
+files/jvm/src/test/scala/com/swoval/logging/LoggingSpec.scala
 #END FILESJVM TEST SYMLINKS
 
 #BEGIN FILESJS TEST SYMLINKS
@@ -43,6 +44,7 @@ files/js/src/test/scala/com/swoval/files/test/FileBytes.scala
 files/js/src/test/scala/com/swoval/files/test/TestLogger.scala
 files/js/src/test/scala/com/swoval/files/test/package.scala
 files/js/src/test/scala/com/swoval/functional/EitherTest.scala
+files/js/src/test/scala/com/swoval/logging/LoggingSpec.scala
 #END FILESJS TEST SYMLINKS
 
 #BEGIN FILESJS COMPILE SYMLINKS

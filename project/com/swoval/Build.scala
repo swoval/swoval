@@ -55,14 +55,6 @@ object Build {
       licenses += ("MIT", url("https://opensource.org/licenses/MIT")),
       scalacOptions ++= Seq("-feature"),
       publishMavenStyle in publishLocal := false,
-      setProp := {
-        val args = Def.spaceDelimited("<arg>").parsed
-        val Array(key, value) = args.toArray match {
-          case Array(prop) => prop.split("=")
-          case s           => s
-        }
-        System.setProperty(key, value)
-      },
       publishTo := {
         val p = publishTo.value
         if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true"))
@@ -194,6 +186,14 @@ object Build {
     .enablePlugins(CrossPerProjectPlugin)
     .aggregate(projects: _*)
     .settings(
+      setProp := {
+        val args = Def.spaceDelimited("<arg>").parsed
+        val Array(key, value) = args.toArray match {
+          case Array(prop) => prop.split("=")
+          case s           => s
+        }
+        System.setProperty(key, value)
+      },
       crossScalaVersions := scalaCrossVersions,
       version := baseVersion,
       publishSigned := {},
@@ -447,7 +447,6 @@ object Build {
                 "CachedDirectory",
                 "CachedDirectoryImpl",
                 "CacheObservers",
-                "DebugLogger",
                 "DirectoryDataView",
                 "DirectoryLister",
                 "DirectoryView",
@@ -481,7 +480,7 @@ object Build {
               ).value
               convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
               convertSources("com/swoval/functional", "Consumer", "Either", "Filter", "Filters").value
-              convertSources("com/swoval/logging", "Logger").value
+              convertSources("com/swoval/logging", "Logger", "Loggers").value
             }
           },
           scalafmt in Compile,
@@ -520,6 +519,7 @@ object Build {
         "com.swoval.files.*DirectoryLister*",
         "com.swoval.files.Observers*",
         "com.swoval.files.RegisterableWatchServices*",
+        "com.swoval.files.Sleep*",
         "com.swoval.files.WatchServices*",
         "com.swoval.files.WatchedDirectory*",
         "com.swoval.files.apple.Event*",
@@ -591,12 +591,12 @@ object Build {
           "java",
           "-classpath",
           cp,
-          "-verbose:gc",
+          s"-Dswoval.alltest.verbose=${System.getProperty("swoval.alltest.verbose", "false")}",
+          s"-Dswoval.test.timeout=${System.getProperty("swoval.alltest.timeout", "20")}",
           "com.swoval.files.AllTests",
           count.toString,
-          System.getProperty("swoval.test.timeout", "10"),
-          System.getProperty("swoval.debug", "true"),
-          System.getProperty("swoval.debug.logger", "com.swoval.files.test.TestLogger")
+          System.getProperty("swoval.alltest.timeout", "20"),
+          System.getProperty("swoval.debug", "false"),
         )
         val process = pb.inheritIO().start()
         process.waitFor()

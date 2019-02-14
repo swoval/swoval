@@ -5,6 +5,8 @@ package com.swoval.files
 import com.swoval.files.FileTreeDataViews.Converter
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
+import com.swoval.logging.Logger
+import com.swoval.logging.Loggers
 import java.io.IOException
 
 object FileTreeRepositories {
@@ -23,7 +25,7 @@ object FileTreeRepositories {
    * @return a file tree repository.
    */
   def get[T <: AnyRef](converter: Converter[T], followLinks: Boolean): FileTreeRepository[T] =
-    get(converter, followLinks, false)
+    get(converter, followLinks, false, Loggers.getLogger)
 
   /**
    * Create a file tree repository.
@@ -39,24 +41,27 @@ object FileTreeRepositories {
    *     update is detected for that directory. This can be very expensive since it will perform
    *     iops proportional to the number of files in the subtree. It generally should not be
    *     necessary since we are also watching the subtree for events.
+   * @param logger
    * @tparam T the value type of the cache entries
    * @return a file tree repository.
    */
   def get[T <: AnyRef](converter: Converter[T],
                        followLinks: Boolean,
-                       rescanOnDirectoryUpdates: Boolean): FileTreeRepository[T] = {
+                       rescanOnDirectoryUpdates: Boolean,
+                       logger: Logger): FileTreeRepository[T] = {
     val symlinkWatcher: SymlinkWatcher =
       if (followLinks)
-        new SymlinkWatcher(PathWatchers.get(false, new DirectoryRegistryImpl()))
+        new SymlinkWatcher(PathWatchers.get(false, new DirectoryRegistryImpl(), logger), logger)
       else null
     val callbackExecutor: Executor =
       Executor.make("FileTreeRepository-callback-executor")
     val tree: FileCacheDirectoryTree[T] = new FileCacheDirectoryTree[T](converter,
                                                                         callbackExecutor,
                                                                         symlinkWatcher,
-                                                                        rescanOnDirectoryUpdates)
+                                                                        rescanOnDirectoryUpdates,
+                                                                        logger)
     val pathWatcher: PathWatcher[PathWatchers.Event] =
-      PathWatchers.get(false, tree.readOnlyDirectoryRegistry())
+      PathWatchers.get(false, tree.readOnlyDirectoryRegistry(), logger)
     pathWatcher.addObserver(new Observer[Event]() {
       override def onError(t: Throwable): Unit = {}
 

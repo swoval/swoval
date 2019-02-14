@@ -5,6 +5,9 @@ import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
+import com.swoval.logging.Logger;
+import com.swoval.logging.Loggers;
+import com.swoval.logging.Loggers.Level;
 import com.swoval.runtime.ShutdownHooks;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -28,13 +31,21 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
         }
       };
   private final int shutdownHookId;
-  private final DebugLogger logger = Loggers.getDebug();
+  private final Logger logger;
 
   FileTreeRepositoryImpl(
-      final FileCacheDirectoryTree<T> directoryTree, final FileCachePathWatcher<T> watcher) {
+      final FileCacheDirectoryTree<T> directoryTree,
+      final FileCachePathWatcher<T> watcher,
+      final Logger logger) {
     this.shutdownHookId = ShutdownHooks.addHook(1, closeRunnable);
     this.directoryTree = directoryTree;
     this.watcher = watcher;
+    this.logger = logger;
+  }
+
+  FileTreeRepositoryImpl(
+      final FileCacheDirectoryTree<T> directoryTree, final FileCachePathWatcher<T> watcher) {
+    this(directoryTree, watcher, Loggers.getLogger());
   }
 
   /** Cleans up the path watcher and clears the directory cache. */
@@ -88,8 +99,8 @@ class FileTreeRepositoryImpl<T> implements FileTreeRepository<T> {
       final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
       final Either<IOException, Boolean> res =
           Either.right(watcher.register(absolutePath, maxDepth));
-      if (logger.shouldLog())
-        logger.debug("FileTreeRepository registered " + path + " with max depth " + maxDepth);
+      if (Loggers.shouldLog(logger, Level.DEBUG))
+        logger.debug(this + " registered " + path + " with max depth " + maxDepth);
       return res;
     } catch (final IOException e) {
       return Either.left(e);

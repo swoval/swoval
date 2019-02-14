@@ -13,6 +13,9 @@ import com.swoval.files.apple.FileEventMonitors.Handle;
 import com.swoval.files.apple.FileEventMonitors.Handles;
 import com.swoval.files.apple.Flags.Create;
 import com.swoval.functional.Consumer;
+import com.swoval.logging.Logger;
+import com.swoval.logging.Loggers;
+import com.swoval.logging.Loggers.Level;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.Files;
@@ -48,8 +51,7 @@ class MacOSXWatchService implements RegisterableWatchService {
   private final AtomicBoolean open = new AtomicBoolean(true);
   private final WatchKeys registered = new WatchKeys();
   private final LinkedBlockingQueue<MacOSXWatchKey> readyKeys = new LinkedBlockingQueue<>();
-  private final DebugLogger logger = Loggers.getDebug();
-
+  private final Logger logger;
   private final Consumer<String> dropEvent =
       new Consumer<String>() {
         @Override
@@ -66,8 +68,8 @@ class MacOSXWatchService implements RegisterableWatchService {
         @Override
         public void accept(final FileEvent fileEvent) {
           final Path path = Paths.get(fileEvent.fileName);
-          if (logger.shouldLog())
-            logger.debug("MacOSXWatchService received event for path " + fileEvent);
+          if (Loggers.shouldLog(logger, Level.DEBUG))
+            logger.debug(this + " received event for path " + fileEvent.fileName);
           final WatchKey childKeys = registered.get(path);
           final WatchKey watchKey =
               childKeys == null ? registered.get(path.getParent()) : childKeys;
@@ -88,8 +90,8 @@ class MacOSXWatchService implements RegisterableWatchService {
               }
             }
           } else {
-            if (logger.shouldLog())
-              logger.debug("MacOSXWatchService dropping event for unregistered path " + path);
+            if (Loggers.shouldLog(logger, Level.DEBUG))
+              logger.debug(this + " dropping event for unregistered path " + path);
           }
         }
       };
@@ -106,10 +108,27 @@ class MacOSXWatchService implements RegisterableWatchService {
    */
   public MacOSXWatchService(final int watchLatency, final TimeUnit timeUnit, final int queueSize)
       throws InterruptedException {
+    this(watchLatency, timeUnit, queueSize, Loggers.getLogger());
+  }
+
+  /**
+   * Creates a new MacOSXWatchService.
+   *
+   * @param watchLatency the minimum latency between watch events specified in units of <code>
+   *     timeUnit</code>
+   * @param timeUnit the time unit the latency is specified with
+   * @param queueSize the maximum number of events to queue per watch key
+   * @param logger the logger
+   * @throws InterruptedException if the native file events api initialization is interrupted.
+   */
+  public MacOSXWatchService(
+      final int watchLatency, final TimeUnit timeUnit, final int queueSize, final Logger logger)
+      throws InterruptedException {
     this.watchLatency = watchLatency;
     this.queueSize = queueSize;
     this.watchTimeUnit = timeUnit;
     this.fileEventMonitor = FileEventMonitors.get(onFileEvent, dropEvent);
+    this.logger = logger;
   }
 
   /**
@@ -210,7 +229,7 @@ class MacOSXWatchService implements RegisterableWatchService {
           result = new MacOSXWatchKey(realPath, queueSize, Handles.INVALID, kinds);
           watchKey.add(result);
         }
-        if (logger.shouldLog()) logger.debug("MacOSXWatchService registered path " + path);
+        if (Loggers.shouldLog(logger, Level.DEBUG)) logger.debug(this + " registered path " + path);
         return result;
       } finally {
         registered.unlock();
@@ -364,8 +383,8 @@ class MacOSXWatchService implements RegisterableWatchService {
     }
 
     void createEvent(final WatchEvent.Kind<Path> kind, final Path file) {
-      if (logger.shouldLog())
-        logger.debug("MacOSXWatchService creating event for " + file + " with kind " + kind);
+      if (Loggers.shouldLog(logger, Level.DEBUG))
+        logger.debug(this + " creating event for " + file + " with kind " + kind);
       Event<Path> event = new Event<>(kind, 1, watchable.relativize(file));
       addEvent(event);
     }

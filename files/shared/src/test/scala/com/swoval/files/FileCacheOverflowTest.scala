@@ -1,12 +1,13 @@
-package com.swoval.files
+package com
+package swoval
+package files
 
 import java.io.IOException
-import java.nio.file.{ Path, Paths }
+import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.FileTreeDataViews.Entry
-import com.swoval.files.TestHelpers.EntryOps._
 import com.swoval.files.TestHelpers._
 import com.swoval.files.test._
 import com.swoval.runtime.Platform
@@ -20,19 +21,19 @@ import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
 
 trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
-  import FileCacheOverflowTest._
   def getBounded[T <: AnyRef](
       converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeDataViews.CacheObserver[T]
-  ): FileTreeRepository[T] =
+  )(implicit testLogger: TestLogger): FileTreeRepository[T] =
     FileCacheTest.get[T](
       false,
       converter,
       cacheObserver,
-      (r: DirectoryRegistry) => {
+      (r: DirectoryRegistry, _) => {
         PathWatchers.get(false,
                          new BoundedWatchService(boundedQueueSize, RegisterableWatchServices.get()),
-                         r)
+                         r,
+                         testLogger)
       }
     )
   private val name = getClass.getSimpleName
@@ -56,6 +57,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
 
   val testsImpl = Tests {
     'overflow - withTempDirectory { root =>
+      implicit val logger: TestLogger = new CachingLogger
       val dir = root.resolve("overflow").resolve(name).createDirectories()
       // Windows is slow (at least on my vm)
       val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
@@ -153,8 +155,6 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
           .andThen {
             case Failure(e) =>
               println(s"Task failed $e")
-              println(
-                s"Log lines:\n${TestLogger.lines.synchronized(TestLogger.lines.asScala.toIndexedSeq) mkString "\n"}")
               if (creationLatch.getCount > 0) {
                 val count = creationLatch.getCount
                 println((allFiles diff foundFiles).toSeq.take(10).sorted mkString "\n")
@@ -198,12 +198,12 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
   }
 }
 object FileCacheOverflowTest extends FileCacheOverflowTest with DefaultFileCacheTest {
-  private implicit class SyncOps[T](val t: T) extends AnyVal {
+  private implicit class SyncOps[T <: AnyRef](val t: T) extends AnyVal {
     def sync[R](f: T => R): R = t.synchronized(f(t))
   }
-  override def getBounded[T <: AnyRef](
-      converter: FileTreeDataViews.Converter[T],
-      cacheObserver: FileTreeDataViews.CacheObserver[T]): FileTreeRepository[T] =
+  override def getBounded[T <: AnyRef](converter: FileTreeDataViews.Converter[T],
+                                       cacheObserver: FileTreeDataViews.CacheObserver[T])(
+      implicit logger: TestLogger): FileTreeRepository[T] =
     if (Platform.isMac) FileCacheTest.getCached(false, converter, cacheObserver)
     else super.getBounded(converter, cacheObserver)
   val tests = testsImpl
@@ -213,6 +213,7 @@ object NioFileCacheOverflowTest extends FileCacheOverflowTest with NioFileCacheT
     if (Platform.isJVM && Platform.isMac) testsImpl
     else
       Tests('ignore - {
-        println("Not running NioFileCacheTest on platform other than the jvm on osx")
+        if (swoval.test.verbose)
+          println("Not running NioFileCacheTest on platform other than the jvm on osx")
       })
 }

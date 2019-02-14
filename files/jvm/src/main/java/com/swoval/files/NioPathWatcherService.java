@@ -13,6 +13,9 @@ import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Overflow;
 import com.swoval.functional.Consumer;
 import com.swoval.functional.Either;
+import com.swoval.logging.Logger;
+import com.swoval.logging.Loggers;
+import com.swoval.logging.Loggers.Level;
 import com.swoval.runtime.ShutdownHooks;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
@@ -37,13 +40,15 @@ class NioPathWatcherService implements AutoCloseable {
   private final RegisterableWatchService watchService;
   private final WatchedDirectoriesByPath watchedDirectoriesByPath = new WatchedDirectoriesByPath();
   private final int shutdownHookId;
-  private final DebugLogger logger = Loggers.getDebug();
+  private final Logger logger;
 
   NioPathWatcherService(
       final Consumer<Either<Overflow, Event>> eventConsumer,
-      final RegisterableWatchService watchService)
+      final RegisterableWatchService watchService,
+      final Logger logger)
       throws InterruptedException {
     this.watchService = watchService;
+    this.logger = logger;
     this.shutdownHookId =
         ShutdownHooks.addHook(
             1,
@@ -54,6 +59,7 @@ class NioPathWatcherService implements AutoCloseable {
               }
             });
     final CountDownLatch latch = new CountDownLatch(1);
+    final String prefix = this.toString();
     loopThread =
         new Thread("NioPathWatcher-loop-thread-" + threadId.incrementAndGet()) {
           @Override
@@ -71,12 +77,9 @@ class NioPathWatcherService implements AutoCloseable {
                 while (it.hasNext()) {
                   final WatchEvent<?> e = it.next();
                   final WatchEvent.Kind<?> k = e.kind();
-                  if (logger.shouldLog())
+                  if (Loggers.shouldLog(logger, Level.DEBUG))
                     logger.debug(
-                        "NioPathWatcherService received event for path "
-                            + e.context()
-                            + " with kind "
-                            + k);
+                        prefix + " received event for path " + e.context() + " with kind " + k);
                   if (OVERFLOW.equals(k)) {
                     final Either<Overflow, Event> result =
                         Either.left(new Overflow((Path) key.watchable()));
@@ -117,6 +120,7 @@ class NioPathWatcherService implements AutoCloseable {
     @Override
     public void close() {
       if (!isShutdown.get() && closed.compareAndSet(false, true)) {
+        if (Loggers.shouldLog(logger, Level.DEBUG)) logger.debug(this + " stopping watch");
         watchedDirectoriesByPath.remove(path);
         key.reset();
         key.cancel();
@@ -131,6 +135,7 @@ class NioPathWatcherService implements AutoCloseable {
 
   Either<IOException, WatchedDirectory> register(final Path path) {
     Either<IOException, WatchedDirectory> result;
+    if (Loggers.shouldLog(logger, Level.DEBUG)) logger.debug(this + " registering " + path);
     try {
       if (watchedDirectoriesByPath.lock()) {
         try {
@@ -138,8 +143,12 @@ class NioPathWatcherService implements AutoCloseable {
           if (previousWatchedDirectory == null) {
             final WatchedDirectory watchedDirectory = new CachedWatchDirectory(path);
             watchedDirectoriesByPath.put(path, watchedDirectory);
+            if (Loggers.shouldLog(logger, Level.DEBUG))
+              logger.debug(this + " creating new watch key for " + path);
             result = Either.right(watchedDirectory);
           } else {
+            if (Loggers.shouldLog(logger, Level.DEBUG))
+              logger.debug(this + " using existing watch key for " + path);
             result = Either.right(previousWatchedDirectory);
           }
         } finally {
@@ -153,6 +162,11 @@ class NioPathWatcherService implements AutoCloseable {
     } catch (final IOException e) {
       result = Either.left(e);
     }
+    if (Loggers.shouldLog(logger, Level.DEBUG))
+      logger.debug(
+          this
+              + (" registration for " + path + " ")
+              + (result.isLeft() ? "failed (" + result + ")" : "succeeded"));
     return result;
   }
 

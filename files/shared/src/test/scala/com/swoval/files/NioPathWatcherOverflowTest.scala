@@ -1,6 +1,8 @@
-package com.swoval.files
+package com
+package swoval
+package files
 
-import java.nio.file.{ Path }
+import java.nio.file.Path
 
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.TestHelpers._
@@ -11,13 +13,13 @@ import com.swoval.test._
 import utest._
 
 import scala.collection.mutable
-import scala.util.Failure
 
 object NioPathWatcherOverflowTest extends TestSuite {
   val tests = if (Platform.isJVM || !Platform.isMac) Tests {
     val subdirsToAdd = 200
     val executor = Executor.make("NioPathWatcherOverflowTest-executor")
     'overflows - withTempDirectory { dir =>
+      implicit val logger: TestLogger = new CachingLogger
       val subdirs = 1 to subdirsToAdd map { i =>
         dir.resolve(s"subdir-$i")
       }
@@ -39,7 +41,8 @@ object NioPathWatcherOverflowTest extends TestSuite {
         PlatformWatcher.make(
           false,
           new BoundedWatchService(4, RegisterableWatchServices.get()),
-          new DirectoryRegistryImpl()
+          new DirectoryRegistryImpl(),
+          logger
         )) { c =>
         c.addObserver(callback)
         c.register(dir, Integer.MAX_VALUE)
@@ -57,9 +60,7 @@ object NioPathWatcherOverflowTest extends TestSuite {
       }
     }
   } else
-    Tests {
-      'ignore - {
-        println("Not running NioPathWatcher on scala.js on osx")
-      }
-    }
+    Tests('ignore - {
+      if (swoval.test.verbose) println("Not running NioPathWatcher on scala.js on osx")
+    })
 }

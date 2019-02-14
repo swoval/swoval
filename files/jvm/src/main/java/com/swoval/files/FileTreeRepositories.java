@@ -3,6 +3,8 @@ package com.swoval.files;
 import com.swoval.files.FileTreeDataViews.Converter;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
+import com.swoval.logging.Logger;
+import com.swoval.logging.Loggers;
 import java.io.IOException;
 
 /** Provides factory methods for generating instances of {@link FileTreeRepository}. */
@@ -27,7 +29,7 @@ public class FileTreeRepositories {
   public static <T> FileTreeRepository<T> get(
       final Converter<T> converter, final boolean followLinks)
       throws InterruptedException, IOException {
-    return get(converter, followLinks, false);
+    return get(converter, followLinks, false, Loggers.getLogger());
   }
   /**
    * Create a file tree repository.
@@ -44,6 +46,7 @@ public class FileTreeRepositories {
    *     update is detected for that directory. This can be very expensive since it will perform
    *     iops proportional to the number of files in the subtree. It generally should not be
    *     necessary since we are also watching the subtree for events.
+   * @param logger
    * @param <T> the value type of the cache entries
    * @return a file tree repository.
    * @throws InterruptedException if the path watcher can't be started.
@@ -52,18 +55,20 @@ public class FileTreeRepositories {
   public static <T> FileTreeRepository<T> get(
       final Converter<T> converter,
       final boolean followLinks,
-      final boolean rescanOnDirectoryUpdates)
+      final boolean rescanOnDirectoryUpdates,
+      final Logger logger)
       throws InterruptedException, IOException {
     final SymlinkWatcher symlinkWatcher =
         followLinks
-            ? new SymlinkWatcher(PathWatchers.get(false, new DirectoryRegistryImpl()))
+            ? new SymlinkWatcher(
+                PathWatchers.get(false, new DirectoryRegistryImpl(), logger), logger)
             : null;
     final Executor callbackExecutor = Executor.make("FileTreeRepository-callback-executor");
     final FileCacheDirectoryTree<T> tree =
         new FileCacheDirectoryTree<>(
-            converter, callbackExecutor, symlinkWatcher, rescanOnDirectoryUpdates);
+            converter, callbackExecutor, symlinkWatcher, rescanOnDirectoryUpdates, logger);
     final PathWatcher<PathWatchers.Event> pathWatcher =
-        PathWatchers.get(false, tree.readOnlyDirectoryRegistry());
+        PathWatchers.get(false, tree.readOnlyDirectoryRegistry(), logger);
     pathWatcher.addObserver(
         new Observer<Event>() {
           @Override

@@ -4,6 +4,7 @@ import java.io.IOException
 import java.nio.charset.Charset
 import java.nio.file._
 import java.nio.file.attribute.{ BasicFileAttributes, FileTime }
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ BlockingQueue, TimeUnit }
 
 import utest._
@@ -167,14 +168,14 @@ package object test {
     }
   }
 
-  def using[C <: AutoCloseable, R: NotFuture](closeable: => C)(f: C => R): Future[R] = {
+  def usingT[C <: AutoCloseable, R: NotFuture](closeable: => C)(f: C => R): Future[R] = {
     val c = closeable
     val p = Promise[R]
     p.tryComplete(Try(f(c)))
     p.future.andThen { case _ => c.close() }
   }
 
-  def usingAsync[C <: AutoCloseable, R](closeable: => C)(f: C => Future[R]): Future[R] = {
+  def usingAsyncT[C <: AutoCloseable, R](closeable: => C)(f: C => Future[R]): Future[R] = {
     val c = closeable
     f(c).andThen { case _ => c.close() }
   }
@@ -220,4 +221,8 @@ package object test {
   }
   def testOn(desc: String, platforms: Platform*)(tests: Any): Tests = macro Macros.testOnWithDesc
   def testOn(platforms: Platform*)(tests: Any): Tests = macro Macros.testOn
+
+  private[this] val _verbose = new AtomicBoolean(true)
+  def setVerbose(value: Boolean): Unit = _verbose.set(value)
+  def verbose: Boolean = _verbose.get()
 }

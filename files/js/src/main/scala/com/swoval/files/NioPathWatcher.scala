@@ -16,6 +16,10 @@ import com.swoval.files.PathWatchers.Overflow
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
+import com.swoval.functional.Filters
+import com.swoval.logging.Logger
+import com.swoval.logging.Loggers
+import com.swoval.logging.Loggers.Level
 import java.io.IOException
 import java.nio.file.FileSystems
 import java.nio.file.NoSuchFileException
@@ -33,7 +37,8 @@ class RootDirectories extends LockableMap[Path, CachedDirectory[WatchedDirectory
  Provides a PathWatcher that is backed by a [[java.nio.file.WatchService]].
  */
 class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
-                     watchService: RegisterableWatchService)
+                     watchService: RegisterableWatchService,
+                     private val logger: Logger)
     extends PathWatcher[PathWatchers.Event]
     with AutoCloseable {
 
@@ -50,8 +55,6 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           Either.getOrElse(service.register(typedPath.getPath), WatchedDirectories.INVALID)
         else WatchedDirectories.INVALID
     }
-
-  private val logger: DebugLogger = Loggers.getDebug
 
   private def updateCacheObserver(events: List[Event]): CacheObserver[WatchedDirectory] =
     new CacheObserver[WatchedDirectory]() {
@@ -76,6 +79,8 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
 
       override def onDelete(oldEntry: FileTreeDataViews.Entry[WatchedDirectory]): Unit = {
         if (oldEntry.getValue.isRight) {
+          if (Loggers.shouldLog(logger, Level.DEBUG))
+            logger.debug(this + " closing key for " + oldEntry.getTypedPath.getPath)
           oldEntry.getValue.get.close()
         }
         events.add(new Event(oldEntry.getTypedPath, Delete))
@@ -100,7 +105,8 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
         }
       }
     },
-    watchService
+    watchService,
+    logger
   )
 
   /**
@@ -119,6 +125,37 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
       val dir: CachedDirectory[WatchedDirectory] = getOrAdd(typedPath.getPath)
       if (dir != null) {
         update(dir, typedPath, events, true)
+      }
+    }
+  }
+
+  private def remove(path: Path, events: List[Event]): Unit = {
+    val root: CachedDirectory[WatchedDirectory] = rootDirectories.remove(path)
+    val dir: CachedDirectory[WatchedDirectory] =
+      if (root == null) find(path) else root
+    if (dir != null) remove(dir, path, events)
+  }
+
+  private def remove(cachedDirectory: CachedDirectory[WatchedDirectory],
+                     path: Path,
+                     events: List[Event]): Unit = {
+    val toCancel: List[FileTreeDataViews.Entry[WatchedDirectory]] =
+      cachedDirectory.remove(path)
+    if (path == null || path == cachedDirectory.getPath)
+      toCancel.add(cachedDirectory.getEntry)
+    val it: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
+      toCancel.iterator()
+    while (it.hasNext) {
+      val entry: FileTreeDataViews.Entry[WatchedDirectory] = it.next()
+      val either: Either[IOException, WatchedDirectory] = entry.getValue
+      if (either.isRight) {
+        if (events != null) {
+          val typedPath: TypedPath = TypedPaths.get(
+            entry.getTypedPath.getPath,
+            TypedPaths.getKind(entry.getTypedPath) | Entries.NONEXISTENT)
+          events.add(new Event(typedPath, Delete))
+        }
+        either.get.close()
       }
     }
   }
@@ -152,12 +189,13 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
       }
     }
     runCallbacks(events)
-    if (logger.shouldLog())
-      logger.debug(
-        "NioPathWatcher registered " + path + " with max depth " +
-          maxDepth)
+    if (Loggers.shouldLog(logger, Level.DEBUG))
+      logger.debug(this + " registered " + path + " with max depth " + maxDepth)
     Either.right(result)
   }
+
+  private def find(rawPath: Path): CachedDirectory[WatchedDirectory] =
+    find(rawPath, null)
 
   private def find(rawPath: Path, toRemove: List[Path]): CachedDirectory[WatchedDirectory] = {
     val path: Path = if (rawPath == null) getRoot else rawPath
@@ -172,7 +210,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           val root: Path = entry.getKey
           if (path.startsWith(root)) {
             result = entry.getValue
-          } else if (root.startsWith(path) && path != root) {
+          } else if (toRemove != null && root.startsWith(path) && path != root) {
             toRemove.add(root)
           }
         }
@@ -245,8 +283,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     directoryRegistry.removeDirectory(absolutePath)
     if (rootDirectories.lock()) {
       try {
-        val dir: CachedDirectory[WatchedDirectory] =
-          find(absolutePath, new ArrayList[Path]())
+        val dir: CachedDirectory[WatchedDirectory] = find(absolutePath)
         if (dir != null) {
           val depth: Int = dir.getPath.relativize(absolutePath).getNameCount
           val toRemove: List[FileTreeDataViews.Entry[WatchedDirectory]] =
@@ -262,24 +299,15 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           while (it.hasNext) {
             val entry: FileTreeDataViews.Entry[WatchedDirectory] = it.next()
             if (!directoryRegistry.acceptPrefix(entry.getTypedPath.getPath)) {
-              remove(dir, entry.getTypedPath.getPath)
+              remove(dir, entry.getTypedPath.getPath, null)
             }
           }
           rootDirectories.remove(dir.getPath)
         }
       } finally rootDirectories.unlock()
     }
-    if (logger.shouldLog()) logger.debug("NioPathWatcher unregistered " + path)
-  }
-
-  private def remove(cachedDirectory: CachedDirectory[WatchedDirectory], path: Path): Unit = {
-    val toCancel: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
-      cachedDirectory.remove(path).iterator()
-    while (toCancel.hasNext) {
-      val either: Either[IOException, WatchedDirectory] =
-        toCancel.next().getValue
-      if (either.isRight) either.get.close()
-    }
+    if (Loggers.shouldLog(logger, Level.DEBUG))
+      logger.debug(this + " unregistered " + path)
   }
 
   override def close(): Unit = {
@@ -298,7 +326,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
       .observe(updateCacheObserver(events))
     catch {
       case e: NoSuchFileException => {
-        remove(dir, typedPath.getPath)
+        remove(dir, typedPath.getPath, events)
         val newTypedPath: TypedPath = TypedPaths.get(typedPath.getPath)
         events.add(new Event(newTypedPath, if (newTypedPath.exists()) Kind.Modify else Kind.Delete))
         val root: CachedDirectory[WatchedDirectory] =
@@ -317,13 +345,12 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
 
   private def handleOverflow(overflow: Overflow): Unit = {
     val path: Path = overflow.getPath
-    if (logger.shouldLog())
-      logger.debug("NioPathWatcher received overflow for " + path)
+    if (Loggers.shouldLog(logger, Level.DEBUG))
+      logger.debug(this + " received overflow for " + path)
     val events: List[Event] = new ArrayList[Event]()
     if (rootDirectories.lock()) {
       try {
-        val root: CachedDirectory[WatchedDirectory] =
-          find(path, new ArrayList[Path]())
+        val root: CachedDirectory[WatchedDirectory] = find(path)
         if (root != null) {
           try {
             val it: Iterator[TypedPath] = FileTreeViews
@@ -372,44 +399,20 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
   }
 
   private def handleEvent(event: Event): Unit = {
-    if (logger.shouldLog())
-      logger.debug("NioPathWatcher received event " + event)
+    if (Loggers.shouldLog(logger, Level.DEBUG))
+      logger.debug(this + " received event " + event)
     val events: List[Event] = new ArrayList[Event]()
     if (!closed.get && rootDirectories.lock()) {
       try if (directoryRegistry.acceptPrefix(event.getTypedPath.getPath)) {
+        val isDelete: Boolean = event.getKind == Delete
         val typedPath: TypedPath = TypedPaths.get(event.getTypedPath.getPath)
-        if (!typedPath.exists()) {
-          val root: CachedDirectory[WatchedDirectory] = getOrAdd(typedPath.getPath)
-          if (root != null) {
-            val isRoot: Boolean = root.getPath == typedPath.getPath
-            val it: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
-              if (isRoot)
-                root.listEntries(root.getMaxDepth, AllPass).iterator()
-              else root.remove(typedPath.getPath).iterator()
-            while (it.hasNext) {
-              val entry: FileTreeDataViews.Entry[WatchedDirectory] = it.next()
-              val either: Either[IOException, WatchedDirectory] =
-                entry.getValue
-              if (either.isRight) {
-                either.get.close()
-              }
-              events.add(new Event(Entries.setExists(entry, false).getTypedPath, Kind.Delete))
-            }
-            val parent: CachedDirectory[WatchedDirectory] =
-              find(typedPath.getPath.getParent, new ArrayList[Path]())
-            if (parent != null) {
-              update(parent, parent.getEntry.getTypedPath, events, event.getKind == Overflow)
-            }
-            if (isRoot) {
-              rootDirectories.remove(root.getPath)
-              getOrAdd(typedPath.getPath)
-            }
-          }
-        }
-        events.add(event)
-        if (typedPath.isDirectory && !typedPath.isSymbolicLink) {
-          add(typedPath, events)
-        }
+        if (isDelete) remove(typedPath.getPath, events)
+        if (typedPath.exists()) {
+          if (typedPath.isDirectory && !typedPath.isSymbolicLink)
+            add(typedPath, events)
+          events.add(event)
+        } else if (!isDelete) remove(typedPath.getPath, events)
+        else events.add(event)
       } finally rootDirectories.unlock()
     }
     runCallbacks(events)
