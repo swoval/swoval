@@ -229,49 +229,43 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
     }
   }
 
-  private CachedDirectory<WatchedDirectory> findOrAddRoot(final Path rawPath) {
-    assert (rawPath != null);
-    CachedDirectory<WatchedDirectory> result = find(rawPath);
-    if (result == null) {
-      /*
-       * We want to monitor the parent in case the file is deleted.
-       */
-      final Path parent = rawPath.getParent();
-      Path path = parent == null ? rawPath : parent;
-      boolean init = false;
-      while (!init && path != null) {
-        try {
-          result =
-              new CachedDirectoryImpl<>(
-                      TypedPaths.get(path),
-                      converter,
-                      Integer.MAX_VALUE,
-                      new Filter<TypedPath>() {
-                        @Override
-                        public boolean accept(final TypedPath typedPath) {
-                          return typedPath.isDirectory()
-                              && !typedPath.isSymbolicLink()
-                              && directoryRegistry.acceptPrefix(typedPath.getPath());
-                        }
-                      },
-                      false)
-                  .init();
-          init = true;
-          rootDirectories.put(path, result);
-        } catch (final IOException e) {
-          path = path.getParent();
-        }
-      }
-    }
-    return result;
-  }
-
   private CachedDirectory<WatchedDirectory> getOrAdd(final Path path) {
     CachedDirectory<WatchedDirectory> result = null;
     if (rootDirectories.lock()) {
       try {
         if (!closed.get()) {
-          result = findOrAddRoot(path);
+          result = find(path);
+          if (result == null) {
+            /*
+             * We want to monitor the parent in case the file is deleted.
+             */
+            Path parent = path.getParent();
+            boolean init = false;
+            while (!init && parent != null) {
+              try {
+                result =
+                    new CachedDirectoryImpl<>(
+                            TypedPaths.get(parent),
+                            converter,
+                            Integer.MAX_VALUE,
+                            new Filter<TypedPath>() {
+                              @Override
+                              public boolean accept(final TypedPath typedPath) {
+                                return typedPath.isDirectory()
+                                    && !typedPath.isSymbolicLink()
+                                    && directoryRegistry.acceptPrefix(typedPath.getPath());
+                              }
+                            },
+                            false)
+                        .init();
+                init = true;
+                rootDirectories.put(parent, result);
+              } catch (final IOException e) {
+                parent = parent.getParent();
+              }
+            }
+          }
+          return result;
         }
       } finally {
         rootDirectories.unlock();

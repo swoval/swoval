@@ -213,44 +213,38 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     }
   }
 
-  private def findOrAddRoot(rawPath: Path): CachedDirectory[WatchedDirectory] = {
-    assert((rawPath != null))
-    var result: CachedDirectory[WatchedDirectory] = find(rawPath)
-    if (result == null) {
-      /*
-       * We want to monitor the parent in case the file is deleted.
-       */
-
-      val parent: Path = rawPath.getParent
-      var path: Path = if (parent == null) rawPath else parent
-      var init: Boolean = false
-      while (!init && path != null) try {
-        result = new CachedDirectoryImpl(
-          TypedPaths.get(path),
-          converter,
-          java.lang.Integer.MAX_VALUE,
-          new Filter[TypedPath]() {
-            override def accept(typedPath: TypedPath): Boolean =
-              typedPath.isDirectory && !typedPath.isSymbolicLink && directoryRegistry
-                .acceptPrefix(typedPath.getPath)
-          },
-          false
-        ).init()
-        init = true
-        rootDirectories.put(path, result)
-      } catch {
-        case e: IOException => path = path.getParent
-
-      }
-    }
-    result
-  }
-
   private def getOrAdd(path: Path): CachedDirectory[WatchedDirectory] = {
     var result: CachedDirectory[WatchedDirectory] = null
     if (rootDirectories.lock()) {
       try if (!closed.get) {
-        result = findOrAddRoot(path)
+        result = find(path)
+        if (result == null) {
+          /*
+           * We want to monitor the parent in case the file is deleted.
+           */
+
+          var parent: Path = path.getParent
+          var init: Boolean = false
+          while (!init && parent != null) try {
+            result = new CachedDirectoryImpl(
+              TypedPaths.get(parent),
+              converter,
+              java.lang.Integer.MAX_VALUE,
+              new Filter[TypedPath]() {
+                override def accept(typedPath: TypedPath): Boolean =
+                  typedPath.isDirectory && !typedPath.isSymbolicLink && directoryRegistry
+                    .acceptPrefix(typedPath.getPath)
+              },
+              false
+            ).init()
+            init = true
+            rootDirectories.put(parent, result)
+          } catch {
+            case e: IOException => parent = parent.getParent
+
+          }
+        }
+        result
       } finally rootDirectories.unlock()
     }
     result
