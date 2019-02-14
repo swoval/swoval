@@ -8,7 +8,7 @@ import com.swoval.test._
 import utest._
 import utest.framework.ExecutionContext.RunNow
 
-object FileEventMonitorTest extends LoggingTestSuite {
+object FileEventMonitorTest extends TestSuite {
 
   def getFileEventsApi(onFileEvent: FileEvent => Unit,
                        onStreamClosed: String => Unit = (_: String) => {}): FileEventMonitor =

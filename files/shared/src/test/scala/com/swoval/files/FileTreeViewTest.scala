@@ -25,7 +25,7 @@ object FileTreeViewTest {
   }
 }
 import com.swoval.files.FileTreeViewTest._
-class FileTreeViewTest(newFileTreeView: (Path, Int, Boolean) => DirectoryView) extends LoggingTestSuite {
+class FileTreeViewTest(newFileTreeView: (Path, Int, Boolean) => DirectoryView) extends TestSuite {
   def newFileTreeView(path: Path): DirectoryView = newFileTreeView(path, Integer.MAX_VALUE, false)
   def newFileTreeView(path: Path, maxDepth: Int): DirectoryView =
     newFileTreeView(path, maxDepth, true)

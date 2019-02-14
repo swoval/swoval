@@ -20,7 +20,7 @@ import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
 
-trait FileCacheOverflowTest extends LoggingTestSuite with FileCacheTest {
+trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
   def getBounded[T <: AnyRef](
       converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeDataViews.CacheObserver[T]

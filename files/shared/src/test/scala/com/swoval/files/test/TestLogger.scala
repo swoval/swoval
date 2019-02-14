@@ -6,9 +6,8 @@ import java.io.OutputStream
 import java.util
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicReference
 
-import com.swoval.logging.{ Logger, Loggers }
+import com.swoval.logging.Logger
 import com.swoval.logging.Loggers.Level
 
 import scala.collection.JavaConverters._
@@ -30,20 +29,6 @@ object TestLogger {
   def unregister(testName: String): Unit = registeredTests.synchronized(registeredTests -= testName)
 }
 
-object LoggingTestSuite {
-  private[this] val defaultOutputStream: AtomicReference[String => OutputStream] =
-    new AtomicReference[String => OutputStream]((_: String) => System.out)
-  def setOutputStreamFactory(factory: String => OutputStream): Unit =
-    defaultOutputStream.set(factory)
-}
-trait LoggingTestSuite extends utest.TestSuite {
-  private[this] val name = new AtomicReference[String]("")
-  private[this] val os = new AtomicReference[OutputStream](System.out)
-  final def setName(string: String): Unit = name.set(string)
-  final def setOutputStream(outputStream: OutputStream): Unit = os.set(outputStream)
-  final def register(): Unit = TestLogger.register(name.get(), os.get())
-  final def unregister(): Unit = TestLogger.unregister(name.get())
-}
 final class CachingLogger(level: Level) extends TestLogger {
   def this() = this(TestLogger.defaultLevel)
   private[this] val lines: util.List[String] =

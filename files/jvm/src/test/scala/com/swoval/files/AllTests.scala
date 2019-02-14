@@ -7,7 +7,6 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{ ArrayBlockingQueue, ConcurrentHashMap, TimeUnit }
 
 import com.swoval.files.apple.FileEventMonitorTest
-import com.swoval.files.test.LoggingTestSuite
 import utest._
 import utest.framework.{ HTree, Result }
 
@@ -21,47 +20,23 @@ object AllTests {
     def intValue(default: Int): Int = Try(Integer.valueOf(s).toInt).getOrElse(default)
   }
   final class CachingOutputStream extends OutputStream {
-    val size = 20000
-    val limit = 10
-    var builders: Seq[StringBuilder] = new StringBuilder(size) :: Nil
-    override def write(b: Int): Unit = {
-      val builder = builders.last
-      if (builder.size >= size - limit) {
-        val newBuilder = new StringBuilder(size)
-        builders = builders :+ newBuilder
-        newBuilder.append(b.toChar)
-      } else {
-        builder.append(b.toChar)
-      }
-    }
-    def printContent(outputStream: OutputStream): Unit = {
-      builders.foreach { b =>
-        outputStream.write(b.toString.getBytes)
-      }
-      outputStream.flush()
-    }
+    val builder = new StringBuilder
+    override def write(b: Int): Unit = builder.append(b.toChar)
+    def printContent(outputStream: OutputStream): Unit = println(builder.toString)
   }
-  def baseArgs(count: String,
-               timeout: String,
-               debug: Option[String],
-               logger: Option[String]): Int = {
+  def baseArgs(count: String, timeout: String, debug: Option[String]): Int = {
     debug.foreach(System.setProperty("swoval.debug", _))
-    logger.foreach(System.setProperty("swoval.debug.logger", _))
     count.intValue(default = 1)
   }
   def main(args: Array[String]): Unit = {
     val iterations = args match {
-      case Array(count, timeout, debug, logger) =>
-        baseArgs(count, timeout, Some(debug), Some(logger))
-      case Array(count, timeout, debug) => baseArgs(count, timeout, Some(debug), None)
-      case Array(count, timeout)        => baseArgs(count, timeout, None, None)
+      case Array(count, timeout, debug) => baseArgs(count, timeout, Some(debug))
+      case Array(count, timeout)        => baseArgs(count, timeout, None)
     }
     try {
       1 to iterations foreach { i =>
-        outputStreams.clear()
-        try {
-          run(i)
-        } catch {
+        try run(i)
+        catch {
           case e: Throwable =>
             System.err.println(s"Tests failed during run $i ($e)")
             e.printStackTrace(System.err)
@@ -76,8 +51,8 @@ object AllTests {
   def run(count: Int): Unit = {
     System.gc()
     val now = System.nanoTime
-    def test[T <: LoggingTestSuite](t: T): (Tests, String, T) =
-      (t.tests, t.getClass.getCanonicalName, t)
+    def test[T <: TestSuite](t: T): (Tests, String) =
+      (t.tests, t.getClass.getCanonicalName)
     val tests = Seq(
       test(BasicFileCacheTest),
       test(NioBasicFileCacheTest),
@@ -89,6 +64,7 @@ object AllTests {
       test(DataViewTest),
       test(CachedFileTreeViewTest),
       test(PathTest),
+      test(NioPathWatcherOverflowTest),
       test(NioPathWatcherTest),
       test(DirectoryFileTreeViewTest),
       test(ApplePathWatcherTest)
@@ -101,24 +77,19 @@ object AllTests {
       1 + (uniform * (uniform + 1)) / n
     }
     print(s"Iteration $count (group size $groupSize)...")
+    val outputStreams = new ConcurrentHashMap[String, CachingOutputStream]
     tests.grouped(groupSize) foreach { group =>
       new Thread(s"${group.map(_._2)} test thread") {
         setDaemon(true)
         start()
         override final def run(): Unit =
           group.foreach {
-            case (t, n, test) =>
+            case (t, n) =>
               val outputStream = new CachingOutputStream
               outputStreams.put(n, outputStream)
-              test.setOutputStream(outputStream)
-              test.setName(n)
-              if (System.getProperty("swoval.alltest.verbose", "false") == "true") {
-                test.register()
-              }
               val printStream = new PrintStream(outputStream, false)
               try queue.add(n -> Try(TestRunner.runAndPrint(t, n, printStream = printStream)))
-              catch { case e: InterruptedException => queue.add(n -> Failure(e)) } finally test
-                .unregister()
+              catch { case e: InterruptedException => queue.add(n -> Failure(e)) }
           }
       }
     }
@@ -127,8 +98,8 @@ object AllTests {
       queue.poll(30, TimeUnit.SECONDS) match {
         case null if completed.size != tests.size =>
           tests.foreach {
-            case (_, name, _) if !completed.contains(name) =>
-              outputStreams.get(name).foreach(s => s.printContent(System.err))
+            case (_, name) if !completed.contains(name) =>
+              Option(outputStreams.get(name)).foreach(s => s.printContent(System.err))
           }
           throw new IllegalStateException(
             s"Test failed: ${tests.map(_._2).toSet diff completed.asScala.toSet} failed to complete")
@@ -137,14 +108,14 @@ object AllTests {
           result.leaves.map(_.value).foreach {
             case Failure(e) =>
               System.err.println(s"Tests failed. Dumping output.")
-              outputStreams.get(n).foreach(s => s.printContent(System.err))
+              Option(outputStreams.get(n)).foreach(s => s.printContent(System.err))
               failure.compareAndSet(None, Some(e))
             case _ =>
           }
         case (n, Failure(e)) =>
           completed.add(n)
           System.err.println(s"Tests failed. Dumping output.")
-          outputStreams.get(n).foreach(s => s.printContent(System.err))
+          Option(outputStreams.get(n)).foreach(s => s.printContent(System.err))
           failure.compareAndSet(None, Some(e))
       }
     }

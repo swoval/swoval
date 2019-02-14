@@ -10,7 +10,7 @@ import com.swoval.test._
 import utest._
 import TestHelpers._
 
-trait PathWatcherSymlinkTest extends LoggingTestSuite {
+trait PathWatcherSymlinkTest extends TestSuite {
   def defaultWatcher(callback: PathWatchers.Event => _)(
       implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event]
   val testsImpl = Tests {

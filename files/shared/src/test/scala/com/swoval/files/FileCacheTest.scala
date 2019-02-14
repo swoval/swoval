@@ -15,7 +15,7 @@ import utest._
 
 import scala.collection.JavaConverters._
 
-trait FileCacheTest extends LoggingTestSuite { self: TestSuite =>
+trait FileCacheTest extends TestSuite { self: TestSuite =>
   val factory: (DirectoryRegistry, TestLogger) => PathWatcher[Event]
   def identity: Converter[Path] = (_: TypedPath).getPath
 

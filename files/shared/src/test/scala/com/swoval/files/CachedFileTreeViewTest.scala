@@ -18,7 +18,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.Future
 
-object CachedFileTreeViewTest extends LoggingTestSuite {
+object CachedFileTreeViewTest extends TestSuite {
   def newCachedView(path: Path): CachedDirectory[Path] = newCachedView(path, Integer.MAX_VALUE)
   def newCachedView(path: Path, maxDepth: Int): CachedDirectory[Path] =
     newCachedView(path, maxDepth, followLinks = true)

@@ -21,7 +21,7 @@ import TestHelpers._
 import EntryOps._
 import com.swoval.files.FileTreeDataViews.CacheObserver
 
-trait FileCacheSymlinkTest extends LoggingTestSuite with FileCacheTest {
+trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
   val testsImpl = Tests {
     'initial - withTempDirectory { dir =>
       implicit val logger: TestLogger = new CachingLogger

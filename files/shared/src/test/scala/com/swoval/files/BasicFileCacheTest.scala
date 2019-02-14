@@ -21,7 +21,7 @@ import scala.collection.mutable
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 
-trait BasicFileCacheTest extends test.LoggingTestSuite with FileCacheTest {
+trait BasicFileCacheTest extends TestSuite with FileCacheTest {
   def ignore[T]: Entry[T] => Unit = (_: Entry[T]) => ()
   def ignoreOld[T](f: Entry[T] => Unit): (Entry[T], Entry[T]) => Unit = (_, e) => f(e)
   val testsImpl: Tests = Tests {
