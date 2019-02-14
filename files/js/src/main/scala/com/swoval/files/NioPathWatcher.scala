@@ -264,23 +264,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
       try {
         val dir: CachedDirectory[WatchedDirectory] = find(absolutePath)
         if (dir != null) {
-          val depth: Int = dir.getPath.relativize(absolutePath).getNameCount
-          val toRemove: List[FileTreeDataViews.Entry[WatchedDirectory]] =
-            dir.listEntries(
-              depth,
-              new Filter[FileTreeDataViews.Entry[WatchedDirectory]]() {
-                override def accept(entry: FileTreeDataViews.Entry[WatchedDirectory]): Boolean =
-                  !directoryRegistry.acceptPrefix(entry.getTypedPath.getPath)
-              }
-            )
-          val it: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
-            toRemove.iterator()
-          while (it.hasNext) {
-            val entry: FileTreeDataViews.Entry[WatchedDirectory] = it.next()
-            if (!directoryRegistry.acceptPrefix(entry.getTypedPath.getPath)) {
-              remove(dir, entry.getTypedPath.getPath, null)
-            }
-          }
+          remove(dir, path, null)
           rootDirectories.remove(dir.getPath)
         }
       } finally rootDirectories.unlock()

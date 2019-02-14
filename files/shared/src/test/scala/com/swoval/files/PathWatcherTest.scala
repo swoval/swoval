@@ -3,6 +3,7 @@ package swoval
 package files
 
 import java.nio.file.{ Path, Paths }
+import java.util
 import java.util.concurrent.{ TimeUnit, TimeoutException }
 
 import com.swoval.files.FileTreeDataViews.Converter
@@ -163,6 +164,55 @@ trait PathWatcherTest extends TestSuite {
       'unregister - {
         'follow - unregisterTest(true)
         'noFollow - unregisterTest(false)
+        'partial - (if (this != PollingPathWatcherTest) withTempDirectory { root =>
+                      implicit val logger: TestLogger = new CachingLogger
+                      val left = root.resolve("left")
+                      val leftFile = left.resolve("file")
+                      val right = root.resolve("right")
+                      val rightFile = right.resolve("file")
+                      val touches = new util.HashSet[Path]
+                      val events = new ArrayBlockingQueue[Path](1)
+                      val latch = new CountDownLatch(2)
+                      val callback = (e: PathWatchers.Event) => {
+                        if (e.path == leftFile || e.path == rightFile) {
+                          if (e.getTypedPath.exists && touches.add(e.path)) latch.countDown()
+                          else if (!e.getTypedPath.exists) events.add(e.path)
+                        }
+                      }
+                      usingAsync(defaultWatcher(callback)) { pw =>
+                        pw.register(left, Int.MaxValue)
+                        pw.register(right, Int.MaxValue)
+                        leftFile.createFile(true)
+                        rightFile.createFile(true)
+                        latch.waitFor(DEFAULT_TIMEOUT) {}.flatMap { _ =>
+                          pw.unregister(right)
+                          rightFile.delete()
+                          leftFile.delete()
+                          events.poll(DEFAULT_TIMEOUT) { p =>
+                            assert(p == leftFile)
+                          }
+                        }
+                      }
+                    } else {})
+        'full - withTempDirectory { root =>
+          val deeplyNested = root.resolve("deeply").resolve("nested").createDirectories()
+          val file = deeplyNested.resolve("file")
+          implicit val logger: CachingLogger = new CachingLogger
+          val latch = new CountDownLatch(1)
+          usingAsync(defaultWatcher((e: Event) => if (e.path == file) latch.countDown())) {
+            watcher =>
+              watcher.register(root, Int.MaxValue)
+              watcher.unregister(root)
+              file.createFile(true)
+              latch
+                .waitFor(100.millis) {
+                  assert(false) //should be unreachable
+                }
+                .recover {
+                  case _: TimeoutException => assert(file.exists())
+                }
+          }
+        }
       }
     }
     'register - {

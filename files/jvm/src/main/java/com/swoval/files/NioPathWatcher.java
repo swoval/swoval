@@ -289,23 +289,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
       try {
         final CachedDirectory<WatchedDirectory> dir = find(absolutePath);
         if (dir != null) {
-          final int depth = dir.getPath().relativize(absolutePath).getNameCount();
-          List<FileTreeDataViews.Entry<WatchedDirectory>> toRemove =
-              dir.listEntries(
-                  depth,
-                  new Filter<FileTreeDataViews.Entry<WatchedDirectory>>() {
-                    @Override
-                    public boolean accept(final FileTreeDataViews.Entry<WatchedDirectory> entry) {
-                      return !directoryRegistry.acceptPrefix(entry.getTypedPath().getPath());
-                    }
-                  });
-          final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> it = toRemove.iterator();
-          while (it.hasNext()) {
-            final FileTreeDataViews.Entry<WatchedDirectory> entry = it.next();
-            if (!directoryRegistry.acceptPrefix(entry.getTypedPath().getPath())) {
-              remove(dir, entry.getTypedPath().getPath(), null);
-            }
-          }
+          remove(dir, path, null);
           rootDirectories.remove(dir.getPath());
         }
       } finally {
