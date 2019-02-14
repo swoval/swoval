@@ -438,6 +438,36 @@ trait PathWatcherTest extends TestSuite {
         }
       }
     }
+    'repeatedDeletions - (if (this != PollingPathWatcherTest) withTempDirectory { root =>
+                            val dir = root.resolve("base")
+                            implicit val logger: TestLogger = new CachingLogger
+                            val subdir = dir.resolve("subdir").createDirectories()
+                            val nested =
+                              subdir.resolve("deeply").resolve("nested").createDirectories()
+                            val file = nested.resolve("file")
+                            val n = 20
+                            var count = n
+                            val latch = new CountDownLatch(1)
+                            val callback = (e: PathWatchers.Event) => {
+                              if (e.path == subdir && subdir.exists()) {
+                                if (count == 0) {
+                                  file.createFile(true)
+                                } else if (count > 0) {
+                                  dir.deleteRecursive()
+                                  nested.createDirectories()
+                                }
+                                count -= 1
+                              }
+                              if (e.path == file) latch.countDown()
+                            }
+                            usingAsync(defaultWatcher(callback)) { w =>
+                              w.register(subdir)
+                              subdir setLastModifiedTime 3000L
+                              latch.waitFor(DEFAULT_TIMEOUT) {
+                                assert(file.exists())
+                              }
+                            }
+                          } else {})
   }
 }
 
