@@ -34,7 +34,7 @@ class RootDirectories extends LockableMap<Path, CachedDirectory<WatchedDirectory
 /** Provides a PathWatcher that is backed by a {@link java.nio.file.WatchService}. */
 class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private final Observers<PathWatchers.Event> observers = new Observers<>();
+  private final Observers<PathWatchers.Event> observers;
   private final RootDirectories rootDirectories = new RootDirectories();
   private final DirectoryRegistry directoryRegistry;
   private final Converter<WatchedDirectory> converter;
@@ -97,6 +97,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
       throws InterruptedException {
     this.directoryRegistry = directoryRegistry;
     this.logger = logger;
+    this.observers = new Observers<>(logger);
     this.service =
         new NioPathWatcherService(
             new Consumer<Either<Overflow, Event>>() {

@@ -4,6 +4,9 @@ package com.swoval.files
 
 import com.swoval.files.FileTreeDataViews.CacheObserver
 import com.swoval.files.FileTreeViews.Observer
+import com.swoval.logging.Logger
+import com.swoval.logging.Loggers
+import com.swoval.logging.Loggers.Level
 import java.util.ArrayList
 import java.util.Iterator
 import java.util.LinkedHashMap
@@ -17,7 +20,9 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * @tparam T the data type for the [[PathWatcher]] to which the observers correspond
  */
-class Observers[T] extends FileTreeViews.Observer[T] with AutoCloseable {
+class Observers[T](private val logger: Logger)
+    extends FileTreeViews.Observer[T]
+    with AutoCloseable {
 
   private val counter: AtomicInteger = new AtomicInteger(0)
 
@@ -32,7 +37,10 @@ class Observers[T] extends FileTreeViews.Observer[T] with AutoCloseable {
     val it: Iterator[FileTreeViews.Observer[T]] = cbs.iterator()
     while (it.hasNext) try it.next().onNext(t)
     catch {
-      case e: Exception => e.printStackTrace()
+      case e: Exception =>
+        if (Loggers.shouldLog(logger, Level.ERROR)) {
+          Loggers.logException(logger, e)
+        }
 
     }
   }
@@ -45,7 +53,10 @@ class Observers[T] extends FileTreeViews.Observer[T] with AutoCloseable {
     val it: Iterator[FileTreeViews.Observer[T]] = cbs.iterator()
     while (it.hasNext) try it.next().onError(throwable)
     catch {
-      case e: Exception => e.printStackTrace()
+      case e: Exception =>
+        if (Loggers.shouldLog(logger, Level.ERROR)) {
+          Loggers.logException(logger, e)
+        }
 
     }
   }

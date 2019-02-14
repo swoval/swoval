@@ -478,7 +478,7 @@ object PollingPathWatcherTest extends PathWatcherTest {
   override def checkModified(event: PathWatchers.Event): Boolean = event.getKind != Delete
   override def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean)(
       implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
-    val res = PathWatchers.polling(followLinks, 100, TimeUnit.MILLISECONDS)
+    val res = PathWatchers.polling(followLinks, 100, TimeUnit.MILLISECONDS, testLogger)
     res.addObserver(callback)
     res
   }

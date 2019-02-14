@@ -84,18 +84,20 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
   private val filter: Filter[TypedPath] =
     DirectoryRegistries.toTypedPathFilter(directoryRegistry)
 
-  private val observers: CacheObservers[T] = new CacheObservers()
-
   private val followLinks: Boolean = symlinkWatcher != null
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
+
+  private val observers: CacheObservers[T] = new CacheObservers(logger)
 
   if (symlinkWatcher != null) {
     val log: Boolean =
       System.getProperty("swoval.symlink.debug", "false").==("true")
     symlinkWatcher.addObserver(new Observer[Event]() {
       override def onError(t: Throwable): Unit = {
-        if (log) t.printStackTrace(System.err)
+        if (log && Loggers.shouldLog(logger, Level.ERROR)) {
+          Loggers.logException(logger, t)
+        }
       }
 
       override def onNext(event: Event): Unit = {
@@ -244,10 +246,12 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
               }
             } catch {
               case e: IOException => {
-                System.err.println(
-                  "Caught unexpected io exception handling event for " +
-                    path)
-                e.printStackTrace(System.err)
+                if (Loggers.shouldLog(logger, Level.ERROR)) {
+                  logger.error(
+                    "Caught unexpected io exception handling event for " +
+                      path)
+                  Loggers.logException(logger, e)
+                }
                 pendingFiles.add(path)
               }
 
@@ -439,7 +443,10 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         } else if (kind == Modify) {
           observers.onUpdate(oldEntry, newEntry)
         } catch {
-          case e: Exception => e.printStackTrace()
+          case e: Exception =>
+            if (Loggers.shouldLog(logger, Level.ERROR)) {
+              Loggers.logException(logger, e)
+            }
 
         }
       }

@@ -183,6 +183,15 @@ public class Loggers {
     }
   }
 
+  public static void logException(final Logger logger, final Throwable t) {
+    int i = 0;
+    final StackTraceElement[] elements = t.getStackTrace();
+    while (i < elements.length) {
+      logger.error(elements[i].toString());
+      i += 1;
+    }
+  }
+
   public static boolean shouldLog(final Logger logger, final Level level) {
     return logger.getLevel().compareTo(level) <= 0;
   }

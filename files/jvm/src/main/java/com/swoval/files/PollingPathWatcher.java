@@ -8,6 +8,9 @@ import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Event.Kind;
 import com.swoval.functional.Either;
+import com.swoval.logging.Logger;
+import com.swoval.logging.Loggers;
+import com.swoval.logging.Loggers.Level;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.NotDirectoryException;
@@ -26,24 +29,32 @@ class PollingPathWatcher implements PathWatcher<PathWatchers.Event> {
   private final AtomicBoolean isClosed = new AtomicBoolean(false);
   private final boolean followLinks;
   private final DirectoryRegistry registry = new DirectoryRegistryImpl();
-  private final Observers<PathWatchers.Event> observers = new Observers<>();
+  private final Observers<PathWatchers.Event> observers;
   private Map<Path, FileTreeDataViews.Entry<Long>> oldEntries;
   private final PeriodicTask periodicTask;
   private final Converter<Long> converter;
+  private final Logger logger;
 
   PollingPathWatcher(
       final Converter<Long> converter,
       final boolean followLinks,
       final long pollInterval,
-      final TimeUnit timeUnit)
+      final TimeUnit timeUnit,
+      final Logger logger)
       throws InterruptedException {
+    this.logger = logger;
     this.converter = converter;
     this.followLinks = followLinks;
+    this.observers = new Observers<>(logger);
     oldEntries = getEntries();
     periodicTask = new PeriodicTask(new PollingRunnable(), timeUnit.toMillis(pollInterval));
   }
 
-  PollingPathWatcher(final boolean followLinks, final long pollInterval, final TimeUnit timeUnit)
+  PollingPathWatcher(
+      final boolean followLinks,
+      final long pollInterval,
+      final TimeUnit timeUnit,
+      final Logger logger)
       throws InterruptedException {
     this(
         new Converter<Long>() {
@@ -58,7 +69,8 @@ class PollingPathWatcher implements PathWatcher<PathWatchers.Event> {
         },
         followLinks,
         pollInterval,
-        timeUnit);
+        timeUnit,
+        logger);
   }
 
   @Override
@@ -86,7 +98,9 @@ class PollingPathWatcher implements PathWatcher<PathWatchers.Event> {
       try {
         periodicTask.close();
       } catch (final InterruptedException e) {
-        e.printStackTrace(System.err);
+        if (Loggers.shouldLog(logger, Level.ERROR)) {
+          Loggers.logException(logger, e);
+        }
       }
     }
   }

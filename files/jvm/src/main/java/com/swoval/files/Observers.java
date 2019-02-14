@@ -2,6 +2,9 @@ package com.swoval.files;
 
 import com.swoval.files.FileTreeDataViews.CacheObserver;
 import com.swoval.files.FileTreeViews.Observer;
+import com.swoval.logging.Logger;
+import com.swoval.logging.Loggers;
+import com.swoval.logging.Loggers.Level;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -18,6 +21,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 class Observers<T> implements FileTreeViews.Observer<T>, AutoCloseable {
   private final AtomicInteger counter = new AtomicInteger(0);
   private final Map<Integer, FileTreeViews.Observer<T>> observers = new LinkedHashMap<>();
+  private final Logger logger;
+
+  Observers(final Logger logger) {
+    this.logger = logger;
+  }
 
   @Override
   public void onNext(final T t) {
@@ -30,7 +38,9 @@ class Observers<T> implements FileTreeViews.Observer<T>, AutoCloseable {
       try {
         it.next().onNext(t);
       } catch (final Exception e) {
-        e.printStackTrace();
+        if (Loggers.shouldLog(logger, Level.ERROR)) {
+          Loggers.logException(logger, e);
+        }
       }
     }
   }
@@ -46,7 +56,9 @@ class Observers<T> implements FileTreeViews.Observer<T>, AutoCloseable {
       try {
         it.next().onError(throwable);
       } catch (final Exception e) {
-        e.printStackTrace();
+        if (Loggers.shouldLog(logger, Level.ERROR)) {
+          Loggers.logException(logger, e);
+        }
       }
     }
   }

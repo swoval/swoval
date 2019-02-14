@@ -89,12 +89,12 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
   private final DirectoryRegistry directoryRegistry = new DirectoryRegistryImpl();
   private final Filter<TypedPath> filter = DirectoryRegistries.toTypedPathFilter(directoryRegistry);
   private final Converter<T> converter;
-  private final CacheObservers<T> observers = new CacheObservers<>();
   private final Executor callbackExecutor;
   private final boolean followLinks;
   private final boolean rescanOnDirectoryUpdate;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final Logger logger;
+  private final CacheObservers<T> observers;
   final SymlinkWatcher symlinkWatcher;
 
   FileCacheDirectoryTree(
@@ -109,13 +109,16 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
     this.followLinks = symlinkWatcher != null;
     this.rescanOnDirectoryUpdate = rescanOnDirectoryUpdate;
     this.logger = logger;
+    observers = new CacheObservers<>(logger);
     if (symlinkWatcher != null) {
       final boolean log = System.getProperty("swoval.symlink.debug", "false").equals("true");
       symlinkWatcher.addObserver(
           new Observer<Event>() {
             @Override
             public void onError(final Throwable t) {
-              if (log) t.printStackTrace(System.err);
+              if (log && Loggers.shouldLog(logger, Level.ERROR)) {
+                Loggers.logException(logger, t);
+              }
             }
 
             @Override
@@ -263,8 +266,10 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
                 addCallback(callbacks, symlinks, entry, null, entry, Create, null);
               }
             } catch (final IOException e) {
-              System.err.println("Caught unexpected io exception handling event for " + path);
-              e.printStackTrace(System.err);
+              if (Loggers.shouldLog(logger, Level.ERROR)) {
+                logger.error("Caught unexpected io exception handling event for " + path);
+                Loggers.logException(logger, e);
+              }
               pendingFiles.add(path);
             }
           }
@@ -457,7 +462,9 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
                 observers.onUpdate(oldEntry, newEntry);
               }
             } catch (final Exception e) {
-              e.printStackTrace();
+              if (Loggers.shouldLog(logger, Level.ERROR)) {
+                Loggers.logException(logger, e);
+              }
             }
           }
         });

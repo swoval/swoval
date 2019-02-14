@@ -59,10 +59,10 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event],
 
   private val isClosed: AtomicBoolean = new AtomicBoolean(false)
 
-  private val observers: Observers[Event] = new Observers()
+  private val observers: Observers[Event] = new Observers(logger)
 
   private val callbackExecutor: Executor =
-    Executor.make("com.swoval.files.SymlinkWather.callback-executor")
+    Executor.make("com.swoval.files.SymlinkWather.callback-executor", logger)
 
   val reentrantLock: ReentrantLock = new ReentrantLock()
 

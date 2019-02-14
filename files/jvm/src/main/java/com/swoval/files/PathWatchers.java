@@ -101,7 +101,7 @@ public class PathWatchers {
    */
   public static <T> FollowSymlinks<T> followSymlinks(
       final Converter<T> converter, final Logger logger) throws IOException, InterruptedException {
-    return new FollowWrapper<>(new ConvertedPathWatcher<>(follow(logger), converter));
+    return new FollowWrapper<>(new ConvertedPathWatcher<>(follow(logger), converter, logger));
   }
 
   /**
@@ -118,7 +118,7 @@ public class PathWatchers {
    */
   public static <T> FollowSymlinks<T> followSymlinks(final Converter<T> converter)
       throws IOException, InterruptedException {
-    return new FollowWrapper<>(new ConvertedPathWatcher<>(follow(Loggers.getLogger()), converter));
+    return followSymlinks(converter, Loggers.getLogger());
   }
 
   /**
@@ -161,10 +161,6 @@ public class PathWatchers {
   /**
    * Create a path watcher that periodically polls the file system to detect changes
    *
-   * @param converter calculates the last modified time in milliseconds for the path watcher. This
-   *     exists so that the converter can be replaced with a higher resolution calculation of the
-   *     file system last modified time than is provided by the jvm, e.g.
-   *     sbt.IO.getLastModifiedTimeOrZero.
    * @param followLinks toggles whether or not the targets of symbolic links should be monitored
    * @param pollInterval minimum duration between when polling ends and the next poll begins
    * @param timeUnit the time unit for which the pollInterval corresponds
@@ -172,33 +168,18 @@ public class PathWatchers {
    * @throws InterruptedException if the polling thread cannot be started.
    */
   public static PathWatcher<PathWatchers.Event> polling(
-      final Converter<Long> converter,
       final boolean followLinks,
       final long pollInterval,
-      final TimeUnit timeUnit)
+      final TimeUnit timeUnit,
+      final Logger logger)
       throws InterruptedException {
-    return new PollingPathWatcher(converter, followLinks, pollInterval, timeUnit);
-  }
-
-  /**
-   * Create a path watcher that periodically polls the file system to detect changes
-   *
-   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
-   * @param pollInterval minimum duration between when polling ends and the next poll begins
-   * @param timeUnit the time unit for which the pollInterval corresponds
-   * @return the polling path watcher.
-   * @throws InterruptedException if the polling thread cannot be started.
-   */
-  public static PathWatcher<PathWatchers.Event> polling(
-      final boolean followLinks, final long pollInterval, final TimeUnit timeUnit)
-      throws InterruptedException {
-    return new PollingPathWatcher(followLinks, pollInterval, timeUnit);
+    return new PollingPathWatcher(followLinks, pollInterval, timeUnit, logger);
   }
 
   private static <T> PathWatcher<T> get(
       final Converter<T> converter, final DirectoryRegistry registry, final Logger logger)
       throws InterruptedException, IOException {
-    return new ConvertedPathWatcher<T>(get(registry, logger), converter);
+    return new ConvertedPathWatcher<T>(get(registry, logger), converter, logger);
   }
   private static PathWatcher<Event> get(final DirectoryRegistry registry, final Logger logger)
       throws InterruptedException, IOException {
@@ -308,13 +289,15 @@ public class PathWatchers {
 
   private static class ConvertedPathWatcher<T> implements PathWatcher<T> {
     private final PathWatcher<Event> pathWatcher;
-    private final Observers<T> observers = new Observers<>();
+    private final Observers<T> observers;
     private final Converter<T> converter;
     private final int handle;
 
-    ConvertedPathWatcher(final PathWatcher<Event> pathWatcher, final Converter<T> converter) {
+    ConvertedPathWatcher(
+        final PathWatcher<Event> pathWatcher, final Converter<T> converter, final Logger logger) {
       this.pathWatcher = pathWatcher;
       this.converter = converter;
+      this.observers = new Observers<>(logger);
       this.handle =
           pathWatcher.addObserver(
               new Observer<Event>() {

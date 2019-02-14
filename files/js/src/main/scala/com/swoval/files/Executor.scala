@@ -1,4 +1,8 @@
 package com.swoval.files
+import com.swoval.logging.Loggers.Level
+import com.swoval.logging.{ Logger, Loggers }
+
+import scala.util.control.NonFatal
 
 /**
  * Provides an execution context to run tasks. Exists to allow source interoperability with the jvm
@@ -35,7 +39,13 @@ object Executor {
    * @param name Unused but exists for jvm source compatibility
    * @return
    */
-  def make(name: String): Executor = new Executor {
-    override def run(runnable: Runnable): Unit = runnable.run()
+  def make(name: String, logger: Logger): Executor = new Executor {
+    override def run(runnable: Runnable): Unit =
+      try runnable.run()
+      catch {
+        case NonFatal(e) =>
+          if (Loggers.shouldLog(logger, Level.ERROR))
+            Loggers.logException(logger, e)
+      }
   }
 }

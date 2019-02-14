@@ -18,6 +18,7 @@ import com.swoval.files.{
 }
 import com.swoval.functional
 import com.swoval.functional.Filter
+import com.swoval.logging.Loggers
 
 import scala.collection.JavaConverters._
 import scala.scalajs.js
@@ -245,7 +246,8 @@ object PathWatchers {
     new PathWatcher(
       SPathWatchers.polling(followLinks.toOption.getOrElse(true),
                             intervalMS.toOption.getOrElse(500.0).toLong,
-                            TimeUnit.MILLISECONDS))
+                            TimeUnit.MILLISECONDS,
+                            Loggers.getLogger()))
   }
 
   /**

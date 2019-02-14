@@ -10,7 +10,6 @@ import com.swoval.files.PathWatchers.FollowSymlinks
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
 import com.swoval.logging.Logger
-import com.swoval.runtime.Platform
 import java.io.IOException
 import java.nio.file.Path
 import java.util.Iterator
@@ -23,7 +22,7 @@ class SymlinkFollowingPathWatcherImpl(private val pathWatcher: PathWatcher[PathW
   private val symlinkWatcher: SymlinkWatcher =
     new SymlinkWatcher(PathWatchers.noFollowSymlinks(logger), logger)
 
-  private val observers: Observers[PathWatchers.Event] = new Observers()
+  private val observers: Observers[PathWatchers.Event] = new Observers(logger)
 
   private val pathWatcherDirectoryRegistry: DirectoryRegistry =
     directoryRegistry

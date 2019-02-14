@@ -3,6 +3,9 @@ package com.swoval.files;
 import com.swoval.files.FileTreeDataViews.CacheObserver;
 import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.files.FileTreeViews.Observer;
+import com.swoval.logging.Logger;
+import com.swoval.logging.Loggers;
+import com.swoval.logging.Loggers.Level;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -14,6 +17,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 class CacheObservers<T> implements CacheObserver<T>, AutoCloseable {
   private final AtomicInteger counter = new AtomicInteger(0);
   private final Map<Integer, CacheObserver<T>> observers = new LinkedHashMap<>();
+  private final Logger logger;
+
+  CacheObservers(final Logger logger) {
+    this.logger = logger;
+  }
 
   @Override
   public void onCreate(final Entry<T> newEntry) {
@@ -26,7 +34,9 @@ class CacheObservers<T> implements CacheObserver<T>, AutoCloseable {
       try {
         it.next().onCreate(newEntry);
       } catch (final Exception e) {
-        e.printStackTrace();
+        if (Loggers.shouldLog(logger, Level.ERROR)) {
+          Loggers.logException(logger, e);
+        }
       }
     }
   }
@@ -42,7 +52,9 @@ class CacheObservers<T> implements CacheObserver<T>, AutoCloseable {
       try {
         it.next().onDelete(oldEntry);
       } catch (final Exception e) {
-        e.printStackTrace();
+        if (Loggers.shouldLog(logger, Level.ERROR)) {
+          Loggers.logException(logger, e);
+        }
       }
     }
   }
@@ -58,7 +70,9 @@ class CacheObservers<T> implements CacheObserver<T>, AutoCloseable {
       try {
         it.next().onUpdate(oldEntry, newEntry);
       } catch (final Exception e) {
-        e.printStackTrace();
+        if (Loggers.shouldLog(logger, Level.ERROR)) {
+          Loggers.logException(logger, e);
+        }
       }
     }
   }

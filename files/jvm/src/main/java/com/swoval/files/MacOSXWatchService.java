@@ -153,7 +153,9 @@ class MacOSXWatchService implements RegisterableWatchService {
           try {
             fileEventMonitor.stopStream(watchKey.handle);
           } catch (final ClosedFileEventMonitorException e) {
-            e.printStackTrace(System.err);
+            if (Loggers.shouldLog(logger, Level.ERROR)) {
+              Loggers.logException(logger, e);
+            }
           }
         }
         watchKey.close();

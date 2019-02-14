@@ -9,7 +9,6 @@ import com.swoval.files.PathWatchers.FollowSymlinks;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
 import com.swoval.logging.Logger;
-import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Iterator;
@@ -17,7 +16,7 @@ import java.util.Iterator;
 class SymlinkFollowingPathWatcherImpl implements FollowSymlinks<Event> {
   private final SymlinkWatcher symlinkWatcher;
   private final PathWatcher<PathWatchers.Event> pathWatcher;
-  private final Observers<PathWatchers.Event> observers = new Observers<>();
+  private final Observers<PathWatchers.Event> observers;
   private final DirectoryRegistry pathWatcherDirectoryRegistry;
 
   SymlinkFollowingPathWatcherImpl(
@@ -27,6 +26,7 @@ class SymlinkFollowingPathWatcherImpl implements FollowSymlinks<Event> {
       throws InterruptedException, IOException {
     this.pathWatcher = pathWatcher;
     this.pathWatcherDirectoryRegistry = directoryRegistry;
+    this.observers = new Observers<>(logger);
     this.symlinkWatcher = new SymlinkWatcher(PathWatchers.noFollowSymlinks(logger), logger);
     pathWatcher.addObserver(
         new Observer<Event>() {

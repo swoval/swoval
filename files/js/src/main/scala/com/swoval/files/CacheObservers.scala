@@ -5,6 +5,9 @@ package com.swoval.files
 import com.swoval.files.FileTreeDataViews.CacheObserver
 import com.swoval.files.FileTreeDataViews.Entry
 import com.swoval.files.FileTreeViews.Observer
+import com.swoval.logging.Logger
+import com.swoval.logging.Loggers
+import com.swoval.logging.Loggers.Level
 import java.io.IOException
 import java.util.ArrayList
 import java.util.Iterator
@@ -37,7 +40,7 @@ object CacheObservers {
 
 }
 
-class CacheObservers[T] extends CacheObserver[T] with AutoCloseable {
+class CacheObservers[T](private val logger: Logger) extends CacheObserver[T] with AutoCloseable {
 
   private val counter: AtomicInteger = new AtomicInteger(0)
 
@@ -51,7 +54,10 @@ class CacheObservers[T] extends CacheObserver[T] with AutoCloseable {
     val it: Iterator[CacheObserver[T]] = cbs.iterator()
     while (it.hasNext) try it.next().onCreate(newEntry)
     catch {
-      case e: Exception => e.printStackTrace()
+      case e: Exception =>
+        if (Loggers.shouldLog(logger, Level.ERROR)) {
+          Loggers.logException(logger, e)
+        }
 
     }
   }
@@ -64,7 +70,10 @@ class CacheObservers[T] extends CacheObserver[T] with AutoCloseable {
     val it: Iterator[CacheObserver[T]] = cbs.iterator()
     while (it.hasNext) try it.next().onDelete(oldEntry)
     catch {
-      case e: Exception => e.printStackTrace()
+      case e: Exception =>
+        if (Loggers.shouldLog(logger, Level.ERROR)) {
+          Loggers.logException(logger, e)
+        }
 
     }
   }
@@ -77,7 +86,10 @@ class CacheObservers[T] extends CacheObserver[T] with AutoCloseable {
     val it: Iterator[CacheObserver[T]] = cbs.iterator()
     while (it.hasNext) try it.next().onUpdate(oldEntry, newEntry)
     catch {
-      case e: Exception => e.printStackTrace()
+      case e: Exception =>
+        if (Loggers.shouldLog(logger, Level.ERROR)) {
+          Loggers.logException(logger, e)
+        }
 
     }
   }

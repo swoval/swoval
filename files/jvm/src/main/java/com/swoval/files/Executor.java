@@ -1,6 +1,9 @@
 package com.swoval.files;
 
 import com.swoval.concurrent.ThreadFactory;
+import com.swoval.logging.Logger;
+import com.swoval.logging.Loggers;
+import com.swoval.logging.Loggers.Level;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -42,8 +45,10 @@ abstract class Executor implements AutoCloseable {
     final ThreadFactory factory;
     final ExecutorService service;
     final LinkedBlockingQueue<PriorityRunnable> consumers = new LinkedBlockingQueue<>();
+    private final Logger logger;
 
-    ExecutorImpl(final ThreadFactory factory, final ExecutorService service) {
+    ExecutorImpl(final ThreadFactory factory, final ExecutorService service, final Logger logger) {
+      this.logger = logger;
       this.factory = factory;
       this.service = service;
       service.submit(
@@ -64,7 +69,9 @@ abstract class Executor implements AutoCloseable {
                     try {
                       runnable.run();
                     } catch (final Exception e) {
-                      e.printStackTrace();
+                      if (Loggers.shouldLog(logger, Level.ERROR)) {
+                        Loggers.logException(logger, e);
+                      }
                     }
                   }
                 } catch (final InterruptedException e) {
@@ -97,7 +104,9 @@ abstract class Executor implements AutoCloseable {
     @Override
     void run(final Runnable runnable, final int priority) {
       if (closed.get()) {
-        new Exception("Tried to submit to closed executor").printStackTrace(System.err);
+        if (Loggers.shouldLog(logger, Level.ERROR)) {
+          Loggers.logException(logger, new Exception("Tried to submit to closed executor"));
+        }
       } else {
         synchronized (consumers) {
           if (!consumers.offer(new PriorityRunnable(runnable, priority))) {
@@ -125,7 +134,7 @@ abstract class Executor implements AutoCloseable {
    * @param name The name of the executor threadHandle
    * @return Executor
    */
-  static Executor make(final String name) {
+  static Executor make(final String name, final Logger logger) {
     final ThreadFactory factory = new ThreadFactory(name);
     final ExecutorService service =
         new ThreadPoolExecutor(
@@ -134,12 +143,14 @@ abstract class Executor implements AutoCloseable {
           protected void afterExecute(java.lang.Runnable r, Throwable t) {
             super.afterExecute(r, t);
             if (t != null) {
-              System.err.println("Error running: " + r + "\n" + t);
-              t.printStackTrace(System.err);
+              if (Loggers.shouldLog(logger, Level.ERROR)) {
+                logger.error("Error running: " + r + "\n" + t);
+                Loggers.logException(logger, t);
+              }
             }
           }
         };
-    return new ExecutorImpl(factory, service);
+    return new ExecutorImpl(factory, service, logger);
   }
 
   private static final class PriorityRunnable implements Runnable, Comparable<PriorityRunnable> {

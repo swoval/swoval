@@ -7,6 +7,7 @@ import static com.swoval.files.PathWatchers.Event.Kind.Modify;
 import com.swoval.files.ApplePathWatcher.DefaultOnStreamRemoved;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
+import com.swoval.files.PathWatchers.Event.Kind;
 import com.swoval.files.apple.ClosedFileEventMonitorException;
 import com.swoval.files.apple.FileEvent;
 import com.swoval.files.apple.FileEventMonitor;
@@ -60,7 +61,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   private final TimeUnit timeUnit;
   private final Flags.Create flags;
   private final FileEventMonitor fileEventMonitor;
-  private final Observers<PathWatchers.Event> observers = new Observers<>();
+  private final Observers<PathWatchers.Event> observers;
   static final DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
   private final Logger logger;
 
@@ -167,7 +168,9 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
         try {
           stream.close();
         } catch (final ClosedFileEventMonitorException e) {
-          e.printStackTrace(System.err);
+          if (Loggers.shouldLog(logger, Level.ERROR)) {
+            Loggers.logException(logger, e);
+          }
         }
       }
       if (Loggers.shouldLog(logger, Level.DEBUG))
@@ -220,6 +223,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
     this.flags = flags;
     this.directoryRegistry = directoryRegistry;
     this.logger = logger;
+    this.observers = new Observers<>(logger);
     fileEventMonitor =
         FileEventMonitors.get(
             new Consumer<FileEvent>() {

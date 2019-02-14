@@ -9,6 +9,9 @@ import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.PathWatchers.Event.Kind
 import com.swoval.functional.Either
+import com.swoval.logging.Logger
+import com.swoval.logging.Loggers
+import com.swoval.logging.Loggers.Level
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.NotDirectoryException
@@ -26,21 +29,22 @@ import java.util.concurrent.atomic.AtomicBoolean
 class PollingPathWatcher(private val converter: Converter[java.lang.Long],
                          private val followLinks: Boolean,
                          pollInterval: java.lang.Long,
-                         timeUnit: TimeUnit)
+                         timeUnit: TimeUnit,
+                         private val logger: Logger)
     extends PathWatcher[PathWatchers.Event] {
 
   private val isClosed: AtomicBoolean = new AtomicBoolean(false)
 
   private val registry: DirectoryRegistry = new DirectoryRegistryImpl()
 
-  private val observers: Observers[PathWatchers.Event] = new Observers()
+  private val observers: Observers[PathWatchers.Event] = new Observers(logger)
 
   private var oldEntries: Map[Path, FileTreeDataViews.Entry[java.lang.Long]] = getEntries
 
   private val periodicTask: PeriodicTask =
     new PeriodicTask(new PollingRunnable(), timeUnit.toMillis(pollInterval))
 
-  def this(followLinks: Boolean, pollInterval: java.lang.Long, timeUnit: TimeUnit) =
+  def this(followLinks: Boolean, pollInterval: java.lang.Long, timeUnit: TimeUnit, logger: Logger) =
     this(
       new Converter[java.lang.Long]() {
         override def apply(typedPath: TypedPath): java.lang.Long =
@@ -52,7 +56,8 @@ class PollingPathWatcher(private val converter: Converter[java.lang.Long],
       },
       followLinks,
       pollInterval,
-      timeUnit
+      timeUnit,
+      logger
     )
 
   override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] = {
@@ -79,7 +84,10 @@ class PollingPathWatcher(private val converter: Converter[java.lang.Long],
       registry.close()
       try periodicTask.close()
       catch {
-        case e: InterruptedException => e.printStackTrace(System.err)
+        case e: InterruptedException =>
+          if (Loggers.shouldLog(logger, Level.ERROR)) {
+            Loggers.logException(logger, e)
+          }
 
       }
     }

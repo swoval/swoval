@@ -144,7 +144,8 @@ public class FileTreeRepositories {
     try {
       final SymlinkWatcher symlinkWatcher =
           followLinks ? new SymlinkWatcher(newPathWatcher.apply(logger), logger) : null;
-      final Executor callbackExecutor = Executor.make("FileTreeRepository-callback-executor");
+      final Executor callbackExecutor =
+          Executor.make("FileTreeRepository-callback-executor", logger);
       final FileCacheDirectoryTree<T> tree =
           new FileCacheDirectoryTree<>(converter, callbackExecutor, symlinkWatcher, false, logger);
       final PathWatcher<PathWatchers.Event> pathWatcher = newPathWatcher.apply(logger);

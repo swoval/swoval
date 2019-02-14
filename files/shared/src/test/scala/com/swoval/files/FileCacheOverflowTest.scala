@@ -67,7 +67,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
       implicit val logger: TestLogger = new CachingLogger
       val dir = root.resolve("overflow").resolve(name).createDirectories()
       // Windows is slow (at least on my vm)
-      val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread")
+      val executor = Executor.make("com.swoval.files.FileCacheTest.addmany.worker-thread", logger)
       val creationLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
       val deletionLatch = new CountDownLatch(subdirsToAdd * (filesPerSubdir + 1))
       val updateLatch = new CountDownLatch(subdirsToAdd)

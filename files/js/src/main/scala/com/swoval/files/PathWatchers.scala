@@ -77,7 +77,7 @@ object PathWatchers {
    *     its background threads
    */
   def followSymlinks[T <: AnyRef](converter: Converter[T], logger: Logger): FollowSymlinks[T] =
-    new FollowWrapper(new ConvertedPathWatcher(follow(logger), converter))
+    new FollowWrapper(new ConvertedPathWatcher(follow(logger), converter, logger))
 
   /**
    * Create a PathWatcher that will follow symlinks and generate file events for the symlink when
@@ -90,7 +90,7 @@ object PathWatchers {
    *     its background threads
    */
   def followSymlinks[T <: AnyRef](converter: Converter[T]): FollowSymlinks[T] =
-    new FollowWrapper(new ConvertedPathWatcher(follow(Loggers.getLogger), converter))
+    followSymlinks(converter, Loggers.getLogger)
 
   /**
    * Create a PathWatcher that will not follow symlinks and generates events of type [[Event]].
@@ -124,24 +124,6 @@ object PathWatchers {
   /**
    * Create a path watcher that periodically polls the file system to detect changes
    *
-   * @param converter calculates the last modified time in milliseconds for the path watcher. This
-   *     exists so that the converter can be replaced with a higher resolution calculation of the
-   *     file system last modified time than is provided by the jvm, e.g.
-   *     sbt.IO.getLastModifiedTimeOrZero.
-   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
-   * @param pollInterval minimum duration between when polling ends and the next poll begins
-   * @param timeUnit the time unit for which the pollInterval corresponds
-   * @return the polling path watcher.
-   */
-  def polling(converter: Converter[java.lang.Long],
-              followLinks: Boolean,
-              pollInterval: java.lang.Long,
-              timeUnit: TimeUnit): PathWatcher[PathWatchers.Event] =
-    new PollingPathWatcher(converter, followLinks, pollInterval, timeUnit)
-
-  /**
-   * Create a path watcher that periodically polls the file system to detect changes
-   *
    * @param followLinks toggles whether or not the targets of symbolic links should be monitored
    * @param pollInterval minimum duration between when polling ends and the next poll begins
    * @param timeUnit the time unit for which the pollInterval corresponds
@@ -149,13 +131,14 @@ object PathWatchers {
    */
   def polling(followLinks: Boolean,
               pollInterval: java.lang.Long,
-              timeUnit: TimeUnit): PathWatcher[PathWatchers.Event] =
-    new PollingPathWatcher(followLinks, pollInterval, timeUnit)
+              timeUnit: TimeUnit,
+              logger: Logger): PathWatcher[PathWatchers.Event] =
+    new PollingPathWatcher(followLinks, pollInterval, timeUnit, logger)
 
   private def get[T <: AnyRef](converter: Converter[T],
                                registry: DirectoryRegistry,
                                logger: Logger): PathWatcher[T] =
-    new ConvertedPathWatcher[T](get(registry, logger), converter)
+    new ConvertedPathWatcher[T](get(registry, logger), converter, logger)
 
   private def get(registry: DirectoryRegistry, logger: Logger): PathWatcher[Event] =
     if (Platform.isMac) ApplePathWatchers.get(registry, logger)
@@ -246,10 +229,11 @@ object PathWatchers {
   }
 
   private class ConvertedPathWatcher[T](private val pathWatcher: PathWatcher[Event],
-                                        private val converter: Converter[T])
+                                        private val converter: Converter[T],
+                                        logger: Logger)
       extends PathWatcher[T] {
 
-    private val observers: Observers[T] = new Observers()
+    private val observers: Observers[T] = new Observers(logger)
 
     private val handle: Int = pathWatcher.addObserver(new Observer[Event]() {
       override def onError(t: Throwable): Unit = {

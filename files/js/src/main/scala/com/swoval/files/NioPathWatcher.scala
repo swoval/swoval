@@ -44,7 +44,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
 
-  private val observers: Observers[PathWatchers.Event] = new Observers()
+  private val observers: Observers[PathWatchers.Event] = new Observers(logger)
 
   private val rootDirectories: RootDirectories = new RootDirectories()
 

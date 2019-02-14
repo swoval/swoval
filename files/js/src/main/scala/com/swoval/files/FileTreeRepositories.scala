@@ -116,7 +116,7 @@ object FileTreeRepositories {
       if (followLinks) new SymlinkWatcher(newPathWatcher.apply(logger), logger)
       else null
     val callbackExecutor: Executor =
-      Executor.make("FileTreeRepository-callback-executor")
+      Executor.make("FileTreeRepository-callback-executor", logger)
     val tree: FileCacheDirectoryTree[T] =
       new FileCacheDirectoryTree[T](converter, callbackExecutor, symlinkWatcher, false, logger)
     val pathWatcher: PathWatcher[PathWatchers.Event] =

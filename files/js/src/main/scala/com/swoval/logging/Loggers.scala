@@ -146,6 +146,15 @@ object Loggers {
     Loggers.global
   }
 
+  def logException(logger: Logger, t: Throwable): Unit = {
+    var i: Int = 0
+    val elements: Array[StackTraceElement] = t.getStackTrace
+    while (i < elements.length) {
+      logger.error(elements(i).toString)
+      i += 1
+    }
+  }
+
   def shouldLog(logger: Logger, level: Level): Boolean =
     logger.getLevel.compareTo(level) <= 0
 

@@ -8,6 +8,7 @@ import com.swoval.files.PathWatchers.Event.Kind.Modify
 import com.swoval.files.ApplePathWatcher.DefaultOnStreamRemoved
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
+import com.swoval.files.PathWatchers.Event.Kind
 import com.swoval.files.apple.ClosedFileEventMonitorException
 import com.swoval.files.apple.FileEvent
 import com.swoval.files.apple.FileEventMonitor
@@ -119,7 +120,7 @@ class ApplePathWatcher(private val latency: java.lang.Long,
     }
   )
 
-  private val observers: Observers[PathWatchers.Event] = new Observers()
+  private val observers: Observers[PathWatchers.Event] = new Observers(logger)
 
   override def addObserver(observer: Observer[_ >: Event]): Int =
     observers.addObserver(observer)
@@ -220,7 +221,9 @@ class ApplePathWatcher(private val latency: java.lang.Long,
         try stream.close()
         catch {
           case e: ClosedFileEventMonitorException =>
-            e.printStackTrace(System.err)
+            if (Loggers.shouldLog(logger, Level.ERROR)) {
+              Loggers.logException(logger, e)
+            }
 
         }
       }

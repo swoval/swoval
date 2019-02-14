@@ -5,6 +5,9 @@ import com.swoval.files.apple.FileEventMonitors.Handle;
 import com.swoval.files.apple.FileEventMonitors.Handles;
 import com.swoval.files.apple.Flags.Create;
 import com.swoval.functional.Consumer;
+import com.swoval.logging.Logger;
+import com.swoval.logging.Loggers;
+import com.swoval.logging.Loggers.Level;
 import com.swoval.runtime.NativeLoader;
 import com.swoval.runtime.ShutdownHooks;
 import java.io.IOException;
@@ -44,7 +47,15 @@ public class FileEventMonitors {
   public static FileEventMonitor get(
       final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer)
       throws InterruptedException {
-    return new FileEventMonitorImpl(eventConsumer, streamConsumer);
+    return get(eventConsumer, streamConsumer, Loggers.getLogger());
+  }
+
+  public static FileEventMonitor get(
+      final Consumer<FileEvent> eventConsumer,
+      final Consumer<String> streamConsumer,
+      final Logger logger)
+      throws InterruptedException {
+    return new FileEventMonitorImpl(eventConsumer, streamConsumer, logger);
   }
 }
 
@@ -56,6 +67,7 @@ class FileEventMonitorImpl implements FileEventMonitor {
           new ThreadFactory("com.swoval.files.apple.FileEventsMonitor.callback"));
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final int shutdownHookId;
+  private final Logger logger;
   private final Runnable closeRunnable =
       new Runnable() {
         @Override
@@ -70,18 +82,23 @@ class FileEventMonitorImpl implements FileEventMonitor {
               callbackExecutor.awaitTermination(5, TimeUnit.SECONDS);
               close(handle);
             } catch (final InterruptedException e) {
-              e.printStackTrace(System.err);
+              if (Loggers.shouldLog(logger, Level.ERROR)) {
+                Loggers.logException(logger, e);
+              }
             }
           }
         }
       };
 
   FileEventMonitorImpl(
-      final Consumer<FileEvent> eventConsumer, final Consumer<String> streamConsumer)
+      final Consumer<FileEvent> eventConsumer,
+      final Consumer<String> streamConsumer,
+      final Logger logger)
       throws InterruptedException {
+    this.logger = logger;
     final CountDownLatch initLatch = new CountDownLatch(1);
-    final Consumer<FileEvent> wrappedEventConsumer = new WrappedConsumer<>(eventConsumer);
-    final Consumer<String> wrappedStreamConsumer = new WrappedConsumer<>(streamConsumer);
+    final Consumer<FileEvent> wrappedEventConsumer = new WrappedConsumer<>(eventConsumer, logger);
+    final Consumer<String> wrappedStreamConsumer = new WrappedConsumer<>(streamConsumer, logger);
     loopThread =
         new Thread("com.swoval.files.apple.FileEventsMonitor.runloop") {
           @Override
@@ -162,7 +179,7 @@ class FileEventMonitorImpl implements FileEventMonitor {
   private class WrappedConsumer<T> implements Consumer<T> {
     private final Consumer<T> consumer;
 
-    WrappedConsumer(final Consumer<T> consumer) {
+    WrappedConsumer(final Consumer<T> consumer, final Logger logger) {
       this.consumer = consumer;
     }
 
@@ -178,7 +195,9 @@ class FileEventMonitorImpl implements FileEventMonitor {
                     consumer.accept(t);
                   }
                 } catch (final Exception e) {
-                  e.printStackTrace(System.err);
+                  if (Loggers.shouldLog(logger, Level.ERROR)) {
+                    Loggers.logException(logger, e);
+                  }
                 }
               }
             });

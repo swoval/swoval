@@ -38,14 +38,15 @@ class RegisteredPaths extends LockableMap<Path, RegisteredPath> {
  */
 class SymlinkWatcher implements Observable<Event>, AutoCloseable {
   private final AtomicBoolean isClosed = new AtomicBoolean(false);
-  private final Observers<Event> observers = new Observers<>();
-  private final Executor callbackExecutor =
-      Executor.make("com.swoval.files.SymlinkWather.callback-executor");
+  private final Observers<Event> observers;
+  private final Executor callbackExecutor;
   private final Logger logger;
 
   SymlinkWatcher(final PathWatcher<PathWatchers.Event> watcher, final Logger logger) {
     this.watcher = watcher;
     this.logger = logger;
+    this.observers = new Observers<>(logger);
+    callbackExecutor = Executor.make("com.swoval.files.SymlinkWather.callback-executor", logger);
     final ReentrantLock reentrantLock = new ReentrantLock();
     watchedSymlinksByTarget = new RegisteredPaths(reentrantLock);
     watcher.addObserver(
