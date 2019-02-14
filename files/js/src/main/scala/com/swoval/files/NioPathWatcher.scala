@@ -159,6 +159,8 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
   }
 
   override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] = {
+    if (Loggers.shouldLog(logger, Level.DEBUG))
+      logger.debug(this + " registering " + path + " with max depth " + maxDepth)
     val absolutePath: Path =
       if (path.isAbsolute) path else path.toAbsolutePath()
     val existingMaxDepth: Int = directoryRegistry.maxDepthFor(absolutePath)

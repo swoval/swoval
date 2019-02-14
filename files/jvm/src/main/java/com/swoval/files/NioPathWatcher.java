@@ -177,6 +177,8 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
   @Override
   public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
+    if (Loggers.shouldLog(logger, Level.DEBUG))
+      logger.debug(this + " registering " + path + " with max depth " + maxDepth);
     final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
     final int existingMaxDepth = directoryRegistry.maxDepthFor(absolutePath);
     boolean result = existingMaxDepth < maxDepth;
