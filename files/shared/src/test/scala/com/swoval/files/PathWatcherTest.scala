@@ -266,7 +266,7 @@ trait PathWatcherTest extends TestSuite {
           val dir = root.resolve("initial").resolve("debug").createDirectories()
           val dirLatch = new CountDownLatch(1)
           val fileLatch = new CountDownLatch(1)
-          val subdir = dir.resolve("subdir")
+          val subdir = dir.resolve("subdir").resolve("nested")
           val file = subdir.resolve("file-initial")
           val callback = (e: PathWatchers.Event) => {
             if (e.path == subdir && e.getTypedPath.exists) dirLatch.countDown()
@@ -275,7 +275,7 @@ trait PathWatcherTest extends TestSuite {
 
           usingAsync(defaultWatcher(callback)) { w =>
             w.register(subdir)
-            subdir.createDirectory()
+            subdir.createDirectories()
             dirLatch
               .waitFor(DEFAULT_TIMEOUT) {
                 assert(subdir.exists())

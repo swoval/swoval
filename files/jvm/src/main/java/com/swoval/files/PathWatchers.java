@@ -35,7 +35,8 @@ public class PathWatchers {
    */
   public static <T> NoFollowSymlinks<T> noFollowSymlinks(
       final Converter<T> converter, final Logger logger) throws IOException, InterruptedException {
-    return new NoFollowWrapper<>(PathWatchers.<T>get(converter, new DirectoryRegistryImpl(), logger));
+    return new NoFollowWrapper<>(
+        PathWatchers.<T>get(converter, new DirectoryRegistryImpl(), logger));
   }
 
   /**
@@ -181,6 +182,7 @@ public class PathWatchers {
       throws InterruptedException, IOException {
     return new ConvertedPathWatcher<T>(get(registry, logger), converter, logger);
   }
+
   private static PathWatcher<Event> get(final DirectoryRegistry registry, final Logger logger)
       throws InterruptedException, IOException {
     return Platform.isMac()

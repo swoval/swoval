@@ -3,7 +3,6 @@ package swoval
 package files
 
 import java.nio.file.Path
-import java.util.concurrent.TimeUnit
 
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.TestHelpers._

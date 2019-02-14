@@ -5,24 +5,19 @@ package com.swoval.files
 import com.swoval.files.PathWatchers.Event.Kind.Create
 import com.swoval.files.PathWatchers.Event.Kind.Delete
 import com.swoval.files.PathWatchers.Event.Kind.Overflow
-import com.swoval.functional.Filters.AllPass
 import java.util.Map.Entry
 import com.swoval.files.FileTreeDataViews.CacheObserver
 import com.swoval.files.FileTreeDataViews.Converter
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
-import com.swoval.files.PathWatchers.Event.Kind
 import com.swoval.files.PathWatchers.Overflow
 import com.swoval.functional.Consumer
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
-import com.swoval.functional.Filters
 import com.swoval.logging.Logger
 import com.swoval.logging.Loggers
 import com.swoval.logging.Loggers.Level
 import java.io.IOException
-import java.nio.file.FileSystems
-import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.util.ArrayList
 import java.util.HashSet
@@ -120,11 +115,11 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
    *
    * @param typedPath The newly created directory to add
    */
-  def add(typedPath: TypedPath, events: List[Event]): Unit = {
-    if (directoryRegistry.maxDepthFor(typedPath.getPath) >= 0) {
+  private def add(typedPath: TypedPath, events: List[Event]): Unit = {
+    if (directoryRegistry.acceptPrefix(typedPath.getPath)) {
       val dir: CachedDirectory[WatchedDirectory] = getOrAdd(typedPath.getPath)
       if (dir != null) {
-        update(dir, typedPath, events, true)
+        dir.update(typedPath, true).observe(updateCacheObserver(events))
       }
     }
   }
@@ -164,7 +159,6 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     val absolutePath: Path =
       if (path.isAbsolute) path else path.toAbsolutePath()
     val existingMaxDepth: Int = directoryRegistry.maxDepthFor(absolutePath)
-    val result: Boolean = existingMaxDepth < maxDepth
     val typedPath: TypedPath = TypedPaths.get(absolutePath)
     var realPath: Path = null
     try realPath = absolutePath.toRealPath()
@@ -172,26 +166,22 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
       case e: IOException => realPath = absolutePath.toAbsolutePath()
 
     }
-    if (result) {
+    var result: Either[IOException, Boolean] = Either.right(false)
+    if (existingMaxDepth < maxDepth) {
       directoryRegistry.addDirectory(typedPath.getPath, maxDepth)
     }
     val dir: CachedDirectory[WatchedDirectory] = getOrAdd(realPath)
-    val events: List[Event] = new ArrayList[Event]()
     if (dir != null) {
-      val directories: List[FileTreeDataViews.Entry[WatchedDirectory]] =
-        dir.listEntries(typedPath.getPath, -1, AllPass)
-      if (result || directories.isEmpty || directories
-            .get(0)
-            .getValue
-            .isRight) {
-        val toUpdate: Path = typedPath.getPath
-        if (toUpdate != null) update(dir, typedPath, events, true)
+      result = Either.right(true)
+      try dir.update(typedPath, true)
+      catch {
+        case e: IOException => result = Either.left(e)
+
       }
     }
-    runCallbacks(events)
     if (Loggers.shouldLog(logger, Level.DEBUG))
       logger.debug(this + " registered " + path + " with max depth " + maxDepth)
-    Either.right(result)
+    result
   }
 
   private def find(path: Path): CachedDirectory[WatchedDirectory] = {
@@ -218,38 +208,41 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
   private def getOrAdd(path: Path): CachedDirectory[WatchedDirectory] = {
     var result: CachedDirectory[WatchedDirectory] = null
     if (rootDirectories.lock()) {
-      try if (!closed.get) {
-        result = find(path)
-        if (result == null) {
-          /*
-           * We want to monitor the parent in case the file is deleted.
-           */
+      try {
+        if (!closed.get) {
+          result = find(path)
+          if (result == null) {
+            /*
+             * We want to monitor the parent in case the file is deleted.
+             */
 
-          var parent: Path = path.getParent
-          var init: Boolean = false
-          while (!init && parent != null) try {
-            result = new CachedDirectoryImpl(
-              TypedPaths.get(parent),
-              converter,
-              java.lang.Integer.MAX_VALUE,
-              new Filter[TypedPath]() {
-                override def accept(typedPath: TypedPath): Boolean =
-                  typedPath.isDirectory && !typedPath.isSymbolicLink && directoryRegistry
-                    .acceptPrefix(typedPath.getPath)
-              },
-              false
-            ).init()
-            init = true
-            rootDirectories.put(parent, result)
-          } catch {
-            case e: IOException => parent = parent.getParent
+            var parent: Path = path.getParent
+            var init: Boolean = false
+            while (!init && parent != null) try {
+              result = new CachedDirectoryImpl(
+                TypedPaths.get(parent),
+                converter,
+                java.lang.Integer.MAX_VALUE,
+                new Filter[TypedPath]() {
+                  override def accept(typedPath: TypedPath): Boolean =
+                    typedPath.isDirectory && !typedPath.isSymbolicLink && directoryRegistry
+                      .acceptPrefix(typedPath.getPath)
+                },
+                false
+              ).init()
+              init = true
+              rootDirectories.put(parent, result)
+            } catch {
+              case e: IOException => parent = parent.getParent
 
+            }
           }
         }
         result
       } finally rootDirectories.unlock()
+    } else {
+      result
     }
-    result
   }
 
   override def unregister(path: Path): Unit = {
@@ -273,32 +266,6 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     if (closed.compareAndSet(false, true)) {
       service.close()
       rootDirectories.clear()
-    }
-  }
-
-  private def update(dir: CachedDirectory[WatchedDirectory],
-                     typedPath: TypedPath,
-                     events: List[Event],
-                     rescanDirectories: Boolean): Unit = {
-    try dir
-      .update(typedPath, rescanDirectories)
-      .observe(updateCacheObserver(events))
-    catch {
-      case e: NoSuchFileException => {
-        remove(dir, typedPath.getPath, events)
-        val newTypedPath: TypedPath = TypedPaths.get(typedPath.getPath)
-        events.add(new Event(newTypedPath, if (newTypedPath.exists()) Kind.Modify else Kind.Delete))
-        val root: CachedDirectory[WatchedDirectory] =
-          rootDirectories.remove(typedPath.getPath)
-        if (root != null) {
-          val it: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
-            root.listEntries(java.lang.Integer.MAX_VALUE, AllPass).iterator()
-          while (it.hasNext) it.next().getValue.get.close()
-        }
-      }
-
-      case e: IOException => {}
-
     }
   }
 
@@ -364,15 +331,26 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     if (!closed.get && rootDirectories.lock()) {
       try if (directoryRegistry.acceptPrefix(event.getTypedPath.getPath)) {
         val isDelete: Boolean = event.getKind == Delete
-        val typedPath: TypedPath = TypedPaths.get(event.getTypedPath.getPath)
-        if (isDelete) remove(typedPath.getPath, events)
+        val path: Path = event.getTypedPath.getPath
+        val typedPath: TypedPath = TypedPaths.get(path)
+        if (isDelete) remove(path, events)
         if (typedPath.exists()) {
-          if (typedPath.isDirectory && !typedPath.isSymbolicLink)
-            add(typedPath, events)
+          if (typedPath.isDirectory && !typedPath.isSymbolicLink) {
+            try add(typedPath, events)
+            catch {
+              case e: IOException => remove(path, events)
+
+            }
+          }
           events.add(event)
-        } else if (!isDelete) remove(typedPath.getPath, events)
+        } else if (!isDelete) remove(path, events)
         else events.add(event)
       } finally rootDirectories.unlock()
+    }
+    if (Loggers.shouldLog(logger, Level.DEBUG)) {
+      logger.debug(
+        this + " generated " + events.toString + " from initial event " +
+          event)
     }
     runCallbacks(events)
   }
