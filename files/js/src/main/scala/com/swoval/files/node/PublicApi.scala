@@ -30,22 +30,16 @@ import scala.scalajs.js.annotation.{ JSExportAll, JSExportTopLevel }
 object FileTreeRepositories {
 
   /**
-   * Create a file tree repository.
+   * Create a file tree repository that follows symlinks.
    *
    * @param converter function that converts a [[TypedPath]] to a generic type
-   * @param followLinks toggles whether or not to follow symbolic links. When true, any symbolic
-   *     links that point to a regular file will trigger an event when the target file is modified.
-   *     For any symbolic links that point to a directory, the children of the target directory will
-   *     be included (up to the max depth parameter specified by [[    FileTreeRepository.register]]) and will trigger an event when any of the included children
-   *     are modified. When false, symbolic links are not followed and only events for the symbolic
-   *     link itself are reported. True by default.
    * @tparam T the value type of the cache entries
    * @return a file tree repository.
    */
-  def get[T <: AnyRef](converter: js.UndefOr[js.Function1[TypedPath, T]],
-                       followLinks: js.UndefOr[Boolean]): FileTreeRepository[T] = {
+  def followSymlinks[T <: AnyRef](
+      converter: js.UndefOr[js.Function1[TypedPath, T]]): FileTreeRepository[T] = {
     val underlying =
-      SFileTreeRepositories.get(
+      SFileTreeRepositories.followSymlinks(
         new Converter[T] {
           val function = converter.toOption match {
             case Some(f) =>
@@ -57,7 +51,6 @@ object FileTreeRepositories {
           }
           override def apply(typedPath: STypedPath): T = function(typedPath)
         },
-        followLinks.toOption.getOrElse(true)
       )
     new FileTreeRepository[T](underlying)
   }
@@ -226,13 +219,20 @@ class FileTreeRepository[T <: AnyRef] protected[node] (
 object PathWatchers {
 
   /**
-   * Create a [[PathWatcher]] for the runtime platform.
+   * Create a [[PathWatcher]] that follows symlinks for the runtime platform.
    *
-   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
    * @return an appropriate [[PathWatcher]] for the runtime platform.
    */
-  def get(followLinks: js.UndefOr[Boolean]): PathWatcher =
-    new PathWatcher(SPathWatchers.get(followLinks.toOption.getOrElse(true)))
+  def followLinks(): PathWatcher =
+    new PathWatcher(SPathWatchers.followSymlinks())
+
+  /**
+   * Create a [[PathWatcher]] that follows symlinks for the runtime platform.
+   *
+   * @return an appropriate [[PathWatcher]] for the runtime platform.
+   */
+  def noFollowLinks(): PathWatcher =
+    new PathWatcher(SPathWatchers.noFollowSymlinks())
 
   /**
    * Create a path watcher that periodically polls the file system to detect changes

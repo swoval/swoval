@@ -6,6 +6,7 @@ import com.swoval.functional.Filters.AllPass
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.PathWatchers.Event.Kind
+import com.swoval.files.PathWatchers.FollowSymlinks
 import com.swoval.functional.Either
 import com.swoval.functional.Filter
 import com.swoval.logging.Logger
@@ -14,16 +15,13 @@ import java.io.IOException
 import java.nio.file.Path
 import java.util.Iterator
 
-class SymlinkFollowingPathWatcher(private val pathWatcher: PathWatcher[PathWatchers.Event],
-                                  directoryRegistry: DirectoryRegistry,
-                                  logger: Logger)
-    extends PathWatcher[PathWatchers.Event] {
+class SymlinkFollowingPathWatcherImpl(private val pathWatcher: PathWatcher[PathWatchers.Event],
+                                      directoryRegistry: DirectoryRegistry,
+                                      logger: Logger)
+    extends FollowSymlinks[Event] {
 
-  private val symlinkWatcher: SymlinkWatcher = new SymlinkWatcher(
-    if (Platform.isMac)
-      new ApplePathWatcher(new DirectoryRegistryImpl(), logger)
-    else PlatformWatcher.make(false, new DirectoryRegistryImpl(), logger),
-    logger)
+  private val symlinkWatcher: SymlinkWatcher =
+    new SymlinkWatcher(PathWatchers.noFollowSymlinks(logger), logger)
 
   private val observers: Observers[PathWatchers.Event] = new Observers()
 
@@ -55,15 +53,7 @@ class SymlinkFollowingPathWatcher(private val pathWatcher: PathWatcher[PathWatch
     }
   })
 
-  symlinkWatcher.addObserver(new Observer[Event]() {
-    override def onError(t: Throwable): Unit = {
-      observers.onError(t)
-    }
-
-    override def onNext(event: Event): Unit = {
-      observers.onNext(event)
-    }
-  })
+  symlinkWatcher.addObserver(observers)
 
   private def handleNewDirectory(path: Path, maxDepth: Int, trigger: Boolean): Unit = {
     val it: Iterator[TypedPath] =

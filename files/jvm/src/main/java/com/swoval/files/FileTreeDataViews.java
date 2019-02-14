@@ -73,6 +73,16 @@ public class FileTreeDataViews {
     R apply(final TypedPath typedPath) throws IOException;
   }
 
+  static class Converters {
+    static final Converter<TypedPath> IDENTITY =
+        new Converter<TypedPath>() {
+          @Override
+          public TypedPath apply(final TypedPath typedPath) {
+            return typedPath;
+          }
+        };
+  }
+
   /**
    * Provides callbacks to run when different types of file events are detected by the cache.
    *

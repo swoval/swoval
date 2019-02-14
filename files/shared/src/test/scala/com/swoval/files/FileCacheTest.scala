@@ -10,7 +10,7 @@ import com.swoval.files.TestHelpers._
 import com.swoval.files.test._
 import com.swoval.files.test.platform.Bool
 import com.swoval.functional.{ Filter, Filters, Either => SEither }
-import com.swoval.logging.Logger
+import com.swoval.runtime.Platform
 import utest._
 
 import scala.collection.JavaConverters._
@@ -21,29 +21,23 @@ trait FileCacheTest extends TestSuite { self: TestSuite =>
 
   def simpleCache(f: Entry[Path] => Unit)(
       implicit testLogger: TestLogger): FileTreeRepository[Path] =
-    FileCacheTest.get(true, identity, getObserver(f), factory)
+    FileCacheTest.get(identity, getObserver(f))
 
   def lastModifiedCache(f: Entry[LastModified] => Unit)(
       implicit testLogger: TestLogger): FileTreeRepository[LastModified] =
-    FileCacheTest.get(true, LastModified(_: TypedPath), getObserver(f), factory)
+    FileCacheTest.get(LastModified(_: TypedPath), getObserver(f))
 
-  def lastModifiedCache(followLinks: Boolean)(
-      onCreate: Entry[LastModified] => Unit,
-      onUpdate: (Entry[LastModified], Entry[LastModified]) => Unit,
-      onDelete: Entry[LastModified] => Unit)(
+  def lastModifiedCache(onCreate: Entry[LastModified] => Unit,
+                        onUpdate: (Entry[LastModified], Entry[LastModified]) => Unit,
+                        onDelete: Entry[LastModified] => Unit)(
       implicit testLogger: TestLogger): FileTreeRepository[LastModified] =
-    FileCacheTest.get(followLinks,
-                      LastModified(_: TypedPath),
-                      getObserver(onCreate, onUpdate, onDelete),
-                      factory)
+    FileCacheTest.get(LastModified(_: TypedPath), getObserver(onCreate, onUpdate, onDelete))
 }
 
 object FileCacheTest {
-  def getCached[T <: AnyRef](
-      followLinks: Boolean,
-      converter: Converter[T],
-      cacheObserver: CacheObserver[T])(implicit testLogger: TestLogger): FileTreeRepository[T] = {
-    val res = FileTreeRepositories.get(converter, followLinks, false, testLogger)
+  def get[T <: AnyRef](converter: Converter[T], cacheObserver: CacheObserver[T])(
+      implicit testLogger: TestLogger): FileTreeRepository[T] = {
+    val res = FileTreeRepositories.getDefault(converter, testLogger)
     res.addCacheObserver(cacheObserver)
     res
   }
@@ -68,41 +62,14 @@ object FileCacheTest {
       res
     }
   }
-
-  /**
-   * Create a file cache with a CacheObserver of events.
-   *
-   * @param converter     converts a path to the cached value type T
-   * @param cacheObserver an cacheObserver of events for this cache
-   * @return a file cache.
-   */
-  private[files] def get[T <: AnyRef](
-      followLinks: Boolean,
-      converter: FileTreeDataViews.Converter[T],
-      cacheObserver: FileTreeDataViews.CacheObserver[T],
-      watcherFactory: (DirectoryRegistry, TestLogger) => PathWatcher[PathWatchers.Event])(
-      implicit testLogger: TestLogger): FileTreeRepository[T] = {
-    val symlinkWatcher =
-      if (followLinks)
-        new SymlinkWatcher(watcherFactory(new DirectoryRegistryImpl, testLogger), testLogger)
-      else null
-    val callbackExecutor = Executor.make("FileTreeRepository-callback-executor")
-    val tree =
-      new FileCacheDirectoryTree(converter, callbackExecutor, symlinkWatcher, false, testLogger)
-    val pathWatcher = watcherFactory(tree.readOnlyDirectoryRegistry, testLogger)
-    pathWatcher.addObserver((e: PathWatchers.Event) => tree.handleEvent(e))
-    val watcher = new FileCachePathWatcher(tree, pathWatcher)
-    val res = new FileTreeRepositoryImpl(tree, watcher, testLogger)
-    res.addCacheObserver(cacheObserver)
-    res
-  }
 }
 
 trait DefaultFileCacheTest { self: FileCacheTest =>
   val factory = (directoryRegistry: DirectoryRegistry, testLogger: TestLogger) =>
-    PathWatchers.get(false, directoryRegistry, testLogger)
+    if (Platform.isMac) ApplePathWatchers.get(directoryRegistry, testLogger)
+    else PlatformWatcher.make(directoryRegistry, testLogger)
 }
 trait NioFileCacheTest { self: FileCacheTest =>
   val factory = (directoryRegistry: DirectoryRegistry, testLogger: TestLogger) =>
-    PlatformWatcher.make(false, directoryRegistry, testLogger)
+    PlatformWatcher.make(directoryRegistry, testLogger)
 }

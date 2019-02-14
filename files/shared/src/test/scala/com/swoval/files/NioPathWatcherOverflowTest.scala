@@ -39,7 +39,6 @@ object NioPathWatcherOverflowTest extends TestSuite {
       }
       usingAsync(
         PlatformWatcher.make(
-          false,
           new BoundedWatchService(4, RegisterableWatchServices.get()),
           new DirectoryRegistryImpl(),
           logger

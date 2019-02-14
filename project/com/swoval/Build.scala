@@ -472,14 +472,19 @@ object Build {
                 "RegisterableWatchService",
                 "SimpleFileTreeView",
                 "SymlinkWatcher",
-                "SymlinkFollowingPathWatcher",
+                "SymlinkFollowingPathWatcherImpl",
                 "TypedPath",
                 "TypedPaths",
                 "UpdatableFileTreeDataView",
                 "WatchedDirectory"
               ).value
               convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
-              convertSources("com/swoval/functional", "Consumer", "Either", "Filter", "Filters").value
+              convertSources("com/swoval/functional",
+                             "Consumer",
+                             "Either",
+                             "Filter",
+                             "Filters",
+                             "IOFunction").value
               convertSources("com/swoval/logging", "Logger", "Loggers").value
             }
           },
@@ -514,12 +519,15 @@ object Build {
         "com.swoval.files.CachedDirectories*",
         "com.swoval.files.CacheObservers*",
         "com.swoval.files.DataViews*",
-        "com.swoval.files.Logger*",
         "com.swoval.files.DebugLogger*",
         "com.swoval.files.*DirectoryLister*",
+        "com.swoval.files.Logger*",
+        "com.swoval.files.FileTreeRepositories",
+        "com.swoval.files.FileTreeRepositories*Interrupt*",
         "com.swoval.files.Observers*",
         "com.swoval.files.RegisterableWatchServices*",
         "com.swoval.files.Sleep*",
+        "com.swoval.files.PathWatchers",
         "com.swoval.files.WatchServices*",
         "com.swoval.files.WatchedDirectory*",
         "com.swoval.files.apple.Event*",

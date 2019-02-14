@@ -5,6 +5,7 @@ package com.swoval.files
 import com.swoval.files.PathWatchers.Event.Kind.Create
 import com.swoval.files.PathWatchers.Event.Kind.Delete
 import com.swoval.files.PathWatchers.Event.Kind.Modify
+import com.swoval.files.ApplePathWatcher.DefaultOnStreamRemoved
 import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event
 import com.swoval.files.apple.ClosedFileEventMonitorException
@@ -44,7 +45,7 @@ object ApplePathWatcher {
 
   }
 
-  private val DefaultOnStreamRemoved: DefaultOnStreamRemoved =
+  val DefaultOnStreamRemoved: DefaultOnStreamRemoved =
     new DefaultOnStreamRemoved()
 
   /**
@@ -65,13 +66,9 @@ class ApplePathWatcher(private val latency: java.lang.Long,
                        private val timeUnit: TimeUnit,
                        private val flags: Flags.Create,
                        onStreamRemoved: Consumer[String],
-                       managedDirectoryRegistry: DirectoryRegistry,
+                       private val directoryRegistry: DirectoryRegistry,
                        private val logger: Logger)
     extends PathWatcher[PathWatchers.Event] {
-
-  private val directoryRegistry: DirectoryRegistry =
-    if (managedDirectoryRegistry == null) new DirectoryRegistryImpl()
-    else managedDirectoryRegistry
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
 
@@ -199,7 +196,7 @@ class ApplePathWatcher(private val latency: java.lang.Long,
           }
         }
         val pathIterator: Iterator[Path] = toRemove.iterator()
-        while (pathIterator.hasNext) unregister(pathIterator.next())
+        while (pathIterator.hasNext) unregisterImpl(pathIterator.next(), false)
       } finally appleFileEventStreams.unlock()
     }
   }
@@ -210,10 +207,14 @@ class ApplePathWatcher(private val latency: java.lang.Long,
    * @param path The directory to remove from monitoring
    */
   override def unregister(path: Path): Unit = {
+    unregisterImpl(path, true)
+  }
+
+  private def unregisterImpl(path: Path, removeFromRegistry: Boolean): Unit = {
     val absolutePath: Path =
       if (path.isAbsolute) path else path.toAbsolutePath()
     if (!closed.get) {
-      directoryRegistry.removeDirectory(absolutePath)
+      if (removeFromRegistry) directoryRegistry.removeDirectory(absolutePath)
       val stream: Stream = appleFileEventStreams.remove(absolutePath)
       if (stream != null && stream.handle != Handles.INVALID) {
         try stream.close()
@@ -240,35 +241,6 @@ class ApplePathWatcher(private val latency: java.lang.Long,
     }
   }
 
-  def this(directoryRegistry: DirectoryRegistry, logger: Logger) =
-    this(10,
-         TimeUnit.MILLISECONDS,
-         new Flags.Create().setNoDefer().setFileEvents(),
-         DefaultOnStreamRemoved,
-         directoryRegistry,
-         logger)
-
-  /**
-   * Creates a new ApplePathWatcher which is a wrapper around [[FileEventMonitor]], which in
-   * turn is a native wrapper around [[https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1
-   * Apple File System Events]]
-   *
-   * @param latency specified in fractional seconds
-   * @param flags Native flags
-   * @param onStreamRemoved [[com.swoval.functional.Consumer]] to run when a redundant stream is
-   *     removed from the underlying native file events implementation
-   * @param managedDirectoryRegistry The nullable registry of directories to monitor. If this is
-   *     non-null, then registrations are handled by an outer class and this watcher should not call
-   *     add or remove directory.
-   *     initialization
-   */
-  def this(latency: java.lang.Long,
-           timeUnit: TimeUnit,
-           flags: Flags.Create,
-           onStreamRemoved: Consumer[String],
-           managedDirectoryRegistry: DirectoryRegistry) =
-    this(latency, timeUnit, flags, onStreamRemoved, managedDirectoryRegistry, Loggers.getLogger)
-
   private def find(path: Path): Entry[Path, Stream] = {
     val it: Iterator[Entry[Path, Stream]] = appleFileEventStreams.iterator()
     var result: Entry[Path, Stream] = null
@@ -285,18 +257,12 @@ class ApplePathWatcher(private val latency: java.lang.Long,
 
 object ApplePathWatchers {
 
-  def get(followLinks: Boolean,
-          directoryRegistry: DirectoryRegistry): PathWatcher[PathWatchers.Event] =
-    get(followLinks, directoryRegistry, Loggers.getLogger)
-
-  def get(followLinks: Boolean,
-          directoryRegistry: DirectoryRegistry,
-          logger: Logger): PathWatcher[PathWatchers.Event] = {
-    val pathWatcher: ApplePathWatcher =
-      new ApplePathWatcher(directoryRegistry, logger)
-    if (followLinks)
-      new SymlinkFollowingPathWatcher(pathWatcher, directoryRegistry, logger)
-    else pathWatcher
-  }
+  def get(registry: DirectoryRegistry, logger: Logger): PathWatcher[PathWatchers.Event] =
+    new ApplePathWatcher(10,
+                         TimeUnit.MILLISECONDS,
+                         new Flags.Create().setNoDefer().setFileEvents(),
+                         ApplePathWatcher.DefaultOnStreamRemoved,
+                         registry,
+                         logger)
 
 }

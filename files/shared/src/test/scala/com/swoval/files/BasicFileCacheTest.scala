@@ -101,7 +101,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           val onUpdate = ignoreOld[Path](ignore)
           val onError = (_: IOException) => {}
           val observer = getObserver(onChange, onUpdate, onChange, onError)
-          usingAsync(FileCacheTest.getCached(false, identity, observer)) { c =>
+          usingAsync(FileCacheTest.get(identity, observer)) { c =>
             c.reg(dir, recursive = false)
             c.ls(dir, recursive = false) === Seq(initial)
             initial.renameTo(moved)
@@ -342,8 +342,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         implicit val logger: TestLogger = new CachingLogger
         val latch = new CountDownLatch(1)
         usingAsync(
-          FileCacheTest.getCached[LastModified](
-            false,
+          FileCacheTest.get[LastModified](
             LastModified(_: TypedPath),
             new FileTreeDataViews.CacheObserver[LastModified] {
               override def onCreate(newEntry: Entry[LastModified]): Unit = {}
@@ -429,7 +428,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
 
             override def onError(exception: IOException): Unit = {}
           }
-          usingAsync(FileCacheTest.getCached(false, identity, observer)) { c =>
+          usingAsync(FileCacheTest.get(identity, observer)) { c =>
             c.reg(dir)
             c.ls(dir) === Seq(file)
             dir.deleteRecursive()
@@ -503,9 +502,9 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         val updateLatch = new CountDownLatch(1)
         val deletionLatch = new CountDownLatch(1)
         usingAsync(
-          lastModifiedCache(false)(
+          lastModifiedCache(
             (e: Entry[LastModified]) => if (e.path == file) creationLatch.countDown(),
-            (e: Entry[LastModified], newEntry: Entry[LastModified]) =>
+            (_: Entry[LastModified], newEntry: Entry[LastModified]) =>
               if (newEntry.getValue.isRight && newEntry.getValue.get.lastModified == 3000)
                 updateLatch.countDown(),
             (oldEntry: Entry[LastModified]) => if (oldEntry.path == file) deletionLatch.countDown()
@@ -566,7 +565,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         val file = dir.resolve("simple").createFile()
         val latch = new CountDownLatch(1)
         usingAsync(
-          lastModifiedCache(true)(
+          lastModifiedCache(
             ignore,
             ignoreOld { newEntry: Entry[LastModified] =>
               if (newEntry.value.lastModified == 3000) latch.countDown()
@@ -594,7 +593,7 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           withTempFile(subdir) { file =>
             val latch = new CountDownLatch(1)
             val secondLatch = new CountDownLatch(1)
-            usingAsync(lastModifiedCache(true)(
+            usingAsync(lastModifiedCache(
               ignore,
               ignoreOld { newEntry: Entry[LastModified] =>
                 newEntry.value.lastModified match {

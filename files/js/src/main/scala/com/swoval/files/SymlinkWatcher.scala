@@ -116,9 +116,6 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event],
     }
   })
 
-  def this(watcher: PathWatcher[PathWatchers.Event]) =
-    this(watcher, Loggers.getLogger)
-
   private val watchedSymlinksByTarget: RegisteredPaths = new RegisteredPaths(reentrantLock)
 
   override def addObserver(observer: Observer[_ >: Event]): Int =

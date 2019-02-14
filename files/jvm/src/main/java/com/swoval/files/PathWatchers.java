@@ -1,6 +1,8 @@
 package com.swoval.files;
 
 import com.swoval.files.FileTreeDataViews.Converter;
+import com.swoval.files.FileTreeViews.Observer;
+import com.swoval.functional.Either;
 import com.swoval.logging.Logger;
 import com.swoval.logging.Loggers;
 import com.swoval.runtime.Platform;
@@ -8,6 +10,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
+// Ignore the errors in javadoc in intellij. It is getting confused by having the java and
+// js implementations.
 /**
  * Provides factory methods to create instances of {@link com.swoval.files.PathWatcher}. It also
  * defines the {@link com.swoval.files.PathWatchers.Event} class for which the {@link
@@ -15,18 +19,143 @@ import java.util.concurrent.TimeUnit;
  */
 public class PathWatchers {
   private PathWatchers() {}
+
   /**
-   * Create a PathWatcher for the runtime platform.
+   * Create a PathWatcher that will not follow symlinks. The implementation will be platform
+   * dependent.
    *
-   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
-   * @return PathWatcher for the runtime platform
-   * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
-   *     initialized
-   * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
+   * @param converter function to convert a {@link TypedPath} to the generic data type `T`.
+   * @param logger the logger for t
+   * @param <T> the generic type of events created by this path watcher
+   * @return a PathWatcher that does not follow symlinks.
+   * @throws IOException when the platform specific monitoring service cannot be initialized due to
+   *     an io error
+   * @throws InterruptedException when the platform specific monitoring service cannot initialize
+   *     its background threads
    */
-  public static PathWatcher<PathWatchers.Event> get(final boolean followLinks)
+  public static <T> NoFollowSymlinks<T> noFollowSymlinks(
+      final Converter<T> converter, final Logger logger) throws IOException, InterruptedException {
+    return new NoFollowWrapper<>(PathWatchers.<T>get(converter, new DirectoryRegistryImpl(), logger));
+  }
+
+  /**
+   * Create a PathWatcher that will not follow symlinks. The implementation will be platform
+   * dependent.
+   *
+   * @param converter function to convert a {@link TypedPath} to the generic data type `T`.
+   * @param <T> the generic type of events created by this path watcher
+   * @return a PathWatcher that does not follow symlinks.
+   * @throws IOException when the platform specific monitoring service cannot be initialized due to
+   *     an io error
+   * @throws InterruptedException when the platform specific monitoring service cannot initialize
+   *     its background threads
+   */
+  public static <T> NoFollowSymlinks<T> noFollowSymlinks(final Converter<T> converter)
       throws IOException, InterruptedException {
-    return get(followLinks, new DirectoryRegistryImpl(), Loggers.getLogger());
+    return noFollowSymlinks(converter, Loggers.getLogger());
+  }
+
+  /**
+   * Create a PathWatcher that will not follow symlinks and generates events of type {@link Event}.
+   * The implementation will be platform dependent.
+   *
+   * @param logger the logger to use
+   * @return a PathWatcher that does not follow symlinks.
+   * @throws IOException when the platform specific monitoring service cannot be initialized due to
+   *     an io error
+   * @throws InterruptedException when the platform specific monitoring service cannot initialize
+   *     its background threads
+   */
+  public static NoFollowSymlinks<Event> noFollowSymlinks(final Logger logger)
+      throws IOException, InterruptedException {
+    return new NoFollowWrapper<>(get(new DirectoryRegistryImpl(), logger));
+  }
+
+  /**
+   * Create a PathWatcher that will not follow symlinks and generates events of type {@link Event}.
+   * The implementation will be platform dependent.
+   *
+   * @return a PathWatcher that does not follow symlinks.
+   * @throws IOException when the platform specific monitoring service cannot be initialized due to
+   *     an io error
+   * @throws InterruptedException when the platform specific monitoring service cannot initialize
+   *     its background threads
+   */
+  public static NoFollowSymlinks<Event> noFollowSymlinks()
+      throws IOException, InterruptedException {
+    return noFollowSymlinks(Loggers.getLogger());
+  }
+
+  /**
+   * Create a PathWatcher that will follow symlinks and generate file events for the symlink when
+   * its target is modifified. The implementation will be platform dependent.
+   *
+   * @param converter function to convert a {@link TypedPath} to the generic data type `T`.
+   * @param logger the logger for t
+   * @param <T> the generic type of events created by this path watcher
+   * @return a PathWatcher that does not follow symlinks.
+   * @throws IOException when the platform specific monitoring service cannot be initialized due to
+   *     an io error
+   * @throws InterruptedException when the platform specific monitoring service cannot initialize
+   *     its background threads
+   */
+  public static <T> FollowSymlinks<T> followSymlinks(
+      final Converter<T> converter, final Logger logger) throws IOException, InterruptedException {
+    return new FollowWrapper<>(new ConvertedPathWatcher<>(follow(logger), converter));
+  }
+
+  /**
+   * Create a PathWatcher that will follow symlinks and generate file events for the symlink when
+   * its target is modifified. The implementation will be platform dependent.
+   *
+   * @param converter function to convert a {@link TypedPath} to the generic data type `T`.
+   * @param <T> the generic type of events created by this path watcher
+   * @return a PathWatcher that does not follow symlinks.
+   * @throws IOException when the platform specific monitoring service cannot be initialized due to
+   *     an io error
+   * @throws InterruptedException when the platform specific monitoring service cannot initialize
+   *     its background threads
+   */
+  public static <T> FollowSymlinks<T> followSymlinks(final Converter<T> converter)
+      throws IOException, InterruptedException {
+    return new FollowWrapper<>(new ConvertedPathWatcher<>(follow(Loggers.getLogger()), converter));
+  }
+
+  /**
+   * Create a PathWatcher that will not follow symlinks and generates events of type {@link Event}.
+   * The implementation will be platform dependent.
+   *
+   * @param logger the logger
+   * @return a PathWatcher that does not follow symlinks.
+   * @throws IOException when the platform specific monitoring service cannot be initialized due to
+   *     an io error
+   * @throws InterruptedException when the platform specific monitoring service cannot initialize
+   *     its background threads
+   */
+  public static FollowSymlinks<Event> followSymlinks(final Logger logger)
+      throws IOException, InterruptedException {
+    return new FollowWrapper<>(follow(logger));
+  }
+
+  /**
+   * Create a PathWatcher that will not follow symlinks and generates events of type {@link Event}.
+   * The implementation will be platform dependent.
+   *
+   * @return a PathWatcher that does not follow symlinks.
+   * @throws IOException when the platform specific monitoring service cannot be initialized due to
+   *     an io error
+   * @throws InterruptedException when the platform specific monitoring service cannot initialize
+   *     its background threads
+   */
+  public static FollowSymlinks<Event> followSymlinks() throws IOException, InterruptedException {
+    return new FollowWrapper<>(follow(Loggers.getLogger()));
+  }
+
+  private static PathWatcher<Event> follow(final Logger logger)
+      throws InterruptedException, IOException {
+    final DirectoryRegistry directoryRegistry = new DirectoryRegistryImpl();
+    final PathWatcher<Event> pathWatcher = get(directoryRegistry, logger);
+    return new SymlinkFollowingPathWatcherImpl(pathWatcher, directoryRegistry, logger);
   }
 
   /**
@@ -66,54 +195,16 @@ public class PathWatchers {
     return new PollingPathWatcher(followLinks, pollInterval, timeUnit);
   }
 
-  /**
-   * Create a PathWatcher for the runtime platform.
-   *
-   * @param followLinks toggles whether or not the targets of symbolic links should be monitored
-   * @param registry The registry of directories to monitor
-   * @param logger the logger
-   * @return PathWatcher for the runtime platform
-   * @throws IOException when the underlying {@link java.nio.file.WatchService} cannot be
-   *     initialized
-   * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
-   */
-  static PathWatcher<Event> get(
-      final boolean followLinks, final DirectoryRegistry registry, final Logger logger)
+  private static <T> PathWatcher<T> get(
+      final Converter<T> converter, final DirectoryRegistry registry, final Logger logger)
+      throws InterruptedException, IOException {
+    return new ConvertedPathWatcher<T>(get(registry, logger), converter);
+  }
+  private static PathWatcher<Event> get(final DirectoryRegistry registry, final Logger logger)
       throws InterruptedException, IOException {
     return Platform.isMac()
-        ? ApplePathWatchers.get(followLinks, registry, logger)
-        : PlatformWatcher.make(followLinks, registry, logger);
-  }
-
-  /**
-   * Create a PathWatcher for the runtime platform.
-   *
-   * @param registry The registry of directories to monitor
-   * @return PathWatcher for the runtime platform
-   * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
-   */
-  static PathWatcher<Event> get(
-      final boolean followLinks,
-      final RegisterableWatchService service,
-      final DirectoryRegistry registry)
-      throws InterruptedException, IOException {
-    return PlatformWatcher.make(followLinks, service, registry, Loggers.getLogger());
-  }
-
-  /**
-   * Create a PathWatcher for the runtime platform.
-   *
-   * @param registry The registry of directories to monitor
-   * @return PathWatcher for the runtime platform
-   * @throws InterruptedException when the {@link PathWatcher} is interrupted during initialization
-   */
-  static PathWatcher<Event> get(
-      final boolean followLinks,
-      final RegisterableWatchService service,
-      final DirectoryRegistry registry,
-      final Logger logger)
-      throws InterruptedException, IOException {
-    return PlatformWatcher.make(followLinks, service, registry, logger);
+        ? ApplePathWatchers.get(registry, logger)
+        : PlatformWatcher.make(registry, logger);
   }
 
   static final class Overflow {
@@ -214,4 +305,122 @@ public class PathWatchers {
       }
     }
   }
+
+  private static class ConvertedPathWatcher<T> implements PathWatcher<T> {
+    private final PathWatcher<Event> pathWatcher;
+    private final Observers<T> observers = new Observers<>();
+    private final Converter<T> converter;
+    private final int handle;
+
+    ConvertedPathWatcher(final PathWatcher<Event> pathWatcher, final Converter<T> converter) {
+      this.pathWatcher = pathWatcher;
+      this.converter = converter;
+      this.handle =
+          pathWatcher.addObserver(
+              new Observer<Event>() {
+                @Override
+                public void onError(final Throwable t) {
+                  observers.onError(t);
+                }
+
+                @Override
+                public void onNext(Event event) {
+                  observe(event);
+                }
+              });
+    }
+
+    @Override
+    public Either<IOException, Boolean> register(Path path, int maxDepth) {
+      return pathWatcher.register(path, maxDepth);
+    }
+
+    @Override
+    public void unregister(Path path) {
+      pathWatcher.unregister(path);
+    }
+
+    @Override
+    public void close() {
+      pathWatcher.removeObserver(this.handle);
+      observers.close();
+      pathWatcher.close();
+    }
+
+    public int addObserver(Observer<? super T> observer) {
+      return observers.addObserver(observer);
+    }
+
+    @Override
+    public void removeObserver(int handle) {
+      observers.removeObserver(handle);
+    }
+
+    private void observe(final Event event) {
+      try {
+        observers.onNext(converter.apply(event.getTypedPath()));
+      } catch (final IOException e) {
+        observers.onError(e);
+      }
+    }
+  }
+
+  private static class Wrapper<T> implements PathWatcher<T> {
+    private final PathWatcher<T> delegate;
+
+    Wrapper(final PathWatcher<T> delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public Either<IOException, Boolean> register(final Path path, final int maxDepth) {
+      return delegate.register(path, maxDepth);
+    }
+
+    @Override
+    public void unregister(final Path path) {
+      delegate.unregister(path);
+    }
+
+    @Override
+    public void close() {
+      delegate.close();
+    }
+
+    @Override
+    public int addObserver(final Observer<? super T> observer) {
+      return delegate.addObserver(observer);
+    }
+
+    @Override
+    public void removeObserver(final int handle) {
+      delegate.removeObserver(handle);
+    }
+  }
+
+  private static final class NoFollowWrapper<T> extends Wrapper<T> implements NoFollowSymlinks<T> {
+    NoFollowWrapper(final PathWatcher<T> delegate) {
+      super(delegate);
+    }
+
+    @Override
+    public String toString() {
+      return "NoFollowSymlinksPathWatcher@" + System.identityHashCode(this);
+    }
+  }
+
+  private static final class FollowWrapper<T> extends Wrapper<T> implements FollowSymlinks<T> {
+    FollowWrapper(final PathWatcher<T> delegate) {
+      super(delegate);
+    }
+
+    @Override
+    public String toString() {
+      return "SymlinkFollowingPathWatcher@" + System.identityHashCode(this);
+    }
+  }
+
+  public interface FollowSymlinks<T> extends PathWatcher<T> {}
+
+  public interface NoFollowSymlinks<T> extends PathWatcher<T> {}
 }

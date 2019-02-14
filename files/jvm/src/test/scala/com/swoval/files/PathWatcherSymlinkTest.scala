@@ -4,11 +4,12 @@ package files
 
 import java.nio.file.Files
 
-import com.swoval.runtime.Platform
+import com.swoval.files.PathWatchers.FollowSymlinks
+import com.swoval.files.TestHelpers._
 import com.swoval.files.test._
+import com.swoval.runtime.Platform
 import com.swoval.test._
 import utest._
-import TestHelpers._
 
 trait PathWatcherSymlinkTest extends TestSuite {
   def defaultWatcher(callback: PathWatchers.Event => _)(
@@ -84,8 +85,8 @@ trait PathWatcherSymlinkTest extends TestSuite {
 
 object PathWatcherSymlinkTest extends PathWatcherSymlinkTest {
   override def defaultWatcher(callback: Predef.Function[PathWatchers.Event, _])(
-      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
-    val res = PathWatchers.get(true, new DirectoryRegistryImpl(), testLogger)
+      implicit testLogger: TestLogger): FollowSymlinks[PathWatchers.Event] = {
+    val res = PathWatchers.followSymlinks(testLogger)
     res.addObserver(callback)
     res
   }
@@ -94,7 +95,9 @@ object PathWatcherSymlinkTest extends PathWatcherSymlinkTest {
 object NioPathWatcherSymlinkTest extends PathWatcherSymlinkTest {
   override def defaultWatcher(callback: Predef.Function[PathWatchers.Event, _])(
       implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
-    val res = PlatformWatcher.make(true, new DirectoryRegistryImpl(), testLogger)
+    val registry = new DirectoryRegistryImpl
+    val watcher = PlatformWatcher.make(registry, testLogger)
+    val res = new SymlinkFollowingPathWatcherImpl(watcher, registry, testLogger)
     res.addObserver(callback)
     res
   }

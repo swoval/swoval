@@ -5,6 +5,7 @@ import static com.swoval.functional.Filters.AllPass;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Event.Kind;
+import com.swoval.files.PathWatchers.FollowSymlinks;
 import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
 import com.swoval.logging.Logger;
@@ -13,25 +14,20 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Iterator;
 
-class SymlinkFollowingPathWatcher implements PathWatcher<PathWatchers.Event> {
+class SymlinkFollowingPathWatcherImpl implements FollowSymlinks<Event> {
   private final SymlinkWatcher symlinkWatcher;
   private final PathWatcher<PathWatchers.Event> pathWatcher;
   private final Observers<PathWatchers.Event> observers = new Observers<>();
   private final DirectoryRegistry pathWatcherDirectoryRegistry;
 
-  SymlinkFollowingPathWatcher(
+  SymlinkFollowingPathWatcherImpl(
       final PathWatcher<PathWatchers.Event> pathWatcher,
       final DirectoryRegistry directoryRegistry,
       final Logger logger)
       throws InterruptedException, IOException {
     this.pathWatcher = pathWatcher;
     this.pathWatcherDirectoryRegistry = directoryRegistry;
-    this.symlinkWatcher =
-        new SymlinkWatcher(
-            Platform.isMac()
-                ? new ApplePathWatcher(new DirectoryRegistryImpl(), logger)
-                : PlatformWatcher.make(false, new DirectoryRegistryImpl(), logger),
-            logger);
+    this.symlinkWatcher = new SymlinkWatcher(PathWatchers.noFollowSymlinks(logger), logger);
     pathWatcher.addObserver(
         new Observer<Event>() {
           @Override
@@ -58,18 +54,7 @@ class SymlinkFollowingPathWatcher implements PathWatcher<PathWatchers.Event> {
             observers.onNext(event);
           }
         });
-    symlinkWatcher.addObserver(
-        new Observer<Event>() {
-          @Override
-          public void onError(final Throwable t) {
-            observers.onError(t);
-          }
-
-          @Override
-          public void onNext(final Event event) {
-            observers.onNext(event);
-          }
-        });
+    symlinkWatcher.addObserver(observers);
   }
 
   private void handleNewDirectory(final Path path, final int maxDepth, final boolean trigger)

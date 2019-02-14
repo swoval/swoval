@@ -70,6 +70,14 @@ object FileTreeDataViews {
 
   }
 
+  object Converters {
+
+    val IDENTITY: Converter[TypedPath] = new Converter[TypedPath]() {
+      override def apply(typedPath: TypedPath): TypedPath = typedPath
+    }
+
+  }
+
   /**
    * Provides callbacks to run when different types of file events are detected by the cache.
    *

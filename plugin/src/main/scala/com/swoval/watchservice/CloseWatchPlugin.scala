@@ -285,9 +285,9 @@ object CloseWatchPlugin extends AutoPlugin {
             .put(stateBuildStructure, newStructure)
             .put(sessionSettings, session.copy(original = newSettings))
         } else state
-        val fileCache = FileTreeRepositories.get(new Converter[Path] {
+        val fileCache = FileTreeRepositories.followSymlinks(new Converter[Path] {
           override def apply(typedPath: TypedPath): Path = typedPath.getPath
-        }, true)
+        })
         newState
           .put(closeWatchGlobalFileRepository, fileCache)
           .copy(definedCommands = filtered :+ Continuously.continuous)

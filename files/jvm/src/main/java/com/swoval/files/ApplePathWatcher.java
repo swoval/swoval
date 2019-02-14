@@ -4,6 +4,7 @@ import static com.swoval.files.PathWatchers.Event.Kind.Create;
 import static com.swoval.files.PathWatchers.Event.Kind.Delete;
 import static com.swoval.files.PathWatchers.Event.Kind.Modify;
 
+import com.swoval.files.ApplePathWatcher.DefaultOnStreamRemoved;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.apple.ClosedFileEventMonitorException;
@@ -60,7 +61,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   private final Flags.Create flags;
   private final FileEventMonitor fileEventMonitor;
   private final Observers<PathWatchers.Event> observers = new Observers<>();
-  private static final DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
+  static final DefaultOnStreamRemoved DefaultOnStreamRemoved = new DefaultOnStreamRemoved();
   private final Logger logger;
 
   @Override
@@ -138,7 +139,7 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
         }
         final Iterator<Path> pathIterator = toRemove.iterator();
         while (pathIterator.hasNext()) {
-          unregister(pathIterator.next());
+          unregisterImpl(pathIterator.next(), false);
         }
       } finally {
         appleFileEventStreams.unlock();
@@ -154,9 +155,13 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
   @Override
   @SuppressWarnings("EmptyCatchBlock")
   public void unregister(final Path path) {
+    unregisterImpl(path, true);
+  }
+
+  private void unregisterImpl(final Path path, final boolean removeFromRegistry) {
     final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
     if (!closed.get()) {
-      directoryRegistry.removeDirectory(absolutePath);
+      if (removeFromRegistry) directoryRegistry.removeDirectory(absolutePath);
       final Stream stream = appleFileEventStreams.remove(absolutePath);
       if (stream != null && stream.handle != Handles.INVALID) {
         try {
@@ -189,16 +194,6 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
     public void accept(final String stream) {}
   }
 
-  ApplePathWatcher(final DirectoryRegistry directoryRegistry, final Logger logger)
-      throws InterruptedException {
-    this(
-        10,
-        TimeUnit.MILLISECONDS,
-        new Flags.Create().setNoDefer().setFileEvents(),
-        DefaultOnStreamRemoved,
-        directoryRegistry,
-        logger);
-  }
   /**
    * Creates a new ApplePathWatcher which is a wrapper around {@link FileEventMonitor}, which in
    * turn is a native wrapper around <a
@@ -209,9 +204,6 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
    * @param flags Native flags
    * @param onStreamRemoved {@link com.swoval.functional.Consumer} to run when a redundant stream is
    *     removed from the underlying native file events implementation
-   * @param managedDirectoryRegistry The nullable registry of directories to monitor. If this is
-   *     non-null, then registrations are handled by an outer class and this watcher should not call
-   *     add or remove directory.
    * @throws InterruptedException if the native file events implementation is interrupted during
    *     initialization
    */
@@ -220,39 +212,13 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
       final TimeUnit timeUnit,
       final Flags.Create flags,
       final Consumer<String> onStreamRemoved,
-      final DirectoryRegistry managedDirectoryRegistry)
-      throws InterruptedException {
-    this(latency, timeUnit, flags, onStreamRemoved, managedDirectoryRegistry, Loggers.getLogger());
-  }
-  /**
-   * Creates a new ApplePathWatcher which is a wrapper around {@link FileEventMonitor}, which in
-   * turn is a native wrapper around <a
-   * href="https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005289-CH1-SW1">
-   * Apple File System Events</a>
-   *
-   * @param latency specified in fractional seconds
-   * @param flags Native flags
-   * @param onStreamRemoved {@link com.swoval.functional.Consumer} to run when a redundant stream is
-   *     removed from the underlying native file events implementation
-   * @param managedDirectoryRegistry The nullable registry of directories to monitor. If this is
-   *     non-null, then registrations are handled by an outer class and this watcher should not call
-   *     add or remove directory.
-   * @throws InterruptedException if the native file events implementation is interrupted during
-   *     initialization
-   */
-  ApplePathWatcher(
-      final long latency,
-      final TimeUnit timeUnit,
-      final Flags.Create flags,
-      final Consumer<String> onStreamRemoved,
-      final DirectoryRegistry managedDirectoryRegistry,
+      final DirectoryRegistry directoryRegistry,
       final Logger logger)
       throws InterruptedException {
     this.latency = latency;
     this.timeUnit = timeUnit;
     this.flags = flags;
-    this.directoryRegistry =
-        managedDirectoryRegistry == null ? new DirectoryRegistryImpl() : managedDirectoryRegistry;
+    this.directoryRegistry = directoryRegistry;
     this.logger = logger;
     fileEventMonitor =
         FileEventMonitors.get(
@@ -319,18 +285,14 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
 class ApplePathWatchers {
   private ApplePathWatchers() {}
 
-  public static PathWatcher<PathWatchers.Event> get(
-      final boolean followLinks, final DirectoryRegistry directoryRegistry)
-      throws InterruptedException, IOException {
-    return get(followLinks, directoryRegistry, Loggers.getLogger());
-  }
-
-  public static PathWatcher<PathWatchers.Event> get(
-      final boolean followLinks, final DirectoryRegistry directoryRegistry, final Logger logger)
-      throws InterruptedException, IOException {
-    final ApplePathWatcher pathWatcher = new ApplePathWatcher(directoryRegistry, logger);
-    return followLinks
-        ? new SymlinkFollowingPathWatcher(pathWatcher, directoryRegistry, logger)
-        : pathWatcher;
+  static PathWatcher<PathWatchers.Event> get(final DirectoryRegistry registry, final Logger logger)
+      throws InterruptedException {
+    return new ApplePathWatcher(
+        10,
+        TimeUnit.MILLISECONDS,
+        new Flags.Create().setNoDefer().setFileEvents(),
+        ApplePathWatcher.DefaultOnStreamRemoved,
+        registry,
+        logger);
   }
 }

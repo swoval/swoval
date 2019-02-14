@@ -43,10 +43,6 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
       Executor.make("com.swoval.files.SymlinkWather.callback-executor");
   private final Logger logger;
 
-  SymlinkWatcher(final PathWatcher<PathWatchers.Event> watcher) {
-    this(watcher, Loggers.getLogger());
-  }
-
   SymlinkWatcher(final PathWatcher<PathWatchers.Event> watcher, final Logger logger) {
     this.watcher = watcher;
     this.logger = logger;

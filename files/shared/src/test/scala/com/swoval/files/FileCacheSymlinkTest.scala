@@ -5,7 +5,7 @@ package files
 import java.io.IOException
 import java.nio.file.{ Path, Paths }
 
-import FileTreeDataViews.Entry
+import FileTreeDataViews.{ CacheObserver, Converter, Converters, Entry }
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.test._
 import com.swoval.runtime.Platform
@@ -19,9 +19,12 @@ import scala.concurrent.duration._
 import scala.util.Failure
 import TestHelpers._
 import EntryOps._
-import com.swoval.files.FileTreeDataViews.CacheObserver
 
 trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
+  def getRepo(implicit testLogger: TestLogger): FileTreeRepository[TypedPath] =
+    FileTreeRepositories.getDefault(Converters.IDENTITY, testLogger)
+  def getNoFollow(implicit testLogger: TestLogger): FileTreeRepository[TypedPath] =
+    FileTreeRepositories.noFollowSymlinks(Converters.IDENTITY, testLogger)
   val testsImpl = Tests {
     'initial - withTempDirectory { dir =>
       implicit val logger: TestLogger = new CachingLogger
@@ -248,8 +251,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
         withTempFile { file =>
           val linkLatch = new CountDownLatch(1)
           val link = dir.resolve("link")
-          usingAsync(FileCacheTest.getCached[Path](
-            true,
+          usingAsync(FileCacheTest.get[Path](
             identity,
             new FileTreeDataViews.CacheObserver[Path] {
               override def onCreate(newEntry: Entry[Path]): Unit = {}
@@ -287,11 +289,11 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           val link = dir.resolve("link") linkTo otherDir
           Future.sequence(
             Seq(
-              using(FileTreeRepositories.get(identity, false)) { c =>
+              using(getNoFollow) { c =>
                 c.register(dir, Integer.MAX_VALUE)
                 c.ls(dir, true, functional.Filters.AllPass) === Set(link)
               },
-              using(FileTreeRepositories.get(identity, true)) { c =>
+              using(getRepo) { c =>
                 c.register(dir)
                 c.ls(dir, true, functional.Filters.AllPass) === Set(link, link.resolve("file"))
               }
@@ -308,14 +310,15 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           val creationLatch = new CountDownLatch(1)
           val deletionLatch = new CountDownLatch(1)
           val link = dir.resolve("link") linkTo otherDir
-          usingAsync(FileTreeRepositories.get[Path](identity, false)) { c =>
+          usingAsync(getNoFollow) { c =>
             c.register(dir, Integer.MAX_VALUE)
-            c.addCacheObserver(new CacheObserver[Path] {
-              override def onCreate(newEntry: Entry[Path]): Unit =
+            c.addCacheObserver(new CacheObserver[TypedPath] {
+              override def onCreate(newEntry: Entry[TypedPath]): Unit =
                 if (newEntry.path == link) creationLatch.countDown()
-              override def onDelete(oldEntry: Entry[Path]): Unit =
+              override def onDelete(oldEntry: Entry[TypedPath]): Unit =
                 if (oldEntry.path == link) deletionLatch.countDown()
-              override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
+              override def onUpdate(oldEntry: Entry[TypedPath],
+                                    newEntry: Entry[TypedPath]): Unit = {}
               override def onError(exception: IOException): Unit = {}
             })
             link.delete()
@@ -326,7 +329,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
               c.ls(dir, true, functional.Filters.AllPass) === Set(link)
             }
           }.flatMap { _ =>
-            using(FileTreeRepositories.get(identity, true)) { c =>
+            using(getRepo) { c =>
               c.register(dir)
               c.ls(dir, true, functional.Filters.AllPass) === Set(link,
                                                                   link.resolve("updated-file"))
@@ -344,8 +347,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           withTempFile { file =>
             val link = dir.resolve("link") linkTo file
             val otherLink = otherDir.resolve("link") linkTo file
-            usingAsync(FileCacheTest.getCached[Path](
-              true,
+            usingAsync(FileCacheTest.get[Path](
               identity,
               new FileTreeDataViews.CacheObserver[Path] {
                 override def onCreate(newEntry: Entry[Path]): Unit = {}
@@ -382,8 +384,7 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           withTempFile { file =>
             val link = dir.resolve("link") linkTo file
             val otherLink = otherDir.resolve("link") linkTo file
-            usingAsync(FileCacheTest.getCached[Path](
-              true,
+            usingAsync(FileCacheTest.get[Path](
               identity,
               new FileTreeDataViews.CacheObserver[Path] {
                 override def onCreate(newEntry: Entry[Path]): Unit = {}

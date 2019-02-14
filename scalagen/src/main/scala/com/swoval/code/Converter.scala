@@ -38,7 +38,6 @@ object Converter {
     Link.replaceAllIn(_, "$1[[$2]]"),
     "(?s)^(.*class[^\n]+(?= \\/\\*\\*))(.+?)(?=\\*\\/)\\*\\/".r.replaceAllIn(_: String, "$1"),
     "\\[\\[\\.".r.replaceAllIn(_: String, "[["),
-    "(?s)([ ]*\\/\\*\\*.+?\\*\\/)(.*)\\1".r.replaceAllIn(_: String, "$1"),
     "(?s)(.+?import[^\n]+?)\n\nimport".r.replaceAllIn(_: String, "$1\nimport"),
     "(?s)(.+?import[^\n]+?)\n\nimport".r.replaceAllIn(_: String, "$1\nimport"),
     """(?s)(.+?)<a.+?href=["]([^"]+)["][^>]*>""".r.replaceAllIn(_: String, "$1[[$2 "),
@@ -82,11 +81,16 @@ object Converter {
         "FileTreeRepository",
         "FileTreeRepositoryImpl",
         "FileTreeViews",
-        "UpdatableFileTreeDataView"
+        "FollowSymlinks",
+        "FollowWrapper",
+        "NoFollowSymlinks",
+        "NoFollowWrapper",
+        "UpdatableFileTreeDataView",
+        "Wrapper"
       )
     (if (fileName.contains("PathWatcher")) {
        val regex =
-         s"(def (?:get|apply|cached)|trait (?:${needAnyRef.mkString("|")})|class (?:${needAnyRef
+         s"(def (?:get|apply|cached|noFollowSymlinks|followSymlinks)|trait (?:${needAnyRef.mkString("|")})|class (?:${needAnyRef
            .mkString("|")}}))[\\[]T".r
        val contraRegex = "^(.*result: List).R".r
        val longRegex = "([^.])Long".r
@@ -102,7 +106,8 @@ object Converter {
        newLines.map(regex.replaceAllIn(_, "class Either[+L, +R]"))
      } else if (needAnyRef.contains(fileName)) {
        val regex =
-         s"(def (?:get|apply|cached(?:Updatable)?)|trait (?:${needAnyRef.mkString("|")})|class (?:${needAnyRef
+         s"(def (?:get|apply|cached|getDefault|impl|(?:noF|f)ollowSymlinks|(?:Updatable)?)|trait (?:${needAnyRef
+           .mkString("|")})|class (?:${needAnyRef
            .mkString("|")}}))[\\[]T".r
        val contraRegex = "^(.*result: List).R".r
        newLines.view

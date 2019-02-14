@@ -34,7 +34,6 @@ import java.util.HashMap
 import java.util.HashSet
 import java.util.Iterator
 import java.util.List
-import java.util.Map
 import java.util.Set
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
@@ -115,38 +114,9 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
 
   val reentrantLock: ReentrantLock = new ReentrantLock()
 
-  def this(converter: Converter[T],
-           callbackExecutor: Executor,
-           symlinkWatcher: SymlinkWatcher,
-           rescanOnDirectoryUpdate: Boolean) =
-    this(converter, callbackExecutor, symlinkWatcher, rescanOnDirectoryUpdate, Loggers.getLogger)
-
   private val directories: FileCacheDirectories[T] = new FileCacheDirectories(reentrantLock)
 
   private val pendingFiles: FileCachePendingFiles = new FileCachePendingFiles(reentrantLock)
-
-  private val READ_ONLY_DIRECTORY_REGISTRY: DirectoryRegistry =
-    new DirectoryRegistry() {
-      override def close(): Unit = {}
-
-      override def addDirectory(path: Path, maxDepth: Int): Boolean = false
-
-      override def maxDepthFor(path: Path): Int =
-        directoryRegistry.maxDepthFor(path)
-
-      override def registered(): Map[Path, Integer] =
-        directoryRegistry.registered()
-
-      override def removeDirectory(path: Path): Unit = {}
-
-      override def acceptPrefix(path: Path): Boolean =
-        directoryRegistry.acceptPrefix(path)
-
-      override def accept(path: Path): Boolean = directoryRegistry.accept(path)
-    }
-
-  def readOnlyDirectoryRegistry(): DirectoryRegistry =
-    READ_ONLY_DIRECTORY_REGISTRY
 
   def unregister(path: Path): Unit = {
     val absolutePath: Path =
@@ -209,7 +179,9 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
               logger.debug(this + " running callback " + callback)
             try callback.run()
             catch {
-              case e: Exception => {}
+              case e: Exception =>
+                if (Loggers.shouldLog(logger, Level.ERROR))
+                  logger.error("Error running callback " + e)
 
             }
           }
@@ -565,8 +537,6 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
       try result =
         new CachedDirectoryImpl(TypedPaths.get(path), converter, depth, filter, followLinks).init()
       catch {
-        case e @ (_: NoSuchFileException | _: NotDirectoryException) => throw e
-
         case e: AccessDeniedException =>
           if (Platform.isWin) {
             Sleep.sleep(0)

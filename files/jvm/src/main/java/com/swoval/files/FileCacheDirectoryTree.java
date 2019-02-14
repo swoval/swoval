@@ -33,7 +33,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
@@ -114,14 +113,6 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
       final Converter<T> converter,
       final Executor callbackExecutor,
       final SymlinkWatcher symlinkWatcher,
-      final boolean rescanOnDirectoryUpdate) {
-    this(converter, callbackExecutor, symlinkWatcher, rescanOnDirectoryUpdate, Loggers.getLogger());
-  }
-
-  FileCacheDirectoryTree(
-      final Converter<T> converter,
-      final Executor callbackExecutor,
-      final SymlinkWatcher symlinkWatcher,
       final boolean rescanOnDirectoryUpdate,
       final Logger logger) {
     this.converter = converter;
@@ -152,44 +143,6 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
 
   private final FileCacheDirectories<T> directories;
   private final FileCachePendingFiles pendingFiles;
-
-  private final DirectoryRegistry READ_ONLY_DIRECTORY_REGISTRY =
-      new DirectoryRegistry() {
-        @Override
-        public void close() {}
-
-        @Override
-        public boolean addDirectory(final Path path, final int maxDepth) {
-          return false;
-        }
-
-        @Override
-        public int maxDepthFor(final Path path) {
-          return directoryRegistry.maxDepthFor(path);
-        }
-
-        @Override
-        public Map<Path, Integer> registered() {
-          return directoryRegistry.registered();
-        }
-
-        @Override
-        public void removeDirectory(final Path path) {}
-
-        @Override
-        public boolean acceptPrefix(final Path path) {
-          return directoryRegistry.acceptPrefix(path);
-        }
-
-        @Override
-        public boolean accept(final Path path) {
-          return directoryRegistry.accept(path);
-        }
-      };
-
-  DirectoryRegistry readOnlyDirectoryRegistry() {
-    return READ_ONLY_DIRECTORY_REGISTRY;
-  }
 
   void unregister(final Path path) {
     final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
@@ -257,6 +210,8 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
                 try {
                   callback.run();
                 } catch (final Exception e) {
+                  if (Loggers.shouldLog(logger, Level.ERROR))
+                    logger.error("Error running callback " + e);
                 }
               }
             }
@@ -621,8 +576,6 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
         result =
             new CachedDirectoryImpl<>(TypedPaths.get(path), converter, depth, filter, followLinks)
                 .init();
-      } catch (final NoSuchFileException | NotDirectoryException e) {
-        throw e;
       } catch (final AccessDeniedException e) {
         if (Platform.isWin()) {
           try {

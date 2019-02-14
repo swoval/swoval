@@ -5,6 +5,8 @@ package files
 import java.nio.file.{ Path, Paths }
 import java.util.concurrent.{ TimeUnit, TimeoutException }
 
+import com.swoval.files.FileTreeDataViews.Converter
+import com.swoval.files.FileTreeViews.Observer
 import com.swoval.files.PathWatchers.Event.Kind
 import com.swoval.files.PathWatchers.Event.Kind.{ Delete, Modify }
 import com.swoval.files.TestHelpers._
@@ -145,7 +147,8 @@ trait PathWatcherTest extends TestSuite {
               TimeUnit.NANOSECONDS,
               fileFlags,
               callback,
-              new DirectoryRegistryImpl
+              new DirectoryRegistryImpl,
+              logger
             )
             usingAsync(watcher) { w =>
               w.register(subdir)
@@ -416,6 +419,25 @@ trait PathWatcherTest extends TestSuite {
         }
       }
     }
+    'converter - {
+      'simple - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
+        val converter: Converter[java.lang.Long] =
+          (tp: TypedPath) => java.lang.Long.valueOf(tp.getPath.lastModified)
+        usingAsync(PathWatchers.followSymlinks(converter, logger)) { pw =>
+          val latch = new CountDownLatch(1)
+          pw.addObserver(new Observer[java.lang.Long] {
+            override def onError(t: _root_.java.lang.Throwable): Unit = {}
+            override def onNext(t: java.lang.Long): Unit = if (t == 3000L) latch.countDown()
+          })
+          pw.register(dir, Int.MaxValue)
+          dir setLastModifiedTime 3000L
+          latch.waitFor(DEFAULT_TIMEOUT) {
+            dir.lastModified ==> 3000L
+          }
+        }
+      }
+    }
   }
 }
 
@@ -424,7 +446,9 @@ object PathWatcherTest extends PathWatcherTest {
 
   override def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean)(
       implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
-    val res = PathWatchers.get(followLinks, new DirectoryRegistryImpl(), testLogger)
+    val res =
+      if (followLinks) PathWatchers.followSymlinks(testLogger)
+      else PathWatchers.noFollowSymlinks(testLogger)
     res.addObserver(callback)
     res
   }
@@ -443,7 +467,7 @@ object NioPathWatcherTest extends PathWatcherTest {
 
   override def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean)(
       implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
-    val res = PlatformWatcher.make(followLinks, new DirectoryRegistryImpl(), testLogger)
+    val res = PlatformWatcher.make(new DirectoryRegistryImpl(), testLogger)
     res.addObserver(callback)
     res
   }
