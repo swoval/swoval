@@ -176,6 +176,10 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
     return Either.right(result);
   }
 
+  private CachedDirectory<WatchedDirectory> find(final Path rawPath) {
+    return find(rawPath, null);
+  }
+
   private CachedDirectory<WatchedDirectory> find(final Path rawPath, final List<Path> toRemove) {
     final Path path = rawPath == null ? getRoot() : rawPath;
     assert (path != null);
@@ -189,7 +193,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
           final Path root = entry.getKey();
           if (path.startsWith(root)) {
             result = entry.getValue();
-          } else if (root.startsWith(path) && !path.equals(root)) {
+          } else if (toRemove != null && root.startsWith(path) && !path.equals(root)) {
             toRemove.add(root);
           }
         }
@@ -273,7 +277,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
     directoryRegistry.removeDirectory(absolutePath);
     if (rootDirectories.lock()) {
       try {
-        final CachedDirectory<WatchedDirectory> dir = find(absolutePath, new ArrayList<Path>());
+        final CachedDirectory<WatchedDirectory> dir = find(absolutePath);
         if (dir != null) {
           final int depth = dir.getPath().relativize(absolutePath).getNameCount();
           List<FileTreeDataViews.Entry<WatchedDirectory>> toRemove =
@@ -349,7 +353,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
     final List<Event> events = new ArrayList<>();
     if (rootDirectories.lock()) {
       try {
-        final CachedDirectory<WatchedDirectory> root = find(path, new ArrayList<Path>());
+        final CachedDirectory<WatchedDirectory> root = find(path);
         if (root != null) {
           try {
             final Iterator<TypedPath> it =
@@ -407,7 +411,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         if (directoryRegistry.acceptPrefix(event.getTypedPath().getPath())) {
           final TypedPath typedPath = TypedPaths.get(event.getTypedPath().getPath());
           if (!typedPath.exists()) {
-            final CachedDirectory<WatchedDirectory> root = getOrAdd(typedPath.getPath());
+            final CachedDirectory<WatchedDirectory> root = find(typedPath.getPath());
             if (root != null) {
               final boolean isRoot = root.getPath().equals(typedPath.getPath());
               final Iterator<FileTreeDataViews.Entry<WatchedDirectory>> it =
@@ -423,7 +427,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
                 events.add(new Event(Entries.setExists(entry, false).getTypedPath(), Kind.Delete));
               }
               final CachedDirectory<WatchedDirectory> parent =
-                  find(typedPath.getPath().getParent(), new ArrayList<Path>());
+                  find(typedPath.getPath().getParent());
               if (parent != null) {
                 update(
                     parent, parent.getEntry().getTypedPath(), events, event.getKind() == Overflow);

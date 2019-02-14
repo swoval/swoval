@@ -108,9 +108,6 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     logger
   )
 
-  def this(directoryRegistry: DirectoryRegistry, watchService: RegisterableWatchService) =
-    this(directoryRegistry, watchService, Loggers.getLogger)
-
   /**
    * Similar to register, but tracks all of the new files found in the directory. It polls the
    * directory until the contents stop changing to ensure that a callback is fired for each path in
@@ -165,6 +162,9 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     Either.right(result)
   }
 
+  private def find(rawPath: Path): CachedDirectory[WatchedDirectory] =
+    find(rawPath, null)
+
   private def find(rawPath: Path, toRemove: List[Path]): CachedDirectory[WatchedDirectory] = {
     val path: Path = if (rawPath == null) getRoot else rawPath
     assert((path != null))
@@ -178,7 +178,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           val root: Path = entry.getKey
           if (path.startsWith(root)) {
             result = entry.getValue
-          } else if (root.startsWith(path) && path != root) {
+          } else if (toRemove != null && root.startsWith(path) && path != root) {
             toRemove.add(root)
           }
         }
@@ -251,8 +251,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     directoryRegistry.removeDirectory(absolutePath)
     if (rootDirectories.lock()) {
       try {
-        val dir: CachedDirectory[WatchedDirectory] =
-          find(absolutePath, new ArrayList[Path]())
+        val dir: CachedDirectory[WatchedDirectory] = find(absolutePath)
         if (dir != null) {
           val depth: Int = dir.getPath.relativize(absolutePath).getNameCount
           val toRemove: List[FileTreeDataViews.Entry[WatchedDirectory]] =
@@ -329,8 +328,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     val events: List[Event] = new ArrayList[Event]()
     if (rootDirectories.lock()) {
       try {
-        val root: CachedDirectory[WatchedDirectory] =
-          find(path, new ArrayList[Path]())
+        val root: CachedDirectory[WatchedDirectory] = find(path)
         if (root != null) {
           try {
             val it: Iterator[TypedPath] = FileTreeViews
@@ -386,7 +384,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
       try if (directoryRegistry.acceptPrefix(event.getTypedPath.getPath)) {
         val typedPath: TypedPath = TypedPaths.get(event.getTypedPath.getPath)
         if (!typedPath.exists()) {
-          val root: CachedDirectory[WatchedDirectory] = getOrAdd(typedPath.getPath)
+          val root: CachedDirectory[WatchedDirectory] = find(typedPath.getPath)
           if (root != null) {
             val isRoot: Boolean = root.getPath == typedPath.getPath
             val it: Iterator[FileTreeDataViews.Entry[WatchedDirectory]] =
@@ -402,8 +400,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
               }
               events.add(new Event(Entries.setExists(entry, false).getTypedPath, Kind.Delete))
             }
-            val parent: CachedDirectory[WatchedDirectory] =
-              find(typedPath.getPath.getParent, new ArrayList[Path]())
+            val parent: CachedDirectory[WatchedDirectory] = find(typedPath.getPath.getParent)
             if (parent != null) {
               update(parent, parent.getEntry.getTypedPath, events, event.getKind == Overflow)
             }
