@@ -464,9 +464,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
       return null;
     } else if (path.equals(this.getPath())) {
       return Either.right(this);
-    } else if (!path.isAbsolute()) {
-      return findImpl(parts(path));
-    } else if (path.startsWith(this.getPath())) {
+    } else if (path.isAbsolute() && path.startsWith(this.getPath())) {
       return findImpl(parts(this.getPath().relativize(path)));
     } else {
       return null;

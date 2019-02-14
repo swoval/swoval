@@ -410,9 +410,7 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
       null
     } else if (path == this.getPath) {
       Either.right(this)
-    } else if (!path.isAbsolute) {
-      findImpl(parts(path))
-    } else if (path.startsWith(this.getPath)) {
+    } else if (path.isAbsolute && path.startsWith(this.getPath)) {
       findImpl(parts(this.getPath.relativize(path)))
     } else {
       null
