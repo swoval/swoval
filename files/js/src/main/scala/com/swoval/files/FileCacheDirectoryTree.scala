@@ -60,14 +60,6 @@ class FileCachePendingFiles(reentrantLock: ReentrantLock) extends Lockable(reent
       false
     }
 
-  def contains(path: Path): Boolean =
-    if (lock()) {
-      try pendingFiles.contains(path)
-      finally unlock()
-    } else {
-      false
-    }
-
   def remove(path: Path): Boolean =
     if (lock()) {
       try pendingFiles.remove(path)
@@ -216,7 +208,7 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
               case e: IOException => handleDelete(path, callbacks, symlinks)
 
             }
-          } else if (pendingFiles.contains(path)) {
+          } else if (pendingFiles.remove(path)) {
             if (Loggers.shouldLog(logger, Level.DEBUG))
               logger.debug(this + " found pending file for " + path)
             try {

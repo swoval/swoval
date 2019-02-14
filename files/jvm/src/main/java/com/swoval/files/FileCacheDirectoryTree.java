@@ -72,18 +72,6 @@ class FileCachePendingFiles extends Lockable {
     }
   }
 
-  boolean contains(final Path path) {
-    if (lock()) {
-      try {
-        return pendingFiles.contains(path);
-      } finally {
-        unlock();
-      }
-    } else {
-      return false;
-    }
-  }
-
   boolean remove(final Path path) {
     if (lock()) {
       try {
@@ -244,7 +232,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
             } catch (final IOException e) {
               handleDelete(path, callbacks, symlinks);
             }
-          } else if (pendingFiles.contains(path)) {
+          } else if (pendingFiles.remove(path)) {
             if (Loggers.shouldLog(logger, Level.DEBUG))
               logger.debug(this + " found pending file for " + path);
             try {
