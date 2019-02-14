@@ -111,6 +111,13 @@ public class TypedPaths {
     }
   }
 
+  static int getKind(final TypedPath typedPath) {
+    return (typedPath.exists() ? 0 : Entries.NONEXISTENT)
+        | (typedPath.isDirectory() ? Entries.DIRECTORY : 0)
+        | (typedPath.isFile() ? Entries.FILE : 0)
+        | (typedPath.isSymbolicLink() ? Entries.LINK : 0);
+  }
+
   static TypedPath get(final Path path, final int kind) {
     return new TypedPathImpl(path.isAbsolute() ? path : path.toAbsolutePath()) {
       @Override

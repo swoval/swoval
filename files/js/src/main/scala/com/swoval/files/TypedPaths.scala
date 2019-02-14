@@ -82,6 +82,12 @@ object TypedPaths {
 
     }
 
+  def getKind(typedPath: TypedPath): Int =
+    (if (typedPath.exists()) 0 else Entries.NONEXISTENT) |
+      (if (typedPath.isDirectory) Entries.DIRECTORY else 0) |
+      (if (typedPath.isFile) Entries.FILE else 0) |
+      (if (typedPath.isSymbolicLink) Entries.LINK else 0)
+
   def get(path: Path, kind: Int): TypedPath =
     new TypedPathImpl(if (path.isAbsolute) path else path.toAbsolutePath()) {
       override def exists(): Boolean = (kind & Entries.NONEXISTENT) == 0
