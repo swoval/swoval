@@ -131,9 +131,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
 
   private def remove(path: Path, events: List[Event]): Unit = {
     val root: CachedDirectory[WatchedDirectory] = rootDirectories.remove(path)
-    val dir: CachedDirectory[WatchedDirectory] =
-      if (root == null) find(path) else root
-    if (dir != null) remove(dir, path, events)
+    if (root != null) remove(root, path, events)
   }
 
   private def remove(cachedDirectory: CachedDirectory[WatchedDirectory],
@@ -194,10 +192,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     Either.right(result)
   }
 
-  private def find(path: Path): CachedDirectory[WatchedDirectory] =
-    find(path, null)
-
-  private def find(path: Path, toRemove: List[Path]): CachedDirectory[WatchedDirectory] = {
+  private def find(path: Path): CachedDirectory[WatchedDirectory] = {
     assert((path != null))
     if (rootDirectories.lock()) {
       try {
@@ -209,8 +204,6 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
           val root: Path = entry.getKey
           if (path.startsWith(root)) {
             result = entry.getValue
-          } else if (toRemove != null && root.startsWith(path) && path != root) {
-            toRemove.add(root)
           }
         }
         result
@@ -222,8 +215,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
 
   private def findOrAddRoot(rawPath: Path): CachedDirectory[WatchedDirectory] = {
     assert((rawPath != null))
-    val toRemove: List[Path] = new ArrayList[Path]()
-    var result: CachedDirectory[WatchedDirectory] = find(rawPath, toRemove)
+    var result: CachedDirectory[WatchedDirectory] = find(rawPath)
     if (result == null) {
       /*
        * We want to monitor the parent in case the file is deleted.
@@ -251,8 +243,6 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
 
       }
     }
-    val toRemoveIterator: Iterator[Path] = toRemove.iterator()
-    while (toRemoveIterator.hasNext) rootDirectories.remove(toRemoveIterator.next())
     result
   }
 

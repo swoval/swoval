@@ -149,8 +149,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
   private void remove(final Path path, List<Event> events) {
     final CachedDirectory<WatchedDirectory> root = rootDirectories.remove(path);
-    final CachedDirectory<WatchedDirectory> dir = root == null ? find(path) : root;
-    if (dir != null) remove(dir, path, events);
+    if (root != null) remove(root, path, events);
   }
 
   private void remove(
@@ -208,10 +207,6 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
   }
 
   private CachedDirectory<WatchedDirectory> find(final Path path) {
-    return find(path, null);
-  }
-
-  private CachedDirectory<WatchedDirectory> find(final Path path, final List<Path> toRemove) {
     assert (path != null);
     if (rootDirectories.lock()) {
       try {
@@ -223,8 +218,6 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
           final Path root = entry.getKey();
           if (path.startsWith(root)) {
             result = entry.getValue();
-          } else if (toRemove != null && root.startsWith(path) && !path.equals(root)) {
-            toRemove.add(root);
           }
         }
         return result;
@@ -238,8 +231,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
 
   private CachedDirectory<WatchedDirectory> findOrAddRoot(final Path rawPath) {
     assert (rawPath != null);
-    final List<Path> toRemove = new ArrayList<>();
-    CachedDirectory<WatchedDirectory> result = find(rawPath, toRemove);
+    CachedDirectory<WatchedDirectory> result = find(rawPath);
     if (result == null) {
       /*
        * We want to monitor the parent in case the file is deleted.
@@ -270,10 +262,6 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
           path = path.getParent();
         }
       }
-    }
-    final Iterator<Path> toRemoveIterator = toRemove.iterator();
-    while (toRemoveIterator.hasNext()) {
-      rootDirectories.remove(toRemoveIterator.next());
     }
     return result;
   }
