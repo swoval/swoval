@@ -27,6 +27,7 @@ import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin
 import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin.autoImport._
 import scalajscrossproject.JSPlatform
 import scalajscrossproject.ScalaJSCrossPlugin.autoImport.JSCrossProjectOps
+import xsbti.compile.CompileAnalysis
 
 import scala.collection.JavaConverters._
 import scala.io.Source
@@ -562,15 +563,18 @@ object Build {
             res
           }
       }.value,
-      skip in formatSources := System.getProperty("swoval.format", "true") == "true",
-      formatSources := Def.taskDyn {
-        if ((skip in formatSources).value) Def.task {
-          javafmt.toTask("").value
-          clangfmt.toTask("").value
-          ()
-        } else Def.task(())
+      skip in javafmt := System.getProperty("swoval.format", "true") == "true",
+      skip in clangfmt := System.getProperty("swoval.format", "true") == "true",
+      javafmt / formatSources := dynamicFormat(javafmt).value,
+      clangfmt / formatSources := dynamicFormat(clangfmt).value,
+      Compile / compile := (Compile / compile).dependsOn(javafmt / formatSources).value,
+      Compile / compile := Def.taskDyn {
+        val res = (Compile / compile).value
+        Def.task {
+          val _ = (clangfmt / formatSources).value
+          res
+        }
       }.value,
-      Compile / compile := (Compile / compile).dependsOn(formatSources).value,
       fork in Test := System.getProperty("swoval.fork.tests", "false") == "true",
       forkOptions in Test := {
         val prev = (forkOptions in Test).value
@@ -630,6 +634,12 @@ object Build {
       }
     )
     .dependsOn(testing % "test->compile")
+  private def dynamicFormat(key: InputKey[_]): Def.Initialize[Task[Unit]] = Def.taskDyn {
+    if ((skip in key).value) Def.task {
+      key.toTask("").value
+      ()
+    } else Def.task(())
+  }
 
   lazy val plugin: Project = project
     .in(file("plugin"))
