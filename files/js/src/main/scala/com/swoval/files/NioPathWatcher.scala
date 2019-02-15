@@ -194,11 +194,10 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     Either.right(result)
   }
 
-  private def find(rawPath: Path): CachedDirectory[WatchedDirectory] =
-    find(rawPath, null)
+  private def find(path: Path): CachedDirectory[WatchedDirectory] =
+    find(path, null)
 
-  private def find(rawPath: Path, toRemove: List[Path]): CachedDirectory[WatchedDirectory] = {
-    val path: Path = if (rawPath == null) getRoot else rawPath
+  private def find(path: Path, toRemove: List[Path]): CachedDirectory[WatchedDirectory] = {
     assert((path != null))
     if (rootDirectories.lock()) {
       try {
@@ -221,17 +220,8 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
     }
   }
 
-  private def getRoot(): Path = {
-    /* This may not make sense on windows which has multiple root directories, but at least it
-     * will return something.
-     */
-
-    val it: Iterator[Path] =
-      FileSystems.getDefault.getRootDirectories.iterator()
-    it.next()
-  }
-
   private def findOrAddRoot(rawPath: Path): CachedDirectory[WatchedDirectory] = {
+    assert((rawPath != null))
     val toRemove: List[Path] = new ArrayList[Path]()
     var result: CachedDirectory[WatchedDirectory] = find(rawPath, toRemove)
     if (result == null) {
@@ -240,8 +230,7 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
        */
 
       val parent: Path = rawPath.getParent
-      var path: Path = if (parent == null) getRoot else parent
-      assert((path != null))
+      var path: Path = if (parent == null) rawPath else parent
       var init: Boolean = false
       while (!init && path != null) try {
         result = new CachedDirectoryImpl(

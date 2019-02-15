@@ -75,19 +75,11 @@ class MacOSXWatchService implements RegisterableWatchService {
               childKeys == null ? registered.get(path.getParent()) : childKeys;
           final boolean exists = Files.exists(path, LinkOption.NOFOLLOW_LINKS);
           if (watchKey != null) {
-            if (fileEvent.mustScanSubDirs()) {
-              final Iterator<MacOSXWatchKey> it = watchKey.keys().iterator();
-              while (it.hasNext()) {
-                final MacOSXWatchKey key = it.next();
-                key.addOverflow();
-              }
-            } else {
-              final Iterator<MacOSXWatchKey> it = watchKey.keys().iterator();
-              while (it.hasNext()) {
-                final MacOSXWatchKey key = it.next();
-                if (exists && key.reportModifyEvents()) key.createEvent(ENTRY_MODIFY, path);
-                else if (!exists && key.reportDeleteEvents()) key.createEvent(ENTRY_DELETE, path);
-              }
+            final Iterator<MacOSXWatchKey> it = watchKey.keys().iterator();
+            while (it.hasNext()) {
+              final MacOSXWatchKey key = it.next();
+              if (exists && key.reportModifyEvents()) key.createEvent(ENTRY_MODIFY, path);
+              else if (!exists && key.reportDeleteEvents()) key.createEvent(ENTRY_DELETE, path);
             }
           } else {
             if (Loggers.shouldLog(logger, Level.DEBUG))
@@ -106,7 +98,7 @@ class MacOSXWatchService implements RegisterableWatchService {
    * @param queueSize the maximum number of events to queue per watch key
    * @throws InterruptedException if the native file events api initialization is interrupted.
    */
-  public MacOSXWatchService(final int watchLatency, final TimeUnit timeUnit, final int queueSize)
+  MacOSXWatchService(final int watchLatency, final TimeUnit timeUnit, final int queueSize)
       throws InterruptedException {
     this(watchLatency, timeUnit, queueSize, Loggers.getLogger());
   }
@@ -121,7 +113,7 @@ class MacOSXWatchService implements RegisterableWatchService {
    * @param logger the logger
    * @throws InterruptedException if the native file events api initialization is interrupted.
    */
-  public MacOSXWatchService(
+  MacOSXWatchService(
       final int watchLatency, final TimeUnit timeUnit, final int queueSize, final Logger logger)
       throws InterruptedException {
     this.watchLatency = watchLatency;
@@ -223,10 +215,8 @@ class MacOSXWatchService implements RegisterableWatchService {
             }
           }
           result = new MacOSXWatchKey(realPath, queueSize, handle, kinds);
-          if (registered.put(realPath, new WatchKey(handle, result)) != null) {
-            result.cancel();
-            throw new ClosedWatchServiceException();
-          }
+          final WatchKey previous = registered.put(realPath, new WatchKey(handle, result));
+          assert (previous == null);
         } else {
           result = new MacOSXWatchKey(realPath, queueSize, Handles.INVALID, kinds);
           watchKey.add(result);
@@ -282,10 +272,6 @@ class MacOSXWatchService implements RegisterableWatchService {
       return handle;
     }
 
-    public void setHandle(final Handle handle) {
-      this.handle = handle;
-    }
-
     private Handle handle;
     private final boolean reportCreateEvents;
     private final boolean reportModifyEvents;
@@ -327,7 +313,7 @@ class MacOSXWatchService implements RegisterableWatchService {
 
     @Override
     public void cancel() {
-      valid.set(false);
+      if (isValid()) valid.compareAndSet(true, false);
     }
 
     @Override
@@ -362,14 +348,6 @@ class MacOSXWatchService implements RegisterableWatchService {
     @Override
     public String toString() {
       return "MacOSXWatchKey(" + watchable + ")";
-    }
-
-    void addOverflow() {
-      events.add(new Event<>(OVERFLOW, 1, null));
-      overflow.incrementAndGet();
-      if (!readyKeys.contains(this)) {
-        readyKeys.offer(this);
-      }
     }
 
     void addEvent(Event<Path> event) {
