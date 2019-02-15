@@ -368,16 +368,16 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
           if (isDelete) remove(path, events);
           if (typedPath.exists()) {
             if (typedPath.isDirectory() && !typedPath.isSymbolicLink()) {
+              if (Loggers.shouldLog(logger, Level.DEBUG)) logger.debug(this + " adding directory for " + typedPath);
               try {
                 add(typedPath, events);
               } catch (final IOException e) {
                 remove(path, events);
               }
             }
-            events.add(event);
           } else if (!isDelete) remove(path, events);
-          else events.add(event);
         }
+        events.add(event);
       } finally {
         rootDirectories.unlock();
       }

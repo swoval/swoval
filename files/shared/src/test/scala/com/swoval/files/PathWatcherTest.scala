@@ -499,6 +499,7 @@ trait PathWatcherTest extends TestSuite {
                             var count = n
                             val latch = new CountDownLatch(1)
                             val callback = (e: PathWatchers.Event) => {
+                              logger.debug(s"$count $e")
                               if (e.path == subdir && subdir.exists()) {
                                 if (count == 0) {
                                   file.createFile(true)
