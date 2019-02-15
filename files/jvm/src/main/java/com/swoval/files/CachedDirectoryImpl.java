@@ -264,7 +264,7 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
    *     the cache entries for any children of the path when the path is a non-empty directory.
    */
   public List<Entry<T>> remove(final Path path) {
-    if (path.isAbsolute() && path.startsWith(this.getPath())) {
+    if (path.isAbsolute() && path.startsWith(this.getPath()) && !path.equals(this.getPath())) {
       return removeImpl(parts(this.getPath().relativize(path)));
     } else {
       return Collections.emptyList();
@@ -511,39 +511,26 @@ class CachedDirectoryImpl<T> implements CachedDirectory<T> {
     final List<Entry<T>> result = new ArrayList<>();
     if (this.subdirectories.lock()) {
       try {
-        if (parts.isEmpty()) {
-          final Iterator<CachedDirectoryImpl<T>> dirIt = this.subdirectories.values().iterator();
-          while (dirIt.hasNext()) {
-            final CachedDirectoryImpl<T> dir = dirIt.next();
-            result.addAll(dir.remove(dir.getPath()));
-          }
-          final Iterator<Entry<T>> fileIt = this.files.values().iterator();
-          while (fileIt.hasNext()) {
-            result.add(Entries.setExists(fileIt.next(), false));
-          }
-          _cacheEntry.set(Entries.setExists(getEntry(), false));
-        } else {
-          final Iterator<Path> it = parts.iterator();
-          CachedDirectoryImpl<T> currentDir = this;
-          while (it.hasNext() && currentDir != null) {
-            final Path p = it.next();
-            if (!it.hasNext()) {
-              final Entry<T> entry = currentDir.files.remove(p);
-              if (entry != null) {
-                result.add(Entries.setExists(Entries.resolve(currentDir.getPath(), entry), false));
-              }
-              final CachedDirectoryImpl<T> dir = currentDir.subdirectories.remove(p);
-              if (dir != null) {
-                final Iterator<Entry<T>> removeIt =
-                    dir.listEntries(Integer.MAX_VALUE, AllPass).iterator();
-                while (removeIt.hasNext()) {
-                  result.add(Entries.setExists(removeIt.next(), false));
-                }
-                result.add(Entries.setExists(dir.getEntry(), false));
-              }
-            } else {
-              currentDir = currentDir.subdirectories.get(p);
+        final Iterator<Path> it = parts.iterator();
+        CachedDirectoryImpl<T> currentDir = this;
+        while (it.hasNext() && currentDir != null) {
+          final Path p = it.next();
+          if (!it.hasNext()) {
+            final Entry<T> entry = currentDir.files.remove(p);
+            if (entry != null) {
+              result.add(Entries.setExists(Entries.resolve(currentDir.getPath(), entry), false));
             }
+            final CachedDirectoryImpl<T> dir = currentDir.subdirectories.remove(p);
+            if (dir != null) {
+              final Iterator<Entry<T>> removeIt =
+                  dir.listEntries(Integer.MAX_VALUE, AllPass).iterator();
+              while (removeIt.hasNext()) {
+                result.add(Entries.setExists(removeIt.next(), false));
+              }
+              result.add(Entries.setExists(dir.getEntry(), false));
+            }
+          } else {
+            currentDir = currentDir.subdirectories.get(p);
           }
         }
       } finally {

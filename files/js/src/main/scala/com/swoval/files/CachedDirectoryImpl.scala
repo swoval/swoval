@@ -216,7 +216,7 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
    *     the cache entries for any children of the path when the path is a non-empty directory.
    */
   def remove(path: Path): List[Entry[T]] =
-    if (path.isAbsolute && path.startsWith(this.getPath)) {
+    if (path.isAbsolute && path.startsWith(this.getPath) && path != this.getPath) {
       removeImpl(parts(this.getPath.relativize(path)))
     } else {
       Collections.emptyList()
@@ -455,17 +455,7 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
   private def removeImpl(parts: List[Path]): List[Entry[T]] = {
     val result: List[Entry[T]] = new ArrayList[Entry[T]]()
     if (this.subdirectories.lock()) {
-      try if (parts.isEmpty) {
-        val dirIt: Iterator[CachedDirectoryImpl[T]] =
-          this.subdirectories.values.iterator()
-        while (dirIt.hasNext) {
-          val dir: CachedDirectoryImpl[T] = dirIt.next()
-          result.addAll(dir.remove(dir.getPath))
-        }
-        val fileIt: Iterator[Entry[T]] = this.files.values.iterator()
-        while (fileIt.hasNext) result.add(Entries.setExists(fileIt.next(), false))
-        _cacheEntry.set(Entries.setExists(getEntry, false))
-      } else {
+      try {
         val it: Iterator[Path] = parts.iterator()
         var currentDir: CachedDirectoryImpl[T] = this
         while (it.hasNext && currentDir != null) {
