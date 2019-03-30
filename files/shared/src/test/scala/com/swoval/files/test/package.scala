@@ -30,7 +30,7 @@ package object test {
     val res = com.swoval.test
       .usingT(closeable)(f)
     res.onComplete {
-      case Success(_) => if ("true" == System.getProperty("swoval.debug")) printLog(testLogger)
+      case Success(_) => if ("true" == System.getProperty("swoval.test.debug")) printLog(testLogger)
       case Failure(_) => printLog(testLogger)
     }(utest.framework.ExecutionContext.RunNow)
     res
@@ -39,7 +39,7 @@ package object test {
       implicit testLogger: TestLogger): Future[R] = {
     val res = com.swoval.test.usingAsyncT(closeable)(f)
     res.onComplete {
-      case Success(_)            => if ("true" == System.getProperty("swoval.debug")) printLog(testLogger)
+      case Success(_)            => if ("true" == System.getProperty("swoval.test.debug")) printLog(testLogger)
       case Failure(_: Throwable) => printLog(testLogger)
     }(utest.framework.ExecutionContext.RunNow)
     res

@@ -25,7 +25,7 @@ object AllTests {
     def printContent(outputStream: OutputStream): Unit = println(builder.toString)
   }
   def baseArgs(count: String, timeout: String, debug: Option[String]): Int = {
-    debug.foreach(System.setProperty("swoval.debug", _))
+    debug.foreach(System.setProperty("swoval.test.debug", _))
     count.intValue(default = 1)
   }
   def main(args: Array[String]): Unit = {

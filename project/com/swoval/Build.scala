@@ -567,9 +567,9 @@ object Build {
       forkOptions in Test := {
         val prev = (forkOptions in Test).value
         prev.withRunJVMOptions(
-          prev.runJVMOptions ++ Option(System.getProperty("swoval.debug")).map(v =>
-            s"-Dswoval.debug=$v") ++ Option(System.getProperty("swoval.debug.logger")).map(v =>
-            s"-Dswoval.debug.logger=$v"))
+          prev.runJVMOptions ++ Option(System.getProperty("swoval.test.debug")).map(v =>
+            s"-Dswoval.test.debug=$v") ++ Option(System.getProperty("swoval.test.debug.logger")).map(v =>
+            s"-Dswoval.test.debug.logger=$v"))
       },
       travisQuickListReflectionTest := {
         quickListReflectionTest
@@ -596,7 +596,7 @@ object Build {
           "com.swoval.files.AllTests",
           count.toString,
           System.getProperty("swoval.alltest.timeout", "20"),
-          System.getProperty("swoval.debug", "false"),
+          System.getProperty("swoval.test.debug", "false"),
         )
         val process = pb.inheritIO().start()
         process.waitFor()
