@@ -8,8 +8,10 @@ This is a scala.js and jvm cross platform package that provides three important 
   notifies the user when files are created/modified/deleted. It implements both the PathWatcher
   and the FileTreeView interfaces.
 
-Javadocs may be found at [files-jvm](https://swoval.github.io/docs/swoval/2.1.0/jvm/api).
-Scaladocs for scala.js may be found at [files-js](https://swoval.github.io/docs/swoval/2.1.0/js/api).
+Javadocs may be found at
+[files-jvm](https://swoval.github.io/docs/swoval/2.1.0/jvm/api/).
+Scaladocs for scala.js may be found at
+[files-js](https://swoval.github.io/docs/swoval/2.1.0/js/api/).
 Not that most of the scala.js code is automatically generated from the java code so the javadocs
 should be considered canonical.
 
