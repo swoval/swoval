@@ -49,7 +49,7 @@ class SourceFilter(override val base: Path,
   override lazy val toString: String = {
     val filterStr = Filter.show(filter, 0) match {
       case f if f.length > 80 =>
-        f.lines
+        f.linesIterator
           .map("    " + _)
           .map {
             case l if l.length > 80 => l.split("&&").map(_.trim).mkString("    ", " &&\n      ", "")

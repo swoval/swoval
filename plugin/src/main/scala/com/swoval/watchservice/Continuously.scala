@@ -180,3 +180,4 @@ object Continuously {
       State(arg, sources, cache, log, antiEntropy, onTrigger).waitForEvents(s)
   }
 }
+//
