@@ -21,7 +21,6 @@ import sbt._
 import sbt.internal.TaskSequential
 import sbtcrossproject.CrossPlugin.autoImport._
 import sbtcrossproject.{ CrossProject, crossProject }
-import sbtdoge.CrossPerProjectPlugin
 import scalajsbundler.BundlingMode
 import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin
 import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin.autoImport._
@@ -183,7 +182,6 @@ object Build {
 
   lazy val swoval = project
     .in(file("."))
-    .enablePlugins(CrossPerProjectPlugin)
     .aggregate(projects: _*)
     .settings(
       setProp := {

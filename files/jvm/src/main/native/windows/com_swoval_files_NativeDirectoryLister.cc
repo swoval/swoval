@@ -66,7 +66,10 @@ JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeDirectoryLister_openDir(JNIE
     handle->first  = true;
     handle->handle = FindFirstFileEx(env->GetStringUTFChars(dir, 0), FindExInfoBasic, &handle->ffd,
                                      FindExSearchNameMatch, NULL, FIND_FIRST_EX_LARGE_FETCH);
-    handle->err    = GetLastError();
+    if (handle->handle == INVALID_HANDLE_VALUE)
+        handle->err = GetLastError();
+    else
+        handle->err = ERROR_SUCCESS;
     return (jlong)handle;
 }
 
