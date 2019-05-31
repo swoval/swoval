@@ -1,10 +1,9 @@
 #include <jni.h>
 #include "windows.h"
 #include "com_swoval_files_NativeDirectoryLister.h"
-#include <stdio.h>
 
 typedef struct Handle {
-    WIN32_FIND_DATA ffd;
+    WIN32_FIND_DATAW ffd;
     HANDLE handle;
     bool first = true;
     int err    = ERROR_SUCCESS;
@@ -62,10 +61,11 @@ JNIEXPORT jstring JNICALL Java_com_swoval_files_NativeDirectoryLister_strerror(J
  */
 JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeDirectoryLister_openDir(JNIEnv *env, jobject,
                                                                             jstring dir) {
-    Handle *handle = (Handle *)HeapAlloc(GetProcessHeap(), 0, sizeof(Handle));
-    handle->first  = true;
-    handle->handle = FindFirstFileEx(env->GetStringUTFChars(dir, 0), FindExInfoBasic, &handle->ffd,
-                                     FindExSearchNameMatch, NULL, FIND_FIRST_EX_LARGE_FETCH);
+    Handle *handle   = (Handle *)HeapAlloc(GetProcessHeap(), 0, sizeof(Handle));
+    handle->first    = true;
+    const jchar *str = env->GetStringChars(dir, 0);
+    handle->handle   = FindFirstFileExW((LPCWSTR)str, FindExInfoBasic, &handle->ffd,
+                                      FindExSearchNameMatch, NULL, FIND_FIRST_EX_LARGE_FETCH);
     if (handle->handle == INVALID_HANDLE_VALUE)
         handle->err = GetLastError();
     else
@@ -95,7 +95,7 @@ JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeDirectoryLister_nextFile(JNI
     if (handle->first) {
         handle->first = false;
     } else {
-        if (!FindNextFile(handle->handle, &handle->ffd)) {
+        if (!FindNextFileW(handle->handle, &handle->ffd)) {
             handle->err = GetLastError();
             return 0;
         }
@@ -127,6 +127,10 @@ JNIEXPORT jint JNICALL Java_com_swoval_files_NativeDirectoryLister_getType(JNIEn
  */
 JNIEXPORT jstring JNICALL Java_com_swoval_files_NativeDirectoryLister_getName(JNIEnv *env, jobject,
                                                                               jlong handle) {
-    return env->NewStringUTF(((WIN32_FIND_DATA *)handle)->cFileName);
+    WIN32_FIND_DATAW *data = (WIN32_FIND_DATAW *)handle;
+    int len                = 0;
+    for (len = 0; data->cFileName[len] != 0; len++) {
+    }
+    return env->NewString((const jchar *)data->cFileName, (jsize)len);
 }
 }
