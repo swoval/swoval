@@ -1,6 +1,6 @@
 package com.swoval.files
 
-import java.nio.file.{ Path, Paths }
+import java.nio.file.{ Files, Path, Paths }
 import java.util
 
 import com.swoval.files.TestHelpers._
@@ -98,6 +98,11 @@ class FileTreeViewTest(newFileTreeView: (Path, Int, Boolean) => DirectoryView) e
         }
       }
     }
+  }
+  def specialCharacters: Future[Unit] = withTempDirectorySync { dir =>
+    val pathChars = Array[Int](102, 111, 111, 61453).map(_.toChar)
+    val file = Files.createFile(dir.resolve(new String(pathChars)))
+    newFileTreeView(dir, 0).ls(dir, false, AllPass) === Seq(file)
   }
   def recursive: Future[Unit] = withTempDirectory { dir =>
     withTempDirectory(dir) { subdir =>
@@ -217,6 +222,7 @@ class FileTreeViewTest(newFileTreeView: (Path, Int, Boolean) => DirectoryView) e
       'directory - symlinks.directory
       'loop - symlinks.loop.initial
     }
+    'specialCharacters - specialCharacters
   }
 }
 object DirectoryFileTreeViewTest extends FileTreeViewTest(FileTreeViews.cached)
