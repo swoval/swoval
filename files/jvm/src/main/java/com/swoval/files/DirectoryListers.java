@@ -27,7 +27,7 @@ class DirectoryListers {
     NativeDirectoryLister nativeDirectoryLister;
     try {
       nativeDirectoryLister = new NativeDirectoryLister();
-    } catch (final UnsatisfiedLinkError | RuntimeException e) {
+    } catch (final ExceptionInInitializerError | UnsatisfiedLinkError | RuntimeException e) {
       nativeDirectoryLister = null;
     }
     return new DirectoryLister[] {nativeDirectoryLister, directoryLister};
