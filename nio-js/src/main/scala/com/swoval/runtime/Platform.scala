@@ -7,10 +7,14 @@ import scala.scalajs.js.annotation.JSImport
  * Provides some platform specific properties.
  */
 object Platform {
-  private[this] val (_isMac, _isWin, _isLinux) = {
+  private[this] val (_isMac, _isWin, _isLinux, _isFreeBSD) = {
     val platform = os.platform()
-    (platform == "darwin", platform == "win32", platform == "linux")
+    (platform == "darwin",
+      platform == "win32",
+      platform == "linux",
+      platform.toLowerCase.startsWith("freebsd"))
   }
+  def isFreeBSD(): Boolean = false
   def isJVM(): Boolean = false
   def isLinux(): Boolean = _isLinux
   def isMac(): Boolean = _isMac

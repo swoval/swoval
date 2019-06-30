@@ -4,6 +4,7 @@ package com.swoval.runtime;
 public class Platform {
   private Platform() {}
 
+  private static final boolean isFreeBSD = System.getProperty("os.name", "").startsWith("FreeBSD");
   private static final boolean isLinuxValue = System.getProperty("os.name", "").startsWith("Linux");
   private static final boolean isMacValue =
       System.getProperty("os.name", "").startsWith("Mac OS X");
@@ -19,6 +20,14 @@ public class Platform {
     return true;
   }
 
+  /**
+   * Returns true if running on freebsd.
+   *
+   * @return true if running on freebsd.
+   */
+  public static boolean isFreeBSD() {
+    return isFreeBSD;
+  }
   /**
    * Returns true if running on a mac.
    *

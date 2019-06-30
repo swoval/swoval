@@ -30,6 +30,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 public class NativeLoader {
   private static final String NATIVE_LIBRARY = "swoval-files0";
   private static final String lib = System.mapLibraryName(NATIVE_LIBRARY);
+  private static boolean loaded = false;
 
   @SuppressWarnings("EmptyCatchBlock")
   private static void cleanupTask(final Path path) {
@@ -106,8 +107,7 @@ public class NativeLoader {
                     System.getProperty(
                         "swoval.tmpdir", System.getProperty("java.io.tmpdir", "/tmp")))
                 .resolve("swoval-jni"));
-    final String osSubDir =
-        System.getProperty("os.name", "").startsWith("FreeBSD") ? "/freebsd/" : "/";
+    final String osSubDir = Platform.isFreeBSD() ? "/freebsd" : "/";
     final String resourcePath = "/native/" + arch + osSubDir + lib;
     final InputStream resourceStream = NativeLoader.class.getResourceAsStream(resourcePath);
     if (resourceStream == null) {
@@ -161,15 +161,19 @@ public class NativeLoader {
    * @throws IOException if the packaged native binary cannot be written to a temp directory.
    * @throws UnsatisfiedLinkError if no compatible binary for the platform is present.
    */
-  public static void loadPackaged() throws IOException, UnsatisfiedLinkError {
-    try {
-      System.loadLibrary(NATIVE_LIBRARY);
-    } catch (UnsatisfiedLinkError e) {
+  public static synchronized void loadPackaged() throws IOException, UnsatisfiedLinkError {
+    if (!loaded) {
       try {
+        System.loadLibrary(NATIVE_LIBRARY);
+      } catch (UnsatisfiedLinkError e) {
+        final boolean is64bit = System.getProperty("sun.arch.data.model", "64").equals("64");
+        if (!is64bit) throw new UnsatisfiedLinkError("No 32 bit native libraries are provided.");
+        if (!Platform.isFreeBSD() && !Platform.isMac() && !Platform.isLinux() && !Platform.isWin())
+          throw new UnsatisfiedLinkError(
+              "No native libary is available for '" + System.getProperty("os.name", ""));
         loadPackaged("x86_64");
-      } catch (UnsatisfiedLinkError ex) {
-        loadPackaged("i686");
       }
+      loaded = true;
     }
   }
 }
