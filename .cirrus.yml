@@ -12,4 +12,4 @@ task:
       - rm sbt-1.2.8.tgz
       - mv sbt /tmp/sbt
       - pkg install -y openjdk8
-  script: java -jar /tmp/sbt/bin/sbt-launch.jar filesJVM/test
+  script: java -Dsbt.coursier=false -jar /tmp/sbt/bin/sbt-launch.jar filesJVM/test
