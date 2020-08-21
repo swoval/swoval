@@ -42,18 +42,18 @@ object FileTreeRepositories {
    * @tparam T the value type of the cache entries
    * @return a file tree repository.
    */
-  def get[T <: AnyRef](converter: js.UndefOr[js.Function1[TypedPath, T]],
-                       followLinks: js.UndefOr[Boolean]): FileTreeRepository[T] = {
+  def get[T <: AnyRef](
+      converter: js.UndefOr[js.Function1[TypedPath, T]],
+      followLinks: js.UndefOr[Boolean]
+  ): FileTreeRepository[T] = {
     val underlying =
       SFileTreeRepositories.get(
         new Converter[T] {
           val function = converter.toOption match {
             case Some(f) =>
-              (typedPath: STypedPath) =>
-                f(new TypedPath(typedPath))
+              (typedPath: STypedPath) => f(new TypedPath(typedPath))
             case None =>
-              (typedPath: STypedPath) =>
-                new TypedPath(typedPath).asInstanceOf[T]
+              (typedPath: STypedPath) => new TypedPath(typedPath).asInstanceOf[T]
           }
           override def apply(typedPath: STypedPath): T = function(typedPath)
         },
@@ -94,7 +94,8 @@ object FileTreeRepositories {
 @JSExportTopLevel("FileTreeRepository")
 @JSExportAll
 class FileTreeRepository[T <: AnyRef] protected[node] (
-    private[this] val underlying: SFileTreeRepository[T]) {
+    private[this] val underlying: SFileTreeRepository[T]
+) {
 
   /**
    * Shutdown the repository, freeing any native resources.
@@ -128,17 +129,17 @@ class FileTreeRepository[T <: AnyRef] protected[node] (
    * @param filter include only paths accepted by this. By default it accepts all paths.
    * @return a List of [[TypedPath]] instances accepted by the filter.
    */
-  def list(path: String,
-           maxDepth: UndefOr[Int],
-           filter: UndefOr[js.Function1[TypedPath, Boolean]]): js.Array[TypedPath] = {
+  def list(
+      path: String,
+      maxDepth: UndefOr[Int],
+      filter: UndefOr[js.Function1[TypedPath, Boolean]]
+  ): js.Array[TypedPath] = {
     val jsFilter: Filter[STypedPath] = new Filter[STypedPath] {
       val f = filter.toOption match {
         case Some(f) =>
-          (typedPath: STypedPath) =>
-            f(new TypedPath(typedPath))
+          (typedPath: STypedPath) => f(new TypedPath(typedPath))
         case _ =>
-          (_: STypedPath) =>
-            true
+          (_: STypedPath) => true
       }
       override def accept(typedPath: STypedPath): Boolean = f(typedPath)
     }
@@ -161,19 +162,18 @@ class FileTreeRepository[T <: AnyRef] protected[node] (
    *     not a subdirectory of this CachedDirectory or if it is a subdirectory, but the
    *     CachedDirectory was created without the recursive flag.
    */
-  def listEntries(path: String,
-                  maxDepth: UndefOr[Int],
-                  filter: UndefOr[js.Function1[FileTreeDataViews.Entry[T], Boolean]])
-    : js.Array[FileTreeDataViews.Entry[T]] = {
+  def listEntries(
+      path: String,
+      maxDepth: UndefOr[Int],
+      filter: UndefOr[js.Function1[FileTreeDataViews.Entry[T], Boolean]]
+  ): js.Array[FileTreeDataViews.Entry[T]] = {
     val jsFilter: Filter[SFileTreeDataViews.Entry[T]] =
       new Filter[SFileTreeDataViews.Entry[T]] {
         val f = filter.toOption match {
           case Some(f) =>
-            (entry: SFileTreeDataViews.Entry[T]) =>
-              f(entry.toJS)
+            (entry: SFileTreeDataViews.Entry[T]) => f(entry.toJS)
           case _ =>
-            (_: SFileTreeDataViews.Entry[T]) =>
-              true
+            (_: SFileTreeDataViews.Entry[T]) => true
         }
         override def accept(entry: SFileTreeDataViews.Entry[T]): Boolean = f(entry)
       }
@@ -243,9 +243,12 @@ object PathWatchers {
    */
   def polling(followLinks: js.UndefOr[Boolean], intervalMS: js.UndefOr[Double]): PathWatcher = {
     new PathWatcher(
-      SPathWatchers.polling(followLinks.toOption.getOrElse(true),
-                            intervalMS.toOption.getOrElse(500.0).toLong,
-                            TimeUnit.MILLISECONDS))
+      SPathWatchers.polling(
+        followLinks.toOption.getOrElse(true),
+        intervalMS.toOption.getOrElse(500.0).toLong,
+        TimeUnit.MILLISECONDS
+      )
+    )
   }
 
   /**
@@ -271,7 +274,8 @@ object PathWatchers {
 @JSExportTopLevel("PathWatcher")
 @JSExportAll
 class PathWatcher protected[node] (
-    private[this] val underlying: SPathWatcher[SPathWatchers.Event]) {
+    private[this] val underlying: SPathWatcher[SPathWatchers.Event]
+) {
 
   /**
    * Register a path to monitor for file events. The watcher will only watch child subdirectories up
@@ -328,8 +332,10 @@ class PathWatcher protected[node] (
  */
 @JSExportTopLevel("Observer")
 @JSExportAll
-class Observer[T <: AnyRef](val onNext: js.Function1[T, Unit],
-                            val onError: js.UndefOr[js.Function1[Throwable, Unit]])
+class Observer[T <: AnyRef](
+    val onNext: js.Function1[T, Unit],
+    val onError: js.UndefOr[js.Function1[Throwable, Unit]]
+)
 
 /**
  * An observer of cache events.
@@ -362,15 +368,18 @@ object CacheObservers {
    * @tparam T the generic type of the cache entries.
    * @return a [[CacheObserver]].
    */
-  def get[T](onEvent: js.Function1[FileTreeDataViews.Entry[T], Unit],
-             onError: js.UndefOr[js.Function1[IOException, Unit]]): CacheObserver[T] =
+  def get[T](
+      onEvent: js.Function1[FileTreeDataViews.Entry[T], Unit],
+      onError: js.UndefOr[js.Function1[IOException, Unit]]
+  ): CacheObserver[T] =
     new CacheObserver[T](
       onEvent,
       onEvent,
       ((_: FileTreeDataViews.Entry[T], e: FileTreeDataViews.Entry[T]) => onEvent(e)): js.Function2[
         FileTreeDataViews.Entry[T],
         FileTreeDataViews.Entry[T],
-        Unit],
+        Unit
+      ],
       onError
     )
 }
@@ -537,17 +546,20 @@ private[files] object Converters {
       }
   }
   implicit class JSCacheObserverOps[T <: AnyRef](val observer: CacheObserver[T]) extends AnyVal {
-    def toSwoval: SFileTreeDataViews.CacheObserver[T] = new SFileTreeDataViews.CacheObserver[T] {
-      override def onError(ioException: IOException): Unit =
-        observer.onError.foreach(_(ioException))
-      override def onCreate(newEntry: SFileTreeDataViews.Entry[T]): Unit =
-        observer.onCreate(newEntry.toJS)
-      override def onDelete(oldEntry: SFileTreeDataViews.Entry[T]): Unit =
-        observer.onDelete(oldEntry.toJS)
-      override def onUpdate(oldEntry: SFileTreeDataViews.Entry[T],
-                            newEntry: SFileTreeDataViews.Entry[T]): Unit =
-        observer.onUpdate(oldEntry.toJS, newEntry.toJS)
-    }
+    def toSwoval: SFileTreeDataViews.CacheObserver[T] =
+      new SFileTreeDataViews.CacheObserver[T] {
+        override def onError(ioException: IOException): Unit =
+          observer.onError.foreach(_(ioException))
+        override def onCreate(newEntry: SFileTreeDataViews.Entry[T]): Unit =
+          observer.onCreate(newEntry.toJS)
+        override def onDelete(oldEntry: SFileTreeDataViews.Entry[T]): Unit =
+          observer.onDelete(oldEntry.toJS)
+        override def onUpdate(
+            oldEntry: SFileTreeDataViews.Entry[T],
+            newEntry: SFileTreeDataViews.Entry[T]
+        ): Unit =
+          observer.onUpdate(oldEntry.toJS, newEntry.toJS)
+      }
   }
   implicit class EventOps(val event: SPathWatchers.Event) extends AnyVal {
     def toJS: PathWatchers.Event =

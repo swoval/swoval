@@ -68,7 +68,7 @@ trait CachedDirectory[T <: AnyRef]
   def getEntry(): Entry[T]
 
   /**
- Catch any exceptions in close.
+   * Catch any exceptions in close.
    */
   override def close(): Unit
 

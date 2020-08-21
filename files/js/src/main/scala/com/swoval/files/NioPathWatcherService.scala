@@ -25,8 +25,8 @@ import scala.util.Try
 private[files] class NioPathWatcherService(
     eventConsumer: Consumer[functional.Either[Overflow, Event]],
     registerable: RegisterableWatchService,
-    logger: Logger)
-    extends AutoCloseable {
+    logger: Logger
+) extends AutoCloseable {
   private[this] var closed = false
   private[this] val options = new FSWatcherOptions(recursive = false, persistent = false)
   private[this] var watchedDirectoriesByPath: Map[Path, WatchedDirectory] =
@@ -89,13 +89,14 @@ private[files] class NioPathWatcherService(
           try setOnError()
           catch { case _: Exception => setTimeout(1.millis)(setOnError()) }
           val watchedDirectory: WatchedDirectory = new WatchedDirectory {
-            override def close(): Unit = if (closed.compareAndSet(false, true)) {
-              if (Loggers.shouldLog(logger, Level.DEBUG)) {
-                logger.debug(this + " stopping monitor.")
+            override def close(): Unit =
+              if (closed.compareAndSet(false, true)) {
+                if (Loggers.shouldLog(logger, Level.DEBUG)) {
+                  logger.debug(this + " stopping monitor.")
+                }
+                watchedDirectoriesByPath -= path
+                watcher.close()
               }
-              watchedDirectoriesByPath -= path
-              watcher.close()
-            }
           }
           watchedDirectoriesByPath += path -> watchedDirectory
           if (Loggers.shouldLog(logger, Level.DEBUG)) {

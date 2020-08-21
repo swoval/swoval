@@ -60,8 +60,9 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           val file = otherDir.resolve("file").createFile()
           val link = dir.resolve("link") linkTo otherDir
           val latch = new CountDownLatch(1)
-          usingAsync(simpleCache((e: Entry[Path]) =>
-            if (e.path == link.resolve("file")) latch.countDown())) { c =>
+          usingAsync(
+            simpleCache((e: Entry[Path]) => if (e.path == link.resolve("file")) latch.countDown())
+          ) { c =>
             c.reg(dir)
             file write "foo"
             latch.waitFor(DEFAULT_TIMEOUT) {
@@ -94,13 +95,15 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           val link = otherDir.resolve("link") linkTo dir
           val file = dir.resolve("file").createFile()
           val latch = new CountDownLatch(1)
-          usingAsync(lastModifiedCache((e: Entry[LastModified]) =>
-            if (e.value.lastModified == 3000) latch.countDown())) {
-            c: FileTreeRepository[LastModified] =>
-              c.register(link, Integer.MAX_VALUE)
-              c.ls(link) === Set(link.resolve("file"))
-              file.setLastModifiedTime(3000)
-              latch.waitFor(DEFAULT_TIMEOUT) {}
+          usingAsync(
+            lastModifiedCache((e: Entry[LastModified]) =>
+              if (e.value.lastModified == 3000) latch.countDown()
+            )
+          ) { c: FileTreeRepository[LastModified] =>
+            c.register(link, Integer.MAX_VALUE)
+            c.ls(link) === Set(link.resolve("file"))
+            file.setLastModifiedTime(3000)
+            latch.waitFor(DEFAULT_TIMEOUT) {}
           }
         }
       }
@@ -125,8 +128,11 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
                 otherDir.resolve("dir") linkTo dir
                 val latch = new CountDownLatch(1)
                 val loopLink = dir.resolve("other")
-                usingAsync(simpleCache((e: Entry[Path]) =>
-                  if (e.path == loopLink.resolve("dir")) latch.countDown())) { c =>
+                usingAsync(
+                  simpleCache((e: Entry[Path]) =>
+                    if (e.path == loopLink.resolve("dir")) latch.countDown()
+                  )
+                ) { c =>
                   c.reg(dir)
                   loopLink linkTo otherDir
                   latch.waitFor(DEFAULT_TIMEOUT) {
@@ -186,11 +192,13 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
               .flatMap { _ =>
                 fileLatch.waitFor(DEFAULT_TIMEOUT) {
                   newFile.read ==> "foo"
-                  c.ls(dir) === Set(link,
-                                    dirLink,
-                                    dirLink.resolve(file.getFileName),
-                                    fooLink,
-                                    fooLink.resolve("newfile"))
+                  c.ls(dir) === Set(
+                    link,
+                    dirLink,
+                    dirLink.resolve(file.getFileName),
+                    fooLink,
+                    fooLink.resolve("newfile")
+                  )
                 }
               }
           }
@@ -248,21 +256,23 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
         withTempFile { file =>
           val linkLatch = new CountDownLatch(1)
           val link = dir.resolve("link")
-          usingAsync(FileCacheTest.getCached[Path](
-            true,
-            identity,
-            new FileTreeDataViews.CacheObserver[Path] {
-              override def onCreate(newEntry: Entry[Path]): Unit = {}
+          usingAsync(
+            FileCacheTest.getCached[Path](
+              true,
+              identity,
+              new FileTreeDataViews.CacheObserver[Path] {
+                override def onCreate(newEntry: Entry[Path]): Unit = {}
 
-              override def onDelete(oldEntry: Entry[Path]): Unit = {
-                if (oldEntry.getTypedPath.getPath == link) linkLatch.countDown()
+                override def onDelete(oldEntry: Entry[Path]): Unit = {
+                  if (oldEntry.getTypedPath.getPath == link) linkLatch.countDown()
+                }
+
+                override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
+
+                override def onError(exception: IOException): Unit = {}
               }
-
-              override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {}
-
-              override def onError(exception: IOException): Unit = {}
-            }
-          )) { c =>
+            )
+          ) { c =>
             link linkTo file
             c.reg(dir)
             c.ls(dir) === Seq(link)
@@ -328,8 +338,10 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           }.flatMap { _ =>
             using(FileTreeRepositories.get(identity, true)) { c =>
               c.register(dir)
-              c.ls(dir, true, functional.Filters.AllPass) === Set(link,
-                                                                  link.resolve("updated-file"))
+              c.ls(dir, true, functional.Filters.AllPass) === Set(
+                link,
+                link.resolve("updated-file")
+              )
             }
           }
         }
@@ -344,19 +356,21 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           withTempFile { file =>
             val link = dir.resolve("link") linkTo file
             val otherLink = otherDir.resolve("link") linkTo file
-            usingAsync(FileCacheTest.getCached[Path](
-              true,
-              identity,
-              new FileTreeDataViews.CacheObserver[Path] {
-                override def onCreate(newEntry: Entry[Path]): Unit = {}
-                override def onDelete(oldEntry: Entry[Path]): Unit = {}
-                override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
-                  val path = newEntry.getTypedPath.getPath
-                  if (path.getFileName == Paths.get("link") && paths.add(path)) latch.countDown()
+            usingAsync(
+              FileCacheTest.getCached[Path](
+                true,
+                identity,
+                new FileTreeDataViews.CacheObserver[Path] {
+                  override def onCreate(newEntry: Entry[Path]): Unit = {}
+                  override def onDelete(oldEntry: Entry[Path]): Unit = {}
+                  override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
+                    val path = newEntry.getTypedPath.getPath
+                    if (path.getFileName == Paths.get("link") && paths.add(path)) latch.countDown()
+                  }
+                  override def onError(exception: IOException): Unit = {}
                 }
-                override def onError(exception: IOException): Unit = {}
-              }
-            )) { c =>
+              )
+            ) { c =>
               c.register(dir)
               c.register(otherDir)
               file write "foo"
@@ -382,31 +396,33 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
           withTempFile { file =>
             val link = dir.resolve("link") linkTo file
             val otherLink = otherDir.resolve("link") linkTo file
-            usingAsync(FileCacheTest.getCached[Path](
-              true,
-              identity,
-              new FileTreeDataViews.CacheObserver[Path] {
-                override def onCreate(newEntry: Entry[Path]): Unit = {}
+            usingAsync(
+              FileCacheTest.getCached[Path](
+                true,
+                identity,
+                new FileTreeDataViews.CacheObserver[Path] {
+                  override def onCreate(newEntry: Entry[Path]): Unit = {}
 
-                override def onDelete(oldEntry: Entry[Path]): Unit = {
-                  if (oldEntry.getTypedPath.getPath == otherLink) {
-                    deletionLatch.countDown()
+                  override def onDelete(oldEntry: Entry[Path]): Unit = {
+                    if (oldEntry.getTypedPath.getPath == otherLink) {
+                      deletionLatch.countDown()
+                    }
+                    if (oldEntry.getTypedPath.getPath == link) secondDeletionLatch.countDown()
                   }
-                  if (oldEntry.getTypedPath.getPath == link) secondDeletionLatch.countDown()
-                }
 
-                override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
-                  if (newEntry.getTypedPath.getPath == link) {
-                    paths.add(newEntry.getTypedPath.getPath)
-                    updateLatch.countDown()
-                  } else if (closed && newEntry.getTypedPath.getPath.startsWith(link)) {
-                    secondUpdateLatch.countDown()
+                  override def onUpdate(oldEntry: Entry[Path], newEntry: Entry[Path]): Unit = {
+                    if (newEntry.getTypedPath.getPath == link) {
+                      paths.add(newEntry.getTypedPath.getPath)
+                      updateLatch.countDown()
+                    } else if (closed && newEntry.getTypedPath.getPath.startsWith(link)) {
+                      secondUpdateLatch.countDown()
+                    }
                   }
-                }
 
-                override def onError(exception: IOException): Unit = {}
-              }
-            )) { c =>
+                  override def onError(exception: IOException): Unit = {}
+                }
+              )
+            ) { c =>
               c.register(dir)
               c.register(otherDir)
               otherLink.delete()
@@ -446,7 +462,8 @@ trait FileCacheSymlinkTest extends TestSuite with FileCacheTest {
                       s"Test failed:\ndeletionLatch = ${deletionLatch.getCount}\n" +
                         s"secondDeletionLatch = ${secondDeletionLatch.getCount}\n"
                         + s"updateLatch = ${updateLatch.getCount}\n"
-                        + s"secondUpdateLatch = ${secondUpdateLatch.getCount}")
+                        + s"secondUpdateLatch = ${secondUpdateLatch.getCount}"
+                    )
                 }
             }
           }

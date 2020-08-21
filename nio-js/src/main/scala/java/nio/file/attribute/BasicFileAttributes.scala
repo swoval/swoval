@@ -18,10 +18,11 @@ trait BasicFileAttributes {
 }
 
 class BasicFileAttributesImpl(p: Path, options: Seq[LinkOption]) extends BasicFileAttributes {
-  private[this] val stat = try {
-    if (options.contains(LinkOption.NOFOLLOW_LINKS)) Fs.lstatSync(p.toString)
-    else Fs.statSync(p.toString)
-  } catch { case e: Exception => java.nio.file.Errors.rethrow(p, e) }
+  private[this] val stat =
+    try {
+      if (options.contains(LinkOption.NOFOLLOW_LINKS)) Fs.lstatSync(p.toString)
+      else Fs.statSync(p.toString)
+    } catch { case e: Exception => java.nio.file.Errors.rethrow(p, e) }
   override def creationTime(): FileTime = FileTime.fromMillis(stat.ctime.getTime().toLong)
   override def fileKey(): AnyRef = p
   override def isDirectory: Boolean = stat.isDirectory()

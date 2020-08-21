@@ -12,19 +12,20 @@ object TypedPaths {
 
     private var realPath: Path = _
 
-    def expanded(): Path = path.synchronized {
-      if (realPath == null) {
-        try {
-          realPath = if (isSymbolicLink) path.toRealPath() else path
-          realPath
-        } catch {
-          case e: IOException => path
+    def expanded(): Path =
+      path.synchronized {
+        if (realPath == null) {
+          try {
+            realPath = if (isSymbolicLink) path.toRealPath() else path
+            realPath
+          } catch {
+            case e: IOException => path
 
+          }
+        } else {
+          realPath
         }
-      } else {
-        realPath
       }
-    }
 
     override def toString(): String =
       "TypedPath(path: " + path + ", exists: " + exists() +
@@ -36,11 +37,12 @@ object TypedPaths {
         isSymbolicLink +
         ")"
 
-    override def equals(other: Any): Boolean = other match {
-      case other: TypedPath => other.getPath == getPath
-      case _                => false
+    override def equals(other: Any): Boolean =
+      other match {
+        case other: TypedPath => other.getPath == getPath
+        case _                => false
 
-    }
+      }
 
     override def hashCode(): Int = getPath.hashCode
 

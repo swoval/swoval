@@ -21,7 +21,6 @@ import scala.concurrent.Future
  * provides numerous implicit classes to convert scala functions to java functional interfaces.
  * These conversions are to support scala 2.10 and scala 2.11 without the experimental compiler
  * flag set.
- *
  */
 object TestHelpers extends PlatformFiles {
 
@@ -38,7 +37,8 @@ object TestHelpers extends PlatformFiles {
       oncreate: Entry[T] => Unit,
       onupdate: (Entry[T], Entry[T]) => Unit,
       ondelete: Entry[T] => Unit,
-      onerror: IOException => Unit = _ => {}): FileTreeDataViews.CacheObserver[T] =
+      onerror: IOException => Unit = _ => {}
+  ): FileTreeDataViews.CacheObserver[T] =
     new FileTreeDataViews.CacheObserver[T] {
       override def onCreate(newEntry: Entry[T]): Unit = oncreate(newEntry)
 

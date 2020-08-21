@@ -26,43 +26,46 @@ trait PathWatcherTest extends TestSuite {
   val DEFAULT_LATENCY = 5.milliseconds
   val fileFlags = new Flags.Create().setNoDefer().setFileEvents()
   def checkModified(e: Event): Boolean = e.getKind == Modify
-  def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean = false)(
-      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event]
-  def unregisterTest(followLinks: Boolean): Future[Unit] = withTempDirectory { root =>
-    implicit val logger: TestLogger = new CachingLogger
-    val base = root.resolve("unregister").createDirectory()
-    val dir = base.resolve("nested").createDirectory()
-    val firstLatch = new CountDownLatch(1)
-    val secondLatch = new CountDownLatch(2)
-    val callback = (e: PathWatchers.Event) => {
-      if (e.path.endsWith("foo")) {
-        firstLatch.countDown()
-      } else if (e.path.endsWith("bar")) {
-        secondLatch.countDown()
+  def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean = false)(implicit
+      testLogger: TestLogger
+  ): PathWatcher[PathWatchers.Event]
+  def unregisterTest(followLinks: Boolean): Future[Unit] =
+    withTempDirectory { root =>
+      implicit val logger: TestLogger = new CachingLogger
+      val base = root.resolve("unregister").createDirectory()
+      val dir = base.resolve("nested").createDirectory()
+      val firstLatch = new CountDownLatch(1)
+      val secondLatch = new CountDownLatch(2)
+      val callback = (e: PathWatchers.Event) => {
+        if (e.path.endsWith("foo")) {
+          firstLatch.countDown()
+        } else if (e.path.endsWith("bar")) {
+          secondLatch.countDown()
+        }
+      }
+      import Implicits.executionContext
+      usingAsync(defaultWatcher(callback, followLinks)) { c =>
+        c.register(base)
+        val file = dir.resolve("foo").createFile()
+        firstLatch
+          .waitFor(DEFAULT_TIMEOUT) {
+            assert(file.exists())
+          }
+          .flatMap { _ =>
+            c.unregister(base)
+            dir.resolve("bar").createFile()
+            secondLatch
+              .waitFor(100.millis) {
+                throw new IllegalStateException(
+                  "Watcher triggered for path no longer under monitoring"
+                )
+              }
+              .recover {
+                case _: TimeoutException => ()
+              }
+          }
       }
     }
-    import Implicits.executionContext
-    usingAsync(defaultWatcher(callback, followLinks)) { c =>
-      c.register(base)
-      val file = dir.resolve("foo").createFile()
-      firstLatch
-        .waitFor(DEFAULT_TIMEOUT) {
-          assert(file.exists())
-        }
-        .flatMap { _ =>
-          c.unregister(base)
-          dir.resolve("bar").createFile()
-          secondLatch
-            .waitFor(100.millis) {
-              throw new IllegalStateException(
-                "Watcher triggered for path no longer under monitoring")
-            }
-            .recover {
-              case _: TimeoutException => ()
-            }
-        }
-    }
-  }
 
   val testsImpl = Tests {
     val events = new ArrayBlockingQueue[PathWatchers.Event](10)
@@ -302,7 +305,8 @@ trait PathWatcherTest extends TestSuite {
                    }
                  } else {
                    Future.successful(
-                     println("not running directory.delete test on scala.js on windows"))
+                     println("not running directory.delete test on scala.js on windows")
+                   )
                  })
     }
     'depth - {
@@ -318,7 +322,8 @@ trait PathWatcherTest extends TestSuite {
             events
               .poll(100.milliseconds) { _ =>
                 throw new IllegalStateException(
-                  s"Event triggered for file that shouldn't be monitored $file")
+                  s"Event triggered for file that shouldn't be monitored $file"
+                )
               }
               .recoverWith {
                 case _: TimeoutException =>
@@ -351,7 +356,8 @@ trait PathWatcherTest extends TestSuite {
                   events
                     .poll(100.milliseconds) { _ =>
                       throw new IllegalStateException(
-                        s"Event triggered for file that shouldn't be monitored $file")
+                        s"Event triggered for file that shouldn't be monitored $file"
+                      )
                     }
                     .recoverWith {
                       case _: TimeoutException =>
@@ -392,7 +398,8 @@ trait PathWatcherTest extends TestSuite {
                   events
                     .poll(100.milliseconds) { _ =>
                       throw new IllegalStateException(
-                        s"Event triggered for file that shouldn't be monitored $file")
+                        s"Event triggered for file that shouldn't be monitored $file"
+                      )
                     }
                     .recoverWith {
                       case _: TimeoutException =>
@@ -422,8 +429,9 @@ trait PathWatcherTest extends TestSuite {
 object PathWatcherTest extends PathWatcherTest {
   val tests = testsImpl
 
-  override def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean)(
-      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
+  override def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean)(implicit
+      testLogger: TestLogger
+  ): PathWatcher[PathWatchers.Event] = {
     val res = PathWatchers.get(followLinks, new DirectoryRegistryImpl(), testLogger)
     res.addObserver(callback)
     res
@@ -441,8 +449,9 @@ object NioPathWatcherTest extends PathWatcherTest {
         }
       }
 
-  override def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean)(
-      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
+  override def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean)(implicit
+      testLogger: TestLogger
+  ): PathWatcher[PathWatchers.Event] = {
     val res = PlatformWatcher.make(followLinks, new DirectoryRegistryImpl(), testLogger)
     res.addObserver(callback)
     res
@@ -452,8 +461,9 @@ object NioPathWatcherTest extends PathWatcherTest {
 object PollingPathWatcherTest extends PathWatcherTest {
   val tests = testsImpl
   override def checkModified(event: PathWatchers.Event): Boolean = event.getKind != Delete
-  override def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean)(
-      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
+  override def defaultWatcher(callback: PathWatchers.Event => _, followLinks: Boolean)(implicit
+      testLogger: TestLogger
+  ): PathWatcher[PathWatchers.Event] = {
     val res = PathWatchers.polling(followLinks, 100, TimeUnit.MILLISECONDS)
     res.addObserver(callback)
     res

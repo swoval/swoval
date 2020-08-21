@@ -32,13 +32,16 @@ class FileEventMonitor(handle: Double) extends AutoCloseable {
   def createStream(path: Path, latency: Long, unit: TimeUnit, flags: Flags.Create): Handle = {
     val res: Int =
       if (!closed)
-        FileEventsApiFacade.createStream(path.toString,
-                                         unit.toNanos(latency) / 1.0e9,
-                                         flags.value,
-                                         handle)
+        FileEventsApiFacade.createStream(
+          path.toString,
+          unit.toNanos(latency) / 1.0e9,
+          flags.value,
+          handle
+        )
       else
         throw new IllegalStateException(
-          s"Tried to call create stream for $path on closed FileEventMonitor")
+          s"Tried to call create stream for $path on closed FileEventMonitor"
+        )
     new HandleImpl(res)
   }
 
@@ -81,8 +84,10 @@ private object FileEventsApiFacade {
 
   def close(handle: Double): Unit = fe.close(handle)
 
-  def init(consumer: js.Function2[String, Int, Unit],
-           pathConsumer: js.Function1[String, Unit]): Double = {
+  def init(
+      consumer: js.Function2[String, Int, Unit],
+      pathConsumer: js.Function1[String, Unit]
+  ): Double = {
     fe.init(consumer, pathConsumer).asInstanceOf[Double]
   }
 

@@ -35,7 +35,8 @@ object Executor {
    * @param name Unused but exists for jvm source compatibility
    * @return
    */
-  def make(name: String): Executor = new Executor {
-    override def run(runnable: Runnable): Unit = runnable.run()
-  }
+  def make(name: String): Executor =
+    new Executor {
+      override def run(runnable: Runnable): Unit = runnable.run()
+    }
 }

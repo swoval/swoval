@@ -45,21 +45,25 @@ object FileTreeRepositories {
    * @tparam T the value type of the cache entries
    * @return a file tree repository.
    */
-  def get[T <: AnyRef](converter: Converter[T],
-                       followLinks: Boolean,
-                       rescanOnDirectoryUpdates: Boolean,
-                       logger: Logger): FileTreeRepository[T] = {
+  def get[T <: AnyRef](
+      converter: Converter[T],
+      followLinks: Boolean,
+      rescanOnDirectoryUpdates: Boolean,
+      logger: Logger
+  ): FileTreeRepository[T] = {
     val symlinkWatcher: SymlinkWatcher =
       if (followLinks)
         new SymlinkWatcher(PathWatchers.get(false, new DirectoryRegistryImpl(), logger), logger)
       else null
     val callbackExecutor: Executor =
       Executor.make("FileTreeRepository-callback-executor")
-    val tree: FileCacheDirectoryTree[T] = new FileCacheDirectoryTree[T](converter,
-                                                                        callbackExecutor,
-                                                                        symlinkWatcher,
-                                                                        rescanOnDirectoryUpdates,
-                                                                        logger)
+    val tree: FileCacheDirectoryTree[T] = new FileCacheDirectoryTree[T](
+      converter,
+      callbackExecutor,
+      symlinkWatcher,
+      rescanOnDirectoryUpdates,
+      logger
+    )
     val pathWatcher: PathWatcher[PathWatchers.Event] =
       PathWatchers.get(false, tree.readOnlyDirectoryRegistry(), logger)
     pathWatcher.addObserver(new Observer[Event]() {

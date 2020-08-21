@@ -102,7 +102,8 @@ object AllTests {
               Option(outputStreams.get(name)).foreach(s => s.printContent(System.err))
           }
           throw new IllegalStateException(
-            s"Test failed: ${tests.map(_._2).toSet diff completed.asScala.toSet} failed to complete")
+            s"Test failed: ${tests.map(_._2).toSet diff completed.asScala.toSet} failed to complete"
+          )
         case (n, Success(result)) =>
           completed.add(n)
           result.leaves.map(_.value).foreach {

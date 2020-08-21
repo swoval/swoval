@@ -35,7 +35,8 @@ package object test {
           case e: IOException if mkdirs =>
             Option(path.getParent).map(_.createDirectories())
             throw e
-        })
+        }
+      )
     def createTempFile(prefix: String): Path = {
       if (!path.isDirectory()) throw new NotDirectoryException(path.toString)
       retry(Files.createTempFile(path, prefix, ""))
@@ -67,38 +68,41 @@ package object test {
     }
     private def deleteImpl(path: Path): Boolean =
       retry(Files.deleteIfExists(path), maxAttempts = 10)
-    def deleteRecursive(): Unit = retry {
-      var deleted = false
-      while (!deleted && Files.isDirectory(path)) {
-        try {
-          Files.walkFileTree(
-            path,
-            new FileVisitor[Path] {
-              override def preVisitDirectory(dir: Path,
-                                             attrs: BasicFileAttributes): FileVisitResult =
-                FileVisitResult.CONTINUE
+    def deleteRecursive(): Unit =
+      retry {
+        var deleted = false
+        while (!deleted && Files.isDirectory(path)) {
+          try {
+            Files.walkFileTree(
+              path,
+              new FileVisitor[Path] {
+                override def preVisitDirectory(
+                    dir: Path,
+                    attrs: BasicFileAttributes
+                ): FileVisitResult =
+                  FileVisitResult.CONTINUE
 
-              override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult = {
-                deleteImpl(file)
-                FileVisitResult.CONTINUE
+                override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult = {
+                  deleteImpl(file)
+                  FileVisitResult.CONTINUE
+                }
+
+                override def visitFileFailed(file: Path, exc: IOException): FileVisitResult =
+                  FileVisitResult.CONTINUE
+
+                override def postVisitDirectory(dir: Path, exc: IOException): FileVisitResult = {
+                  deleteImpl(dir)
+                  FileVisitResult.CONTINUE
+                }
               }
-
-              override def visitFileFailed(file: Path, exc: IOException): FileVisitResult =
-                FileVisitResult.CONTINUE
-
-              override def postVisitDirectory(dir: Path, exc: IOException): FileVisitResult = {
-                deleteImpl(dir)
-                FileVisitResult.CONTINUE
-              }
-            }
-          )
-          deleted = true
-        } catch {
-          case _: AccessDeniedException =>
+            )
+            deleted = true
+          } catch {
+            case _: AccessDeniedException =>
+          }
         }
+        deleteImpl(path)
       }
-      deleteImpl(path)
-    }
     def exists(): Boolean = retry(Files.exists(path), 10)
     def lastModified: Long =
       Try(Files.getLastModifiedTime(path).toMillis).getOrElse(java.lang.Long.MIN_VALUE)
@@ -108,7 +112,8 @@ package object test {
     def setLastModifiedTime(lastModified: Long): Unit =
       retry(
         try Files.setLastModifiedTime(path, FileTime.fromMillis(lastModified))
-        catch { case _: NoSuchFileException => })
+        catch { case _: NoSuchFileException => }
+      )
     def write(bytes: Array[Byte]): Path = Files.write(path, bytes)
     def write(content: String, charset: Charset = Charset.defaultCharset()): Path =
       Files.write(path, content.getBytes(charset))
@@ -138,7 +143,8 @@ package object test {
           val comp = truncate(s)
           println(
             s"The actual result had $c fields $comp compared to the expected result.\n" +
-              s"Found: ${truncate(tSet)}\nExpected: ${truncate(oSet)} ")
+              s"Found: ${truncate(tSet)}\nExpected: ${truncate(oSet)} "
+          )
           comp.toSet ==> Set.empty
         case _ =>
       }

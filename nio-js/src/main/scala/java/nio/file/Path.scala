@@ -23,9 +23,11 @@ trait Path {
   def startsWith(other: Path): Boolean
   def startsWith(other: String): Boolean
   def normalize(): Path
-  def register(watcher: WatchService,
-               events: Array[WatchEvent.Kind[_]],
-               modifiers: Array[WatchEvent.Modifier]): WatchKey
+  def register(
+      watcher: WatchService,
+      events: Array[WatchEvent.Kind[_]],
+      modifiers: Array[WatchEvent.Modifier]
+  ): WatchKey
   def register(watcher: WatchService, events: Array[WatchEvent.Kind[_]]): WatchKey
   def resolve(other: Path): Path
   def resolve(other: String): Path
@@ -63,10 +65,11 @@ class JSPath(val rawPath: String) extends Path {
   override def getRoot(): Path = new JSPath(root)
   override def getFileName(): Path = new JSPath(file.getName)
   override def getFileSystem: FileSystem = ???
-  override def getParent(): Path = this.file.getParent match {
-    case `root` => null
-    case p      => new JSPath(p)
-  }
+  override def getParent(): Path =
+    this.file.getParent match {
+      case `root` => null
+      case p      => new JSPath(p)
+    }
   override def getNameCount(): Int = parts.length
   override def getName(index: Int): Path = new JSPath(parts(index))
   override def isAbsolute(): Boolean = file.isAbsolute
@@ -93,27 +96,31 @@ class JSPath(val rawPath: String) extends Path {
   override def toRealPath(options: Array[LinkOption]): Path =
     Errors.wrap(this, new JSPath(Fs.realpathSync(path)))
   override def toFile(): File = file
-  override def register(watcher: WatchService,
-                        events: Array[WatchEvent.Kind[_]],
-                        modifiers: Array[WatchEvent.Modifier]): WatchKey = ???
+  override def register(
+      watcher: WatchService,
+      events: Array[WatchEvent.Kind[_]],
+      modifiers: Array[WatchEvent.Modifier]
+  ): WatchKey = ???
   override def register(watcher: WatchService, events: Array[WatchEvent.Kind[_]]): WatchKey = ???
-  override def iterator(): util.Iterator[Path] = new util.Iterator[Path] {
-    private[this] var i = 0
-    override def hasNext: Boolean = i < parts.length
-    override def next(): Path = {
-      val res = new JSPath(parts(i))
-      i += 1
-      res
+  override def iterator(): util.Iterator[Path] =
+    new util.Iterator[Path] {
+      private[this] var i = 0
+      override def hasNext: Boolean = i < parts.length
+      override def next(): Path = {
+        val res = new JSPath(parts(i))
+        i += 1
+        res
+      }
+      override def remove(): Unit = {}
     }
-    override def remove(): Unit = {}
-  }
   override def compareTo(other: Path): Int = this.path.compareTo(other.toString)
   override def toString(): String = path
   override def hashCode(): Int = path.hashCode()
-  override def equals(o: Any): Boolean = o match {
-    case that: Path => this.toString == that.toString
-    case _          => false
-  }
+  override def equals(o: Any): Boolean =
+    o match {
+      case that: Path => this.toString == that.toString
+      case _          => false
+    }
 }
 object JSPath {
   val isWin = com.swoval.runtime.Platform.isWin

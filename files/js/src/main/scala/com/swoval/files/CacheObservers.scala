@@ -49,11 +49,12 @@ class CacheObservers[T] extends CacheObserver[T] with AutoCloseable {
       cbs = new ArrayList(observers.values)
     }
     val it: Iterator[CacheObserver[T]] = cbs.iterator()
-    while (it.hasNext) try it.next().onCreate(newEntry)
-    catch {
-      case e: Exception => e.printStackTrace()
+    while (it.hasNext)
+      try it.next().onCreate(newEntry)
+      catch {
+        case e: Exception => e.printStackTrace()
 
-    }
+      }
   }
 
   override def onDelete(oldEntry: Entry[T]): Unit = {
@@ -62,11 +63,12 @@ class CacheObservers[T] extends CacheObserver[T] with AutoCloseable {
       cbs = new ArrayList(observers.values)
     }
     val it: Iterator[CacheObserver[T]] = cbs.iterator()
-    while (it.hasNext) try it.next().onDelete(oldEntry)
-    catch {
-      case e: Exception => e.printStackTrace()
+    while (it.hasNext)
+      try it.next().onDelete(oldEntry)
+      catch {
+        case e: Exception => e.printStackTrace()
 
-    }
+      }
   }
 
   override def onUpdate(oldEntry: Entry[T], newEntry: Entry[T]): Unit = {
@@ -75,11 +77,12 @@ class CacheObservers[T] extends CacheObserver[T] with AutoCloseable {
       cbs = new ArrayList(observers.values)
     }
     val it: Iterator[CacheObserver[T]] = cbs.iterator()
-    while (it.hasNext) try it.next().onUpdate(oldEntry, newEntry)
-    catch {
-      case e: Exception => e.printStackTrace()
+    while (it.hasNext)
+      try it.next().onUpdate(oldEntry, newEntry)
+      catch {
+        case e: Exception => e.printStackTrace()
 
-    }
+      }
   }
 
   override def onError(exception: IOException): Unit = {

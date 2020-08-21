@@ -15,10 +15,11 @@ class BoundedWatchService(val queueSize: Int, underlying: RegisterableWatchServi
     new BoundedWatchKey(queueSize, underlying.register(path, kinds: _*))
   }
 
-  override def poll(): WatchKey = underlying.poll() match {
-    case null => null
-    case key  => new BoundedWatchKey(queueSize, key)
-  }
+  override def poll(): WatchKey =
+    underlying.poll() match {
+      case null => null
+      case key  => new BoundedWatchKey(queueSize, key)
+    }
 
   override def poll(timeout: Long, unit: TimeUnit): WatchKey =
     underlying.poll(timeout, unit) match {
@@ -28,10 +29,11 @@ class BoundedWatchService(val queueSize: Int, underlying: RegisterableWatchServi
 
   override def close(): Unit = underlying.close()
 
-  override def take(): WatchKey = underlying.take() match {
-    case null => null
-    case key  => new BoundedWatchKey(queueSize, key)
-  }
+  override def take(): WatchKey =
+    underlying.take() match {
+      case null => null
+      case key  => new BoundedWatchKey(queueSize, key)
+    }
 }
 private class BoundedWatchKey(val queueSize: Int, underlying: WatchKey) extends WatchKey {
   override def isValid: Boolean = underlying.isValid

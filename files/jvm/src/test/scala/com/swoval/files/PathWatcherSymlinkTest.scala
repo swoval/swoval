@@ -11,8 +11,9 @@ import utest._
 import TestHelpers._
 
 trait PathWatcherSymlinkTest extends TestSuite {
-  def defaultWatcher(callback: PathWatchers.Event => _)(
-      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event]
+  def defaultWatcher(callback: PathWatchers.Event => _)(implicit
+      testLogger: TestLogger
+  ): PathWatcher[PathWatchers.Event]
   val testsImpl = Tests {
     'follow - {
       'file - {
@@ -83,8 +84,9 @@ trait PathWatcherSymlinkTest extends TestSuite {
 }
 
 object PathWatcherSymlinkTest extends PathWatcherSymlinkTest {
-  override def defaultWatcher(callback: Predef.Function[PathWatchers.Event, _])(
-      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
+  override def defaultWatcher(
+      callback: Predef.Function[PathWatchers.Event, _]
+  )(implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
     val res = PathWatchers.get(true, new DirectoryRegistryImpl(), testLogger)
     res.addObserver(callback)
     res
@@ -92,8 +94,9 @@ object PathWatcherSymlinkTest extends PathWatcherSymlinkTest {
   override val tests = testsImpl
 }
 object NioPathWatcherSymlinkTest extends PathWatcherSymlinkTest {
-  override def defaultWatcher(callback: Predef.Function[PathWatchers.Event, _])(
-      implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
+  override def defaultWatcher(
+      callback: Predef.Function[PathWatchers.Event, _]
+  )(implicit testLogger: TestLogger): PathWatcher[PathWatchers.Event] = {
     val res = PlatformWatcher.make(true, new DirectoryRegistryImpl(), testLogger)
     res.addObserver(callback)
     res

@@ -24,7 +24,8 @@ package object platform {
     }
     override def reportFailure(cause: Throwable): Unit = {
       Console.err.println(
-        s"Caught error running runnable $cause\n${cause.getStackTrace mkString "\n"}")
+        s"Caught error running runnable $cause\n${cause.getStackTrace mkString "\n"}"
+      )
     }
   }
   def createTempFile(dir: String, prefix: String): (String, Thread) = {
@@ -49,7 +50,8 @@ package object platform {
           try {
             val realPath = Fs.realpathSync(p)
             if (Fs.statSync(realPath).isDirectory) delete(p)
-          } catch { case e: Exception => } finally {
+          } catch { case e: Exception => }
+          finally {
             util.Try(Fs.unlinkSync(p))
           }
         }

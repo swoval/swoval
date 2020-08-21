@@ -48,7 +48,7 @@ object ApplePathWatcher {
     new DefaultOnStreamRemoved()
 
   /**
- A no-op callback to invoke when appleFileEventStreams are removed.
+   * A no-op callback to invoke when appleFileEventStreams are removed.
    */
   class DefaultOnStreamRemoved() extends Consumer[String] {
 
@@ -61,13 +61,14 @@ object ApplePathWatcher {
 /**
  * Implements the PathWatcher for Mac OSX using the [[https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/UsingtheFSEventsFramework/UsingtheFSEventsFramework.html Apple File System Events Api]].
  */
-class ApplePathWatcher(private val latency: java.lang.Long,
-                       private val timeUnit: TimeUnit,
-                       private val flags: Flags.Create,
-                       onStreamRemoved: Consumer[String],
-                       managedDirectoryRegistry: DirectoryRegistry,
-                       private val logger: Logger)
-    extends PathWatcher[PathWatchers.Event] {
+class ApplePathWatcher(
+    private val latency: java.lang.Long,
+    private val timeUnit: TimeUnit,
+    private val flags: Flags.Create,
+    onStreamRemoved: Consumer[String],
+    managedDirectoryRegistry: DirectoryRegistry,
+    private val logger: Logger
+) extends PathWatcher[PathWatchers.Event] {
 
   private val directoryRegistry: DirectoryRegistry =
     if (managedDirectoryRegistry == null) new DirectoryRegistryImpl()
@@ -229,7 +230,7 @@ class ApplePathWatcher(private val latency: java.lang.Long,
   }
 
   /**
- Stops all appleFileEventStreams and closes the FileEventsApi
+   * Stops all appleFileEventStreams and closes the FileEventsApi
    */
   override def close(): Unit = {
     if (closed.compareAndSet(false, true)) {
@@ -241,12 +242,14 @@ class ApplePathWatcher(private val latency: java.lang.Long,
   }
 
   def this(directoryRegistry: DirectoryRegistry, logger: Logger) =
-    this(10,
-         TimeUnit.MILLISECONDS,
-         new Flags.Create().setNoDefer().setFileEvents(),
-         DefaultOnStreamRemoved,
-         directoryRegistry,
-         logger)
+    this(
+      10,
+      TimeUnit.MILLISECONDS,
+      new Flags.Create().setNoDefer().setFileEvents(),
+      DefaultOnStreamRemoved,
+      directoryRegistry,
+      logger
+    )
 
   /**
    * Creates a new ApplePathWatcher which is a wrapper around [[FileEventMonitor]], which in
@@ -262,11 +265,13 @@ class ApplePathWatcher(private val latency: java.lang.Long,
    *     add or remove directory.
    *     initialization
    */
-  def this(latency: java.lang.Long,
-           timeUnit: TimeUnit,
-           flags: Flags.Create,
-           onStreamRemoved: Consumer[String],
-           managedDirectoryRegistry: DirectoryRegistry) =
+  def this(
+      latency: java.lang.Long,
+      timeUnit: TimeUnit,
+      flags: Flags.Create,
+      onStreamRemoved: Consumer[String],
+      managedDirectoryRegistry: DirectoryRegistry
+  ) =
     this(latency, timeUnit, flags, onStreamRemoved, managedDirectoryRegistry, Loggers.getLogger)
 
   private def find(path: Path): Entry[Path, Stream] = {
@@ -285,13 +290,17 @@ class ApplePathWatcher(private val latency: java.lang.Long,
 
 object ApplePathWatchers {
 
-  def get(followLinks: Boolean,
-          directoryRegistry: DirectoryRegistry): PathWatcher[PathWatchers.Event] =
+  def get(
+      followLinks: Boolean,
+      directoryRegistry: DirectoryRegistry
+  ): PathWatcher[PathWatchers.Event] =
     get(followLinks, directoryRegistry, Loggers.getLogger)
 
-  def get(followLinks: Boolean,
-          directoryRegistry: DirectoryRegistry,
-          logger: Logger): PathWatcher[PathWatchers.Event] = {
+  def get(
+      followLinks: Boolean,
+      directoryRegistry: DirectoryRegistry,
+      logger: Logger
+  ): PathWatcher[PathWatchers.Event] = {
     val pathWatcher: ApplePathWatcher =
       new ApplePathWatcher(directoryRegistry, logger)
     if (followLinks)

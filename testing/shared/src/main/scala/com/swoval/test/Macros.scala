@@ -6,12 +6,14 @@ import utest.Tests
 import scala.util.Properties
 
 object Macros {
-  def testOnWithDesc(c: blackbox.Context)(desc: c.Expr[String], platforms: c.Expr[Platform]*)(
-      tests: c.Expr[Any]): c.Expr[Tests] = {
+  def testOnWithDesc(
+      c: blackbox.Context
+  )(desc: c.Expr[String], platforms: c.Expr[Platform]*)(tests: c.Expr[Any]): c.Expr[Tests] = {
     impl(c)(reifiedPlatforms(c)(platforms), desc, tests)
   }
-  def testOn(c: blackbox.Context)(platforms: c.Expr[Platform]*)(
-      tests: c.Expr[Any]): c.Expr[Tests] = {
+  def testOn(
+      c: blackbox.Context
+  )(platforms: c.Expr[Platform]*)(tests: c.Expr[Any]): c.Expr[Tests] = {
     import c.universe._
     c.Expr[Tests](q"""
       com.swoval.test.testOn(this.getClass.getName.replaceAll("\\$$", ""), ..$platforms)($tests)
@@ -29,9 +31,9 @@ object Macros {
       }
     """)
   }
-  private def impl(c: blackbox.Context)(platforms: Seq[Platform],
-                                        context: c.Expr[String],
-                                        tests: c.Expr[Any]): c.Expr[Tests] = {
+  private def impl(
+      c: blackbox.Context
+  )(platforms: Seq[Platform], context: c.Expr[String], tests: c.Expr[Any]): c.Expr[Tests] = {
     import c.universe._
     val thisPlatform = if (Properties.isMac) MacOS else if (Properties.isWin) Windows else Linux
     if (platforms.contains(thisPlatform)) {

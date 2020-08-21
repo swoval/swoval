@@ -5,7 +5,7 @@ package com.swoval.files
 trait WatchedDirectory extends AutoCloseable {
 
   /**
- Cancel the watch on this directory. Handle all non-fatal exceptions.
+   * Cancel the watch on this directory. Handle all non-fatal exceptions.
    */
   override def close(): Unit
 

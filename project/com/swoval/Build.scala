@@ -9,15 +9,20 @@ import java.util.jar.JarFile
 import com.github.sbt.jacoco.JacocoKeys.{ jacocoExcludes, jacocoReportSettings }
 import com.github.sbt.jacoco.report.{ JacocoReportSettings, JacocoThresholds }
 import com.swoval.Dependencies._
-import com.swoval.format.ExtensionFilter
-import com.swoval.format.SourceFormatPlugin.autoImport.{ clangfmt, clangfmtSources, javafmt }
+import com.swoval.format.SourceFormatPlugin.{
+  clangfmt,
+  clangfmtCheck,
+  javafmt,
+  javafmtCheck,
+  scalafmt
+}
 import com.typesafe.sbt.pgp.PgpKeys.publishSigned
 import org.apache.commons.codec.digest.DigestUtils
-import org.scalafmt.sbt.ScalafmtPlugin.autoImport.scalafmt
 import org.scalajs.core.tools.linker.backend.ModuleKind
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ fastOptJS, fullOptJS, scalaJSModuleKind }
 import sbt.Keys._
 import sbt._
+import sbt.nio.Keys.fileInputs
 import sbt.internal.TaskSequential
 import sbtcrossproject.CrossPlugin.autoImport._
 import sbtcrossproject.{ CrossProject, crossProject }
@@ -32,7 +37,8 @@ import scala.io.Source
 import scala.util.{ Properties, Try }
 
 object Build {
-  val scalaCrossVersions @ Seq(scala210, scala211, scala212) = Seq("2.10.7", "2.11.12", "2.12.8")
+  val scalaCrossVersions @ Seq(scala212) = Seq("2.12.8")
+  val scala211 = "2.11.12"
 
   def baseVersion: String = "2.2.0-SNAPSHOT"
 
@@ -203,8 +209,8 @@ object Build {
       publishLocal := {},
       checkFormat := {
         import sys.process._
-        javafmt.toTask(" --check").value
-        clangfmt.toTask(" --check").value
+        (Compile / javafmtCheck).value
+        clangfmtCheck.value
         (scalafmt in Compile).value
         val output = Seq("git", "status").!!
         println(output)
@@ -355,7 +361,7 @@ object Build {
       scalaJSModuleKind := ModuleKind.CommonJSModule,
       webpackBundlingMode := BundlingMode.LibraryOnly(),
       useYarn := false,
-      clangfmtSources += (files.js.base / "npm" / "src", ExtensionFilter("cc", "h", "hh"), true),
+      clangfmt / fileInputs += files.js.base.getCanonicalFile.toGlob / "npm" / "src" / ** / "*.{cc,h,hh}",
       createCrossLinks("FILESJS"),
       cleanAllGlobals,
       nodeNativeLibs,
@@ -505,15 +511,14 @@ object Build {
     )
     .jvmSettings(
       createCrossLinks("FILESJVM"),
-      clangfmtSources +=
-        (files.jvm.base / "src" / "main" / "native", ExtensionFilter("cc", "h", "hh"), true),
+      clangfmt / fileInputs += files.jvm.base.getCanonicalFile.toGlob / "src" / "main" / "native" / "*.{cc,h,hh}",
       javacOptions ++= Seq(
         "-source",
         "1.7",
         "-target",
         "1.7",
         "-h",
-        sourceDirectory.value.toPath.resolve("main/native/include").toString
+        sourceDirectory.value.toPath.resolve("main/native/include/jni").toString
       ) ++
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty) ++
         Seq("-Xlint:unchecked", "-Xlint:deprecation"),
@@ -576,8 +581,8 @@ object Build {
       skip in formatSources := System.getProperty("swoval.format", "true") == "true",
       formatSources := Def.taskDyn {
         if ((skip in formatSources).value) Def.task {
-          javafmt.toTask("").value
-          clangfmt.toTask("").value
+          (Compile / javafmt).value
+          clangfmt.value
           ()
         }
         else Def.task(())
@@ -659,14 +664,6 @@ object Build {
       libraryDependencies += Dependencies.scalagen
     )
 
-  def addParadise = {
-    libraryDependencies ++= {
-      if (scalaVersion.value == scala210)
-        Seq(compilerPlugin(paradise cross CrossVersion.full), quasiquotes cross CrossVersion.binary)
-      else Nil
-    }
-  }
-
   lazy val testing: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("testing"))
     .jsConfigure(_.dependsOn(nio.js))
@@ -678,7 +675,6 @@ object Build {
     .settings(
       commonSettings,
       libraryDependencies += scalaMacros % scalaVersion.value,
-      addParadise,
       utestCrossMain,
       utestFramework
     )

@@ -79,12 +79,13 @@ class FileCachePendingFiles(reentrantLock: ReentrantLock) extends Lockable(reent
 
 }
 
-class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
-                                          private val callbackExecutor: Executor,
-                                          val symlinkWatcher: SymlinkWatcher,
-                                          private val rescanOnDirectoryUpdate: Boolean,
-                                          private val logger: Logger)
-    extends ObservableCache[T]
+class FileCacheDirectoryTree[T <: AnyRef](
+    private val converter: Converter[T],
+    private val callbackExecutor: Executor,
+    val symlinkWatcher: SymlinkWatcher,
+    private val rescanOnDirectoryUpdate: Boolean,
+    private val logger: Logger
+) extends ObservableCache[T]
     with FileTreeDataView[T] {
 
   private val directoryRegistry: DirectoryRegistry =
@@ -115,10 +116,12 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
 
   val reentrantLock: ReentrantLock = new ReentrantLock()
 
-  def this(converter: Converter[T],
-           callbackExecutor: Executor,
-           symlinkWatcher: SymlinkWatcher,
-           rescanOnDirectoryUpdate: Boolean) =
+  def this(
+      converter: Converter[T],
+      callbackExecutor: Executor,
+      symlinkWatcher: SymlinkWatcher,
+      rescanOnDirectoryUpdate: Boolean
+  ) =
     this(converter, callbackExecutor, symlinkWatcher, rescanOnDirectoryUpdate, Loggers.getLogger)
 
   private val directories: FileCacheDirectories[T] = new FileCacheDirectories(reentrantLock)
@@ -176,7 +179,10 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     Collections.sort(
       dirs,
       new Comparator[CachedDirectory[T]]() {
-        override def compare(left: CachedDirectory[T], right: CachedDirectory[T]): Int = // Descending order so that we find the most specific path
+        override def compare(
+            left: CachedDirectory[T],
+            right: CachedDirectory[T]
+        ): Int = // Descending order so that we find the most specific path
           right.getPath.compareTo(left.getPath)
       }
     )
@@ -264,13 +270,15 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
               val previous: CachedDirectory[T] =
                 directories.put(path, cachedDirectory)
               if (previous != null) previous.close()
-              addCallback(callbacks,
-                          symlinks,
-                          cachedDirectory.getEntry,
-                          null,
-                          cachedDirectory.getEntry,
-                          Create,
-                          null)
+              addCallback(
+                callbacks,
+                symlinks,
+                cachedDirectory.getEntry,
+                null,
+                cachedDirectory.getEntry,
+                Create,
+                null
+              )
               val it: Iterator[FileTreeDataViews.Entry[T]] = cachedDirectory
                 .listEntries(cachedDirectory.getMaxDepth, AllPass)
                 .iterator()
@@ -282,7 +290,8 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
               case e: IOException => {
                 System.err.println(
                   "Caught unexpected io exception handling event for " +
-                    path)
+                    path
+                )
                 e.printStackTrace(System.err)
                 pendingFiles.add(path)
               }
@@ -315,9 +324,11 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     }
   }
 
-  private def handleDelete(path: Path,
-                           callbacks: List[Callback],
-                           symlinks: List[TypedPath]): Unit = {
+  private def handleDelete(
+      path: Path,
+      callbacks: List[Callback],
+      symlinks: List[TypedPath]
+  ): Unit = {
     val removeIterators: List[Iterator[FileTreeDataViews.Entry[T]]] =
       new ArrayList[Iterator[FileTreeDataViews.Entry[T]]]()
     val directoryIterator: Iterator[CachedDirectory[T]] =
@@ -371,13 +382,17 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
       logger.debug(this + " was closed")
   }
 
-  def register(path: Path,
-               maxDepth: Int,
-               watcher: PathWatcher[PathWatchers.Event]): CachedDirectory[T] = {
+  def register(
+      path: Path,
+      maxDepth: Int,
+      watcher: PathWatcher[PathWatchers.Event]
+  ): CachedDirectory[T] = {
     val absolutePath: Path =
       if (path.isAbsolute) path else path.toAbsolutePath()
-    if (directoryRegistry.addDirectory(absolutePath, maxDepth) &&
-        directories.lock()) {
+    if (
+      directoryRegistry.addDirectory(absolutePath, maxDepth) &&
+      directories.lock()
+    ) {
       try {
         watcher.register(absolutePath, maxDepth)
         val dirs: List[CachedDirectory[T]] =
@@ -397,7 +412,9 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
             val depth: Int = dir.getPath
               .relativize(absolutePath)
               .getNameCount - 1
-            if (dir.getMaxDepth == java.lang.Integer.MAX_VALUE || dir.getMaxDepth - depth > maxDepth) {
+            if (
+              dir.getMaxDepth == java.lang.Integer.MAX_VALUE || dir.getMaxDepth - depth > maxDepth
+            ) {
               existing = dir
             }
           }
@@ -453,13 +470,15 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
     while (removeIterator.hasNext) directories.remove(removeIterator.next())
   }
 
-  private def addCallback(callbacks: List[Callback],
-                          symlinks: List[TypedPath],
-                          entry: FileTreeDataViews.Entry[T],
-                          oldEntry: FileTreeDataViews.Entry[T],
-                          newEntry: FileTreeDataViews.Entry[T],
-                          kind: Kind,
-                          ioException: IOException): Unit = {
+  private def addCallback(
+      callbacks: List[Callback],
+      symlinks: List[TypedPath],
+      entry: FileTreeDataViews.Entry[T],
+      oldEntry: FileTreeDataViews.Entry[T],
+      newEntry: FileTreeDataViews.Entry[T],
+      kind: Kind,
+      ioException: IOException
+  ): Unit = {
     val typedPath: TypedPath = if (entry == null) null else entry.getTypedPath
     if (typedPath != null && typedPath.isSymbolicLink && followLinks) {
       symlinks.add(typedPath)
@@ -492,9 +511,11 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
   override def addCacheObserver(observer: CacheObserver[T]): Int =
     observers.addCacheObserver(observer)
 
-  override def listEntries(path: Path,
-                           maxDepth: Int,
-                           filter: Filter[_ >: Entry[T]]): List[Entry[T]] =
+  override def listEntries(
+      path: Path,
+      maxDepth: Int,
+      filter: Filter[_ >: Entry[T]]
+  ): List[Entry[T]] =
     if (directories.lock()) {
       try {
         val dir: CachedDirectory[T] = find(path)
@@ -516,8 +537,10 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
       Collections.emptyList()
     }
 
-  private def callbackObserver(callbacks: List[Callback],
-                               symlinks: List[TypedPath]): CacheObserver[T] =
+  private def callbackObserver(
+      callbacks: List[Callback],
+      symlinks: List[TypedPath]
+  ): CacheObserver[T] =
     new CacheObserver[T]() {
       override def onCreate(newEntry: FileTreeDataViews.Entry[T]): Unit = {
         addCallback(callbacks, symlinks, newEntry, null, newEntry, Create, null)
@@ -527,8 +550,10 @@ class FileCacheDirectoryTree[T <: AnyRef](private val converter: Converter[T],
         addCallback(callbacks, symlinks, oldEntry, oldEntry, null, Delete, null)
       }
 
-      override def onUpdate(oldEntry: FileTreeDataViews.Entry[T],
-                            newEntry: FileTreeDataViews.Entry[T]): Unit = {
+      override def onUpdate(
+          oldEntry: FileTreeDataViews.Entry[T],
+          newEntry: FileTreeDataViews.Entry[T]
+      ): Unit = {
         addCallback(callbacks, symlinks, oldEntry, oldEntry, newEntry, Modify, null)
       }
 
