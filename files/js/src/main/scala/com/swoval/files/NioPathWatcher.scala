@@ -121,7 +121,10 @@ class NioPathWatcher(private val directoryRegistry: DirectoryRegistry,
    * @param typedPath The newly created directory to add
    */
   def add(typedPath: TypedPath, events: List[Event]): Unit = {
-    if (directoryRegistry.maxDepthFor(typedPath.getPath) >= 0) {
+    if (
+      directoryRegistry.maxDepthFor(typedPath.getPath) >= 0 ||
+      directoryRegistry.acceptPrefix(typedPath.getPath)
+    ) {
       val dir: CachedDirectory[WatchedDirectory] = getOrAdd(typedPath.getPath)
       if (dir != null) {
         update(dir, typedPath, events, true)

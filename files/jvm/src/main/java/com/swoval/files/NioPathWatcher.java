@@ -138,7 +138,8 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
    * @param typedPath The newly created directory to add
    */
   void add(final TypedPath typedPath, final List<Event> events) {
-    if (directoryRegistry.maxDepthFor(typedPath.getPath()) >= 0) {
+    if (directoryRegistry.maxDepthFor(typedPath.getPath()) >= 0
+        || directoryRegistry.acceptPrefix(typedPath.getPath())) {
       final CachedDirectory<WatchedDirectory> dir = getOrAdd(typedPath.getPath());
       if (dir != null) {
         update(dir, typedPath, events, true);
