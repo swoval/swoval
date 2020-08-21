@@ -1,6 +1,6 @@
 #include <jni.h>
 #include "windows.h"
-#include "com_swoval_files_NativeDirectoryLister.h"
+#include "jni/com_swoval_files_NativeDirectoryLister.h"
 
 typedef struct Handle {
     WIN32_FIND_DATAW ffd;

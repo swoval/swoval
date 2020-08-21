@@ -6,7 +6,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <thread>
-#include "com_swoval_files_apple_FileEventMonitorImpl.h"
+#include "jni/com_swoval_files_apple_FileEventMonitorImpl.h"
 #include "swoval_apple_file_system.hpp"
 
 #define CALLBACK_SIG "(Ljava/lang/Object;)V"

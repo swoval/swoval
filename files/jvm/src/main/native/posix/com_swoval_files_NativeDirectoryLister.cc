@@ -3,7 +3,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include "com_swoval_files_NativeDirectoryLister.h"
+#include "jni/com_swoval_files_NativeDirectoryLister.h"
 
 typedef struct Handle {
     DIR *dp = nullptr;

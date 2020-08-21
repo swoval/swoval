@@ -50,7 +50,7 @@ object Build {
       organization := "com.swoval",
       homepage := Some(url("https://github.com/swoval/swoval")),
       scmInfo := Some(
-        ScmInfo(url("https://github.com/swoval/swoval"), "git@github.com:swoval/swoval.git"),
+        ScmInfo(url("https://github.com/swoval/swoval"), "git@github.com:swoval/swoval.git")
       ),
       developers := List(
         Developer(
@@ -517,7 +517,7 @@ object Build {
         "-target",
         "1.7",
         "-h",
-        sourceDirectory.value.toPath.resolve("main/native/include").toString
+        sourceDirectory.value.toPath.resolve("main/native/include/jni").toString
       ) ++
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty) ++
         Seq("-Xlint:unchecked", "-Xlint:deprecation"),
