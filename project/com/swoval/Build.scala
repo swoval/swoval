@@ -37,7 +37,8 @@ import scala.io.Source
 import scala.util.{ Properties, Try }
 
 object Build {
-  val scalaCrossVersions @ Seq(scala210, scala211, scala212) = Seq("2.10.7", "2.11.12", "2.12.8")
+  val scalaCrossVersions @ Seq(scala212) = Seq("2.12.8")
+  val scala211 = "2.11.12"
 
   def baseVersion: String = "2.2.0-SNAPSHOT"
 
@@ -663,14 +664,6 @@ object Build {
       libraryDependencies += Dependencies.scalagen
     )
 
-  def addParadise = {
-    libraryDependencies ++= {
-      if (scalaVersion.value == scala210)
-        Seq(compilerPlugin(paradise cross CrossVersion.full), quasiquotes cross CrossVersion.binary)
-      else Nil
-    }
-  }
-
   lazy val testing: CrossProject = crossProject(JSPlatform, JVMPlatform)
     .in(file("testing"))
     .jsConfigure(_.dependsOn(nio.js))
@@ -682,7 +675,6 @@ object Build {
     .settings(
       commonSettings,
       libraryDependencies += scalaMacros % scalaVersion.value,
-      addParadise,
       utestCrossMain,
       utestFramework
     )
