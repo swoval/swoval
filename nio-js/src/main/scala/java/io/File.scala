@@ -19,10 +19,11 @@ class File(pathname: String) {
   def getCanonicalPath(): String = JPath.normalize(JPath.resolve(pathname))
   def getCanonicalFile(): File = new File(getCanonicalPath)
   def getName(): String = JPath.basename(pathname)
-  def getParent(): String = JPath.dirname(pathname) match {
-    case "" if pathname.nonEmpty => null
-    case p                       => p
-  }
+  def getParent(): String =
+    JPath.dirname(pathname) match {
+      case "" if pathname.nonEmpty => null
+      case p                       => p
+    }
   def getParentFile(): File = new File(getParent)
   def getPath(): String = pathname
   def isAbsolute(): Boolean = JPath.isAbsolute(pathname)
@@ -114,6 +115,12 @@ class File(pathname: String) {
   }
   def toURI(): URI = toURL.toURI()
   def compareTo(pathname: File): Int = this.pathname.compareTo(pathname.toString)
+  override def equals(o: Any) =
+    o match {
+      case that: File => this.absolutePath == that.getAbsolutePath()
+      case _          => false
+    }
+  override def hashCode(): Int = this.absolutePath.hashCode
   override def toString(): String = pathname
 }
 

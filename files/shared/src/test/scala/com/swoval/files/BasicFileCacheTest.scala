@@ -3,7 +3,7 @@ package swoval
 package files
 
 import java.io.IOException
-import java.nio.file.{ Path, Paths }
+import java.nio.file.{ Files, Path, Paths }
 
 import com.swoval.files.FileCacheTest.FileCacheOps
 import com.swoval.files.FileTreeDataViews.Entry
@@ -332,6 +332,27 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
             latch.waitFor(DEFAULT_TIMEOUT) {
               c.ls(dir) === Set(subdir)
               c.ls(subdir) === Set(file)
+            }
+          }
+        }
+      }
+      'missing - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
+        withTempDirectory(dir) { subdir =>
+          val latch = new CountDownLatch(1)
+          val subdir2 = subdir.resolve("sub")
+          val subdir3 = subdir2.resolve("sub")
+          val subdir4 = subdir3.resolve("sub")
+          val file = subdir4.resolve("file")
+          usingAsync(simpleCache((e: Entry[Path]) => if (e.path == file) latch.countDown())) { c =>
+            c.reg(subdir4, true)
+            c.ls(subdir4) === Set.empty[Path]
+            Files.createDirectories(subdir4)
+            file.createFile()
+            latch.waitFor(DEFAULT_TIMEOUT) {
+              c.ls(subdir3) === Set.empty[Path]
+              subdir3.toFile.listFiles.toSet === Set(subdir4.toFile)
+              c.ls(subdir4) === Set(file)
             }
           }
         }

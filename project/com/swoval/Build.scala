@@ -45,12 +45,16 @@ object Build {
       organization := "com.swoval",
       homepage := Some(url("https://github.com/swoval/swoval")),
       scmInfo := Some(
-        ScmInfo(url("https://github.com/swoval/swoval"), "git@github.com:swoval/swoval.git")),
+        ScmInfo(url("https://github.com/swoval/swoval"), "git@github.com:swoval/swoval.git")
+      ),
       developers := List(
-        Developer("username",
-                  "Ethan Atkins",
-                  "ethan.atkins@gmail.com",
-                  url("https://github.com/eatkins"))),
+        Developer(
+          "username",
+          "Ethan Atkins",
+          "ethan.atkins@gmail.com",
+          url("https://github.com/eatkins")
+        )
+      ),
       licenses += ("MIT", url("https://opensource.org/licenses/MIT")),
       scalacOptions ++= Seq("-feature"),
       publishMavenStyle in publishLocal := false,
@@ -113,39 +117,39 @@ object Build {
   lazy val buildNative = taskKey[Unit]("Build the native libraries")
   lazy val formatSources = taskKey[Unit]("Format source code")
 
-  def projects: Seq[ProjectReference] = Seq[ProjectReference](
-    files.js,
-    files.jvm,
-    nio.js,
-    plugin,
-    testing.js,
-    testing.jvm
-  )
+  def projects: Seq[ProjectReference] =
+    Seq[ProjectReference](
+      files.js,
+      files.jvm,
+      nio.js,
+      testing.js,
+      testing.jvm
+    )
 
-  def releaseTask(key: TaskKey[Unit]) = Def.taskDyn {
-    val valid = checkFormat.toTask(" silent").value
-    if (valid) {
-      Def.taskDyn {
-        (key in testing.jvm).value
-        (scalaVersion in crossVersion).value match {
-          case `scala210` => Def.task((key in plugin).value)
-          case v =>
-            Def.taskDyn {
-              (key in nio.js).value
-              (key in files.js).value
-              (key in testing.js).value
-              if (v == scala212)
-                Def.task {
-                  (key in files.jvm).value
-                  (key in plugin).value
-                } else Def.task(())
-            }
+  def releaseTask(key: TaskKey[Unit]) =
+    Def.taskDyn {
+      val valid = checkFormat.toTask(" silent").value
+      if (valid) {
+        Def.taskDyn {
+          (key in testing.jvm).value
+          (scalaVersion in crossVersion).value match {
+            case v =>
+              Def.taskDyn {
+                (key in nio.js).value
+                (key in files.js).value
+                (key in testing.js).value
+                if (v == scala212)
+                  Def.task {
+                    (key in files.jvm).value
+                  }
+                else Def.task(())
+              }
+          }
         }
+      } else {
+        throw new IllegalStateException("There are local diffs.")
       }
-    } else {
-      throw new IllegalStateException("There are local diffs.")
     }
-  }
 
   private def releaseNpmTask(otp: Option[String]) =
     Def.task {
@@ -229,10 +233,11 @@ object Build {
     dir
   }
 
-  def nodeNativeLibs: SettingsDefinition = settings(
-    (npmUpdate in Compile) := addLib((npmUpdate in Compile).value),
-    (npmUpdate in Test) := addLib((npmUpdate in Test).value)
-  )
+  def nodeNativeLibs: SettingsDefinition =
+    settings(
+      (npmUpdate in Compile) := addLib((npmUpdate in Compile).value),
+      (npmUpdate in Test) := addLib((npmUpdate in Test).value)
+    )
 
   def cleanGlobals(file: Attributed[File]) = {
     val content = new String(Files.readAllBytes(file.data.toPath))
@@ -241,12 +246,13 @@ object Build {
     file
   }
 
-  def cleanAllGlobals: SettingsDefinition = settings(
-    (fastOptJS in Compile) := cleanGlobals((fastOptJS in Compile).value),
-    (fastOptJS in Test) := cleanGlobals((fastOptJS in Test).value),
-    (fullOptJS in Compile) := cleanGlobals((fullOptJS in Compile).value),
-    (fullOptJS in Test) := cleanGlobals((fullOptJS in Test).value)
-  )
+  def cleanAllGlobals: SettingsDefinition =
+    settings(
+      (fastOptJS in Compile) := cleanGlobals((fastOptJS in Compile).value),
+      (fastOptJS in Test) := cleanGlobals((fastOptJS in Test).value),
+      (fullOptJS in Compile) := cleanGlobals((fullOptJS in Compile).value),
+      (fullOptJS in Test) := cleanGlobals((fullOptJS in Test).value)
+    )
 
   def createCrossLinks(projectName: String): SettingsDefinition = {
     def createLinks(conf: Configuration): Def.Setting[Task[Seq[File]]] =
@@ -290,8 +296,10 @@ object Build {
             val content = new String(Files.readAllBytes(root.resolve(".gitignore")))
             val name = s"$projectName ${conf.name.toUpperCase}"
             val newGitignore = if (content.contains(name)) {
-              content.replaceAll(s"(?s)(#BEGIN $name SYMLINKS)(.*)(#END $name SYMLINKS)",
-                                 s"$$1\n${links.sorted.mkString("\n")}\n$$3")
+              content.replaceAll(
+                s"(?s)(#BEGIN $name SYMLINKS)(.*)(#END $name SYMLINKS)",
+                s"$$1\n${links.sorted.mkString("\n")}\n$$3"
+              )
             } else {
               s"$content${links.mkString(s"\n#BEGIN $name SYMLINKS\n", "\n", s"\n#END $name SYMLINKS\n")}"
             }
@@ -367,10 +375,11 @@ object Build {
           if (Files.exists(path)) Files.newInputStream(path)
           else new ByteArrayInputStream(Array.empty[Byte])
 
-        def append(l: InputStream, r: InputStream*): InputStream = r match {
-          case Seq(h)            => new SequenceInputStream(l, h)
-          case Seq(h, rest @ _*) => append(new SequenceInputStream(l, h), rest: _*)
-        }
+        def append(l: InputStream, r: InputStream*): InputStream =
+          r match {
+            case Seq(h)            => new SequenceInputStream(l, h)
+            case Seq(h, rest @ _*) => append(new SequenceInputStream(l, h), rest: _*)
+          }
 
         def digest: String = {
           val inputStream = append(
@@ -425,18 +434,19 @@ object Build {
           Def.taskDyn {
             val base = baseDirectory.value.toPath
 
-            def convertSources(pkg: String, sources: String*) = Def.taskDyn {
-              val javaSourceDir: JPath =
-                base.relativize((javaSource in Compile).value.toPath.resolve(pkg))
-              val javaDir: JPath = base.resolveSibling("jvm").resolve(javaSourceDir)
-              val javaSources = sources.map(f => javaDir.resolve(s"$f.java").toString)
-              val target = (scalaSource in Compile).value.toPath.resolve(pkg)
-              Def.task {
-                (run in scalagen in Compile)
-                  .toTask((javaSources :+ target).mkString(" ", " ", ""))
-                  .value
+            def convertSources(pkg: String, sources: String*) =
+              Def.taskDyn {
+                val javaSourceDir: JPath =
+                  base.relativize((javaSource in Compile).value.toPath.resolve(pkg))
+                val javaDir: JPath = base.resolveSibling("jvm").resolve(javaSourceDir)
+                val javaSources = sources.map(f => javaDir.resolve(s"$f.java").toString)
+                val target = (scalaSource in Compile).value.toPath.resolve(pkg)
+                Def.task {
+                  (run in scalagen in Compile)
+                    .toTask((javaSources :+ target).mkString(" ", " ", ""))
+                    .value
+                }
               }
-            }
 
             Def.task {
               convertSources(
@@ -477,7 +487,13 @@ object Build {
                 "WatchedDirectory"
               ).value
               convertSources("com/swoval/files/apple", "Event", "FileEvent", "Flags").value
-              convertSources("com/swoval/functional", "Consumer", "Either", "Filter", "Filters").value
+              convertSources(
+                "com/swoval/functional",
+                "Consumer",
+                "Either",
+                "Filter",
+                "Filters"
+              ).value
               convertSources("com/swoval/logging", "Logger", "Loggers").value
             }
           },
@@ -491,22 +507,27 @@ object Build {
       createCrossLinks("FILESJVM"),
       clangfmtSources +=
         (files.jvm.base / "src" / "main" / "native", ExtensionFilter("cc", "h", "hh"), true),
-      javacOptions ++= Seq("-source",
-                           "1.7",
-                           "-target",
-                           "1.7",
-                           "-h",
-                           sourceDirectory.value.toPath.resolve("main/native/include").toString) ++
+      javacOptions ++= Seq(
+        "-source",
+        "1.7",
+        "-target",
+        "1.7",
+        "-h",
+        sourceDirectory.value.toPath.resolve("main/native/include").toString
+      ) ++
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty) ++
         Seq("-Xlint:unchecked", "-Xlint:deprecation"),
       jacocoReportSettings in Test := JacocoReportSettings()
         .withThresholds(
-          JacocoThresholds(instruction = 82,
-                           branch = 73,
-                           line = 84,
-                           clazz = 100,
-                           complexity = 68,
-                           method = 84)),
+          JacocoThresholds(
+            instruction = 82,
+            branch = 73,
+            line = 84,
+            clazz = 100,
+            complexity = 68,
+            method = 84
+          )
+        ),
       jacocoExcludes in Test := Seq(
         "com.swoval.runtime.*",
         "com.swoval.files.CachedDirectories*",
@@ -523,7 +544,7 @@ object Build {
         "com.swoval.files.apple.Event*",
         "com.swoval.files.apple.Flag*",
         "com.swoval.files.apple.Native*",
-        "com.swoval.logging.*",
+        "com.swoval.logging.*"
       ) ++ (if (!Properties.isMac) Seq("*apple*", "*Apple*", "*MacOS*")
             else Nil),
       javacOptions in (Compile, doc) :=
@@ -558,7 +579,8 @@ object Build {
           javafmt.toTask("").value
           clangfmt.toTask("").value
           ()
-        } else Def.task(())
+        }
+        else Def.task(())
       }.value,
       Compile / compile := (Compile / compile).dependsOn(formatSources).value,
       fork in Test := System.getProperty("swoval.fork.tests", "false") == "true",
@@ -566,8 +588,11 @@ object Build {
         val prev = (forkOptions in Test).value
         prev.withRunJVMOptions(
           prev.runJVMOptions ++ Option(System.getProperty("swoval.test.debug")).map(v =>
-            s"-Dswoval.test.debug=$v") ++ Option(System.getProperty("swoval.test.debug.logger")).map(v =>
-            s"-Dswoval.test.debug.logger=$v"))
+            s"-Dswoval.test.debug=$v"
+          ) ++ Option(System.getProperty("swoval.test.debug.logger")).map(v =>
+            s"-Dswoval.test.debug.logger=$v"
+          )
+        )
       },
       travisQuickListReflectionTest := {
         quickListReflectionTest
@@ -594,54 +619,34 @@ object Build {
           "com.swoval.files.AllTests",
           count.toString,
           System.getProperty("swoval.alltest.timeout", "20"),
-          System.getProperty("swoval.test.debug", "false"),
+          System.getProperty("swoval.test.debug", "false")
         )
         val process = pb.inheritIO().start()
         process.waitFor()
         if (process.exitValue != 0) throw new IllegalStateException("AllTests failed")
       },
       quickListReflectionTest := {
-        ("" +: Def.spaceDelimited("<arg>").parsed) foreach {
-          arg =>
-            val cp =
-              (fullClasspath in Test).value.map(_.data).filterNot(_.toString.contains("jacoco"))
-            val prefix = Seq("java", "-classpath", cp.mkString(File.pathSeparator))
-            val args = prefix ++ (if (arg.nonEmpty) Seq(s"-Dswoval.directory.lister=$arg") else Nil) ++
-              Seq("com.swoval.files.QuickListReflectionTest",
-                  if (arg.isEmpty) "com.swoval.files.NativeDirectoryLister" else arg)
-            val proc = new ProcessBuilder(args: _*).start()
-            proc.waitFor(5, TimeUnit.SECONDS)
-            val in = Source.fromInputStream(proc.getInputStream).mkString
-            if (in.nonEmpty) System.err.println(in)
-            val err = Source.fromInputStream(proc.getErrorStream).mkString
-            if (err.nonEmpty) System.err.println(err)
-            assert(proc.exitValue() == 0)
+        ("" +: Def.spaceDelimited("<arg>").parsed) foreach { arg =>
+          val cp =
+            (fullClasspath in Test).value.map(_.data).filterNot(_.toString.contains("jacoco"))
+          val prefix = Seq("java", "-classpath", cp.mkString(File.pathSeparator))
+          val args = prefix ++ (if (arg.nonEmpty) Seq(s"-Dswoval.directory.lister=$arg")
+                                else Nil) ++
+            Seq(
+              "com.swoval.files.QuickListReflectionTest",
+              if (arg.isEmpty) "com.swoval.files.NativeDirectoryLister" else arg
+            )
+          val proc = new ProcessBuilder(args: _*).start()
+          proc.waitFor(5, TimeUnit.SECONDS)
+          val in = Source.fromInputStream(proc.getInputStream).mkString
+          if (in.nonEmpty) System.err.println(in)
+          val err = Source.fromInputStream(proc.getErrorStream).mkString
+          if (err.nonEmpty) System.err.println(err)
+          assert(proc.exitValue() == 0)
         }
       }
     )
     .dependsOn(testing % "test->compile")
-
-  lazy val plugin: Project = project
-    .in(file("plugin"))
-    .settings(
-      commonSettings,
-      sbtVersion in pluginCrossBuild := {
-        if ((scalaVersion in crossVersion).value == scala210) "0.13.17" else "1.1.1"
-      },
-      crossSbtVersions := Seq("1.1.1", "0.13.17"),
-      crossScalaVersions := Seq(scala210, scala212),
-      name := "sbt-close-watch",
-      description := "CloseWatch reduces the latency between file system events and sbt task " +
-        "and command processing, especially on OSX.",
-      sbtPlugin := true,
-      libraryDependencies ++= Seq(
-        "com.lihaoyi" %% "utest" % utestVersion % "test"
-      ) ++ (if ((scalaVersion in crossVersion).value == scala210) None else Some(sbtIO)),
-      publishMavenStyle in publishLocal := false,
-      watchSources ++= (watchSources in files.jvm).value,
-      utestFramework
-    )
-    .dependsOn(files.jvm % "compile->compile", testing.jvm % "test->compile")
 
   lazy val scalagen: Project = project
     .in(file("scalagen"))
