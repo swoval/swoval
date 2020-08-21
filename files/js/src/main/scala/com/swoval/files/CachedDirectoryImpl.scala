@@ -62,16 +62,18 @@ object CachedDirectoryImpl {
  *
  * @tparam T the cache value type.
  */
-class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
-                                       private val converter: Converter[T],
-                                       private val depth: Int,
-                                       filter: Filter[_ >: TypedPath],
-                                       private val followLinks: Boolean,
-                                       private val fileTreeView: FileTreeView)
-    extends CachedDirectory[T] {
+class CachedDirectoryImpl[T <: AnyRef](
+    typedPath: TypedPath,
+    private val converter: Converter[T],
+    private val depth: Int,
+    filter: Filter[_ >: TypedPath],
+    private val followLinks: Boolean,
+    private val fileTreeView: FileTreeView
+) extends CachedDirectory[T] {
 
   private val _cacheEntry: AtomicReference[Entry[T]] = new AtomicReference(
-    Entries.get(typedPath, converter, typedPath))
+    Entries.get(typedPath, converter, typedPath)
+  )
 
   private val pathFilter: Filter[_ >: TypedPath] = filter
 
@@ -80,11 +82,13 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
 
   private val files: Map[Path, Entry[T]] = new HashMap()
 
-  def this(typedPath: TypedPath,
-           converter: Converter[T],
-           depth: Int,
-           filter: Filter[_ >: TypedPath],
-           followLinks: Boolean) =
+  def this(
+      typedPath: TypedPath,
+      converter: Converter[T],
+      depth: Int,
+      filter: Filter[_ >: TypedPath],
+      followLinks: Boolean
+  ) =
     this(typedPath, converter, depth, filter, followLinks, FileTreeViews.getDefault(followLinks))
 
   def getMaxDepth(): Int = depth
@@ -128,9 +132,11 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
       Collections.emptyList()
     }
 
-  override def listEntries(path: Path,
-                           maxDepth: Int,
-                           filter: Filter[_ >: Entry[T]]): List[Entry[T]] =
+  override def listEntries(
+      path: Path,
+      maxDepth: Int,
+      filter: Filter[_ >: Entry[T]]
+  ): List[Entry[T]] =
     if (this.subdirectories.lock()) {
       try {
         val findResult: Either[Entry[T], CachedDirectoryImpl[T]] = find(path)
@@ -138,9 +144,14 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
           if (findResult.isRight) {
             val result: List[Entry[T]] = new ArrayList[Entry[T]]()
             findResult.get
-              .listImpl[Entry[T]](maxDepth, filter, result, new ListTransformer[T, Entry[T]]() {
-                override def apply(entry: Entry[T]): Entry[T] = entry
-              })
+              .listImpl[Entry[T]](
+                maxDepth,
+                filter,
+                result,
+                new ListTransformer[T, Entry[T]]() {
+                  override def apply(entry: Entry[T]): Entry[T] = entry
+                }
+              )
             result
           } else {
             val entry: Entry[T] = leftProjection(findResult).getValue
@@ -194,10 +205,12 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
   override def update(typedPath: TypedPath, rescanDirectoriesOnUpdate: Boolean): Updates[T] =
     if (pathFilter.accept(typedPath)) {
       if (typedPath.exists()) {
-        updateImpl(if (typedPath.getPath == this.getPath) new ArrayList[Path]()
-                   else parts(this.getPath.relativize(typedPath.getPath)),
-                   typedPath,
-                   rescanDirectoriesOnUpdate)
+        updateImpl(
+          if (typedPath.getPath == this.getPath) new ArrayList[Path]()
+          else parts(this.getPath.relativize(typedPath.getPath)),
+          typedPath,
+          rescanDirectoriesOnUpdate
+        )
       } else {
         val it: Iterator[Entry[T]] = remove(typedPath.getPath).iterator()
         val result: Updates[T] = new Updates[T]()
@@ -231,15 +244,19 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
     else if (depth > 0) depth - 1
     else 0
 
-  private def addDirectory(currentDir: CachedDirectoryImpl[T],
-                           typedPath: TypedPath,
-                           updates: Updates[T]): Unit = {
+  private def addDirectory(
+      currentDir: CachedDirectoryImpl[T],
+      typedPath: TypedPath,
+      updates: Updates[T]
+  ): Unit = {
     val path: Path = typedPath.getPath
-    val dir: CachedDirectoryImpl[T] = new CachedDirectoryImpl[T](typedPath,
-                                                                 converter,
-                                                                 currentDir.subdirectoryDepth(),
-                                                                 pathFilter,
-                                                                 followLinks)
+    val dir: CachedDirectoryImpl[T] = new CachedDirectoryImpl[T](
+      typedPath,
+      converter,
+      currentDir.subdirectoryDepth(),
+      pathFilter,
+      followLinks
+    )
     var exists: Boolean = true
     try {
       val tp: TypedPath = dir.getEntry.getTypedPath
@@ -286,16 +303,20 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
   private def isLoop(path: Path, realPath: Path): Boolean =
     path.startsWith(realPath) && path != realPath
 
-  private def updateDirectory(dir: CachedDirectoryImpl[T],
-                              result: Updates[T],
-                              entry: Entry[T]): Unit = {
+  private def updateDirectory(
+      dir: CachedDirectoryImpl[T],
+      result: Updates[T],
+      entry: Entry[T]
+  ): Unit = {
     result.onUpdate(dir.getEntry, entry)
     dir._cacheEntry.set(entry)
   }
 
-  private def updateImpl(parts: List[Path],
-                         typedPath: TypedPath,
-                         rescanOnDirectoryUpdate: Boolean): Updates[T] = {
+  private def updateImpl(
+      parts: List[Path],
+      typedPath: TypedPath,
+      rescanOnDirectoryUpdate: Boolean
+  ): Updates[T] = {
     val result: Updates[T] = new Updates[T]()
     if (this.subdirectories.lock()) {
       try if (!parts.isEmpty) {
@@ -307,10 +328,14 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
           val resolved: Path = currentDir.getPath.resolve(p)
           if (!it.hasNext) {
 // We will always return from this block
-            val isDirectory
-              : Boolean = typedPath.isDirectory && (followLinks || !typedPath.isSymbolicLink)
-            if (!isDirectory || currentDir.depth <= 0 || isLoop(resolved,
-                                                                TypedPaths.expanded(typedPath))) {
+            val isDirectory: Boolean =
+              typedPath.isDirectory && (followLinks || !typedPath.isSymbolicLink)
+            if (
+              !isDirectory || currentDir.depth <= 0 || isLoop(
+                resolved,
+                TypedPaths.expanded(typedPath)
+              )
+            ) {
               val previousCachedDirectoryImpl: CachedDirectoryImpl[T] =
                 if (isDirectory) currentDir.subdirectories.get(p) else null
               val fileEntry: Entry[T] = currentDir.files.remove(p)
@@ -319,20 +344,25 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
                 else if (previousCachedDirectoryImpl != null)
                   previousCachedDirectoryImpl.getEntry
                 else null
-              val newEntry: Entry[T] = Entries.get(TypedPaths.getDelegate(resolved, typedPath),
-                                                   converter,
-                                                   TypedPaths.getDelegate(resolved, typedPath))
+              val newEntry: Entry[T] = Entries.get(
+                TypedPaths.getDelegate(resolved, typedPath),
+                converter,
+                TypedPaths.getDelegate(resolved, typedPath)
+              )
               if (isDirectory) {
                 val previous: CachedDirectoryImpl[T] =
                   currentDir.subdirectories.get(p)
                 if (previous == null || rescanOnDirectoryUpdate) {
                   currentDir.subdirectories.put(
                     p,
-                    new CachedDirectoryImpl(TypedPaths.getDelegate(resolved, typedPath),
-                                            converter,
-                                            -1,
-                                            pathFilter,
-                                            followLinks))
+                    new CachedDirectoryImpl(
+                      TypedPaths.getDelegate(resolved, typedPath),
+                      converter,
+                      -1,
+                      pathFilter,
+                      followLinks
+                    )
+                  )
                 } else {
                   updateDirectory(previous, result, newEntry)
                 }
@@ -418,10 +448,12 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
       null
     }
 
-  private def listImpl[R](maxDepth: Int,
-                          filter: Filter[_ >: R],
-                          result: List[_ >: R],
-                          function: ListTransformer[T, R]): Unit = {
+  private def listImpl[R](
+      maxDepth: Int,
+      filter: Filter[_ >: R],
+      result: List[_ >: R],
+      function: ListTransformer[T, R]
+  ): Unit = {
     if (this.depth < 0 || maxDepth < 0) {
       result.add(function.apply(this.getEntry))
     } else {
@@ -500,8 +532,10 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
       try {
         subdirectories.clear()
         files.clear()
-        if (depth >= 0 &&
-            (!this.getPath.startsWith(realPath) || this.getPath == realPath)) {
+        if (
+          depth >= 0 &&
+          (!this.getPath.startsWith(realPath) || this.getPath == realPath)
+        ) {
           val it: Iterator[TypedPath] =
             fileTreeView.list(this.getPath, 0, pathFilter).iterator()
           while (it.hasNext) {
@@ -512,11 +546,13 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
             if (file.isDirectory) {
               if (depth > 0) {
                 if (!file.isSymbolicLink || !isLoop(path, TypedPaths.expanded(file))) {
-                  val dir: CachedDirectoryImpl[T] = new CachedDirectoryImpl[T](file,
-                                                                               converter,
-                                                                               subdirectoryDepth(),
-                                                                               pathFilter,
-                                                                               followLinks)
+                  val dir: CachedDirectoryImpl[T] = new CachedDirectoryImpl[T](
+                    file,
+                    converter,
+                    subdirectoryDepth(),
+                    pathFilter,
+                    followLinks
+                  )
                   try {
                     dir.init()
                     subdirectories.put(key, dir)
@@ -530,7 +566,8 @@ class CachedDirectoryImpl[T <: AnyRef](typedPath: TypedPath,
                 } else {
                   subdirectories.put(
                     key,
-                    new CachedDirectoryImpl(file, converter, -1, pathFilter, followLinks))
+                    new CachedDirectoryImpl(file, converter, -1, pathFilter, followLinks)
+                  )
                 }
               } else {
                 files.put(key, Entries.get(TypedPaths.getDelegate(key, file), converter, file))

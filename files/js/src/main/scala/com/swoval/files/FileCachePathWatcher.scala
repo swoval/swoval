@@ -8,9 +8,10 @@ import java.io.IOException
 import java.nio.file.Path
 import java.util.Iterator
 
-class FileCachePathWatcher[T <: AnyRef](private val tree: FileCacheDirectoryTree[T],
-                                        private val pathWatcher: PathWatcher[PathWatchers.Event])
-    extends AutoCloseable {
+class FileCachePathWatcher[T <: AnyRef](
+    private val tree: FileCacheDirectoryTree[T],
+    private val pathWatcher: PathWatcher[PathWatchers.Event]
+) extends AutoCloseable {
 
   private val symlinkWatcher: SymlinkWatcher = tree.symlinkWatcher
 
@@ -30,9 +31,11 @@ class FileCachePathWatcher[T <: AnyRef](private val tree: FileCacheDirectoryTree
         if (entry.getTypedPath.isSymbolicLink) {
           val depth: Int =
             absolutePath.relativize(entry.getTypedPath.getPath).getNameCount
-          symlinkWatcher.addSymlink(entry.getTypedPath.getPath,
-                                    if (maxDepth == java.lang.Integer.MAX_VALUE) maxDepth
-                                    else maxDepth - depth)
+          symlinkWatcher.addSymlink(
+            entry.getTypedPath.getPath,
+            if (maxDepth == java.lang.Integer.MAX_VALUE) maxDepth
+            else maxDepth - depth
+          )
         }
       }
     }

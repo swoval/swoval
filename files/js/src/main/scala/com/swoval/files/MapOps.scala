@@ -13,9 +13,11 @@ import java.util.Map
 
 object MapOps {
 
-  def diffDirectoryEntries[T](oldEntries: List[FileTreeDataViews.Entry[T]],
-                              newEntries: List[FileTreeDataViews.Entry[T]],
-                              cacheObserver: CacheObserver[T]): Unit = {
+  def diffDirectoryEntries[T](
+      oldEntries: List[FileTreeDataViews.Entry[T]],
+      newEntries: List[FileTreeDataViews.Entry[T]],
+      cacheObserver: CacheObserver[T]
+  ): Unit = {
     val oldMap: Map[Path, FileTreeDataViews.Entry[T]] =
       new HashMap[Path, FileTreeDataViews.Entry[T]]()
     val oldIterator: Iterator[FileTreeDataViews.Entry[T]] =
@@ -35,9 +37,11 @@ object MapOps {
     diffDirectoryEntries(oldMap, newMap, cacheObserver)
   }
 
-  def diffDirectoryEntries[K, V](oldMap: Map[K, FileTreeDataViews.Entry[V]],
-                                 newMap: Map[K, FileTreeDataViews.Entry[V]],
-                                 cacheObserver: CacheObserver[V]): Unit = {
+  def diffDirectoryEntries[K, V](
+      oldMap: Map[K, FileTreeDataViews.Entry[V]],
+      newMap: Map[K, FileTreeDataViews.Entry[V]],
+      cacheObserver: CacheObserver[V]
+  ): Unit = {
     val newIterator: Iterator[Entry[K, FileTreeDataViews.Entry[V]]] =
       new ArrayList(newMap.entrySet()).iterator()
     val oldIterator: Iterator[Entry[K, FileTreeDataViews.Entry[V]]] =

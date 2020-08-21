@@ -22,10 +22,12 @@ object FileTreeDataViews {
    * @tparam T the data type for this view
    * @return a directory whose entries just contain the path itself.
    */
-  def cached[T <: AnyRef](path: Path,
-                          converter: Converter[T],
-                          depth: Int,
-                          followLinks: Boolean): DirectoryDataView[T] =
+  def cached[T <: AnyRef](
+      path: Path,
+      converter: Converter[T],
+      depth: Int,
+      followLinks: Boolean
+  ): DirectoryDataView[T] =
     new CachedDirectoryImpl(TypedPaths.get(path), converter, depth, Filters.AllPass, followLinks)
       .init()
 

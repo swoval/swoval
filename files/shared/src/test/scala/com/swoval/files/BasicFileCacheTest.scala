@@ -31,9 +31,12 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           implicit val logger: TestLogger = new CachingLogger
           val events = new ArrayBlockingQueue[Path](2)
           val eventSet = mutable.Set.empty[Path]
-          usingAsync(simpleCache((cacheEntry: Entry[Path]) =>
-            if (cacheEntry.path != dir && eventSet.add(cacheEntry.path))
-              events.add(cacheEntry.path))) { c =>
+          usingAsync(
+            simpleCache((cacheEntry: Entry[Path]) =>
+              if (cacheEntry.path != dir && eventSet.add(cacheEntry.path))
+                events.add(cacheEntry.path)
+            )
+          ) { c =>
             c.register(dir)
             withTempDirectory(dir) { subdir =>
               withTempFile(subdir) { f =>
@@ -80,14 +83,14 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
               implicit val logger: TestLogger = new CachingLogger
               val latch = new CountDownLatch(1)
               usingAsync(
-                simpleCache((e: Entry[Path]) => if (e.path.getParent == dir) latch.countDown())) {
-                c =>
-                  c.reg(dir)
-                  withTempDirectory(dir) { subdir =>
-                    latch.waitFor(DEFAULT_TIMEOUT) {
-                      c.ls(dir) === Seq(subdir)
-                    }
+                simpleCache((e: Entry[Path]) => if (e.path.getParent == dir) latch.countDown())
+              ) { c =>
+                c.reg(dir)
+                withTempDirectory(dir) { subdir =>
+                  latch.waitFor(DEFAULT_TIMEOUT) {
+                    c.ls(dir) === Seq(subdir)
                   }
+                }
               }
             }
           }
@@ -371,14 +374,15 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
 
               override def onDelete(oldEntry: Entry[LastModified]): Unit = {}
 
-              override def onUpdate(oldEntry: Entry[LastModified],
-                                    newEntry: Entry[LastModified]): Unit =
+              override def onUpdate(oldEntry: Entry[LastModified], newEntry: Entry[LastModified])
+                  : Unit =
                 if (oldEntry.value.lastModified != newEntry.value.lastModified)
                   latch.countDown()
 
               override def onError(iOException: IOException): Unit = {}
             }
-          )) { c =>
+          )
+        ) { c =>
           c.reg(file.getParent, recursive = false)
           val cachedFile: Entry[LastModified] =
             c.ls(file.getParent, recursive = false) match {
@@ -530,7 +534,8 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
               if (newEntry.getValue.isRight && newEntry.getValue.get.lastModified == 3000)
                 updateLatch.countDown(),
             (oldEntry: Entry[LastModified]) => if (oldEntry.path == file) deletionLatch.countDown()
-          )) { c =>
+          )
+        ) { c =>
           c.reg(dir)
           file.createFile()
           creationLatch
@@ -593,7 +598,8 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
               if (newEntry.value.lastModified == 3000) latch.countDown()
             },
             ignore
-          )) { c =>
+          )
+        ) { c =>
           c.register(file)
           c.ls(file) === Seq(file)
           c.unregister(file)
@@ -602,7 +608,8 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           latch
             .waitFor(100.millis) {
               throw new IllegalStateException(
-                s"Cache triggered for file that shouldn't be monitored: $file")
+                s"Cache triggered for file that shouldn't be monitored: $file"
+              )
             }
             .recover {
               case _: TimeoutException => file.lastModified ==> 3000
@@ -615,17 +622,19 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           withTempFile(subdir) { file =>
             val latch = new CountDownLatch(1)
             val secondLatch = new CountDownLatch(1)
-            usingAsync(lastModifiedCache(true)(
-              ignore,
-              ignoreOld { newEntry: Entry[LastModified] =>
-                newEntry.value.lastModified match {
-                  case 3000 => latch.countDown()
-                  case 4000 => secondLatch.countDown()
-                  case _    =>
-                }
-              },
-              ignore
-            )) { c =>
+            usingAsync(
+              lastModifiedCache(true)(
+                ignore,
+                ignoreOld { newEntry: Entry[LastModified] =>
+                  newEntry.value.lastModified match {
+                    case 3000 => latch.countDown()
+                    case 4000 => secondLatch.countDown()
+                    case _    =>
+                  }
+                },
+                ignore
+              )
+            ) { c =>
               c.register(dir)
               c.register(file)
               c.ls(dir) === Set(subdir, file)
@@ -647,7 +656,8 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
                   secondLatch
                     .waitFor(100.millis) {
                       throw new IllegalStateException(
-                        s"Cache triggered for file that shouldn't be monitored: $file")
+                        s"Cache triggered for file that shouldn't be monitored: $file"
+                      )
                     }
                     .recover {
                       case _: TimeoutException => file.lastModified ==> 4000

@@ -39,21 +39,27 @@ object Files {
     }
     path
   }
-  def createSymbolicLink(path: Path,
-                         target: Path,
-                         attrs: Array[FileAttribute[_]] = Array.empty): Path = {
+  def createSymbolicLink(
+      path: Path,
+      target: Path,
+      attrs: Array[FileAttribute[_]] = Array.empty
+  ): Path = {
     val tpe = if (Platform.isWin && Files.isDirectory(target)) "dir" else "file"
     Fs.symlinkSync(target.toString, path.toString, tpe)
     path
   }
-  def createTempDirectory(path: Path,
-                          prefix: String,
-                          attrs: Array[FileAttribute[_]] = Array.empty): Path =
+  def createTempDirectory(
+      path: Path,
+      prefix: String,
+      attrs: Array[FileAttribute[_]] = Array.empty
+  ): Path =
     new JSPath(Fs.realpathSync(Fs.mkdtempSync(path.resolve(prefix).toString)))
-  def createTempFile(dir: Path,
-                     prefix: String,
-                     suffix: String,
-                     attrs: Array[FileAttribute[_]] = Array.empty): Path = {
+  def createTempFile(
+      dir: Path,
+      prefix: String,
+      suffix: String,
+      attrs: Array[FileAttribute[_]] = Array.empty
+  ): Path = {
     val random = new scala.util.Random().alphanumeric.take(10).mkString
     val path = s"$dir${File.separator}$prefix$random${Option(suffix).getOrElse("")}"
     Fs.closeSync(Fs.openSync(path, "w"))
@@ -74,7 +80,8 @@ object Files {
   }
   def isSymbolicLink(path: Path): Boolean = {
     Try(
-      NioWrappers.readAttributes(path, com.swoval.files.LinkOption.NOFOLLOW_LINKS).isSymbolicLink())
+      NioWrappers.readAttributes(path, com.swoval.files.LinkOption.NOFOLLOW_LINKS).isSymbolicLink()
+    )
       .getOrElse(false)
   }
 
@@ -85,21 +92,26 @@ object Files {
   }
   def getLastModifiedTime(path: Path, linkOptions: Array[LinkOption] = Array.empty): FileTime =
     FileTime.fromMillis(path.toFile.lastModified)
-  def readAttributes[T <: BasicFileAttributes](path: Path,
-                                               clazz: Class[T],
-                                               options: LinkOption*): T =
+  def readAttributes[T <: BasicFileAttributes](
+      path: Path,
+      clazz: Class[T],
+      options: LinkOption*
+  ): T =
     readAttributes(path, clazz, options.toArray)
-  def readAttributes[T <: BasicFileAttributes](path: Path,
-                                               clazz: Class[T],
-                                               options: Array[LinkOption]): T = {
+  def readAttributes[T <: BasicFileAttributes](
+      path: Path,
+      clazz: Class[T],
+      options: Array[LinkOption]
+  ): T = {
     NioWrappers.readAttributes[T](
       path,
       clazz,
-      options.toSeq.map(_.asInstanceOf[com.swoval.files.LinkOption]): _*)
+      options.toSeq.map(_.asInstanceOf[com.swoval.files.LinkOption]): _*
+    )
   }
   def readAllBytes(path: Path): Array[Byte] = {
     val buf = Fs.readFileSync(path.toRealPath().toString)
-    buf.values.map(b => (b & 0xFF).toByte).toArray
+    buf.values.map(b => (b & 0xff).toByte).toArray
   }
   def readSymbolicLink(path: Path): Path = {
     Paths.get(Fs.readlinkSync(path.toString()))
@@ -108,13 +120,16 @@ object Files {
     path.toFile.setLastModified(fileTime.toMillis())
     path
   }
-  def walkFileTree(path: Path,
-                   options: java.util.Set[FileVisitOption],
-                   depth: Int,
-                   fileVisitor: FileVisitor[_ >: Path]): Path = {
-    val files = try {
-      Fs.readdirSync(path.toAbsolutePath.toString())
-    } catch { case ex: Exception => Errors.rethrow(path, ex) }
+  def walkFileTree(
+      path: Path,
+      options: java.util.Set[FileVisitOption],
+      depth: Int,
+      fileVisitor: FileVisitor[_ >: Path]
+  ): Path = {
+    val files =
+      try {
+        Fs.readdirSync(path.toAbsolutePath.toString())
+      } catch { case ex: Exception => Errors.rethrow(path, ex) }
     files.foreach { f =>
       val p = path.resolve(f)
       try {

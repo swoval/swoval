@@ -35,10 +35,12 @@ object PathWatchers {
    * @param timeUnit the time unit for which the pollInterval corresponds
    * @return the polling path watcher.
    */
-  def polling(converter: Converter[java.lang.Long],
-              followLinks: Boolean,
-              pollInterval: java.lang.Long,
-              timeUnit: TimeUnit): PathWatcher[PathWatchers.Event] =
+  def polling(
+      converter: Converter[java.lang.Long],
+      followLinks: Boolean,
+      pollInterval: java.lang.Long,
+      timeUnit: TimeUnit
+  ): PathWatcher[PathWatchers.Event] =
     new PollingPathWatcher(converter, followLinks, pollInterval, timeUnit)
 
   /**
@@ -49,9 +51,11 @@ object PathWatchers {
    * @param timeUnit the time unit for which the pollInterval corresponds
    * @return the polling path watcher.
    */
-  def polling(followLinks: Boolean,
-              pollInterval: java.lang.Long,
-              timeUnit: TimeUnit): PathWatcher[PathWatchers.Event] =
+  def polling(
+      followLinks: Boolean,
+      pollInterval: java.lang.Long,
+      timeUnit: TimeUnit
+  ): PathWatcher[PathWatchers.Event] =
     new PollingPathWatcher(followLinks, pollInterval, timeUnit)
 
   /**
@@ -73,10 +77,12 @@ object PathWatchers {
    * @param registry The registry of directories to monitor
    * @return PathWatcher for the runtime platform
    */
-  def get(followLinks: Boolean,
-          service: RegisterableWatchService,
-          registry: DirectoryRegistry,
-          logger: Logger): PathWatcher[Event] =
+  def get(
+      followLinks: Boolean,
+      service: RegisterableWatchService,
+      registry: DirectoryRegistry,
+      logger: Logger
+  ): PathWatcher[Event] =
     PlatformWatcher.make(followLinks, service, registry, logger)
 
   class Overflow(@BeanProperty val path: Path)
@@ -86,27 +92,27 @@ object PathWatchers {
     object Kind {
 
       /**
- A new file was created.
+       * A new file was created.
        */
       val Create: Kind = new Kind("Create")
 
       /**
- The file was deleted.
+       * The file was deleted.
        */
       val Delete: Kind = new Kind("Delete")
 
       /**
- An error occurred processing the event.
+       * An error occurred processing the event.
        */
       val Error: Kind = new Kind("Error")
 
       /**
- An existing file was modified.
+       * An existing file was modified.
        */
       val Modify: Kind = new Kind("Modify")
 
       /**
- The watching service overflowed so it may be necessary to poll.
+       * The watching service overflowed so it may be necessary to poll.
        */
       val Overflow: Kind = new Kind("Overflow")
 
@@ -120,11 +126,12 @@ object PathWatchers {
 
       override def toString(): String = name
 
-      override def equals(other: Any): Boolean = other match {
-        case other: Kind => other.name == this.name
-        case _           => false
+      override def equals(other: Any): Boolean =
+        other match {
+          case other: Kind => other.name == this.name
+          case _           => false
 
-      }
+        }
 
       override def hashCode(): Int = name.hashCode
 
@@ -133,18 +140,19 @@ object PathWatchers {
   }
 
   /**
- Container for [[PathWatcher]] events.
+   * Container for [[PathWatcher]] events.
    */
   class Event(@BeanProperty val typedPath: TypedPath, @BeanProperty val kind: Event.Kind) {
 
-    override def equals(other: Any): Boolean = other match {
-      case other: Event => {
-        val that: Event = other
-        this.typedPath == that.typedPath && this.kind == that.kind
-      }
-      case _ => false
+    override def equals(other: Any): Boolean =
+      other match {
+        case other: Event => {
+          val that: Event = other
+          this.typedPath == that.typedPath && this.kind == that.kind
+        }
+        case _ => false
 
-    }
+      }
 
     override def hashCode(): Int = typedPath.hashCode ^ kind.hashCode
 

@@ -92,12 +92,13 @@ object Either {
 
     override def toString(): String = "Left(" + value + ")"
 
-    override def equals(other: Any): Boolean = other match {
-      case other: com.swoval.functional.Either.Left[_, _] =>
-        this.value == other.getValue
-      case _ => false
+    override def equals(other: Any): Boolean =
+      other match {
+        case other: com.swoval.functional.Either.Left[_, _] =>
+          this.value == other.getValue
+        case _ => false
 
-    }
+      }
 
     override def hashCode(): Int = value.hashCode
 
@@ -117,12 +118,13 @@ object Either {
 
     override def toString(): String = "Right(" + value + ")"
 
-    override def equals(other: Any): Boolean = other match {
-      case other: com.swoval.functional.Either.Right[_, _] =>
-        this.value == other.getValue
-      case _ => false
+    override def equals(other: Any): Boolean =
+      other match {
+        case other: com.swoval.functional.Either.Right[_, _] =>
+          this.value == other.getValue
+        case _ => false
 
-    }
+      }
 
     override def hashCode(): Int = value.hashCode
 

@@ -9,10 +9,12 @@ import scala.scalajs.js.annotation.JSImport
 object Platform {
   private[this] val (_isMac, _isWin, _isLinux, _isFreeBSD) = {
     val platform = os.platform()
-    (platform == "darwin",
+    (
+      platform == "darwin",
       platform == "win32",
       platform == "linux",
-      platform.toLowerCase.startsWith("freebsd"))
+      platform.toLowerCase.startsWith("freebsd")
+    )
   }
   def isFreeBSD(): Boolean = false
   def isJVM(): Boolean = false

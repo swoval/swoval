@@ -30,10 +30,12 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
       converter,
       cacheObserver,
       (r: DirectoryRegistry, _) => {
-        PathWatchers.get(false,
-                         new BoundedWatchService(boundedQueueSize, RegisterableWatchServices.get()),
-                         r,
-                         testLogger)
+        PathWatchers.get(
+          false,
+          new BoundedWatchService(boundedQueueSize, RegisterableWatchServices.get()),
+          r,
+          testLogger
+        )
       }
     )
   private val name = getClass.getSimpleName
@@ -92,7 +94,7 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
           pendingCreations.remove(e.path).foreach { l =>
             l.countDown()
             foundFiles.add(e.path)
-        },
+          },
         (_: Entry[Path], e: Entry[Path]) => {
           if (Try(e.path.lastModified) == Success(3000)) {
             pendingUpdates.remove(e.path).foreach { l =>
@@ -106,14 +108,17 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
           pendingDeletions.remove(e.path).foreach { l =>
             l.countDown()
             deletedFiles.add(e.path)
-        },
+          },
         (_: IOException) => {}
       )
       usingAsync(getBounded[Path](identity, observer)) { c =>
         c.reg(dir)
         val lambdas =
-          new java.util.ArrayList((subdirs.map(d => () => d.createDirectories()) ++ files.map(f =>
-            () => f.createFile(true))).asJava)
+          new java.util.ArrayList(
+            (subdirs.map(d => () => d.createDirectories()) ++ files.map(f =>
+              () => f.createFile(true)
+            )).asJava
+          )
         java.util.Collections.shuffle(lambdas)
         lambdas.asScala.foreach(executor.run(_))
         creationLatch
@@ -142,8 +147,10 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
               }
               .flatMap { _ =>
                 val lambdas =
-                  new java.util.ArrayList((files.map(f => () => f.delete()) ++ subdirs.map(f =>
-                    () => f.deleteRecursive())).asJava)
+                  new java.util.ArrayList(
+                    (files.map(f => () => f.delete()) ++ subdirs
+                      .map(f => () => f.deleteRecursive())).asJava
+                  )
                 java.util.Collections.shuffle(lambdas)
                 lambdas.asScala.foreach(executor.run(_))
                 deletionLatch
@@ -164,7 +171,8 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
                   println(s"$this Creation latch not triggered ($count)")
                 else
                   println(
-                    s"$this Creation latch not triggered, but still being decremented $newCount")
+                    s"$this Creation latch not triggered, but still being decremented $newCount"
+                  )
               }
               if (creationLatch.getCount <= 0 && updateLatch.getCount > 0) {
                 val count = updateLatch.getCount
@@ -176,9 +184,12 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
                   println(s"$this Update latch not triggered ($count)")
                 else
                   println(
-                    s"$this Update latch not triggered, but still being decremented $newCount")
+                    s"$this Update latch not triggered, but still being decremented $newCount"
+                  )
               }
-              if (creationLatch.getCount <= 0 && updateLatch.getCount <= 0 && deletionLatch.getCount > 0) {
+              if (
+                creationLatch.getCount <= 0 && updateLatch.getCount <= 0 && deletionLatch.getCount > 0
+              ) {
                 val count = deletionLatch.getCount
                 10.milliseconds.sleep
                 val newCount = deletionLatch.getCount
@@ -186,7 +197,8 @@ trait FileCacheOverflowTest extends TestSuite with FileCacheTest {
                   println(s"$this Deletion latch not triggered ($count)")
                 else
                   println(
-                    s"$this Deletion latch not triggered, but still being decremented $newCount")
+                    s"$this Deletion latch not triggered, but still being decremented $newCount"
+                  )
                 println((allFiles diff deletedFiles.toSet).toSeq.sorted.take(10) mkString "\n")
               }
               executor.close()
@@ -201,9 +213,10 @@ object FileCacheOverflowTest extends FileCacheOverflowTest with DefaultFileCache
   private implicit class SyncOps[T <: AnyRef](val t: T) extends AnyVal {
     def sync[R](f: T => R): R = t.synchronized(f(t))
   }
-  override def getBounded[T <: AnyRef](converter: FileTreeDataViews.Converter[T],
-                                       cacheObserver: FileTreeDataViews.CacheObserver[T])(
-      implicit logger: TestLogger): FileTreeRepository[T] =
+  override def getBounded[T <: AnyRef](
+      converter: FileTreeDataViews.Converter[T],
+      cacheObserver: FileTreeDataViews.CacheObserver[T]
+  )(implicit logger: TestLogger): FileTreeRepository[T] =
     if (Platform.isMac) FileCacheTest.getCached(false, converter, cacheObserver)
     else super.getBounded(converter, cacheObserver)
   val tests = testsImpl

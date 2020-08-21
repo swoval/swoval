@@ -3,7 +3,7 @@
 package com.swoval.files
 
 /**
- Functional interface for a function that takes one argument.
+ * Functional interface for a function that takes one argument.
  */
 trait Function[T, R] {
 

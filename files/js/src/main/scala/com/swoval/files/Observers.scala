@@ -30,11 +30,12 @@ class Observers[T] extends FileTreeViews.Observer[T] with AutoCloseable {
       cbs = new ArrayList(observers.values)
     }
     val it: Iterator[FileTreeViews.Observer[T]] = cbs.iterator()
-    while (it.hasNext) try it.next().onNext(t)
-    catch {
-      case e: Exception => e.printStackTrace()
+    while (it.hasNext)
+      try it.next().onNext(t)
+      catch {
+        case e: Exception => e.printStackTrace()
 
-    }
+      }
   }
 
   override def onError(throwable: Throwable): Unit = {
@@ -43,11 +44,12 @@ class Observers[T] extends FileTreeViews.Observer[T] with AutoCloseable {
       cbs = new ArrayList(observers.values)
     }
     val it: Iterator[FileTreeViews.Observer[T]] = cbs.iterator()
-    while (it.hasNext) try it.next().onError(throwable)
-    catch {
-      case e: Exception => e.printStackTrace()
+    while (it.hasNext)
+      try it.next().onError(throwable)
+      catch {
+        case e: Exception => e.printStackTrace()
 
-    }
+      }
   }
 
   /**

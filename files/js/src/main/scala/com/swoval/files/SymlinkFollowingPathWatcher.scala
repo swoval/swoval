@@ -14,16 +14,18 @@ import java.io.IOException
 import java.nio.file.Path
 import java.util.Iterator
 
-class SymlinkFollowingPathWatcher(private val pathWatcher: PathWatcher[PathWatchers.Event],
-                                  directoryRegistry: DirectoryRegistry,
-                                  logger: Logger)
-    extends PathWatcher[PathWatchers.Event] {
+class SymlinkFollowingPathWatcher(
+    private val pathWatcher: PathWatcher[PathWatchers.Event],
+    directoryRegistry: DirectoryRegistry,
+    logger: Logger
+) extends PathWatcher[PathWatchers.Event] {
 
   private val symlinkWatcher: SymlinkWatcher = new SymlinkWatcher(
     if (Platform.isMac)
       new ApplePathWatcher(new DirectoryRegistryImpl(), logger)
     else PlatformWatcher.make(false, new DirectoryRegistryImpl(), logger),
-    logger)
+    logger
+  )
 
   private val observers: Observers[PathWatchers.Event] = new Observers()
 

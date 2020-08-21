@@ -14,14 +14,15 @@ object Loggers {
 
   object Level {
 
-    def fromString(string: String): Level = string.toLowerCase() match {
-      case "verbose" => VERBOSE
-      case "debug"   => DEBUG
-      case "info"    => INFO
-      case "warn"    => WARN
-      case _         => ERROR
+    def fromString(string: String): Level =
+      string.toLowerCase() match {
+        case "verbose" => VERBOSE
+        case "debug"   => DEBUG
+        case "info"    => INFO
+        case "warn"    => WARN
+        case _         => ERROR
 
-    }
+      }
 
     val DEBUG: Level = new Level() {
       override def compareTo(that: Level): Int =
@@ -64,11 +65,12 @@ object Loggers {
 
   abstract class Level() extends Comparable[Level]
 
-  private class LoggerImpl(@BeanProperty val level: Level,
-                           private val infoStream: OutputStream,
-                           private val errorStream: OutputStream,
-                           private val errorLevel: Level)
-      extends Logger {
+  private class LoggerImpl(
+      @BeanProperty val level: Level,
+      private val infoStream: OutputStream,
+      private val errorStream: OutputStream,
+      private val errorLevel: Level
+  ) extends Logger {
 
     override def verbose(message: String): Unit = {
       val outputStream: OutputStream =
@@ -134,17 +136,18 @@ object Loggers {
 
   }
 
-  def getLogger(): Logger = lock.synchronized {
-    if (global == null) {
-      val level: Level =
-        Level.fromString(System.getProperty("swoval.log.level", "error"))
-      Loggers.global = DefaultLogger.get(System.getProperty("swoval.logger"))
-      if (Loggers.global == null) {
-        Loggers.global = new LoggerImpl(level, System.out, System.err, Level.ERROR)
+  def getLogger(): Logger =
+    lock.synchronized {
+      if (global == null) {
+        val level: Level =
+          Level.fromString(System.getProperty("swoval.log.level", "error"))
+        Loggers.global = DefaultLogger.get(System.getProperty("swoval.logger"))
+        if (Loggers.global == null) {
+          Loggers.global = new LoggerImpl(level, System.out, System.err, Level.ERROR)
+        }
       }
+      Loggers.global
     }
-    Loggers.global
-  }
 
   def shouldLog(logger: Logger, level: Level): Boolean =
     logger.getLevel.compareTo(level) <= 0

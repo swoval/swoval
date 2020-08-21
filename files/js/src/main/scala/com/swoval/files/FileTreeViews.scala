@@ -49,11 +49,13 @@ object FileTreeViews {
    * @return a directory whose entries just contain the path itself.
    */
   def cached(path: Path, depth: Int, followLinks: Boolean): DirectoryView =
-    new CachedDirectoryImpl(TypedPaths.get(path),
-                            PATH_CONVERTER,
-                            depth,
-                            Filters.AllPass,
-                            followLinks).init()
+    new CachedDirectoryImpl(
+      TypedPaths.get(path),
+      PATH_CONVERTER,
+      depth,
+      Filters.AllPass,
+      followLinks
+    ).init()
 
   /**
    * Returns an instance of [[FileTreeView]] that uses only apis available in java.nio.file.
@@ -176,8 +178,8 @@ object FileTreeViews {
         cacheObserver.onUpdate(entries(0), entries(1))
       }
       val deletionIterator: Iterator[Entry[T]] = deletions.iterator()
-      while (deletionIterator.hasNext) cacheObserver.onDelete(
-        Entries.setExists(deletionIterator.next(), false))
+      while (deletionIterator.hasNext)
+        cacheObserver.onDelete(Entries.setExists(deletionIterator.next(), false))
     }
 
     override def onCreate(newEntry: Entry[T]): Unit = {

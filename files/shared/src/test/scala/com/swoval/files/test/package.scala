@@ -25,8 +25,9 @@ package object test {
           throw e
       }(utest.framework.ExecutionContext.RunNow)
   }
-  def using[C <: AutoCloseable, R: NotFuture](closeable: => C)(f: C => R)(
-      implicit testLogger: TestLogger): Future[R] = {
+  def using[C <: AutoCloseable, R: NotFuture](
+      closeable: => C
+  )(f: C => R)(implicit testLogger: TestLogger): Future[R] = {
     val res = com.swoval.test
       .usingT(closeable)(f)
     res.onComplete {
@@ -35,8 +36,9 @@ package object test {
     }(utest.framework.ExecutionContext.RunNow)
     res
   }
-  def usingAsync[C <: AutoCloseable, R](closeable: => C)(f: C => Future[R])(
-      implicit testLogger: TestLogger): Future[R] = {
+  def usingAsync[C <: AutoCloseable, R](
+      closeable: => C
+  )(f: C => Future[R])(implicit testLogger: TestLogger): Future[R] = {
     val res = com.swoval.test.usingAsyncT(closeable)(f)
     res.onComplete {
       case Success(_)            => if ("true" == System.getProperty("swoval.test.debug")) printLog(testLogger)
@@ -44,19 +46,21 @@ package object test {
     }(utest.framework.ExecutionContext.RunNow)
     res
   }
-  private def printLog(logger: Logger): Unit = logger match {
-    case cl: CachingLogger => System.err.println(cl.getLines mkString "\n")
-    case l_                =>
-  }
+  private def printLog(logger: Logger): Unit =
+    logger match {
+      case cl: CachingLogger => System.err.println(cl.getLines mkString "\n")
+      case l_                =>
+    }
   class CountDownLatch(private[this] var i: Int) {
     private[this] val promise = Promise.apply[Boolean]
     private[this] val lock = new Object
-    def countDown(): Unit = lock.synchronized {
-      i -= 1
-      if (i == 0) {
-        promise.tryComplete(Success(true))
+    def countDown(): Unit =
+      lock.synchronized {
+        i -= 1
+        if (i == 0) {
+          promise.tryComplete(Success(true))
+        }
       }
-    }
     def getCount = i
     def waitFor[R](duration: FiniteDuration)(f: => R): Future[R] = {
       val tp: TimedPromise[Boolean] = platform.newTimedPromise(promise, duration)
@@ -82,15 +86,17 @@ package object test {
           promises.enqueue(tp)
           def dequeue[R](r: => R): R = { promises.dequeueAll(_ == tp); r }
           p.future.transform(r => dequeue(f(r)), e => dequeue(e))(
-            utest.framework.ExecutionContext.RunNow)
+            utest.framework.ExecutionContext.RunNow
+          )
       })
-    def add(t: T): Unit = lock.synchronized {
-      queue.enqueue(t)
-      promises.dequeueFirst(_ => true).foreach { p =>
-        queue.dequeue()
-        p.tryComplete(Success(t))
+    def add(t: T): Unit =
+      lock.synchronized {
+        queue.enqueue(t)
+        promises.dequeueFirst(_ => true).foreach { p =>
+          queue.dequeue()
+          p.tryComplete(Success(t))
+        }
       }
-    }
   }
   def withTempFile[R](dir: Path)(f: Path => Future[R]): Future[Unit] =
     com.swoval.test.TestFiles.withTempFile(dir.toString)(s => f(Paths.get(s)).map(_ => ()))
@@ -104,11 +110,12 @@ package object test {
   def withTempDirectory[R](dir: Path)(f: Path => Future[R]): Future[Unit] =
     com.swoval.test.TestFiles.withTempDirectory(dir.toString)(d => f(Paths.get(d)).map(_ => ()))
 
-  def wrap[R](f: Path => R): Path => Future[Unit] = (path: Path) => {
-    val p = Promise[Unit]()
-    p.tryComplete(util.Try { f(path); () })
-    p.future
-  }
+  def wrap[R](f: Path => R): Path => Future[Unit] =
+    (path: Path) => {
+      val p = Promise[Unit]()
+      p.tryComplete(util.Try { f(path); () })
+      p.future
+    }
   def withTempFileSync[R: NotFuture](dir: Path)(f: Path => R): Future[Unit] =
     withTempFile(dir)(wrap(f))
 

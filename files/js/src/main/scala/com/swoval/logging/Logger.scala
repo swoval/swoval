@@ -3,7 +3,7 @@
 package com.swoval.logging
 
 /**
- A simple logger.
+ * A simple logger.
  */
 trait Logger {
 

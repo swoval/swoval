@@ -89,10 +89,11 @@ object SimpleFileTreeView {
 
 }
 
-class SimpleFileTreeView(private val directoryLister: DirectoryLister,
-                         private val followLinks: Boolean,
-                         private val ignoreExceptions: Boolean)
-    extends FileTreeView {
+class SimpleFileTreeView(
+    private val directoryLister: DirectoryLister,
+    private val followLinks: Boolean,
+    private val ignoreExceptions: Boolean
+) extends FileTreeView {
 
   def this(directoryLister: DirectoryLister, followLinks: Boolean) =
     this(directoryLister, followLinks, false)
@@ -111,10 +112,12 @@ class SimpleFileTreeView(private val directoryLister: DirectoryLister,
 
   override def close(): Unit = {}
 
-  private class Lister(val filter: Filter[_ >: TypedPath],
-                       val result: List[TypedPath],
-                       val followLinks: Boolean,
-                       val ignoreExceptions: Boolean) {
+  private class Lister(
+      val filter: Filter[_ >: TypedPath],
+      val result: List[TypedPath],
+      val followLinks: Boolean,
+      val ignoreExceptions: Boolean
+  ) {
 
     val visited: Set[Path] = new HashSet()
 

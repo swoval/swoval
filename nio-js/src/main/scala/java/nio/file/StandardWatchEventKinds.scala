@@ -14,10 +14,11 @@ object StandardWatchEventKinds {
     override def name(): String = _name
     override def `type`(): Class[T] = tpe
     override def toString: String = _name
-    override def equals(o: Any): Boolean = o match {
-      case e: WatchEvent.Kind[_] => e.name() == this.name()
-      case _                     => false
-    }
+    override def equals(o: Any): Boolean =
+      o match {
+        case e: WatchEvent.Kind[_] => e.name() == this.name()
+        case _                     => false
+      }
     override def hashCode(): Int = _name.hashCode();
   }
 }

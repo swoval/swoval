@@ -23,11 +23,12 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-class PollingPathWatcher(private val converter: Converter[java.lang.Long],
-                         private val followLinks: Boolean,
-                         pollInterval: java.lang.Long,
-                         timeUnit: TimeUnit)
-    extends PathWatcher[PathWatchers.Event] {
+class PollingPathWatcher(
+    private val converter: Converter[java.lang.Long],
+    private val followLinks: Boolean,
+    pollInterval: java.lang.Long,
+    timeUnit: TimeUnit
+) extends PathWatcher[PathWatchers.Event] {
 
   private val isClosed: AtomicBoolean = new AtomicBoolean(false)
 
@@ -92,8 +93,10 @@ class PollingPathWatcher(private val converter: Converter[java.lang.Long],
     observers.removeObserver(handle)
   }
 
-  private def addAll(map: Map[Path, FileTreeDataViews.Entry[java.lang.Long]],
-                     list: List[FileTreeDataViews.Entry[java.lang.Long]]): Unit = {
+  private def addAll(
+      map: Map[Path, FileTreeDataViews.Entry[java.lang.Long]],
+      list: List[FileTreeDataViews.Entry[java.lang.Long]]
+  ): Unit = {
     val it: Iterator[FileTreeDataViews.Entry[java.lang.Long]] = list.iterator()
     while (it.hasNext) {
       val entry: FileTreeDataViews.Entry[java.lang.Long] = it.next()
@@ -153,8 +156,10 @@ class PollingPathWatcher(private val converter: Converter[java.lang.Long],
         observers.onNext(new Event(oldEntry.getTypedPath, Kind.Delete))
       }
 
-      override def onUpdate(oldEntry: FileTreeDataViews.Entry[java.lang.Long],
-                            newEntry: FileTreeDataViews.Entry[java.lang.Long]): Unit = {
+      override def onUpdate(
+          oldEntry: FileTreeDataViews.Entry[java.lang.Long],
+          newEntry: FileTreeDataViews.Entry[java.lang.Long]
+      ): Unit = {
         if (oldEntry.getValue != newEntry.getValue) {
           observers.onNext(new Event(newEntry.getTypedPath, Kind.Modify))
         }

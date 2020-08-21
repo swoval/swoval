@@ -10,8 +10,10 @@ import utest.framework.ExecutionContext.RunNow
 
 object FileEventMonitorTest extends TestSuite {
 
-  def getFileEventsApi(onFileEvent: FileEvent => Unit,
-                       onStreamClosed: String => Unit = (_: String) => {}): FileEventMonitor =
+  def getFileEventsApi(
+      onFileEvent: FileEvent => Unit,
+      onStreamClosed: String => Unit = (_: String) => {}
+  ): FileEventMonitor =
     FileEventMonitors.get((fe: FileEvent) => onFileEvent(fe), (s: String) => onStreamClosed(s))
 
   val tests: Tests = testOn(MacOS) {
@@ -35,10 +37,13 @@ object FileEventMonitorTest extends TestSuite {
     'removeStream - withTempDirectory { dir =>
       withTempDirectory(dir) { subdir =>
         val latch = new CountDownLatch(1)
-        val api = getFileEventsApi(_ => {}, s => {
-          assert(s == subdir.toString)
-          latch.countDown()
-        })
+        val api = getFileEventsApi(
+          _ => {},
+          s => {
+            assert(s == subdir.toString)
+            latch.countDown()
+          }
+        )
         val handle =
           api.createStream(subdir, 50, TimeUnit.MICROSECONDS, new Flags.Create().setNoDefer())
         api.createStream(dir, 50, TimeUnit.MILLISECONDS, new Flags.Create().setNoDefer())

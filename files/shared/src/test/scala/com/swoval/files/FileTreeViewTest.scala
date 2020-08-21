@@ -33,116 +33,129 @@ class FileTreeViewTest(newFileTreeView: (Path, Int, Boolean) => DirectoryView) e
   def pathFilter(f: TypedPath => Boolean): Filter[TypedPath] = (tp: TypedPath) => f(tp)
 
   object list {
-    def empty: Future[Unit] = withTempDirectorySync { dir =>
-      newFileTreeView(dir).ls(dir, recursive = true, AllPass) === Seq.empty[Path]
-    }
+    def empty: Future[Unit] =
+      withTempDirectorySync { dir =>
+        newFileTreeView(dir).ls(dir, recursive = true, AllPass) === Seq.empty[Path]
+      }
     object files {
       def parent: Future[Unit] =
         withTempFileSync { file =>
           val parent = file.getParent
           newFileTreeView(parent).ls(parent, recursive = true, AllPass) === Seq(file)
         }
-      def directly: Future[Unit] = withTempFileSync { file =>
-        val parent = file.getParent
-        newFileTreeView(parent).ls(file, -1, AllPass) === Seq(file)
-        newFileTreeView(parent).ls(file, 0, AllPass) === Nil
-      }
+      def directly: Future[Unit] =
+        withTempFileSync { file =>
+          val parent = file.getParent
+          newFileTreeView(parent).ls(file, -1, AllPass) === Seq(file)
+          newFileTreeView(parent).ls(file, 0, AllPass) === Nil
+        }
     }
-    def resolution: Future[Unit] = withTempDirectory { dir =>
-      withTempDirectory(dir) { subdir =>
-        withTempFileSync(subdir) { f =>
-          def parentEquals(dir: Path): Filter[TypedPath] =
-            (tp: TypedPath) => tp.getPath.getParent == dir
-          val directory = newFileTreeView(dir)
-          directory.ls(recursive = true, parentEquals(dir)) === Seq(subdir)
-          directory.ls(recursive = true, parentEquals(subdir)) === Seq(f)
-          directory.ls(recursive = true, AllPass) === Seq(subdir, f)
+    def resolution: Future[Unit] =
+      withTempDirectory { dir =>
+        withTempDirectory(dir) { subdir =>
+          withTempFileSync(subdir) { f =>
+            def parentEquals(dir: Path): Filter[TypedPath] =
+              (tp: TypedPath) => tp.getPath.getParent == dir
+            val directory = newFileTreeView(dir)
+            directory.ls(recursive = true, parentEquals(dir)) === Seq(subdir)
+            directory.ls(recursive = true, parentEquals(subdir)) === Seq(f)
+            directory.ls(recursive = true, AllPass) === Seq(subdir, f)
+          }
         }
       }
-    }
     object directories {
-      def nonRecursive: Future[Unit] = withTempDirectory { dir =>
-        withTempFile(dir) { f =>
-          withTempDirectory(dir) { subdir =>
-            withTempFileSync(subdir) { _ =>
-              newFileTreeView(dir).ls(recursive = false, AllPass) === Set(f, subdir)
+      def nonRecursive: Future[Unit] =
+        withTempDirectory { dir =>
+          withTempFile(dir) { f =>
+            withTempDirectory(dir) { subdir =>
+              withTempFileSync(subdir) { _ =>
+                newFileTreeView(dir).ls(recursive = false, AllPass) === Set(f, subdir)
+              }
             }
           }
         }
-      }
-      def recursive: Future[Unit] = withTempDirectory { dir =>
-        withTempFile(dir) { f =>
-          withTempDirectory(dir) { subdir =>
-            withTempFileSync(subdir) { f2 =>
-              newFileTreeView(dir).ls(recursive = true, AllPass) === Set(f, f2, subdir)
+      def recursive: Future[Unit] =
+        withTempDirectory { dir =>
+          withTempFile(dir) { f =>
+            withTempDirectory(dir) { subdir =>
+              withTempFileSync(subdir) { f2 =>
+                newFileTreeView(dir).ls(recursive = true, AllPass) === Set(f, f2, subdir)
+              }
             }
           }
         }
-      }
     }
-    def subdirectories: Future[Unit] = withTempDirectory { dir =>
+    def subdirectories: Future[Unit] =
+      withTempDirectory { dir =>
+        withTempDirectory(dir) { subdir =>
+          withTempFileSync(subdir) { f =>
+            newFileTreeView(dir).ls(subdir, recursive = true, AllPass) === Seq(f)
+            newFileTreeView(dir).ls(Paths.get(s"$subdir.1"), recursive = true, AllPass) === Nil
+          }
+        }
+      }
+    def filter: Future[Unit] =
+      withTempDirectory { dir =>
+        withTempFile(dir) { f =>
+          withTempDirectorySync(dir) { subdir =>
+            newFileTreeView(dir)
+              .ls(recursive = true, pathFilter(!(_: TypedPath).isDirectory)) === Seq(f)
+            newFileTreeView(dir)
+              .ls(recursive = true, pathFilter((_: TypedPath).isDirectory)) === Seq(subdir)
+          }
+        }
+      }
+  }
+  def specialCharacters: Future[Unit] =
+    withTempDirectorySync { dir =>
+      val pathChars = Array[Int](102, 111, 111, 61453).map(_.toChar)
+      val file = Files.createFile(dir.resolve(new String(pathChars)))
+      newFileTreeView(dir, 0).ls(dir, false, AllPass) === Seq(file)
+    }
+  def recursive: Future[Unit] =
+    withTempDirectory { dir =>
       withTempDirectory(dir) { subdir =>
         withTempFileSync(subdir) { f =>
-          newFileTreeView(dir).ls(subdir, recursive = true, AllPass) === Seq(f)
-          newFileTreeView(dir).ls(Paths.get(s"$subdir.1"), recursive = true, AllPass) === Nil
+          assert(f.exists)
+          newFileTreeView(subdir).ls(subdir, recursive = true, AllPass) === Seq(f)
+          newFileTreeView(dir, 0).ls(dir, recursive = true, AllPass) === Seq(subdir)
+          newFileTreeView(dir).ls(dir, recursive = true, AllPass) === Set(subdir, f)
+          newFileTreeView(dir).ls(dir, recursive = false, AllPass) === Seq(subdir)
         }
       }
     }
-    def filter: Future[Unit] = withTempDirectory { dir =>
-      withTempFile(dir) { f =>
-        withTempDirectorySync(dir) { subdir =>
-          newFileTreeView(dir)
-            .ls(recursive = true, pathFilter(!(_: TypedPath).isDirectory)) === Seq(f)
-          newFileTreeView(dir)
-            .ls(recursive = true, pathFilter((_: TypedPath).isDirectory)) === Seq(subdir)
-        }
-      }
-    }
-  }
-  def specialCharacters: Future[Unit] = withTempDirectorySync { dir =>
-    val pathChars = Array[Int](102, 111, 111, 61453).map(_.toChar)
-    val file = Files.createFile(dir.resolve(new String(pathChars)))
-    newFileTreeView(dir, 0).ls(dir, false, AllPass) === Seq(file)
-  }
-  def recursive: Future[Unit] = withTempDirectory { dir =>
-    withTempDirectory(dir) { subdir =>
-      withTempFileSync(subdir) { f =>
-        assert(f.exists)
-        newFileTreeView(subdir).ls(subdir, recursive = true, AllPass) === Seq(f)
-        newFileTreeView(dir, 0).ls(dir, recursive = true, AllPass) === Seq(subdir)
-        newFileTreeView(dir).ls(dir, recursive = true, AllPass) === Set(subdir, f)
-        newFileTreeView(dir).ls(dir, recursive = false, AllPass) === Seq(subdir)
-      }
-    }
-  }
   object depth {
-    def nonnegative: Future[Unit] = withTempDirectory { dir =>
-      withTempDirectory(dir) { subdir =>
-        withTempFileSync(subdir) { file =>
-          newFileTreeView(dir, 0).ls(dir, recursive = true, AllPass) === Set(subdir)
-          newFileTreeView(dir, 1).ls(dir, recursive = true, AllPass) === Set(subdir, file)
+    def nonnegative: Future[Unit] =
+      withTempDirectory { dir =>
+        withTempDirectory(dir) { subdir =>
+          withTempFileSync(subdir) { file =>
+            newFileTreeView(dir, 0).ls(dir, recursive = true, AllPass) === Set(subdir)
+            newFileTreeView(dir, 1).ls(dir, recursive = true, AllPass) === Set(subdir, file)
+          }
         }
       }
-    }
     object negative {
       def ls(fileTreeView: FileTreeView, file: Path): Seq[Path] =
         fileTreeView.list(file, -1, AllPass).asScala.map(_.getPath)
-      def file: Future[Unit] = withTempFileSync { file =>
-        newFileTreeView(file, -1)
-          .list(file, -1, AllPass)
-          .asScala
-          .toIndexedSeq
-          .map(_.getPath) === Seq(file)
-      }
-      def directory: Future[Unit] = withTempDirectorySync { dir =>
-        newFileTreeView(dir, -1).ls(dir, -1, AllPass) === Seq(dir)
-      }
-      def parameter: Future[Unit] = withTempFileSync { file =>
-        val dir = file.getParent
-        val directory = newFileTreeView(dir, Integer.MAX_VALUE)
-        directory.list(dir, -1, AllPass).asScala.map(_.getPath) === Seq(dir)
-        directory.list(dir, 0, AllPass).asScala.map(_.getPath) === Seq(file)
-      }
+      def file: Future[Unit] =
+        withTempFileSync { file =>
+          newFileTreeView(file, -1)
+            .list(file, -1, AllPass)
+            .asScala
+            .toIndexedSeq
+            .map(_.getPath) === Seq(file)
+        }
+      def directory: Future[Unit] =
+        withTempDirectorySync { dir =>
+          newFileTreeView(dir, -1).ls(dir, -1, AllPass) === Seq(dir)
+        }
+      def parameter: Future[Unit] =
+        withTempFileSync { file =>
+          val dir = file.getParent
+          val directory = newFileTreeView(dir, Integer.MAX_VALUE)
+          directory.list(dir, -1, AllPass).asScala.map(_.getPath) === Seq(dir)
+          directory.list(dir, 0, AllPass).asScala.map(_.getPath) === Seq(file)
+        }
     }
   }
   object init {
@@ -159,34 +172,41 @@ class FileTreeViewTest(newFileTreeView: (Path, Int, Boolean) => DirectoryView) e
             }
           }
         }
-      } else { Future.successful(()) }
+      }
+      else { Future.successful(()) }
   }
   object symlinks {
-    def file: Future[Unit] = withTempFileSync { file =>
-      val parent = file.getParent
-      val link = parent.resolve("link") linkTo file
-      newFileTreeView(parent).ls(parent, recursive = true, AllPass) === Set(file, link)
-    }
-    def directory: Future[Unit] = withTempDirectory { dir =>
-      withTempDirectorySync { otherDir =>
-        val link = dir.resolve("link") linkTo otherDir
-        val file = otherDir.resolve("file").createFile()
-        val dirFile = dir.resolve("link").resolve("file")
-        newFileTreeView(dir, Integer.MAX_VALUE, true).ls(dir, recursive = true, AllPass) === Set(
-          link,
-          dirFile)
+    def file: Future[Unit] =
+      withTempFileSync { file =>
+        val parent = file.getParent
+        val link = parent.resolve("link") linkTo file
+        newFileTreeView(parent).ls(parent, recursive = true, AllPass) === Set(file, link)
       }
-    }
-    object loop {
-      def initial: Future[Unit] = withTempDirectory { dir =>
+    def directory: Future[Unit] =
+      withTempDirectory { dir =>
         withTempDirectorySync { otherDir =>
-          val dirToOtherDirLink = dir.resolve("other") linkTo otherDir
-          val otherDirToDirLink = otherDir.resolve("dir") linkTo dir
-          newFileTreeView(dir, Integer.MAX_VALUE, true)
-            .ls(dir, recursive = true, AllPass) === Set(dirToOtherDirLink,
-                                                        dirToOtherDirLink.resolve("dir"))
+          val link = dir.resolve("link") linkTo otherDir
+          val file = otherDir.resolve("file").createFile()
+          val dirFile = dir.resolve("link").resolve("file")
+          newFileTreeView(dir, Integer.MAX_VALUE, true).ls(dir, recursive = true, AllPass) === Set(
+            link,
+            dirFile
+          )
         }
       }
+    object loop {
+      def initial: Future[Unit] =
+        withTempDirectory { dir =>
+          withTempDirectorySync { otherDir =>
+            val dirToOtherDirLink = dir.resolve("other") linkTo otherDir
+            val otherDirToDirLink = otherDir.resolve("dir") linkTo dir
+            newFileTreeView(dir, Integer.MAX_VALUE, true)
+              .ls(dir, recursive = true, AllPass) === Set(
+              dirToOtherDirLink,
+              dirToOtherDirLink.resolve("dir")
+            )
+          }
+        }
     }
 
   }
@@ -237,9 +257,11 @@ object DefaultFileTreeViewTest
           view.list(path, actualDepth, filter)
         }
         override def getMaxDepth: Int = depth
-        override def list(path: Path,
-                          maxDepth: Int,
-                          filter: Filter[_ >: TypedPath]): util.List[TypedPath] = {
+        override def list(
+            path: Path,
+            maxDepth: Int,
+            filter: Filter[_ >: TypedPath]
+        ): util.List[TypedPath] = {
           if (path.startsWith(getPath)) {
             val distance = getPath.relativize(path).getNameCount - 1
             val actualDepth =
@@ -254,11 +276,13 @@ object DefaultFileTreeViewTest
       }
     })
 object NioFileTreeViewTest
-    extends FileTreeViewTest(
-      (path: Path, depth: Int, followLinks: Boolean) =>
-        new CachedDirectoryImpl[Path](TypedPaths.get(path),
-                                      (tp: TypedPath) => tp.getPath,
-                                      depth,
-                                      AllPass,
-                                      followLinks,
-                                      FileTreeViews.getNio(followLinks)).init())
+    extends FileTreeViewTest((path: Path, depth: Int, followLinks: Boolean) =>
+      new CachedDirectoryImpl[Path](
+        TypedPaths.get(path),
+        (tp: TypedPath) => tp.getPath,
+        depth,
+        AllPass,
+        followLinks,
+        FileTreeViews.getNio(followLinks)
+      ).init()
+    )

@@ -28,10 +28,11 @@ object FileTreeRepositoryImpl {
 
 }
 
-class FileTreeRepositoryImpl[T <: AnyRef](private val directoryTree: FileCacheDirectoryTree[T],
-                                          private val watcher: FileCachePathWatcher[T],
-                                          private val logger: Logger)
-    extends FileTreeRepository[T] {
+class FileTreeRepositoryImpl[T <: AnyRef](
+    private val directoryTree: FileCacheDirectoryTree[T],
+    private val watcher: FileCachePathWatcher[T],
+    private val logger: Logger
+) extends FileTreeRepository[T] {
 
   private val closed: AtomicBoolean = new AtomicBoolean(false)
 
@@ -51,7 +52,7 @@ class FileTreeRepositoryImpl[T <: AnyRef](private val directoryTree: FileCacheDi
     this(directoryTree, watcher, Loggers.getLogger)
 
   /**
- Cleans up the path watcher and clears the directory cache.
+   * Cleans up the path watcher and clears the directory cache.
    */
   override def close(): Unit = {
     closeRunnable.run()
@@ -83,7 +84,8 @@ class FileTreeRepositoryImpl[T <: AnyRef](private val directoryTree: FileCacheDi
   override def listEntries(
       path: Path,
       maxDepth: Int,
-      filter: Filter[_ >: FileTreeDataViews.Entry[T]]): List[FileTreeDataViews.Entry[T]] =
+      filter: Filter[_ >: FileTreeDataViews.Entry[T]]
+  ): List[FileTreeDataViews.Entry[T]] =
     directoryTree.listEntries(path, maxDepth, filter)
 
   override def register(path: Path, maxDepth: Int): Either[IOException, Boolean] =

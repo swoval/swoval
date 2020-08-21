@@ -43,7 +43,7 @@ trait PathWatcher[T] extends Observable[T] with AutoCloseable {
   def unregister(path: Path): Unit
 
   /**
- Catch any exceptions in subclasses.
+   * Catch any exceptions in subclasses.
    */
   override def close(): Unit
 

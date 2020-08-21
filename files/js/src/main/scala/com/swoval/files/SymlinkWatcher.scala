@@ -52,9 +52,10 @@ object SymlinkWatcher {
  * symlink. When the symlink target is modified, the watcher will detect the update and invoke a
  * provided [[com.swoval.functional.Consumer]] for the symlink.
  */
-class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event],
-                     private val logger: Logger)
-    extends Observable[Event]
+class SymlinkWatcher(
+    private val watcher: PathWatcher[PathWatchers.Event],
+    private val logger: Logger
+) extends Observable[Event]
     with AutoCloseable {
 
   private val isClosed: AtomicBoolean = new AtomicBoolean(false)
@@ -109,7 +110,8 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event],
           val typedPath: TypedPath = TypedPaths.get(it.next())
           if (Loggers.shouldLog(logger, Level.DEBUG))
             logger.debug(
-              "SymlinkWatcher evaluating callback for " + ("link " + typedPath + " to target " + path))
+              "SymlinkWatcher evaluating callback for " + ("link " + typedPath + " to target " + path)
+            )
           observers.onNext(new Event(typedPath, kind))
         }
       }
@@ -181,7 +183,8 @@ class SymlinkWatcher(private val watcher: PathWatcher[PathWatchers.Event],
         if (Loggers.shouldLog(logger, Level.DEBUG))
           logger.debug(
             this + " SymlinkWatcher adding link " + path + " with max depth " +
-              maxDepth)
+              maxDepth
+          )
         if (watchedSymlinksByTarget.lock()) {
           try {
             val targetRegistrationPath: RegisteredPath =
