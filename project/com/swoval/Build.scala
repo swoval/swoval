@@ -9,15 +9,20 @@ import java.util.jar.JarFile
 import com.github.sbt.jacoco.JacocoKeys.{ jacocoExcludes, jacocoReportSettings }
 import com.github.sbt.jacoco.report.{ JacocoReportSettings, JacocoThresholds }
 import com.swoval.Dependencies._
-import com.swoval.format.ExtensionFilter
-import com.swoval.format.SourceFormatPlugin.autoImport.{ clangfmt, clangfmtSources, javafmt }
+import com.swoval.format.SourceFormatPlugin.{
+  clangfmt,
+  clangfmtCheck,
+  javafmt,
+  javafmtCheck,
+  scalafmt
+}
 import com.typesafe.sbt.pgp.PgpKeys.publishSigned
 import org.apache.commons.codec.digest.DigestUtils
-import org.scalafmt.sbt.ScalafmtPlugin.autoImport.scalafmt
 import org.scalajs.core.tools.linker.backend.ModuleKind
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ fastOptJS, fullOptJS, scalaJSModuleKind }
 import sbt.Keys._
 import sbt._
+import sbt.nio.Keys.fileInputs
 import sbt.internal.TaskSequential
 import sbtcrossproject.CrossPlugin.autoImport._
 import sbtcrossproject.{ CrossProject, crossProject }
@@ -45,7 +50,7 @@ object Build {
       organization := "com.swoval",
       homepage := Some(url("https://github.com/swoval/swoval")),
       scmInfo := Some(
-        ScmInfo(url("https://github.com/swoval/swoval"), "git@github.com:swoval/swoval.git")
+        ScmInfo(url("https://github.com/swoval/swoval"), "git@github.com:swoval/swoval.git"),
       ),
       developers := List(
         Developer(
@@ -203,8 +208,8 @@ object Build {
       publishLocal := {},
       checkFormat := {
         import sys.process._
-        javafmt.toTask(" --check").value
-        clangfmt.toTask(" --check").value
+        (Compile / javafmtCheck).value
+        clangfmtCheck.value
         (scalafmt in Compile).value
         val output = Seq("git", "status").!!
         println(output)
@@ -355,7 +360,7 @@ object Build {
       scalaJSModuleKind := ModuleKind.CommonJSModule,
       webpackBundlingMode := BundlingMode.LibraryOnly(),
       useYarn := false,
-      clangfmtSources += (files.js.base / "npm" / "src", ExtensionFilter("cc", "h", "hh"), true),
+      clangfmt / fileInputs += files.js.base.getCanonicalFile.toGlob / "npm" / "src" / ** / "*.{cc,h,hh}",
       createCrossLinks("FILESJS"),
       cleanAllGlobals,
       nodeNativeLibs,
@@ -505,8 +510,7 @@ object Build {
     )
     .jvmSettings(
       createCrossLinks("FILESJVM"),
-      clangfmtSources +=
-        (files.jvm.base / "src" / "main" / "native", ExtensionFilter("cc", "h", "hh"), true),
+      clangfmt / fileInputs += files.jvm.base.getCanonicalFile.toGlob / "src" / "main" / "native" / "*.{cc,h,hh}",
       javacOptions ++= Seq(
         "-source",
         "1.7",
@@ -576,8 +580,8 @@ object Build {
       skip in formatSources := System.getProperty("swoval.format", "true") == "true",
       formatSources := Def.taskDyn {
         if ((skip in formatSources).value) Def.task {
-          javafmt.toTask("").value
-          clangfmt.toTask("").value
+          (Compile / javafmt).value
+          clangfmt.value
           ()
         }
         else Def.task(())
