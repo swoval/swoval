@@ -32,55 +32,56 @@ extern "C" {
  * Method:    errno
  * Signature: (J)I
  */
-JNIEXPORT jint JNICALL Java_com_swoval_files_NativeDirectoryLister_errno(JNIEnv *, jobject, jlong);
+JNIEXPORT jint JNICALL Java_com_swoval_files_NativeDirectoryLister_errno
+  (JNIEnv *, jobject, jlong);
 
 /*
  * Class:     com_swoval_files_NativeDirectoryLister
  * Method:    strerror
  * Signature: (I)Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_com_swoval_files_NativeDirectoryLister_strerror(JNIEnv *, jobject,
-                                                                               jint);
+JNIEXPORT jstring JNICALL Java_com_swoval_files_NativeDirectoryLister_strerror
+  (JNIEnv *, jobject, jint);
 
 /*
  * Class:     com_swoval_files_NativeDirectoryLister
  * Method:    openDir
  * Signature: (Ljava/lang/String;)J
  */
-JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeDirectoryLister_openDir(JNIEnv *, jobject,
-                                                                            jstring);
+JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeDirectoryLister_openDir
+  (JNIEnv *, jobject, jstring);
 
 /*
  * Class:     com_swoval_files_NativeDirectoryLister
  * Method:    closeDir
  * Signature: (J)V
  */
-JNIEXPORT void JNICALL Java_com_swoval_files_NativeDirectoryLister_closeDir(JNIEnv *, jobject,
-                                                                            jlong);
+JNIEXPORT void JNICALL Java_com_swoval_files_NativeDirectoryLister_closeDir
+  (JNIEnv *, jobject, jlong);
 
 /*
  * Class:     com_swoval_files_NativeDirectoryLister
  * Method:    nextFile
  * Signature: (J)J
  */
-JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeDirectoryLister_nextFile(JNIEnv *, jobject,
-                                                                             jlong);
+JNIEXPORT jlong JNICALL Java_com_swoval_files_NativeDirectoryLister_nextFile
+  (JNIEnv *, jobject, jlong);
 
 /*
  * Class:     com_swoval_files_NativeDirectoryLister
  * Method:    getType
  * Signature: (J)I
  */
-JNIEXPORT jint JNICALL Java_com_swoval_files_NativeDirectoryLister_getType(JNIEnv *, jobject,
-                                                                           jlong);
+JNIEXPORT jint JNICALL Java_com_swoval_files_NativeDirectoryLister_getType
+  (JNIEnv *, jobject, jlong);
 
 /*
  * Class:     com_swoval_files_NativeDirectoryLister
  * Method:    getName
  * Signature: (J)Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_com_swoval_files_NativeDirectoryLister_getName(JNIEnv *, jobject,
-                                                                              jlong);
+JNIEXPORT jstring JNICALL Java_com_swoval_files_NativeDirectoryLister_getName
+  (JNIEnv *, jobject, jlong);
 
 #ifdef __cplusplus
 }

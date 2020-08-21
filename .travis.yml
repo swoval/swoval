@@ -15,7 +15,7 @@ matrix:
    - scala: 2.12.8
      os: osx
      env:
-       CMD="checkFormat filesJVM/jacoco filesJS/test plugin/compile filesJVM/travisQuickListReflectionTest filesJVM/allTests"
+       CMD="checkFormat filesJVM/jacoco filesJS/test filesJVM/travisQuickListReflectionTest filesJVM/allTests"
        TRAVIS_SCALA_VERSION=2.12.8
      osx_image: xcode9.4
      install:
@@ -28,7 +28,7 @@ matrix:
 
    - scala: 2.12.8
      env:
-       CMD="filesJVM/jacoco filesJS/test plugin/compile filesJVM/travisQuickListReflectionTest filesJVM/allTests"
+       CMD="filesJVM/jacoco filesJS/test filesJVM/travisQuickListReflectionTest filesJVM/allTests"
        TRAVIS_SCALA_VERSION=2.12.8
 
    - scala: 2.11.12
@@ -46,13 +46,13 @@ matrix:
    - scala: 2.10.7
      os: osx
      env:
-       CMD="filesJVM/jacoco plugin/compile filesJVM/allTests"
+       CMD="filesJVM/jacoco filesJVM/allTests"
        TRAVIS_SCALA_VERSION=2.10.7
      osx_image: xcode9.3
 
    - scala: 2.10.7
      env:
-       CMD="filesJVM/jacoco plugin/compile filesJVM/allTests"
+       CMD="filesJVM/jacoco filesJVM/allTests"
        TRAVIS_SCALA_VERSION=2.10.7
 
 
