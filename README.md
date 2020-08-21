@@ -15,6 +15,8 @@ File tree views
 File tree views is a cross platform library for efficiently listing the paths in
 a directory and monitoring a directory for updates.
 
+The latest version is 2.1.3.
+
 Overview
 ==
 A scala.js and jvm cross platform package that provides three important interfaces:
@@ -274,3 +276,8 @@ update /private/tmp/foo/bar.txt 1537159860665.4883
 deletion /private/tmp/foo 1537159860445.2976
 deletion /private/tmp/foo/bar.txt 1537159860665.4883
 ```
+
+CloseWatch
+==
+There is a plugin called CloseWatch for monitoring files on older versions of
+sbt. It is no longer supported and has been removed from the repository.
