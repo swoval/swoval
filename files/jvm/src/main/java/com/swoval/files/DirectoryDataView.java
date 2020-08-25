@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
-public interface DirectoryDataView<T> extends FileTreeDataView<T>, DirectoryView {
+interface DirectoryDataView<T> extends FileTreeDataView<T>, DirectoryView {
 
   /**
    * Returns the cache entry associated with the directory returned by {@link

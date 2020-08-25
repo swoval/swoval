@@ -142,10 +142,14 @@ object FileTreeViews {
 
   }
 
+  /**
+   * Provides an api for subscribing and unsubscribing to events.
+   */
   trait Observable[T] {
 
     /**
-     * Add an observer of events.
+     * Add an observer of events. The return value is a handle that can be used
+     * to unregister the provided observer from receiving event notifications.
      *
      * @param observer the observer to add
      * @return the handle to the observer.

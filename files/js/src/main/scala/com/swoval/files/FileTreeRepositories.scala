@@ -41,7 +41,7 @@ object FileTreeRepositories {
    *     update is detected for that directory. This can be very expensive since it will perform
    *     iops proportional to the number of files in the subtree. It generally should not be
    *     necessary since we are also watching the subtree for events.
-   * @param logger
+   * @param logger logs debug events
    * @tparam T the value type of the cache entries
    * @return a file tree repository.
    */

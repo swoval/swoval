@@ -7,6 +7,12 @@ import java.io.IOException
 import java.nio.file.Path
 import java.util.List
 
+/**
+ * Lists all of the children of a particular directory up to a specified depth. It provides an
+ * alternative to `java.nio.file.Files.walkFileTree` or `java.nio.file.Files.list` to recursively
+ * list the contents of a directory. Implementations are provided in [[FileTreeViews]] including
+ * native implementations for most popular platforms that can outperform the java built-ins.
+ */
 trait FileTreeView extends AutoCloseable {
 
   /**
