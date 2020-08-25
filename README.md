@@ -15,7 +15,7 @@ File tree views
 File tree views is a cross platform library for efficiently listing the paths in
 a directory and monitoring a directory for updates.
 
-The latest version is 2.1.3.
+The latest version is 2.1.5.
 
 Overview
 ==
