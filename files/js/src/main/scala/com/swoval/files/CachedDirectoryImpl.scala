@@ -143,15 +143,14 @@ class CachedDirectoryImpl[T <: AnyRef](
         if (findResult != null) {
           if (findResult.isRight) {
             val result: List[Entry[T]] = new ArrayList[Entry[T]]()
-            findResult.get
-              .listImpl[Entry[T]](
-                maxDepth,
-                filter,
-                result,
-                new ListTransformer[T, Entry[T]]() {
-                  override def apply(entry: Entry[T]): Entry[T] = entry
-                }
-              )
+            findResult.get.listImpl[Entry[T]](
+              maxDepth,
+              filter,
+              result,
+              new ListTransformer[T, Entry[T]]() {
+                override def apply(entry: Entry[T]): Entry[T] = entry
+              }
+            )
             result
           } else {
             val entry: Entry[T] = leftProjection(findResult).getValue
