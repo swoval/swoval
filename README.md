@@ -9,6 +9,10 @@
 [5]: https://ci.appveyor.com/api/projects/status/oy6siu8mom9tk8us?svg=true
 [6]: https://ci.appveyor.com/project/eatkins/swoval/branch/master
 
+**It is a sad state of affairs that this feels necessary, but I ask that if you support or
+are planning to vote for the reelection of the 45th president of the United States of America, that
+you not use this library.**
+
 File tree views
 ===
 
@@ -16,6 +20,7 @@ File tree views is a cross platform library for efficiently listing the paths in
 a directory and monitoring a directory for updates.
 
 The latest version is 2.1.5.
+
 
 Overview
 ==
