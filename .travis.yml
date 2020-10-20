@@ -12,17 +12,17 @@ addons:
 
 matrix:
   include:
-   - scala: 2.12.8
+   - scala: 2.12.12
      os: osx
      env:
        CMD="checkFormat filesJVM/jacoco filesJS/test filesJVM/travisQuickListReflectionTest filesJVM/allTests"
-       TRAVIS_SCALA_VERSION=2.12.8
+       TRAVIS_SCALA_VERSION=2.12.12
      osx_image: xcode9.4
 
-   - scala: 2.12.8
+   - scala: 2.12.12
      env:
        CMD="filesJVM/jacoco filesJS/test filesJVM/travisQuickListReflectionTest filesJVM/allTests"
-       TRAVIS_SCALA_VERSION=2.12.8
+       TRAVIS_SCALA_VERSION=2.12.12
 
 
 script: /tmp/sbt/bin/sbt -Dswoval.alltest.timeout=20 -Dswoval.format=false -Dsbt.version=$SBT_VER -Dswoval.skip.native=true -Dswoval.fork.tests=true -Dswoval.alltests.iterations=50 ++$TRAVIS_SCALA_VERSION $CMD
