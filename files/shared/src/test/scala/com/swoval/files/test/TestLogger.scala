@@ -14,7 +14,6 @@ import scala.collection.JavaConverters._
 
 trait TestLogger extends Logger
 object TestLogger {
-  implicit def default: TestLogger = ???
   private[this] val registeredTests = new ConcurrentHashMap[String, OutputStream].asScala
   lazy val defaultLevel: Level = Level.fromString(System.getProperty("swoval.log.level", "debug"))
   def log(message: String): Unit = {
