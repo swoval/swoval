@@ -37,7 +37,7 @@ import scala.io.Source
 import scala.util.{ Properties, Try }
 
 object Build {
-  val scalaCrossVersions @ Seq(scala212) = Seq("2.12.8")
+  val scalaCrossVersions @ Seq(scala212) = Seq("2.12.12")
   val scala211 = "2.11.12"
 
   def baseVersion: String = "2.2.0-SNAPSHOT"
@@ -134,24 +134,10 @@ object Build {
 
   def releaseTask(key: TaskKey[Unit]) =
     Def.taskDyn {
+      assert((scalaVersion in crossVersion).value == scala212)
       val valid = checkFormat.toTask(" silent").value
       if (valid) {
-        Def.taskDyn {
-          (key in testing.jvm).value
-          (scalaVersion in crossVersion).value match {
-            case v =>
-              Def.taskDyn {
-                (key in nio.js).value
-                (key in files.js).value
-                (key in testing.js).value
-                if (v == scala212)
-                  Def.task {
-                    (key in files.jvm).value
-                  }
-                else Def.task(())
-              }
-          }
-        }
+        Def.task(key in files.jvm).value
       } else {
         throw new IllegalStateException("There are local diffs.")
       }
