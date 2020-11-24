@@ -178,7 +178,7 @@ object Build {
 
   lazy val swoval = project
     .in(file("."))
-    .aggregate(projects: _*)
+    .aggregate(projects.filterNot(_.toString.toLowerCase.contains("js")): _*)
     .settings(
       setProp := {
         val args = Def.spaceDelimited("<arg>").parsed
@@ -662,7 +662,8 @@ object Build {
       commonSettings,
       libraryDependencies += scalaMacros % scalaVersion.value,
       utestCrossMain,
-      utestFramework
+      utestFramework,
+      skip in publish := true,
     )
     .jvmSettings(crossScalaVersions := scalaCrossVersions)
 }
