@@ -2,7 +2,7 @@ image:
     - MacOS
     - Visual Studio 2015
     - Visual Studio 2017
-    - Ubuntu 
+    - Ubuntu
 
 build: off
 

@@ -1,4 +1,5 @@
 TARGET_DIR := ../../../target
+RESOURCES_DIR := ../resources/native
 BUILD_DIR := $(TARGET_DIR)/build
 NATIVE_DIR := native/$(shell uname -sm | cut -d ' ' -f2 | tr '[:upper:]' '[:lower:]')
 LIB_DIR := ../resources/$(NATIVE_DIR)
@@ -18,7 +19,7 @@ ifeq ($(UNAME_S),Darwin)
 		$(BUILD_DIR)/x86_64/darwin/com_swoval_files_FileEventMonitorImpl.o \
 		$(BUILD_DIR)/x86_64/windows/$(QUICKLIST_SOURCE).o \
 
-	LIBS := $(TARGET_DIR)/x86_64/$(POSIX_LIB_NAME).dylib \
+	LIBS := $(RESOURCES_DIR)/x86_64/$(POSIX_LIB_NAME).dylib \
 		$(TARGET_DIR)/x86_64/$(LIB_NAME).dll \
 
 
@@ -69,10 +70,19 @@ $(BUILD_DIR)/x86_64/darwin/$(QUICKLIST_SOURCE).o: posix/$(QUICKLIST_SOURCE).cc
 	mkdir -p $(BUILD_DIR)/x86_64/darwin; \
 	$(CC) -c $< $(CCFLAGS) -framework Carbon -o $@
 
+$(BUILD_DIR)/arm64/darwin/$(QUICKLIST_SOURCE).o: posix/$(QUICKLIST_SOURCE).cc
+	mkdir -p $(BUILD_DIR)/arm64/darwin; \
+	$(CC) -c $< $(CCFLAGS) -target arm64-apple-macos11 --stdlib=libc++ -framework Carbon -o $@
+
 $(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventMonitorImpl.o: $(NPMDIR)/swoval_apple_file_system.hpp
 $(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventMonitorImpl.o: apple/com_swoval_files_apple_FileEventMonitorImpl.cc
 	mkdir -p $(BUILD_DIR)/x86_64/darwin; \
 	$(CC) -c $< $(CCFLAGS) -framework Carbon -o $@
+
+$(BUILD_DIR)/arm64/darwin/com_swoval_files_apple_FileEventMonitorImpl.o: $(NPMDIR)/swoval_apple_file_system.hpp
+$(BUILD_DIR)/arm64/darwin/com_swoval_files_apple_FileEventMonitorImpl.o: apple/com_swoval_files_apple_FileEventMonitorImpl.cc
+	mkdir -p $(BUILD_DIR)/arm64/darwin; \
+	$(CC) -c $< $(CCFLAGS) -target arm64-apple-macos11 -framework Carbon --stdlib=libc++ -o $@
 
 $(TARGET_DIR)/x86_64/$(POSIX_LIB_NAME).dylib: $(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventMonitorImpl.o \
 	$(BUILD_DIR)/x86_64/darwin/$(QUICKLIST_SOURCE).o 
@@ -80,11 +90,18 @@ $(TARGET_DIR)/x86_64/$(POSIX_LIB_NAME).dylib: $(BUILD_DIR)/x86_64/darwin/com_swo
 	$(LD) -dynamiclib -framework Carbon $(CCFLAGS) -Wl,-headerpad_max_install_names -install_name @rpath/$(POSIX_LIB_NAME) \
 	$(BUILD_DIR)/x86_64/darwin/com_swoval_files_apple_FileEventMonitorImpl.o \
 	$(BUILD_DIR)/x86_64/darwin/$(QUICKLIST_SOURCE).o  \
-	 -o $@ ; \
-	mkdir -p ../resources/native/x86_64; \
-	cp $(TARGET_DIR)/x86_64/$(POSIX_LIB_NAME).dylib ../resources/native/x86_64
+	 -o $@
 
+$(TARGET_DIR)/arm64/$(POSIX_LIB_NAME).dylib: $(BUILD_DIR)/arm64/darwin/com_swoval_files_apple_FileEventMonitorImpl.o \
+	$(BUILD_DIR)/arm64/darwin/$(QUICKLIST_SOURCE).o 
+	mkdir -p $(TARGET_DIR)/arm64; \
+	$(CC) -arch arm64 -dynamiclib -framework Carbon -install_name @rpath/$(POSIX_LIB_NAME) \
+	$(BUILD_DIR)/arm64/darwin/com_swoval_files_apple_FileEventMonitorImpl.o \
+	$(BUILD_DIR)/arm64/darwin/$(QUICKLIST_SOURCE).o  \
+	 -o $@ -lc++
 
+$(RESOURCES_DIR)/x86_64/$(POSIX_LIB_NAME).dylib: $(TARGET_DIR)/arm64/$(POSIX_LIB_NAME).dylib $(TARGET_DIR)/x86_64/$(POSIX_LIB_NAME).dylib
+	lipo -create -output $@ $^
 
 $(TARGET_DIR)/x86_64/$(LIB_NAME).dll: $(BUILD_DIR)/x86_64/windows/$(QUICKLIST_SOURCE).o
 	mkdir -p $(TARGET_DIR)/x86_64; \
