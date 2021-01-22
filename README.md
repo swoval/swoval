@@ -9,10 +9,6 @@
 [5]: https://ci.appveyor.com/api/projects/status/oy6siu8mom9tk8us?svg=true
 [6]: https://ci.appveyor.com/project/eatkins/swoval/branch/master
 
-**It is a sad state of affairs that this feels necessary, but I ask that if you support or
-are planning to vote for the reelection of the 45th president of the United States of America, that
-you not use this library.**
-
 File tree views
 ===
 
