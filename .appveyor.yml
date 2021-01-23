@@ -28,10 +28,10 @@ for:
     - mkdir ~/sbt
     - tar -xf ~/sbt-bin.tgz --directory ~/sbt
     - curl -sL https://raw.githubusercontent.com/shyiko/jabba/0.11.0/install.sh | bash && . ~/.jabba/jabba.sh
-    - jabba install adopt@1.8.0-222
-    - jabba use adopt@1.8.0-222
+    - jabba install adopt@1.8.0-272
+    - jabba use adopt@1.8.0-272
     - export PATH="~/sbt/sbt/bin:$PATH"
-    - export JAVA_HOME="~/.jabba/jdk/adopt@1.8.0-222"
+    - export JAVA_HOME="~/.jabba/jdk/adopt@1.8.0-272"
     - export PATH="$PATH:$JAVA_HOME/bin"
     - export SBT_OPTS=-"Xmx2g -Dswoval.format=false -Dfile.encoding=UTF8 -Dswoval.skip.native=true -Dswoval.fork.tests=true -Dswoval.alltests.iterations=50"
 
@@ -52,10 +52,10 @@ for:
     - mkdir ~/sbt
     - tar -xf ~/sbt-bin.tgz --directory ~/sbt
     - curl -sL https://raw.githubusercontent.com/shyiko/jabba/0.11.0/install.sh | bash && . ~/.jabba/jabba.sh
-    - jabba install adopt@1.8.0-222
-    - jabba use adopt@1.8.0-222
+    - jabba install adopt@1.8.0-272
+    - jabba use adopt@1.8.0-272
     - export PATH="~/sbt/sbt/bin:$PATH"
-    - export JAVA_HOME="~/.jabba/jdk/adopt@1.8.0-222"
+    - export JAVA_HOME="~/.jabba/jdk/adopt@1.8.0-272"
     - export PATH="$PATH:$JAVA_HOME/bin"
     - export SBT_OPTS="-Xmx2g -Dswoval.format=false -Dfile.encoding=UTF8 -Dswoval.skip.native=true -Dswoval.fork.tests=true -Dswoval.alltests.iterations=50"
 
