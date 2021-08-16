@@ -27,7 +27,7 @@ for:
     - curl -sL https://github.com/sbt/sbt/releases/download/v1.4.4/sbt-1.4.4.tgz > ~/sbt-bin.tgz
     - mkdir ~/sbt
     - tar -xf ~/sbt-bin.tgz --directory ~/sbt
-    - curl -sL https://raw.githubusercontent.com/shyiko/jabba/0.11.0/install.sh | bash && . ~/.jabba/jabba.sh
+    - curl -sL https://github.com/shyiko/jabba/raw/master/install.sh | bash && . ~/.jabba/jabba.sh
     - jabba install adopt@1.8.0-272
     - jabba use adopt@1.8.0-272
     - export PATH="~/sbt/sbt/bin:$PATH"
@@ -51,7 +51,7 @@ for:
     - curl -sL https://github.com/sbt/sbt/releases/download/v1.4.4/sbt-1.4.4.tgz > ~/sbt-bin.tgz
     - mkdir ~/sbt
     - tar -xf ~/sbt-bin.tgz --directory ~/sbt
-    - curl -sL https://raw.githubusercontent.com/shyiko/jabba/0.11.0/install.sh | bash && . ~/.jabba/jabba.sh
+    - curl -sL https://github.com/shyiko/jabba/raw/master/install.sh | bash && . ~/.jabba/jabba.sh
     - jabba install adopt@1.8.0-272
     - jabba use adopt@1.8.0-272
     - export PATH="~/sbt/sbt/bin:$PATH"
