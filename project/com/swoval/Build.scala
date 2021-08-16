@@ -514,7 +514,7 @@ object Build {
             instruction = 82,
             branch = 73,
             line = 84,
-            clazz = 100,
+            clazz = 99,
             complexity = 68,
             method = 84
           )
