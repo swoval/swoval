@@ -15,6 +15,7 @@ import com.swoval.files.FileTreeRepositoryImpl.Callback;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.PathWatchers.Event.Kind;
+import com.swoval.functional.Either;
 import com.swoval.functional.Filter;
 import com.swoval.logging.Logger;
 import com.swoval.logging.Loggers;
@@ -414,7 +415,12 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
     final Path absolutePath = path.isAbsolute() ? path : path.toAbsolutePath();
     if (directoryRegistry.addDirectory(absolutePath, maxDepth) && directories.lock()) {
       try {
-        watcher.register(absolutePath, maxDepth);
+        final Either<IOException, Boolean> res = watcher.register(absolutePath, maxDepth);
+        if (res.isLeft()) {
+          if (Loggers.shouldLog(logger, Level.WARN)) {
+            logger.warn(this + " failed to register " + absolutePath + " for monitoring");
+          }
+        }
         final List<CachedDirectory<T>> dirs = new ArrayList<>(directories.values());
         Collections.sort(
             dirs,

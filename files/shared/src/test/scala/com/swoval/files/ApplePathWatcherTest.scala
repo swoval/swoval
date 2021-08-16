@@ -84,6 +84,13 @@ object ApplePathWatcherTest extends TestSuite {
           }
         }
       }
+      "register results" - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
+        using(defaultWatcher((_: Event) => ())) { w =>
+          assert(w.register(dir).get)
+          assert(!w.register(dir).get)
+        }
+      }
     }
   }
 }

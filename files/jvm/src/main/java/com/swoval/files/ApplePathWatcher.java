@@ -7,6 +7,7 @@ import static com.swoval.files.PathWatchers.Event.Kind.Modify;
 import com.swoval.files.FileTreeViews.Observer;
 import com.swoval.files.PathWatchers.Event;
 import com.swoval.files.apple.ClosedFileEventMonitorException;
+import com.swoval.files.apple.CreateStreamException;
 import com.swoval.files.apple.FileEvent;
 import com.swoval.files.apple.FileEventMonitor;
 import com.swoval.files.apple.FileEventMonitors;
@@ -102,21 +103,22 @@ class ApplePathWatcher implements PathWatcher<PathWatchers.Event> {
    */
   public Either<IOException, Boolean> register(
       final Path path, final Flags.Create flags, final int maxDepth) {
-    boolean result = true;
+    boolean result = false;
     final Entry<Path, Stream> entry = find(path);
     directoryRegistry.addDirectory(path, maxDepth);
     if (entry == null) {
       try {
         FileEventMonitors.Handle id = fileEventMonitor.createStream(path, latency, timeUnit, flags);
         if (id == Handles.INVALID) {
-          result = false;
+          return Either.left(new CreateStreamException(path.toString()));
         } else {
+          result = true;
           removeRedundantStreams(path);
           appleFileEventStreams.put(path, new Stream(fileEventMonitor, id));
         }
       } catch (final ClosedFileEventMonitorException e) {
         close();
-        result = false;
+        return Either.left(e);
       }
     }
     if (Loggers.shouldLog(logger, Level.DEBUG))
