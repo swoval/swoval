@@ -360,6 +360,25 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
           }
         }
       }
+      'missingFile - withTempDirectory { dir =>
+        implicit val logger: TestLogger = new CachingLogger
+        withTempDirectory(dir) { subdir =>
+          val latch = new CountDownLatch(1)
+          val subdir2 = subdir.resolve("sub")
+          val subdir3 = subdir2.resolve("sub")
+          val subdir4 = subdir3.resolve("sub")
+          val file = subdir4.resolve("file")
+          usingAsync(simpleCache((e: Entry[Path]) => if (e.path == file) latch.countDown())) { c =>
+            Files.createDirectories(subdir4)
+            c.reg(file, false)
+            c.ls(subdir4) === Set.empty[Path]
+            file.createFile()
+            latch.waitFor(DEFAULT_TIMEOUT) {
+              c.ls(file) === Set(file)
+            }
+          }
+        }
+      }
     }
     'cache - {
       'update - withTempFile { file =>
