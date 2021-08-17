@@ -420,6 +420,7 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
           if (Loggers.shouldLog(logger, Level.WARN)) {
             logger.warn(this + " failed to register " + absolutePath + " for monitoring");
           }
+          throw Either.leftProjection(res).getValue();
         }
         final List<CachedDirectory<T>> dirs = new ArrayList<>(directories.values());
         Collections.sort(
