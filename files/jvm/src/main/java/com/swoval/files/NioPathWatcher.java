@@ -182,16 +182,10 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
     final int existingMaxDepth = directoryRegistry.maxDepthFor(absolutePath);
     boolean result = existingMaxDepth < maxDepth;
     final TypedPath typedPath = TypedPaths.get(absolutePath);
-    Path realPath;
-    try {
-      realPath = absolutePath.toRealPath();
-    } catch (final IOException e) {
-      realPath = absolutePath.toAbsolutePath();
-    }
     if (result) {
-      directoryRegistry.addDirectory(typedPath.getPath(), maxDepth);
+      directoryRegistry.addDirectory(absolutePath, maxDepth);
     }
-    final CachedDirectory<WatchedDirectory> dir = getOrAdd(realPath);
+    final CachedDirectory<WatchedDirectory> dir = getOrAdd(absolutePath);
     final List<Event> events = new ArrayList<>();
     if (dir != null) {
       final List<FileTreeDataViews.Entry<WatchedDirectory>> directories =
