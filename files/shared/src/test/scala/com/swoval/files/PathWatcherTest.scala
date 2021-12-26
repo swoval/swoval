@@ -309,6 +309,24 @@ trait PathWatcherTest extends TestSuite {
                    )
                  })
     }
+    "empty subs" - withTempDirectory { dir =>
+      implicit val logger: TestLogger = new CachingLogger
+      withTempDirectory(dir) { subdir =>
+        val emptySubdir = dir.resolve("empty")
+        val file = subdir.resolve("foo")
+        val latch = new CountDownLatch(1)
+        val callback =
+          (e: PathWatchers.Event) => if (e.path == file) { latch.countDown() }
+        usingAsync(defaultWatcher(callback)) { w =>
+          w.register(emptySubdir, 0)
+          w.register(file, 0)
+          file.createFile()
+          latch.waitFor(DEFAULT_TIMEOUT) {
+            assert(file.exists())
+          }
+        }
+      }
+    }
     'depth - {
       'limit - withTempDirectory { dir =>
         implicit val logger: TestLogger = new CachingLogger
