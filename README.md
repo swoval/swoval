@@ -30,10 +30,6 @@ A scala.js and jvm cross platform package that provides three important interfac
 
 Javadocs may be found at
 [files-jvm](https://swoval.github.io/docs/swoval/2.1.8/jvm/api/).
-Scaladocs for scala.js may be found at
-[files-js](https://swoval.github.io/docs/swoval/2.1.8/js/api/).
-Not that most of the scala.js code is automatically generated from the java code so the javadocs
-should be considered canonical.
 
 The remainder of this readme will provide a brief overview of the three main classes along with
 examples. Examples are provided in java 8 syntax to allow lambdas, but the library targets java 7.
