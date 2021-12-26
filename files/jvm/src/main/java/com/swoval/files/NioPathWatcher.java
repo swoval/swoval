@@ -192,7 +192,6 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
       Path root = dir.getEntry().getTypedPath().getPath();
       Path relative = root.relativize(current);
       Path lastPath = root;
-      boolean stop = false;
       final List<FileTreeDataViews.Entry<WatchedDirectory>> entries =
           dir.listEntries(root, relative.getNameCount() + 1, AllPass);
       Iterator<FileTreeDataViews.Entry<WatchedDirectory>> it = entries.iterator();
