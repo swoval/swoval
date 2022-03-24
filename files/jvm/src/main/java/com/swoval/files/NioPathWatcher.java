@@ -204,7 +204,28 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
       }
       update(dir, TypedPaths.get(lastPath), events, true);
     }
-    runCallbacks(events);
+    {
+      // It is not clear that any of these callbacks should be
+      // ran at all. If the path watcher is working correctly
+      // then presumably it has already reported all of the change
+      // events. Creation events just indicate that after the
+      // registration we have added new paths to watch. These
+      // should not be reported back to users. Out of paranoia,
+      // we are going to continue running the callbacks for non
+      // Creation events because at the time of writing I am not
+      // 100% sure that this won't break any downstream users of
+      // the library. That being said, it would probably be safe
+      // to remove this entire code block and not run any of the
+      // callbacks at all upon registration.
+      //
+      final List<Event> eventsMinusCreate = new ArrayList<>();
+      for (int i = 0; i < events.size(); i++) {
+        if (events.get(i).getKind() != Kind.Create) {
+          eventsMinusCreate.add(events.get(i));
+        }
+      }
+      runCallbacks(eventsMinusCreate);
+    }
     if (Loggers.shouldLog(logger, Level.DEBUG))
       logger.debug(this + " registered " + path + " with max depth " + maxDepth);
     return Either.right(result);

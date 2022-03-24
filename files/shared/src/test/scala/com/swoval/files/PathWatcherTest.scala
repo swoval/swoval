@@ -441,6 +441,24 @@ trait PathWatcherTest extends TestSuite {
         }
       }
     }
+    'callbacks - withTempDirectory { dir =>
+      implicit val logger: TestLogger = new CachingLogger
+      val callback = (e: PathWatchers.Event) =>
+        // This would create a spurious creation event if
+        // the PathWatcher register invokes certain unneeded callbacks
+        if (e.getKind == Kind.Create) events.add(e)
+        else if (e.getKind == Kind.Modify) {
+          if (e.path.endsWith("foo")) events.add(e)
+        }
+      withTempDirectory(dir) { subdir =>
+        usingAsync(defaultWatcher(callback)) { w =>
+          w.register(dir.resolve("A"))
+          w.register(subdir)
+          val file = subdir.resolve(Paths.get("foo")).createFile()
+          events.poll(DEFAULT_TIMEOUT)(_.path ==> file)
+        }
+      }
+    }
   }
 }
 
