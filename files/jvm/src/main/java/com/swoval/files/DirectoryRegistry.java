@@ -68,6 +68,17 @@ interface DirectoryRegistry extends Filter<Path>, AutoCloseable {
 class DirectoryRegistries {
   private DirectoryRegistries() {}
 
+  static Filter<TypedPath> toTypedPathFilter(
+      final DirectoryRegistry registry, final Filter<TypedPath> filter) {
+    if (filter == null) return toTypedPathFilter(registry);
+    return new Filter<TypedPath>() {
+      @Override
+      public boolean accept(final TypedPath typedPath) {
+        return filter.accept(typedPath) && registry.accept(typedPath.getPath());
+      }
+    };
+  }
+
   static Filter<TypedPath> toTypedPathFilter(final DirectoryRegistry registry) {
     return new Filter<TypedPath>() {
       @Override
