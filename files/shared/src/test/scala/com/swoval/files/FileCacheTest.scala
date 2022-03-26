@@ -40,6 +40,9 @@ trait FileCacheTest extends TestSuite { self: TestSuite =>
       getObserver(onCreate, onUpdate, onDelete),
       factory
     )
+  def filterCache(filter: TypedPath => Boolean)(f: Entry[Path] => Unit)
+    (implicit testLogger: TestLogger): FileTreeRepository[Path] =
+    FileCacheTest.getFiltered(true, identity, getObserver(f), factory, filter)
 }
 
 object FileCacheTest {
@@ -85,7 +88,16 @@ object FileCacheTest {
       followLinks: Boolean,
       converter: FileTreeDataViews.Converter[T],
       cacheObserver: FileTreeDataViews.CacheObserver[T],
-      watcherFactory: (DirectoryRegistry, TestLogger) => PathWatcher[PathWatchers.Event]
+      watcherFactory: (DirectoryRegistry, TestLogger) => PathWatcher[PathWatchers.Event],
+  )(implicit testLogger: TestLogger): FileTreeRepository[T] = {
+    getFiltered(followLinks, converter, cacheObserver, watcherFactory, null)
+  }
+  private[files] def getFiltered[T <: AnyRef](
+      followLinks: Boolean,
+      converter: FileTreeDataViews.Converter[T],
+      cacheObserver: FileTreeDataViews.CacheObserver[T],
+      watcherFactory: (DirectoryRegistry, TestLogger) => PathWatcher[PathWatchers.Event],
+      filter: Filter[TypedPath],
   )(implicit testLogger: TestLogger): FileTreeRepository[T] = {
     val symlinkWatcher =
       if (followLinks)
@@ -93,7 +105,7 @@ object FileCacheTest {
       else null
     val callbackExecutor = Executor.make("FileTreeRepository-callback-executor")
     val tree =
-      new FileCacheDirectoryTree(converter, callbackExecutor, symlinkWatcher, false, testLogger)
+      new FileCacheDirectoryTree(converter, callbackExecutor, symlinkWatcher, false, testLogger, filter)
     val pathWatcher = watcherFactory(tree.readOnlyDirectoryRegistry, testLogger)
     pathWatcher.addObserver((e: PathWatchers.Event) => tree.handleEvent(e))
     val watcher = new FileCachePathWatcher(tree, pathWatcher)

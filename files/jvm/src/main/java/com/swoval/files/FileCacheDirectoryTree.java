@@ -101,7 +101,7 @@ class FileCachePendingFiles extends Lockable {
 
 class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<T> {
   private final DirectoryRegistry directoryRegistry = new DirectoryRegistryImpl();
-  private final Filter<TypedPath> filter = DirectoryRegistries.toTypedPathFilter(directoryRegistry);
+  private final Filter<TypedPath> filter;
   private final Converter<T> converter;
   private final CacheObservers<T> observers = new CacheObservers<>();
   private final Executor callbackExecutor;
@@ -125,12 +125,29 @@ class FileCacheDirectoryTree<T> implements ObservableCache<T>, FileTreeDataView<
       final SymlinkWatcher symlinkWatcher,
       final boolean rescanOnDirectoryUpdate,
       final Logger logger) {
+    this(
+        converter,
+        callbackExecutor,
+        symlinkWatcher,
+        rescanOnDirectoryUpdate,
+        Loggers.getLogger(),
+        null);
+  }
+
+  FileCacheDirectoryTree(
+      final Converter<T> converter,
+      final Executor callbackExecutor,
+      final SymlinkWatcher symlinkWatcher,
+      final boolean rescanOnDirectoryUpdate,
+      final Logger logger,
+      final Filter<TypedPath> filter) {
     this.converter = converter;
     this.callbackExecutor = callbackExecutor;
     this.symlinkWatcher = symlinkWatcher;
     this.followLinks = symlinkWatcher != null;
     this.rescanOnDirectoryUpdate = rescanOnDirectoryUpdate;
     this.logger = logger;
+    this.filter = DirectoryRegistries.toTypedPathFilter(directoryRegistry, filter);
     if (symlinkWatcher != null) {
       final boolean log = System.getProperty("swoval.symlink.debug", "false").equals("true");
       symlinkWatcher.addObserver(

@@ -687,6 +687,23 @@ trait BasicFileCacheTest extends TestSuite with FileCacheTest {
         }
       }
     }
+    'filter - withTempDirectory { dir =>
+      implicit val logger: TestLogger = new CachingLogger
+      val latch = new CountDownLatch(1)
+      val scalaFile = dir.resolve("A.scala")
+      val javaFile = dir.resolve("A.java")
+      usingAsync(filterCache(_.getPath.getFileName.toString.endsWith(".scala"))((e: Entry[Path]) => {
+        if (e.path == scalaFile) latch.countDown()
+        })) { c =>
+        c.register(dir)
+        javaFile.createFile()
+        scalaFile.createFile()
+        latch.waitFor(DEFAULT_TIMEOUT) {
+          c.list(dir, 0, AllPass).asScala.toSeq.map(_.getPath) ===
+            Seq(scalaFile)
+        }
+      }
+    }
   }
 }
 
