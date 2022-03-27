@@ -47,7 +47,7 @@ object Build {
 
   def commonSettings: SettingsDefinition =
     settings(
-      scalaVersion in ThisBuild := scala212,
+      ThisBuild / scalaVersion := scala212,
       organization := "com.swoval",
       homepage := Some(url("https://github.com/swoval/swoval")),
       scmInfo := Some(
@@ -63,7 +63,7 @@ object Build {
       ),
       licenses += ("MIT", url("https://opensource.org/licenses/MIT")),
       scalacOptions ++= Seq("-feature"),
-      publishMavenStyle in publishLocal := false,
+      publishLocal / publishMavenStyle := false,
       publishTo := {
         val p = publishTo.value
         if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true"))
@@ -74,9 +74,9 @@ object Build {
           Some(Opts.resolver.sonatypeReleases): Option[Resolver]
         else p
       },
-      skip in ThisBuild in buildNative := java.lang.Boolean
+      ThisBuild / buildNative / skip := java.lang.Boolean
         .valueOf(System.getProperty("swoval.skip.native", "true")),
-      version in ThisBuild := {
+      ThisBuild / version := {
         val v = baseVersion
         if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true")) {
           if (v.endsWith("-SNAPSHOT")) v else s"$v-SNAPSHOT"
@@ -84,7 +84,7 @@ object Build {
           v
         }
       },
-      BuildKeys.java8rt in ThisBuild := {
+      ThisBuild / BuildKeys.java8rt := {
         if (Properties.isMac) {
           import scala.sys.process._
           Seq("mdfind", "-name", "rt.jar").!! match {
@@ -134,10 +134,10 @@ object Build {
 
   def releaseTask(key: TaskKey[Unit]) =
     Def.taskDyn {
-      assert((scalaVersion in crossVersion).value == scala212)
+      assert((crossVersion / scalaVersion).value == scala212)
       val valid = checkFormat.toTask(" silent").value
       if (valid) {
-        Def.task(key in files.jvm).value
+        Def.task(files.jvm / key).value
       } else {
         throw new IllegalStateException("There are local diffs.")
       }
@@ -197,7 +197,7 @@ object Build {
         import sys.process._
         (Compile / javafmtCheck).value
         clangfmtCheck.value
-        (scalafmt in Compile).value
+        (Compile / scalafmt).value
         val output = Seq("git", "status").!!
         println(output)
         val result = output.contains("working tree clean")
@@ -227,8 +227,8 @@ object Build {
 
   def nodeNativeLibs: SettingsDefinition =
     settings(
-      (npmUpdate in Compile) := addLib((npmUpdate in Compile).value),
-      (npmUpdate in Test) := addLib((npmUpdate in Test).value)
+      (Compile / npmUpdate) := addLib((Compile / npmUpdate).value),
+      (Test / npmUpdate) := addLib((Test / npmUpdate).value)
     )
 
   def cleanGlobals(file: Attributed[File]) = {
@@ -240,25 +240,25 @@ object Build {
 
   def cleanAllGlobals: SettingsDefinition =
     settings(
-      (fastOptJS in Compile) := cleanGlobals((fastOptJS in Compile).value),
-      (fastOptJS in Test) := cleanGlobals((fastOptJS in Test).value),
-      (fullOptJS in Compile) := cleanGlobals((fullOptJS in Compile).value),
-      (fullOptJS in Test) := cleanGlobals((fullOptJS in Test).value)
+      (Compile / fastOptJS) := cleanGlobals((Compile / fastOptJS).value),
+      (Test / fastOptJS) := cleanGlobals((Test / fastOptJS).value),
+      (Compile / fullOptJS) := cleanGlobals((Compile / fullOptJS).value),
+      (Test / fullOptJS) := cleanGlobals((Test / fullOptJS).value)
     )
 
   def createCrossLinks(projectName: String): SettingsDefinition = {
     def createLinks(conf: Configuration): Def.Setting[Task[Seq[File]]] =
-      sources in conf := {
-        val original = (sources in conf).value
+      conf / sources := {
+        val original = (conf / sources).value
         val base = baseDirectory.value.toPath
         val root = base.getParent.getParent
         val shared = base.getParent.resolve("shared")
-        val sourceDirectories = (unmanagedSourceDirectories in conf).value.collect {
+        val sourceDirectories = (conf / unmanagedSourceDirectories).value.collect {
           case dir if dir.getName != "java" && dir.exists && !dir.toPath.startsWith(shared) =>
             dir.toPath
         }
-        val filter = (includeFilter in unmanagedSources).value --
-          (excludeFilter in unmanagedSources).value
+        val filter = (unmanagedSources / includeFilter).value --
+          (unmanagedSources / excludeFilter).value
         val links = sourceDirectories.distinct.flatMap { dir =>
           val relative = base.relativize(dir)
           val sharedBase = shared.resolve(relative)
@@ -326,7 +326,7 @@ object Build {
       commonSettings,
       name := "file-tree-views",
       description := "File system apis.",
-      watchSources in Compile ++= {
+      Compile / watchSources ++= {
         Files
           .walk(baseDirectory.value.toPath.getParent)
           .iterator
@@ -351,15 +351,15 @@ object Build {
       createCrossLinks("FILESJS"),
       cleanAllGlobals,
       nodeNativeLibs,
-      (fullOptJS in Compile) := {
+      (Compile / fullOptJS) := {
         val npm = baseDirectory.value.toPath.resolve("npm")
         Files.createDirectories(npm.resolve("src"))
 
-        val filesJS = (fullOptJS in Compile).value
+        val filesJS = (Compile / fullOptJS).value
         Files.copy(filesJS.data.toPath, npm.resolve("files.js"), REPLACE_EXISTING)
         filesJS
       },
-      compile in Compile := {
+      Compile / compile := {
         val log = state.value.log
         val npm = baseDirectory.value.toPath.resolve("npm")
 
@@ -399,7 +399,7 @@ object Build {
           }
         }
         swovalNodeMD5Sum = digest
-        (compile in Compile).value
+        (Compile / compile).value
       },
       generateJSSource := Def.inputTaskDyn {
         val arg = Def.spaceDelimited("<arg>").parsed.head
@@ -410,12 +410,12 @@ object Build {
           .find(_.getFileName == Paths.get(s"$arg.java")) match {
           case Some(p) =>
             val pkg = p.iterator.asScala.toIndexedSeq.drop(5).dropRight(1).mkString("/")
-            val target = (scalaSource in Compile).value.toPath.resolve(pkg)
+            val target = (Compile / scalaSource).value.toPath.resolve(pkg)
             val ts = new TaskSequential {}
             ts.sequential(
-              (run in scalagen in Compile).toTask(s" ${p.toAbsolutePath} $target"),
-              scalafmt in Compile,
-              compile in Compile,
+              (scalagen / Compile / run).toTask(s" ${p.toAbsolutePath} $target"),
+              Compile / scalafmt,
+              Compile / compile,
               Def.task(())
             )
           case _ => Def.task(println(s"Couldn't find source file for $arg"))
@@ -429,12 +429,12 @@ object Build {
             def convertSources(pkg: String, sources: String*) =
               Def.taskDyn {
                 val javaSourceDir: JPath =
-                  base.relativize((javaSource in Compile).value.toPath.resolve(pkg))
+                  base.relativize((Compile / javaSource).value.toPath.resolve(pkg))
                 val javaDir: JPath = base.resolveSibling("jvm").resolve(javaSourceDir)
                 val javaSources = sources.map(f => javaDir.resolve(s"$f.java").toString)
-                val target = (scalaSource in Compile).value.toPath.resolve(pkg)
+                val target = (Compile / scalaSource).value.toPath.resolve(pkg)
                 Def.task {
-                  (run in scalagen in Compile)
+                  (scalagen / Compile / run)
                     .toTask((javaSources :+ target).mkString(" ", " ", ""))
                     .value
                 }
@@ -489,9 +489,9 @@ object Build {
               convertSources("com/swoval/logging", "Logger", "Loggers").value
             }
           },
-          scalafmt in Compile,
-          compile in Compile,
-          doc in Compile
+          Compile / scalafmt,
+          Compile / compile,
+          Compile / doc
         )
         .value
     )
@@ -508,7 +508,7 @@ object Build {
       ) ++
         BuildKeys.java8rt.value.map(rt => Seq("-bootclasspath", rt)).getOrElse(Seq.empty) ++
         Seq("-Xlint:unchecked", "-Xlint:deprecation"),
-      jacocoReportSettings in Test := JacocoReportSettings()
+      Test / jacocoReportSettings := JacocoReportSettings()
         .withThresholds(
           JacocoThresholds(
             instruction = 82,
@@ -519,7 +519,7 @@ object Build {
             method = 84
           )
         ),
-      jacocoExcludes in Test := Seq(
+      Test / jacocoExcludes := Seq(
         "com.swoval.runtime.*",
         "com.swoval.files.CachedDirectories*",
         "com.swoval.files.CacheObservers*",
@@ -538,7 +538,7 @@ object Build {
         "com.swoval.logging.*"
       ) ++ (if (!Properties.isMac) Seq("*apple*", "*Apple*", "*MacOS*")
             else Nil),
-      javacOptions in (Compile, doc) :=
+      Compile / doc / javacOptions :=
         Seq("-overview", baseDirectory.value.toPath.resolve("overview.html").toString),
       crossScalaVersions := scalaCrossVersions,
       crossPaths := false,
@@ -555,18 +555,18 @@ object Build {
           throw new IllegalStateException("Couldn't build native library!")
         }
       },
-      unmanagedResources in Compile := Def.taskDyn {
-        val res = (unmanagedResources in Compile).value
-        if ((skip in buildNative).value) Def.task(res)
+      Compile / unmanagedResources := Def.taskDyn {
+        val res = (Compile / unmanagedResources).value
+        if ((buildNative / skip).value) Def.task(res)
         else
           Def.task {
             buildNative.value
             res
           }
       }.value,
-      skip in formatSources := System.getProperty("swoval.format", "true") == "true",
+      formatSources / skip := System.getProperty("swoval.format", "true") == "true",
       formatSources := Def.taskDyn {
-        if ((skip in formatSources).value) Def.task {
+        if ((formatSources / skip).value) Def.task {
           (Compile / javafmt).value
           clangfmt.value
           ()
@@ -574,9 +574,9 @@ object Build {
         else Def.task(())
       }.value,
       Compile / compile := (Compile / compile).dependsOn(formatSources).value,
-      fork in Test := System.getProperty("swoval.fork.tests", "false") == "true",
-      forkOptions in Test := {
-        val prev = (forkOptions in Test).value
+      Test / fork := System.getProperty("swoval.fork.tests", "false") == "true",
+      Test / forkOptions := {
+        val prev = (Test / forkOptions).value
         prev.withRunJVMOptions(
           prev.runJVMOptions ++ Option(System.getProperty("swoval.test.debug")).map(v =>
             s"-Dswoval.test.debug=$v"
@@ -597,7 +597,7 @@ object Build {
           .headOption
           .flatMap(a => Try(a.toInt).toOption)
           .getOrElse(Try(System.getProperty("swoval.alltests.iterations", "1").toInt).getOrElse(1))
-        val cp = (fullClasspath in Test).value
+        val cp = (Test / fullClasspath).value
           .map(_.data)
           .filterNot(_.toString.contains("jacoco"))
           .mkString(File.pathSeparator)
@@ -619,7 +619,7 @@ object Build {
       quickListReflectionTest := {
         ("" +: Def.spaceDelimited("<arg>").parsed) foreach { arg =>
           val cp =
-            (fullClasspath in Test).value.map(_.data).filterNot(_.toString.contains("jacoco"))
+            (Test / fullClasspath).value.map(_.data).filterNot(_.toString.contains("jacoco"))
           val prefix = Seq("java", "-classpath", cp.mkString(File.pathSeparator))
           val args = prefix ++ (if (arg.nonEmpty) Seq(s"-Dswoval.directory.lister=$arg")
                                 else Nil) ++
@@ -663,7 +663,7 @@ object Build {
       libraryDependencies += scalaMacros % scalaVersion.value,
       utestCrossMain,
       utestFramework,
-      skip in publish := true,
+      publish / skip := true,
     )
     .jvmSettings(crossScalaVersions := scalaCrossVersions)
 }
