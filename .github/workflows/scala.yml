@@ -16,8 +16,26 @@ permissions:
 
 jobs:
   build:
-
-    runs-on: [ubuntu-latest, windows-latest, macos-11]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-11, ubuntu-latest]
+        java: [8, 11]
+        shard: [1, 2]
+        exclude:
+          - os: windows-latest
+            java: 8
+            shard: 1
+          - os: windows-latest
+            java: 8
+            shard: 2
+          - os: macOS-latest
+            java: 8
+            shard: 1
+          - os: macOS-latest
+            java: 8
+            shard: 2
 
     steps:
     - uses: actions/checkout@v3
