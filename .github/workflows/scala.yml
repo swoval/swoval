@@ -1,0 +1,42 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Scala CI
+
+on:
+  push:
+    branches: [ "develop" ]
+  pull_request:
+    branches: [ "develop" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-11, ubuntu-latest]
+        java: [8, 11]
+        exclude:
+          - os: windows-latest
+            java: 8
+          - os: macos-11
+            java: 8
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up JDK 11
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        cache: 'sbt'
+    - name: Run tests
+      run: sbt "filesJVM/jacoco" "travisQuickListReflectionTest" "allTests"
+      env:
+        SBT_OPTS: -Xmx2g -Dswoval.format=false -Dfile.encoding=UTF8 -Dswoval.skip.native=true -Dswoval.fork.tests=true -Dswoval.alltests.iterations=50
