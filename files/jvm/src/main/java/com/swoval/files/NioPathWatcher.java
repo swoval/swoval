@@ -188,24 +188,33 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
     final CachedDirectory<WatchedDirectory> dir = getOrAdd(absolutePath);
     final List<Event> events = new ArrayList<>();
     if (dir != null) {
-      Path current = typedPath.getPath();
-      Path root = dir.getEntry().getTypedPath().getPath();
-      Path relative = root.relativize(current);
-      Path lastPath = root;
-      final List<FileTreeDataViews.Entry<WatchedDirectory>> entries =
-          dir.listEntries(root, relative.getNameCount() + 1, AllPass);
-      Iterator<FileTreeDataViews.Entry<WatchedDirectory>> it = entries.iterator();
-      while (it.hasNext()) {
-        FileTreeDataViews.Entry<WatchedDirectory> entry = it.next();
-        Path next = entry.getTypedPath().getPath();
-        if (current.startsWith(next) && (next.toString().length() > lastPath.toString().length())) {
-          lastPath = next;
+      if (result) {
+        Path current = typedPath.getPath();
+        Path root = dir.getEntry().getTypedPath().getPath();
+        Path relative = root.relativize(current);
+        Path lastPath = root;
+        final List<FileTreeDataViews.Entry<WatchedDirectory>> entries =
+            dir.listEntries(root, relative.getNameCount() + 1, AllPass);
+        Iterator<FileTreeDataViews.Entry<WatchedDirectory>> it = entries.iterator();
+        while (it.hasNext()) {
+          FileTreeDataViews.Entry<WatchedDirectory> entry = it.next();
+          Path next = entry.getTypedPath().getPath();
+          if (current.startsWith(next)
+              && (next.toString().length() > lastPath.toString().length())) {
+            lastPath = next;
+          }
         }
-      }
-      final List<FileTreeDataViews.Entry<WatchedDirectory>> directories =
-          dir.listEntries(lastPath, -1, AllPass);
-      if (result || directories.isEmpty() || directories.get(0).getValue().isRight()) {
-        update(dir, TypedPaths.get(lastPath), events, true);
+        final List<FileTreeDataViews.Entry<WatchedDirectory>> directories =
+            dir.listEntries(lastPath, -1, AllPass);
+        if (directories.isEmpty() || directories.get(0).getValue().isRight()) {
+          update(dir, TypedPaths.get(lastPath), events, true);
+        }
+      } else {
+        final List<FileTreeDataViews.Entry<WatchedDirectory>> directories =
+            dir.listEntries(typedPath.getPath(), -1, AllPass);
+        if (directories.isEmpty() || directories.get(0).getValue().isRight()) {
+          update(dir, typedPath, events, true);
+        }
       }
     }
     {
