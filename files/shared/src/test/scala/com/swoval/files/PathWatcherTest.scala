@@ -83,6 +83,7 @@ trait PathWatcherTest extends TestSuite {
         }
       }
       'onTouch - withTempFile { f =>
+        f.setLastModifiedTime(5000L)
         implicit val logger: TestLogger = new CachingLogger
         val callback =
           (e: PathWatchers.Event) =>

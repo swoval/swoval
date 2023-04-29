@@ -206,13 +206,13 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         }
         final List<FileTreeDataViews.Entry<WatchedDirectory>> directories =
             dir.listEntries(lastPath, -1, AllPass);
-        if (directories.isEmpty() || directories.get(0).getValue().isRight()) {
+        if (!directories.isEmpty() && directories.get(0).getValue().isRight()) {
           update(dir, TypedPaths.get(lastPath), events, true);
         }
       } else {
         final List<FileTreeDataViews.Entry<WatchedDirectory>> directories =
             dir.listEntries(typedPath.getPath(), -1, AllPass);
-        if (directories.isEmpty() || directories.get(0).getValue().isRight()) {
+        if (!directories.isEmpty() && directories.get(0).getValue().isRight()) {
           update(dir, typedPath, events, true);
         }
       }
