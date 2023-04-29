@@ -217,7 +217,8 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
         }
       }
     }
-    {
+    /*
+    if (false) {
       // It is not clear that any of these callbacks should be
       // ran at all. If the path watcher is working correctly
       // then presumably it has already reported all of the change
@@ -239,6 +240,7 @@ class NioPathWatcher implements PathWatcher<PathWatchers.Event>, AutoCloseable {
       }
       runCallbacks(eventsMinusCreate);
     }
+    */
     if (Loggers.shouldLog(logger, Level.DEBUG))
       logger.debug(this + " registered " + path + " with max depth " + maxDepth);
     return Either.right(result);
