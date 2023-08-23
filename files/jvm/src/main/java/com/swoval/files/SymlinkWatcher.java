@@ -40,7 +40,7 @@ class SymlinkWatcher implements Observable<Event>, AutoCloseable {
   private final AtomicBoolean isClosed = new AtomicBoolean(false);
   private final Observers<Event> observers = new Observers<>();
   private final Executor callbackExecutor =
-      Executor.make("com.swoval.files.SymlinkWather.callback-executor");
+      Executor.make("com.swoval.files.SymlinkWatcher.callback-executor");
   private final Logger logger;
 
   SymlinkWatcher(final PathWatcher<PathWatchers.Event> watcher) {
