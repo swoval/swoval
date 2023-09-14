@@ -7,6 +7,7 @@ import com.swoval.files.FileTreeDataViews.Converter
 import com.swoval.files.FileTreeDataViews.Entry
 import com.swoval.functional.Filter
 import com.swoval.functional.Filters
+import com.swoval.runtime.Platform;
 import java.io.IOException
 import java.nio.file.Path
 import java.util.ArrayList
@@ -21,8 +22,10 @@ object FileTreeViews {
   val nioLister: DirectoryLister = new NioDirectoryLister()
 
   val defaultLister: DirectoryLister =
+    //Note: Windows defaults to use nioLister due to performance reasons, see issue #161
+
     if (listers(1) != null) listers(1)
-    else if (listers(0) != null) listers(0)
+    else if (!Platform.IsWin && listers(0) != null) listers(0)
     else nioLister
 
   private val nioDirectoryLister: DirectoryLister = nioLister
