@@ -8,9 +8,16 @@ object QuickListReflectionTest {
     field.setAccessible(true)
     val clazz = args.headOption match {
       case Some(c) => Class.forName(c)
-      case _       => classOf[NativeDirectoryLister]
+      case _ if System.getProperty("os.name", "").toLowerCase.startsWith("win") =>
+        classOf[NioDirectoryLister]
+      case _ => classOf[NativeDirectoryLister]
     }
     val lister = field.get(default)
-    assert(clazz.isAssignableFrom(lister.getClass))
+    if (!clazz.isAssignableFrom(lister.getClass)) {
+      val a =
+        args.headOption.getOrElse("com.swoval.files.NativeDirectoryLister")
+      val msg = s"Expected $a but got ${lister.getClass.getName}"
+      throw new RuntimeException(msg)
+    }
   }
 }

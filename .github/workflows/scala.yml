@@ -37,6 +37,6 @@ jobs:
         distribution: 'temurin'
         cache: 'sbt'
     - name: Run tests
-      run: sbt "filesJVM/jacoco" "travisQuickListReflectionTest" "allTests"
+      run: sbt "travisQuickListReflectionTest" "filesJVM/jacoco" "allTests"
       env:
         SBT_OPTS: -Xmx2g -Dswoval.format=false -Dfile.encoding=UTF8 -Dswoval.skip.native=true -Dswoval.fork.tests=true -Dswoval.alltests.iterations=50

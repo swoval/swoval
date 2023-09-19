@@ -585,18 +585,11 @@ object Build {
           )
         )
       },
-      travisQuickListReflectionTest := Def.taskDyn {
-        val tpe = System.getProperty("os.name", "") match {
-          case s if s.startsWith("Windows") => "Nio"
-          case _                            => "Native"
-        }
-        val lister = s"com.swoval.files.${tpe}DirectoryLister"
-        Def.task {
-          quickListReflectionTest
-            .toTask(s" com.swoval.files.NioDirectoryLister $lister")
-            .value
-        }
-      }.value,
+      travisQuickListReflectionTest := {
+        quickListReflectionTest
+          .toTask(s" com.swoval.files.NioDirectoryLister com.swoval.files.NativeDirectoryLister")
+          .value
+      },
       allTests := {
         val count = Def
           .spaceDelimited("<arg>")
@@ -632,7 +625,13 @@ object Build {
                                 else Nil) ++
             Seq(
               "com.swoval.files.QuickListReflectionTest",
-              if (arg.isEmpty) "com.swoval.files.NativeDirectoryLister" else arg
+              if (arg.isEmpty)
+                System.getProperty("os.name", "").toLowerCase match {
+                  case s if s.startsWith("win") =>
+                    "com.swoval.files.NioDirectoryLister"
+                  case _ => "com.swoval.files.NativeDirectoryLister"
+                }
+              else arg
             )
           val proc = new ProcessBuilder(args: _*).start()
           proc.waitFor(5, TimeUnit.SECONDS)
