@@ -5,6 +5,7 @@ import com.swoval.files.FileTreeDataViews.Converter;
 import com.swoval.files.FileTreeDataViews.Entry;
 import com.swoval.functional.Filter;
 import com.swoval.functional.Filters;
+import com.swoval.runtime.Platform;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -23,7 +24,10 @@ public class FileTreeViews {
     DirectoryLister nioLister = new NioDirectoryLister();
     nioDirectoryLister = nioLister;
     DirectoryLister defaultLister =
-        listers[1] != null ? listers[1] : listers[0] != null ? listers[0] : nioLister;
+        // Note: Windows defaults to use nioLister due to performance reasons, see issue #161
+        listers[1] != null
+            ? listers[1]
+            : (!Platform.isWin() && listers[0] != null) ? listers[0] : nioLister;
     defaultDirectoryLister = defaultLister;
     defaultFileTreeView = new SimpleFileTreeView(defaultLister, false);
   }
