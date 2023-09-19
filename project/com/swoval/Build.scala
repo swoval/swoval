@@ -585,11 +585,18 @@ object Build {
           )
         )
       },
-      travisQuickListReflectionTest := {
-        quickListReflectionTest
-          .toTask(" com.swoval.files.NioDirectoryLister com.swoval.files.NativeDirectoryLister")
-          .value
-      },
+      travisQuickListReflectionTest := Def.taskDyn {
+        val tpe = System.getProperty("os.name", "") match {
+          case s if s.startsWith("Windows") => "Nio"
+          case _                            => "Native"
+        }
+        val lister = s"com.swoval.files.${tpe}DirectoryLister"
+        Def.task {
+          quickListReflectionTest
+            .toTask(s" com.swoval.files.NioDirectoryLister $lister")
+            .value
+        }
+      }.value,
       allTests := {
         val count = Def
           .spaceDelimited("<arg>")
