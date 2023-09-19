@@ -15,7 +15,7 @@ File tree views
 File tree views is a cross platform library for efficiently listing the paths in
 a directory and monitoring a directory for updates.
 
-The latest version is 2.1.9.
+The latest version is 2.1.11.
 
 
 Overview
@@ -29,7 +29,7 @@ A scala.js and jvm cross platform package that provides three important interfac
   and the FileTreeView interfaces.
 
 Javadocs may be found at
-[files-jvm](https://swoval.github.io/docs/swoval/2.1.9/jvm/api/).
+[files-jvm](https://swoval.github.io/docs/swoval/2.1.11/jvm/api/).
 
 The remainder of this readme will provide a brief overview of the three main classes along with
 examples. Examples are provided in java 8 syntax to allow lambdas, but the library targets java 7.
@@ -38,8 +38,8 @@ Setup
 ==
 The file tree views package is available on
 [maven](https://mvnrepository.com/artifact/com.swoval/file-tree-views) and the latest version is
-`2.1.9`. For sbt builds, it can be added with
-`libraryDependencies += "com.swoval" % "file-tree-views" % "2.1.9"`.
+`2.1.11`. For sbt builds, it can be added with
+`libraryDependencies += "com.swoval" % "file-tree-views" % "2.1.11"`.
 
 FileTreeRepository
 ==
@@ -226,13 +226,13 @@ Please report any that you find.
 Javascript
 ==
 There is also an npm module available [swoval-file-tree-views](https://www.npmjs.com/package/swoval_file_tree_views),
-that exports a subset of the public api as documented in [files-jvm](https://swoval.github.io/docs/swoval/2.1.9/jvm/api).
+that exports a subset of the public api as documented in [files-jvm](https://swoval.github.io/docs/swoval/2.1.11/jvm/api).
 In general, it should have very similar semantics except that all of the types in the public api
 are javascript native types, i.e. String instead of java.nio.file.Path. The api documentation
 can be found here:
-[javascript public api](https://swoval.github.io/docs/swoval/2.1.9/js/api/com/swoval/files/node/index.html).
+[javascript public api](https://swoval.github.io/docs/swoval/2.1.11/js/api/com/swoval/files/node/index.html).
 
-To use, add `"swoval_file_tree_views": "2.1.9"` to your package.json file.
+To use, add `"swoval_file_tree_views": "2.1.11"` to your package.json file.
 
 A simple example:
 ```javascript
