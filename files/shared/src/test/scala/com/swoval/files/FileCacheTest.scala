@@ -40,8 +40,9 @@ trait FileCacheTest extends TestSuite { self: TestSuite =>
       getObserver(onCreate, onUpdate, onDelete),
       factory
     )
-  def filterCache(filter: TypedPath => Boolean)(f: Entry[Path] => Unit)
-    (implicit testLogger: TestLogger): FileTreeRepository[Path] =
+  def filterCache(
+      filter: TypedPath => Boolean
+  )(f: Entry[Path] => Unit)(implicit testLogger: TestLogger): FileTreeRepository[Path] =
     FileCacheTest.getFiltered(true, identity, getObserver(f), factory, filter)
 }
 
@@ -105,7 +106,14 @@ object FileCacheTest {
       else null
     val callbackExecutor = Executor.make("FileTreeRepository-callback-executor")
     val tree =
-      new FileCacheDirectoryTree(converter, callbackExecutor, symlinkWatcher, false, testLogger, filter)
+      new FileCacheDirectoryTree(
+        converter,
+        callbackExecutor,
+        symlinkWatcher,
+        false,
+        testLogger,
+        filter
+      )
     val pathWatcher = watcherFactory(tree.readOnlyDirectoryRegistry, testLogger)
     pathWatcher.addObserver((e: PathWatchers.Event) => tree.handleEvent(e))
     val watcher = new FileCachePathWatcher(tree, pathWatcher)
