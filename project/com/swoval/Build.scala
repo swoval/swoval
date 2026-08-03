@@ -16,7 +16,7 @@ import com.swoval.format.SourceFormatPlugin.{
   javafmtCheck,
   scalafmt
 }
-import com.typesafe.sbt.pgp.PgpKeys.publishSigned
+import com.jsuereth.sbtpgp.PgpKeys.publishSigned
 import org.apache.commons.codec.digest.DigestUtils
 import org.scalajs.core.tools.linker.backend.ModuleKind
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.{ fastOptJS, fullOptJS, scalaJSModuleKind }
@@ -66,12 +66,13 @@ object Build {
       publishLocal / publishMavenStyle := false,
       publishTo := {
         val p = publishTo.value
+        val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
         if (sys.props.get("SonatypeSnapshot").fold(false)(_ == "true"))
-          Some(Opts.resolver.sonatypeSnapshots): Option[Resolver]
+          Some("central-snapshots" at centralSnapshots): Option[Resolver]
         else if (sys.props.get("SonatypeStaging").fold(false)(_ == "true"))
-          Some(Opts.resolver.sonatypeStaging): Option[Resolver]
+          localStaging.value: Option[Resolver]
         else if (sys.props.get("SonatypeRelease").fold(false)(_ == "true"))
-          Some(Opts.resolver.sonatypeReleases): Option[Resolver]
+          localStaging.value: Option[Resolver]
         else p
       },
       ThisBuild / buildNative / skip := java.lang.Boolean
@@ -650,7 +651,6 @@ object Build {
     .settings(
       publish := {},
       version := baseVersion,
-      resolvers += Resolver.bintrayRepo("nightscape", "maven"),
       scalaVersion := scala211,
       crossScalaVersions := Seq(scala211),
       libraryDependencies += Dependencies.scalagen
